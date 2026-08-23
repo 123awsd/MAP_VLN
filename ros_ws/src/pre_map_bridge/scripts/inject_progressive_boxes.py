@@ -7,7 +7,9 @@ from pathlib import Path
 
 import rosbag
 import rospy
+import numpy as np
 from geometry_msgs.msg import Point
+from sensor_msgs import point_cloud2
 from visualization_msgs.msg import Marker, MarkerArray
 
 
@@ -78,6 +80,12 @@ def main():
     parser.add_argument("input_bag", type=Path)
     parser.add_argument("box_csv", type=Path)
     parser.add_argument("output_bag", type=Path)
+    parser.add_argument(
+        "--max-map-distance",
+        type=float,
+        default=0.75,
+        help="discard visualization boxes farther than this many meters from the final occupied cloud",
+    )
     args = parser.parse_args()
     if args.output_bag.exists():
         raise FileExistsError(args.output_bag)
@@ -91,13 +99,52 @@ def main():
             events.append((timestamp, []))
         events[-1][1].append(row)
 
+    last_occupied = None
     with rosbag.Bag(str(args.input_bag), "r") as source:
         rgb_stamps = [
             stamp.to_nsec()
             for _, _, stamp in source.read_messages(topics=["/habitat/rgb"])
         ]
+        for _, message, _ in source.read_messages(
+            topics=["/voxel_mapping/occupancy_grid_occupied"]
+        ):
+            last_occupied = message
     if not rgb_stamps:
         raise RuntimeError("Input bag contains no /habitat/rgb frames")
+    if args.max_map_distance >= 0 and last_occupied is not None:
+        occupied = np.asarray(
+            list(
+                point_cloud2.read_points(
+                    last_occupied, field_names=("x", "y", "z"), skip_nans=True
+                )
+            ),
+            dtype=np.float64,
+        )
+        if occupied.size == 0:
+            raise RuntimeError("Final occupied cloud is empty; cannot filter boxes")
+        kept, rejected = [], []
+        for row in rows:
+            center = np.asarray(
+                [
+                    float(row["tx_world_object"]),
+                    float(row["ty_world_object"]),
+                    float(row["tz_world_object"]),
+                ]
+            )
+            distance = float(np.sqrt(np.square(occupied - center).sum(axis=1)).min())
+            (kept if distance <= args.max_map_distance else rejected).append(row)
+        rows = kept
+        events = []
+        for row in rows:
+            timestamp = int(row["first_seen_ns"])
+            if not events or events[-1][0] != timestamp:
+                events.append((timestamp, []))
+            events[-1][1].append(row)
+        if rejected:
+            print(
+                "map-distance filter rejected %d visualization boxes: %s"
+                % (len(rejected), ", ".join(row["name"] for row in rejected))
+            )
     # Make the RGB stream define the replay interval.  This guarantees that
     # every visible exploration timestamp has a corresponding first-person
     # frame instead of leaving point-cloud-only margins at either end.
