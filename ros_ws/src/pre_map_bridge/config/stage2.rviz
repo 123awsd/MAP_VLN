@@ -1,0 +1,154 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Selection
+    Name: Selection
+  - Class: rviz/Tool Properties
+    Name: Tool Properties
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.62
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 0; 210; 230
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Name: Explored Roofless 3D Map
+      Position Transformer: XYZ
+      Queue Size: 3
+      Selectable: false
+      Size (Pixels): 1
+      Size (m): 0.018
+      Style: Points
+      Topic: /pre_map_vln/roofless_map
+      Unreliable: false
+      Use Fixed Frame: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /stage2/rooms
+      Name: Room Boundaries
+      Namespaces: {}
+      Queue Size: 3
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /stage2/semantic_boxes
+      Name: Semantic 3D Boxes
+      Namespaces: {}
+      Queue Size: 10
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /stage2/candidate_poses
+      Name: Candidate Viewpoints
+      Namespaces: {}
+      Queue Size: 3
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /stage2/selected_goals
+      Name: Selected Goal Poses
+      Namespaces: {}
+      Queue Size: 10
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /stage2/global_tour
+      Name: Global Task Tour (Purple)
+      Namespaces: {}
+      Queue Size: 10
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /stage2/local_path
+      Name: Current Local Path (Amber)
+      Namespaces: {}
+      Queue Size: 10
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 15; 45; 150
+      Enabled: true
+      Head Diameter: 0.20
+      Head Length: 0.12
+      Length: 0.25
+      Line Style: Lines
+      Line Width: 0.008
+      Name: Executed Path (Blue)
+      Offset: {X: 0, Y: 0, Z: 0}
+      Pose Color: 255; 90; 30
+      Pose Style: None
+      Radius: 0.025
+      Shaft Diameter: 0.06
+      Shaft Length: 0.12
+      Topic: /stage2/executed_path
+    - Angle Tolerance: 0.1
+      Class: rviz/Odometry
+      Enabled: true
+      Keep: 1
+      Name: UAV Pose
+      Position Tolerance: 0.1
+      Shape:
+        Alpha: 1
+        Axes Length: 0.45
+        Axes Radius: 0.04
+        Color: 255; 80; 20
+        Head Length: 0.18
+        Head Radius: 0.07
+        Shaft Length: 0.34
+        Shaft Radius: 0.035
+        Value: Arrow
+      Topic: /stage2/uav_pose
+      Unreliable: false
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /pre_map_vln/camera_frustum
+      Name: Camera FoV
+      Namespaces: {}
+      Queue Size: 10
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /stage2/task_text
+      Name: Current Task Status
+      Namespaces: {}
+      Queue Size: 10
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /stage2/rgb
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Habitat First Person RGB
+      Normalize Range: true
+      Queue Size: 3
+      Transport Hint: raw
+      Unreliable: false
+  Enabled: true
+  Global Options:
+    Background Color: 255; 255; 255
+    Default Light: true
+    Fixed Frame: world
+    Frame Rate: 20
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 14
+      Enable Stereo Rendering: false
+      Focal Point: {X: 0.0, Y: -1.8, Z: 1.0}
+      Name: Stage 2 Semantic Mission View
+      Near Clip Distance: 0.01
+      Pitch: 1.05
+      Target Frame: world
+      Yaw: 3.9
+Window Geometry:
+  Height: 900
+  Width: 1180
+  X: 20
+  Y: 40

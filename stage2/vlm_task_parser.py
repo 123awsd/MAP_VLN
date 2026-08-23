@@ -17,14 +17,14 @@ from .task_graph import normalize_and_validate_task_graph
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 MODEL = "qwen3.7-plus"
-PROMPT_VERSION = "stage2-task-graph-v1"
+PROMPT_VERSION = "stage2-task-graph-v3"
 INPUT_CNY_PER_MILLION = 2.0
 OUTPUT_CNY_PER_MILLION = 8.0
 
 
 SYSTEM_PROMPT = """你是室内无人机长时程任务规划器。把中文长指令转换为严格 JSON，不要输出解释或 Markdown。
 只保留语义上真正必要的先后关系，不要把原句出现顺序当作约束。条件任务必须单独建 task，并通过 conditional_rules 激活。
-每个任务必须有可观测的目标物体。空间关系 relation 只能是 front/behind/left/right/above/below/between/near/facing 或 null。
+每个任务必须有可观测的目标物体。空间关系 relation 只能是 front/behind/left/right/above/below/on/between/near/facing 或 null。
 输出结构：
 {
   "format":"pre_map_vln.task_graph.v1",
@@ -33,12 +33,13 @@ SYSTEM_PROMPT = """你是室内无人机长时程任务规划器。把中文长�
     "id":"英文snake_case唯一ID",
     "action":"inspect|find|observe|deliver|approach",
     "target":{"label":"与场景物体标签尽量一致","room":"房间或null","reference":"参照物或null"},
+    "verification_label":"最终需要在RGB中确认的物体类别",
     "spatial_constraints":{"relation":null,"distance_m":[0.8,1.8],"height_m":null,"face_target":true,"visibility_required":true},
     "prerequisites":[],"active_initially":true,"success_outcome":"found|done"
   }],
   "conditional_rules":[{"source_task_id":"...","if_outcome":"not_found","activate_task_ids":["..."],"skip_task_ids":[]}]
 }
-deliver 任务的 target 是交付终点物体，reference 可写被运送物体。检查“有没有”使用 inspect，找到目标后的 outcome 为 found。"""
+deliver 任务的 target 是交付终点物体，reference 可写被运送物体。检查“台面上有没有水杯”时 target.label 是用于导航的 counter，verification_label 是 cup；检查“床边的灯”时 target.label 和 verification_label 都是 lamp，reference 是 bed。检查“有没有”使用 inspect，找到目标后的 outcome 为 found。"""
 
 
 def compact_inventory(scene_graph: dict[str, Any]) -> dict[str, Any]:
@@ -125,7 +126,6 @@ class QwenTaskParser:
             detail = error.read().decode("utf-8", "replace")[:1000]
             raise RuntimeError(f"DashScope HTTP {error.code}: {detail}") from error
         content = body["choices"][0]["message"]["content"]
-        graph = normalize_and_validate_task_graph(_extract_json(content), instruction=instruction)
         usage = body.get("usage") or {}
         input_tokens = int(usage.get("prompt_tokens", 0))
         output_tokens = int(usage.get("completion_tokens", 0))
@@ -143,6 +143,7 @@ class QwenTaskParser:
         })
         ledger["total_estimated_cny"] = round(previous + estimated_cost, 8)
         atomic_json(self.ledger_path, ledger)
+        graph = normalize_and_validate_task_graph(_extract_json(content), instruction=instruction)
         graph["provenance"] = {
             "parser": "qwen_vlm",
             "model": body.get("model", MODEL),

@@ -73,7 +73,7 @@ def plan_joint_mission(
         snapshot = list(states.items())
         for state, (cost, terminal_sum, _, _) in snapshot:
             mask, last_task_index, last_candidate_index = state
-            if mask.bit_count() != visited_count:
+            if bin(mask).count("1") != visited_count:
                 continue
             last_candidate = candidates_by_task[tasks[last_task_index]["id"]][last_candidate_index]
             for next_task_index, next_task in enumerate(tasks):

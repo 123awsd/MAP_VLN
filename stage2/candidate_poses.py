@@ -45,6 +45,19 @@ def matching_objects(scene_graph: dict[str, Any], task: dict[str, Any]) -> list[
             all_matches.append(item)
             if room_name and str(room.get("semantic_type", "")).lower() == room_name:
                 room_matches.append(item)
+    reference = task["target"].get("reference")
+    if reference:
+        reference_centers = [
+            obj["center_xyz_m"]
+            for room in scene_graph.get("rooms", []) for obj in room.get("objects", [])
+            if str(obj.get("label", "")).lower() == reference
+        ]
+        if reference_centers:
+            def reference_key(item):
+                center = item[1]["center_xyz_m"]
+                distance = min(math.dist(center[:2], other[:2]) for other in reference_centers)
+                return distance, -float(item[1].get("probability", 0.0))
+            return sorted(all_matches, key=reference_key)[:12]
     matches = room_matches or all_matches
     return sorted(matches, key=lambda item: float(item[1].get("probability", 0.0)), reverse=True)[:12]
 
@@ -60,6 +73,12 @@ def generate_candidates(
     nominal = 0.5 * (minimum + maximum)
     radii = sorted(set([minimum, nominal, maximum]))
     candidates = []
+    reference_label = task["target"].get("reference")
+    reference_centers = [
+        other["center_xyz_m"]
+        for other_room in scene_graph.get("rooms", []) for other in other_room.get("objects", [])
+        if reference_label and str(other.get("label", "")).lower() == reference_label
+    ]
     for room, obj in matching_objects(scene_graph, task):
         center = [float(value) for value in obj["center_xyz_m"]]
         size = [float(value) for value in obj["size_xyz_m"]]
@@ -85,7 +104,16 @@ def generate_candidates(
                 if z is None:
                     z = min(1.8, max(0.65, center[2]))
                 yaw = math.atan2(center[1] - xy[1], center[0] - xy[0])
-                terminal_score = abs(radius - nominal) + (0.0 if visible else 2.0) + 0.1 * abs(float(z) - center[2])
+                reference_distance = min(
+                    (math.dist(center[:2], other[:2]) for other in reference_centers),
+                    default=0.0,
+                )
+                terminal_score = (
+                    abs(radius - nominal)
+                    + (0.0 if visible else 2.0)
+                    + 0.1 * abs(float(z) - center[2])
+                    + 0.15 * reference_distance
+                )
                 candidates.append({
                     "id": f"{task['id']}__{obj['id']}__{len(candidates):03d}",
                     "task_id": task["id"],
@@ -97,6 +125,7 @@ def generate_candidates(
                     "target_xyz_m": center,
                     "distance_to_box_surface_m": radius,
                     "line_of_sight": visible,
+                    "reference_distance_m": reference_distance if reference_centers else None,
                     "terminal_cost": terminal_score,
                 })
     candidates.sort(key=lambda item: (item["terminal_cost"], -float(item["line_of_sight"]), item["id"]))

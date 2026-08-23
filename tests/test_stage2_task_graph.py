@@ -40,6 +40,7 @@ class TaskGraphTest(unittest.TestCase):
         self.assertEqual(graph["summary"]["task_count"], 3)
         tasks = {task["id"]: task for task in graph["tasks"]}
         self.assertFalse(tasks["inspect_living_cup"]["active_initially"])
+        self.assertTrue(tasks["inspect_kitchen_cup"]["active_initially"])
         self.assertEqual(tasks["deliver_folder"]["spatial_constraints"]["distance_m"], [0.8, 1.8])
 
     def test_rejects_cycle(self):
@@ -61,6 +62,19 @@ class TaskGraphTest(unittest.TestCase):
         graph = normalize_and_validate_task_graph(value)
         self.assertIsNone(graph["tasks"][0]["target"]["room"])
         self.assertIsNone(graph["tasks"][0]["target"]["reference"])
+
+    def test_accepts_on_surface_relation(self):
+        value = self.base_graph()
+        value["tasks"][0]["spatial_constraints"] = {"relation": "on"}
+        graph = normalize_and_validate_task_graph(value)
+        self.assertEqual(graph["tasks"][0]["spatial_constraints"]["relation"], "on")
+
+    def test_preserves_explicit_verification_label(self):
+        value = self.base_graph()
+        value["tasks"][0]["target"]["label"] = "counter"
+        value["tasks"][0]["verification_label"] = "cup"
+        graph = normalize_and_validate_task_graph(value)
+        self.assertEqual(graph["tasks"][0]["verification_label"], "cup")
 
 
 if __name__ == "__main__":

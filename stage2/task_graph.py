@@ -11,7 +11,7 @@ from typing import Any
 FORMAT = "pre_map_vln.task_graph.v1"
 ALLOWED_ACTIONS = {"inspect", "find", "observe", "deliver", "approach"}
 ALLOWED_RELATIONS = {
-    "front", "behind", "left", "right", "above", "below", "between", "near", "facing"
+    "front", "behind", "left", "right", "above", "below", "on", "between", "near", "facing"
 }
 IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
@@ -93,6 +93,7 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
         task["id"] = task_id
         task["action"] = action
         task["target"] = normalized_target
+        task["verification_label"] = str(task.get("verification_label") or label).strip().lower()
         task["spatial_constraints"] = {
             "relation": relation,
             "distance_m": distance,
@@ -135,8 +136,7 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
             "skip_task_ids": skip,
         })
     for task in normalized_tasks:
-        if task["id"] in activated_by_rule:
-            task["active_initially"] = False
+        task["active_initially"] = task["id"] not in activated_by_rule
 
     graph["tasks"] = normalized_tasks
     graph["conditional_rules"] = normalized_rules

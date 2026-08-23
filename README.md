@@ -1,14 +1,25 @@
 # PRE_MAP_VLN
 
-Habitat 中的无人机预探索与全局 3D 语义地图构建工程。
+Habitat 中的无人机预探索、全局 3D 语义地图与长时程多任务 VLN 工程。
 
-第一阶段目标：使用 FALCON 完成自主探索，使用 Boxer 构建全局 3D 物体框，使用 OccuSG 划分房间区域，最终输出供后续 VLN 使用的统一语义地图与场景图。
+第一阶段使用 FALCON 完成自主探索，以 Boxer 构建全局 3D 物体框、OccuSG 划分房间区域。第二阶段使用 Qwen VLM 生成 task graph，在真实占据地图上联合优化任务顺序和观察位姿，并在 Habitat 中执行、视觉验证和动态重规划。
 
 项目状态和对话迁移入口见 [`记忆/README.md`](记忆/README.md)。
 
 ## 当前状态
 
-第一阶段工程闭环已在公开 HM3D example `00861-GLAQ4DNUx5U` 上通过：Habitat 与 FALCON 闭环探索、Boxer 全局 3D 框、OccuSG 房间分割以及语义场景图均有实测输出。详细结果见 [`docs/第一阶段设计.md`](docs/第一阶段设计.md)。
+两个阶段的工程闭环均已在公开 HM3D example `00861-GLAQ4DNUx5U` 上通过。第二阶段默认演示完成 5 个任务、5 次动态重规划、112 帧连续 RGB；联合初始路径比固定顺序短 32.09%。详细结果见 [`docs/第一阶段设计.md`](docs/第一阶段设计.md) 与 [`docs/第二阶段设计.md`](docs/第二阶段设计.md)。
+
+第二阶段一键运行、三地图几何回归和 RViz 回放：
+
+```bash
+cd /home/uav/map_VLN/PRE_MAP_VLN
+./scripts/run_stage2_demo.sh
+./scripts/run_stage2_multiscene.sh
+./scripts/replay_stage2_rviz.sh hm3d_stage2_complete false 1.0
+```
+
+Qwen 和 Matterport 凭据通过 `scripts/configure_secrets.py` 写入 Git 忽略的 `.secrets/`，不得写入命令记录、文档或提交。Qwen 调用有 20 元累计费用保护。
 
 已有探索 episode 的后处理命令：
 
