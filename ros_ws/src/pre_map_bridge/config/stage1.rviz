@@ -12,28 +12,28 @@ Visualization Manager:
       Cell Size: 1
       Class: rviz/Grid
       Color: 90; 90; 90
-      Enabled: true
-      Name: Ground Grid
+      Enabled: false
+      Name: Metric Grid (Optional)
       Plane: XY
       Reference Frame: world
-    - Alpha: 0.22
+    - Alpha: 0.48
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds: true
       Axis: Z
       Channel Name: intensity
       Class: rviz/PointCloud2
-      Color: 185; 185; 185
+      Color: 178; 184; 191
       Color Transformer: FlatColor
       Decay Time: 0
       Enabled: true
-      Name: Occupied Map
+      Name: Roofless Walls and Obstacles
       Position Transformer: XYZ
       Queue Size: 10
-      Selectable: true
+      Selectable: false
       Size (Pixels): 1
       Size (m): 0.02
       Style: Points
-      Topic: /voxel_mapping/occupancy_grid_occupied
+      Topic: /pre_map_vln/roofless_map
       Unreliable: false
       Use Fixed Frame: true
     - Alpha: 0.35
@@ -59,9 +59,29 @@ Visualization Manager:
     - Class: rviz/Marker
       Enabled: false
       Marker Topic: /planning_vis/frontier
-      Name: Frontiers
+      Name: Frontier Labels (Optional)
       Namespaces: {}
       Queue Size: 100
+    - Alpha: 0.30
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 126; 25
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Name: Frontier Cells
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: false
+      Size (Pixels): 1
+      Size (m): 0.04
+      Style: Points
+      Topic: /planning_vis/frontier_pcl
+      Unreliable: false
+      Use Fixed Frame: true
     - Class: rviz/Marker
       Enabled: false
       Marker Topic: /planning_vis/viewpoints
@@ -71,9 +91,15 @@ Visualization Manager:
     - Class: rviz/Marker
       Enabled: false
       Marker Topic: /planning/travel_traj
-      Name: Planned Trajectory
+      Name: FALCON Command History (Optional)
       Namespaces: {}
       Queue Size: 20
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /pre_map_vln/current_plan
+      Name: Current Plan (Yellow)
+      Namespaces: {}
+      Queue Size: 10
     - Alpha: 1
       Buffer Length: 1
       Class: rviz/Path
@@ -84,7 +110,7 @@ Visualization Manager:
       Length: 0.3
       Line Style: Lines
       Line Width: 0.015
-      Name: Habitat Agent Path
+      Name: Executed Path (Green)
       Offset: {X: 0, Y: 0, Z: 0}
       Pose Color: 255; 90; 30
       Pose Style: None
@@ -148,10 +174,10 @@ Visualization Manager:
       Class: rviz/Orbit
       Distance: 17
       Enable Stereo Rendering: false
-      Focal Point: {X: 0, Y: -2.5, Z: 0.8}
-      Name: Current View
+      Focal Point: {X: 1.5, Y: 2.0, Z: 1.0}
+      Name: Roofless Exploration View
       Near Clip Distance: 0.01
-      Pitch: 0.72
+      Pitch: 1.05
       Target Frame: world
       Yaw: 3.9
 Window Geometry:

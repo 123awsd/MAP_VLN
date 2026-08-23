@@ -2,14 +2,25 @@
   <arg name="bag_path" default="/workspace/shared/outputs/bags/hm3d_visualization.bag"/>
   <arg name="box_csv" default="/workspace/shared/outputs/boxer/hm3d_stage1/boxer_3dbbs_visual.csv"/>
   <arg name="rviz" default="true"/>
+  <arg name="topdown" default="true"/>
+  <arg name="roofless_min_z" default="0.50"/>
+  <arg name="roofless_max_z" default="2.25"/>
 
   <include file="$(find pre_map_bridge)/launch/habitat_falcon.launch">
     <arg name="box_csv" value="$(arg box_csv)"/>
   </include>
+
+  <node pkg="pre_map_bridge" type="roofless_visualization_node.py"
+        name="roofless_visualization" output="screen">
+    <param name="min_z" value="$(arg roofless_min_z)"/>
+    <param name="max_z" value="$(arg roofless_max_z)"/>
+  </node>
 
   <node pkg="rosbag" type="record" name="stage1_bag_recorder" output="screen"
         args="--lz4 --buffsize=2048 -O $(arg bag_path) /habitat/rgb /uav_simulator/depth_image /uav_simulator/odometry /uav_simulator/sensor_pose /pre_map_vln/agent_path /planning/bspline /planning/travel_traj /planning_vis/frontier /planning_vis/frontier_pcl /planning_vis/dormant_frontier_pcl /voxel_mapping/occupancy_grid_occupied /voxel_mapping/depth_pointcloud /hgrid/visulization_marker /hgrid/visulization_markerarray"/>
 
   <node if="$(arg rviz)" pkg="rviz" type="rviz" name="pre_map_vln_rviz" output="screen"
         args="-d $(find pre_map_bridge)/config/stage1.rviz"/>
+  <node if="$(arg topdown)" pkg="rviz" type="rviz" name="pre_map_vln_rviz_topdown" output="screen"
+        args="-d $(find pre_map_bridge)/config/stage1_topdown.rviz"/>
 </launch>

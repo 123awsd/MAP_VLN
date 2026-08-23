@@ -31,13 +31,21 @@ cd /home/uav/map_VLN/PRE_MAP_VLN
 
 脚本会自动复制当前桌面的 X11 授权到项目内的忽略文件，不修改系统级 X11 配置。
 
-回放会同时打开一个轻量 3D/RGB 窗口和一个俯视 2D 边界/frontier 窗口。循环播放：
+回放会同时打开一个“掀顶式”3D/RGB 窗口和一个俯视 2D 边界/frontier 窗口。3D 默认只保留世界 Z=0.50–2.25 m 的墙体和主要障碍物，地板点云、天花板点云及 RViz 地面网格均关闭；绿色为 Habitat 实际已执行轨迹，黄色为 FALCON 当前 B-spline，橙色为 Frontier。
+
+循环播放：
 
 ```bash
 ./scripts/replay_bag_rviz.sh hm3d_stage1_scan_complete_final true
 ```
 
 bag 播放完成后 RViz 会保持打开。第三个参数可调整回放倍速，第四个参数控制 2D 窗口，例如 `./scripts/replay_bag_rviz.sh hm3d_stage1_scan_complete_final false 2.0 false`。
+
+第五、六个参数可调整掀顶高度范围，例如只显示 Z=0.60–2.10 m：
+
+```bash
+./scripts/replay_bag_rviz.sh hm3d_stage1_scan_complete_final false 1.0 true 0.60 2.10
+```
 
 重新录制一个同回合渐进包：
 
@@ -46,3 +54,5 @@ bag 播放完成后 RViz 会保持打开。第三个参数可调整回放倍速�
 ```
 
 最后一个参数是静止期相机扫描角速度（度/秒）。移动时相机仍立即朝向真实运动方向。
+
+实时 FALCON 运行时，点云过滤、RGB、实际轨迹、当前规划和 Frontier 都在线发布；默认 bag 中的 Boxer 框按同回合首次观测时间渐进回放。当前 Boxer 推理仍是录制后的批处理，并非探索过程中在线运行。
