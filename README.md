@@ -8,7 +8,7 @@ Habitat 中的无人机预探索、全局 3D 语义地图与长时程多任务 V
 
 ## 当前状态
 
-两个阶段的工程闭环均已在公开 HM3D example `00861-GLAQ4DNUx5U` 上通过。第二阶段默认演示完成 5 个任务、5 次动态重规划、112 帧连续 RGB；联合初始路径比固定顺序短 32.09%。详细结果见 [`docs/第一阶段设计.md`](docs/第一阶段设计.md) 与 [`docs/第二阶段设计.md`](docs/第二阶段设计.md)。
+两个阶段的工程闭环均已在公开 HM3D example `00861-GLAQ4DNUx5U` 上通过。第二阶段现以本地 GPU OWLv2 为默认开放词表检测器，在线演示完成 4 个实际访问任务、4 次动态重规划和 74 帧连续 RGB；找到电视后正确跳过条件柜子任务。联合初始路径比固定顺序短 32.09%。详细结果见 [`docs/第一阶段设计.md`](docs/第一阶段设计.md) 与 [`docs/第二阶段设计.md`](docs/第二阶段设计.md)。
 
 论文级规划评测已增加 4 类 task graph、6 个基线/消融方法以及 3 scenes × 3 seeds × 5 task cases 的 270 次实验。实验设计、指标和结论边界见 [`docs/第三阶段实验评测.md`](docs/第三阶段实验评测.md)。
 
@@ -17,12 +17,13 @@ Habitat 中的无人机预探索、全局 3D 语义地图与长时程多任务 V
 ```bash
 cd /home/uav/map_VLN/PRE_MAP_VLN
 ./scripts/run_stage2_demo.sh
+./scripts/run_stage2_open_vocab_demo.sh
 ./scripts/run_stage2_multiscene.sh
 ./scripts/run_stage2_experiments.sh
 ./scripts/replay_stage2_rviz.sh hm3d_stage2_complete false 1.0
 ```
 
-Qwen 和 Matterport 凭据通过 `scripts/configure_secrets.py` 写入 Git 忽略的 `.secrets/`，不得写入命令记录、文档或提交。Qwen 调用有 20 元累计费用保护。
+Qwen 和 Matterport 凭据通过 `scripts/configure_secrets.py` 写入 Git 忽略的 `.secrets/`，不得写入命令记录、文档或提交。Qwen 只负责 task graph 和可选低置信度复核，不用于连续目标检测；预算由 `PRE_MAP_VLN_QWEN_BUDGET_CNY` 配置并写入审计 ledger。
 
 已有探索 episode 的后处理命令：
 

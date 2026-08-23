@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import copy
 import json
 import math
@@ -24,6 +25,13 @@ from stage2.grid_map import OccupancyGrid  # noqa: E402
 from stage2.io_utils import atomic_json, load_json  # noqa: E402
 from stage2.joint_planner import plan_joint_mission  # noqa: E402
 from stage2.mission_executor import MissionState  # noqa: E402
+from stage2.open_vocab_detector import (  # noqa: E402
+    LocalOpenVocabularyDetector,
+    associate_projection,
+    project_detection_to_world,
+    target_found,
+)
+from stage2.vlm_verifier import QwenImageVerifier  # noqa: E402
 
 
 S_HABITAT_TO_FALCON = np.asarray(
@@ -119,6 +127,19 @@ def main() -> None:
     )
     parser.add_argument("--inflation", type=float, default=0.10)
     parser.add_argument("--save-every", type=int, default=3)
+    parser.add_argument(
+        "--verification-mode",
+        choices=("semantic", "owlv2", "qwen_vl", "hybrid", "owlv2_qwen_fallback"),
+        default="owlv2",
+        help="Decision source; owlv2 is the fast local-GPU default and Qwen is optional fallback",
+    )
+    parser.add_argument("--owlv2-threshold", type=float, default=0.20)
+    parser.add_argument(
+        "--owlv2-every", type=int, default=10,
+        help="Run local open-vocabulary mapping every N flight frames; 0 disables keyframes",
+    )
+    parser.add_argument("--vlm-confidence-threshold", type=float, default=0.65)
+    parser.add_argument("--vlm-no-cache", action="store_true")
     args = parser.parse_args()
     minimum_pixels_by_task = {
         str(key): int(value) for key, value in json.loads(args.minimum_pixels_by_task).items()
@@ -132,8 +153,20 @@ def main() -> None:
         obj["id"]: obj
         for room in updated_scene_graph.get("rooms", []) for obj in room.get("objects", [])
     }
+    mapped_objects = list(objects_by_id.values())
     grid = OccupancyGrid.load(args.grid_prefix, inflation_m=args.inflation)
     state = MissionState(task_graph)
+    vlm_verifier = QwenImageVerifier() if args.verification_mode in {"qwen_vl", "hybrid", "owlv2_qwen_fallback"} else None
+    open_vocab_modes = {"owlv2", "owlv2_qwen_fallback"}
+    detector_prompts = sorted({task["verification_label"].strip().lower() for task in tasks.values()})
+    open_vocab_detector = None
+    if args.verification_mode in open_vocab_modes:
+        open_vocab_detector = LocalOpenVocabularyDetector(
+            detector_prompts,
+            threshold=args.owlv2_threshold,
+            timeout_s=300.0,
+        )
+        atexit.register(open_vocab_detector.close)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     frames_dir = args.output_dir / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
@@ -153,6 +186,7 @@ def main() -> None:
     trajectory = [list(current_f)]
     observations_log = []
     map_updates = []
+    open_vocab_observations = []
     replans = []
     frame_index = 0
     started = time.monotonic()
@@ -197,8 +231,32 @@ def main() -> None:
                 agent.set_state(agent_state)
                 observations = sim.get_sensor_observations()
                 trajectory.append(pose_f)
-                if frame_index % max(1, args.save_every) == 0:
-                    Image.fromarray(np.asarray(observations["rgb"])[..., :3].astype(np.uint8)).save(frames_dir / f"frame_{frame_index:06d}.jpg", quality=90)
+                save_frame = frame_index % max(1, args.save_every) == 0
+                detect_frame = bool(
+                    open_vocab_detector is not None
+                    and args.owlv2_every > 0
+                    and frame_index % args.owlv2_every == 0
+                )
+                frame_path = frames_dir / f"frame_{frame_index:06d}.jpg"
+                if save_frame or detect_frame:
+                    Image.fromarray(np.asarray(observations["rgb"])[..., :3].astype(np.uint8)).save(frame_path, quality=90)
+                if detect_frame:
+                    detected = open_vocab_detector.detect(frame_path)
+                    lifted = [
+                        associate_projection(projected, mapped_objects, ALIASES)
+                        for item in detected["detections"]
+                        if (projected := project_detection_to_world(
+                            item, np.asarray(observations["depth"]), pose_f
+                        )) is not None
+                    ]
+                    open_vocab_observations.append({
+                        "frame_index": frame_index,
+                        "pose": pose_f,
+                        "latency_ms": detected["latency_ms"],
+                        "detections_2d": detected["detections"],
+                        "detections_3d": [item for item in lifted if item["confirmed"]],
+                        "unassociated_3d": [item for item in lifted if not item["confirmed"]],
+                    })
                 frame_index += 1
                 previous = point_xy
 
@@ -209,20 +267,93 @@ def main() -> None:
             agent.set_state(terminal_state)
             observations = sim.get_sensor_observations()
             task_threshold = minimum_pixels_by_task.get(visit["task_id"], args.minimum_pixels)
-            verification = verify_target(
+            semantic_verification = verify_target(
                 sim,
                 observations,
                 tasks[visit["task_id"]]["verification_label"],
                 task_threshold,
             )
-            verification["minimum_pixels"] = task_threshold
-            action = tasks[visit["task_id"]]["action"]
-            if action in {"inspect", "find", "observe"}:
-                outcome = "found" if verification["found"] else "not_found"
-            else:
-                outcome = "done"
+            semantic_verification["minimum_pixels"] = task_threshold
             terminal_rgb = frames_dir / f"terminal_{len(observations_log):02d}_{visit['task_id']}.jpg"
             Image.fromarray(np.asarray(observations["rgb"])[..., :3].astype(np.uint8)).save(terminal_rgb, quality=95)
+            open_vocab_verification = None
+            if open_vocab_detector is not None:
+                local_result = open_vocab_detector.detect(terminal_rgb)
+                local_found = target_found(local_result, tasks[visit["task_id"]]["verification_label"], ALIASES)
+                accepted = ALIASES.get(
+                    tasks[visit["task_id"]]["verification_label"],
+                    {tasks[visit["task_id"]]["verification_label"]},
+                )
+                target_detections = [
+                    item for item in local_result["detections"] if item["label"] in accepted
+                ]
+                lifted_targets = [
+                    associate_projection(projected, mapped_objects, ALIASES)
+                    for item in target_detections
+                    if (projected := project_detection_to_world(
+                        item, np.asarray(observations["depth"]), current_f
+                    )) is not None
+                ]
+                geometry_confirmed = any(item["confirmed"] for item in lifted_targets)
+                planned_object_confirmed = any(
+                    item["confirmed"] and item["associated_object_id"] == visit["object_id"]
+                    for item in lifted_targets
+                )
+                open_vocab_verification = {
+                    "found": local_found and geometry_confirmed,
+                    "detected_2d": local_found,
+                    "geometry_confirmed": geometry_confirmed,
+                    "planned_object_confirmed": planned_object_confirmed,
+                    "target_label": tasks[visit["task_id"]]["verification_label"],
+                    "latency_ms": local_result["latency_ms"],
+                    "detections": target_detections,
+                    "projected_3d": lifted_targets,
+                    "all_detections": local_result["detections"],
+                }
+            vlm_verification = None
+            should_call_vlm = bool(
+                vlm_verifier is not None
+                and (
+                    args.verification_mode != "owlv2_qwen_fallback"
+                    or not open_vocab_verification
+                    or not open_vocab_verification["found"]
+                )
+            )
+            if should_call_vlm:
+                vlm_verification = vlm_verifier.verify(
+                    [terminal_rgb], tasks[visit["task_id"]], use_cache=not args.vlm_no_cache
+                )
+            vlm_found = bool(
+                vlm_verification
+                and vlm_verification["found"]
+                and float(vlm_verification["confidence"]) >= args.vlm_confidence_threshold
+            )
+            if args.verification_mode == "semantic":
+                selected_found = bool(semantic_verification["found"])
+            elif args.verification_mode == "owlv2":
+                selected_found = bool(open_vocab_verification and open_vocab_verification["found"])
+            elif args.verification_mode == "qwen_vl":
+                selected_found = vlm_found
+            elif args.verification_mode == "hybrid":
+                selected_found = bool(semantic_verification["found"]) or vlm_found
+            else:
+                selected_found = bool(open_vocab_verification and open_vocab_verification["found"]) or vlm_found
+            verification = dict(semantic_verification)
+            verification.update({
+                "mode": args.verification_mode,
+                "found": selected_found,
+                "semantic_found": bool(semantic_verification["found"]),
+                "owlv2_found": None if open_vocab_verification is None else open_vocab_verification["found"],
+                "owlv2": open_vocab_verification,
+                "vlm_found_at_threshold": vlm_found if vlm_verification is not None else None,
+                "vlm_confidence_threshold": args.vlm_confidence_threshold,
+                "vlm": vlm_verification,
+            })
+            action = tasks[visit["task_id"]]["action"]
+            if action in {"inspect", "find", "observe"}:
+                outcome = "found" if selected_found else "not_found"
+            else:
+                outcome = "done"
             observation_record = {
                 "sequence": len(observations_log),
                 "task_id": visit["task_id"],
@@ -246,6 +377,10 @@ def main() -> None:
                     "task_id": visit["task_id"],
                     "outcome": outcome,
                     "matching_pixels": verification["matching_pixels"],
+                    "mode": args.verification_mode,
+                    "vlm_confidence": None if vlm_verification is None else vlm_verification["confidence"],
+                    "owlv2_score": None if not open_vocab_verification or not open_vocab_verification["detections"] else open_vocab_verification["detections"][0]["score"],
+                    "projected_3d": None if not open_vocab_verification else open_vocab_verification["projected_3d"],
                     "sequence": len(observations_log) - 1,
                 }
                 map_updates.append({
@@ -257,14 +392,26 @@ def main() -> None:
             state.finish_task(visit["task_id"], outcome)
             print(f"task={visit['task_id']} outcome={outcome} pixels={verification['matching_pixels']} active={sorted(state.active)}", flush=True)
 
+    if open_vocab_detector is not None:
+        open_vocab_detector.close()
+
     trace = {
         "format": "pre_map_vln.habitat_execution.v1",
         "status": "completed" if state.is_finished() else "incomplete",
         "scene": str(args.scene),
+        "verification_mode": args.verification_mode,
         "task_status": state.status,
         "events": state.events,
         "observations": observations_log,
         "map_updates": map_updates,
+        "open_vocab_observations": open_vocab_observations,
+        "open_vocab_detector": None if open_vocab_detector is None else {
+            "backend": "local_owlv2",
+            "prompts": detector_prompts,
+            "threshold": args.owlv2_threshold,
+            "keyframe_interval": args.owlv2_every,
+            "startup": open_vocab_detector.ready,
+        },
         "replans": replans,
         "trajectory_xyz_yaw": trajectory,
         "path_length_m": sum(math.dist(a[:3], b[:3]) for a, b in zip(trajectory, trajectory[1:])),

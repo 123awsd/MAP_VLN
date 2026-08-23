@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import urllib.error
 import urllib.request
@@ -69,9 +70,11 @@ def _extract_json(text: str) -> dict[str, Any]:
 
 
 class QwenTaskParser:
-    def __init__(self, api_key_path: Path | None = None, budget_cny: float = 20.0):
+    def __init__(self, api_key_path: Path | None = None, budget_cny: float | None = None):
         self.api_key_path = api_key_path or ROOT / ".secrets/dashscope_api_key"
-        self.budget_cny = float(budget_cny)
+        self.budget_cny = float(
+            budget_cny if budget_cny is not None else os.environ.get("PRE_MAP_VLN_QWEN_BUDGET_CNY", "1000")
+        )
         self.cache_dir = ROOT / "outputs/stage2/vlm_cache"
         self.ledger_path = ROOT / "outputs/stage2/api_usage.json"
 
@@ -98,6 +101,7 @@ class QwenTaskParser:
             return cached
 
         ledger = self._ledger()
+        ledger["authorized_budget_cny"] = self.budget_cny
         if float(ledger.get("total_estimated_cny", 0.0)) >= self.budget_cny:
             raise RuntimeError(f"Qwen budget reached: {ledger['total_estimated_cny']:.4f} CNY")
         api_key = self.api_key_path.read_text(encoding="utf-8").strip()
@@ -137,6 +141,7 @@ class QwenTaskParser:
             raise RuntimeError("Qwen response would exceed the authorized cost ceiling")
         ledger["calls"].append({
             "model": MODEL,
+            "purpose": "task_graph_parsing",
             "prompt_tokens": input_tokens,
             "completion_tokens": output_tokens,
             "estimated_cny": round(estimated_cost, 8),

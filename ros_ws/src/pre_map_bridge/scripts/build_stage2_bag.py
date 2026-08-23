@@ -113,6 +113,19 @@ def box_marker(obj, marker_id: int, stamp, status: str = "base"):
     return marker
 
 
+def open_vocab_box_marker(obj, marker_id: int, stamp):
+    converted = {
+        "center_xyz_m": obj["center"],
+        "size_xyz_m": obj["size"],
+        "orientation_wxyz": [1.0, 0.0, 0.0, 0.0],
+    }
+    marker = box_marker(converted, marker_id, stamp, "found")
+    marker.ns = "stage2_open_vocab_boxes"
+    marker.scale.x = 0.060
+    marker.color.r, marker.color.g, marker.color.b, marker.color.a = 0.02, 0.30, 0.72, 0.88
+    return marker
+
+
 def room_markers(scene_graph, stamp):
     result = MarkerArray()
     for index, room in enumerate(scene_graph.get("rooms", [])):
@@ -279,6 +292,18 @@ def main():
         bag.write("/stage2/candidate_poses", candidate_markers(candidates, initial_stamp), initial_stamp)
 
         event_by_frame = {int(item["frame_index"]): item for item in execution["observations"]}
+        open_vocab_by_frame = {
+            int(item["frame_index"]): item
+            for item in execution.get("open_vocab_observations", [])
+        }
+        detected_objects = {}
+        online_object_ids = sorted({
+            detected["associated_object_id"]
+            for item in execution.get("open_vocab_observations", [])
+            for detected in item.get("detections_3d", [])
+            if detected.get("associated_object_id")
+        })
+        online_marker_ids = {object_id: index for index, object_id in enumerate(online_object_ids)}
         replan_by_frame = {0: execution["replans"][0]}
         for index, observation in enumerate(execution["observations"][:-1], start=1):
             replan_by_frame[int(observation["frame_index"])] = execution["replans"][index]
@@ -327,6 +352,19 @@ def main():
                 bag.write("/stage2/task_status", String(data=json.dumps({"next_task": next_task, "active_task_ids": replan["active_task_ids"]})), stamp)
             bag.write("/stage2/task_text", task_text_marker(current_text, pose, stamp), stamp)
 
+            if frame_index in open_vocab_by_frame:
+                for detected in open_vocab_by_frame[frame_index].get("detections_3d", []):
+                    object_id = detected["associated_object_id"]
+                    previous = detected_objects.get(object_id)
+                    if previous is None or float(detected["score"]) >= float(previous["score"]):
+                        detected_objects[object_id] = detected
+                markers = MarkerArray()
+                for object_id in sorted(detected_objects):
+                    markers.markers.append(open_vocab_box_marker(
+                        detected_objects[object_id], online_marker_ids[object_id], stamp
+                    ))
+                bag.write("/stage2/open_vocab_boxes", markers, stamp)
+
             if frame_index in event_by_frame:
                 event = event_by_frame[frame_index]
                 object_id = next(item["object_id"] for item in execution["replans"][event["sequence"]]["plan"]["visits"] if item["task_id"] == event["task_id"])
@@ -338,6 +376,7 @@ def main():
     topic_counts = {
         "/voxel_mapping/occupancy_grid_occupied": 1,
         "/stage2/semantic_boxes": 1 + len(execution["observations"]),
+        "/stage2/open_vocab_boxes": len(execution.get("open_vocab_observations", [])),
         "/stage2/rooms": 1,
         "/stage2/candidate_poses": 1,
         "/stage2/executed_path": len(execution["trajectory_xyz_yaw"]),
