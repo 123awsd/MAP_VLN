@@ -1,0 +1,25 @@
+version: 1
+repositories:
+  falcon:
+    url: https://github.com/HKUST-Aerial-Robotics/FALCON.git
+    commit: 312eb4d32c6c7af1a482f94a0a204aa2bb150cca
+  boxer:
+    url: https://github.com/facebookresearch/boxer.git
+    commit: 1f86542dc342a4b1d474c87c97c5d1d6566d9148
+  occusg:
+    url: https://github.com/crcz25/OccuSG.git
+    commit: 2bca2fa06af87fd9dd0542957039be8f580f0dca
+    recursive: true
+  habitat_lab:
+    url: https://github.com/facebookresearch/habitat-lab.git
+    ref: stable
+    commit: cdbb4880519505adf45fba0f0c0c3a3fd18a2a55
+  open3d:
+    url: https://github.com/isl-org/Open3D.git
+    ref: v0.18.0
+    commit: 0f06a149c4fb9406fd3e432a5cb0c024f38e2f0e
+  nlopt:
+    url: https://github.com/stevengj/nlopt.git
+    ref: v2.7.1
+    commit: 09b3c2a6da71cabcb98d2c8facc6b83d2321ed71
+

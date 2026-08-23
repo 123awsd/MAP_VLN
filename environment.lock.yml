@@ -1,0 +1,26 @@
+project: PRE_MAP_VLN
+updated: 2026-08-23
+
+habitat:
+  prefix: .envs/habitat
+  python: 3.9.23
+  cmake: 3.27.9
+  habitat_sim: 0.3.3
+  habitat_lab: 0.3.3
+  numpy: 1.26.4
+  pillow: 10.4.0
+  bullet: true
+
+boxer:
+  prefix: .envs/boxer
+  python: 3.12.14
+  torch: 2.13.0+cu130
+  cuda_runtime: "13.0"
+  numpy: 2.5.2
+  opencv_python: 5.0.0.93
+  dill: 0.4.1
+
+host_gpu:
+  model: NVIDIA GeForce RTX 5060 Ti
+  driver: 580.126.09
+
