@@ -22,7 +22,7 @@ cd /home/uav/map_VLN/PRE_MAP_VLN
 
 ## RViz 与 rosbag
 
-最终修正包：`outputs/bags/hm3d_stage1_visualization_final.bag`。它包含 Habitat RGB/Depth、FALCON 轨迹与 frontier、地图点云、机体位姿，以及 26 个用于调试的 Boxer 高亮 3D boxes。
+最终同步包：`outputs/bags/hm3d_stage1_progressive_final.bag`。它包含同一次探索的 Habitat RGB/Depth、FALCON 轨迹与 frontier、地图点云、机体位姿，以及按首次稳定观测时间渐进出现的 Boxer 3D boxes。
 
 ```bash
 cd /home/uav/map_VLN/PRE_MAP_VLN
@@ -34,5 +34,13 @@ cd /home/uav/map_VLN/PRE_MAP_VLN
 循环播放：
 
 ```bash
-./scripts/replay_bag_rviz.sh hm3d_stage1_visualization_final true
+./scripts/replay_bag_rviz.sh hm3d_stage1_progressive_final true
+```
+
+bag 播放完成后 RViz 会保持打开。第三个参数可调整回放倍速，例如 `./scripts/replay_bag_rviz.sh hm3d_stage1_progressive_final false 2.0`。
+
+重新录制一个同回合渐进包：
+
+```bash
+./scripts/record_progressive_stage1.sh <episode_name> 40 10
 ```

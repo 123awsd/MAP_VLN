@@ -8,7 +8,7 @@
   </include>
 
   <node pkg="rosbag" type="record" name="stage1_bag_recorder" output="screen"
-        args="--lz4 --buffsize=2048 -O $(arg bag_path) /habitat/rgb /uav_simulator/depth_image /uav_simulator/odometry /uav_simulator/sensor_pose /pre_map_vln/agent_path /pre_map_vln/box_markers /planning/bspline /planning/pos_cmd /planning/travel_traj /planning/position_cmd_vis /planning_vis/frontier /planning_vis/viewpoints /planning_vis/frontier_pcl /planning_vis/dormant_frontier_pcl /voxel_mapping/occupancy_grid_occupied /voxel_mapping/depth_pointcloud /hgrid/visulization_marker /hgrid/visulization_markerarray"/>
+        args="--lz4 --buffsize=2048 -O $(arg bag_path) /habitat/rgb /uav_simulator/depth_image /uav_simulator/odometry /uav_simulator/sensor_pose /pre_map_vln/agent_path /planning/bspline /planning/travel_traj /planning_vis/frontier /planning_vis/frontier_pcl /planning_vis/dormant_frontier_pcl /voxel_mapping/occupancy_grid_occupied /voxel_mapping/depth_pointcloud /hgrid/visulization_marker /hgrid/visulization_markerarray"/>
 
   <node if="$(arg rviz)" pkg="rviz" type="rviz" name="pre_map_vln_rviz" output="screen"
         args="-d $(find pre_map_bridge)/config/stage1.rviz"/>
