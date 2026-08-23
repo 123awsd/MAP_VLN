@@ -26,11 +26,16 @@ from stage2.io_utils import atomic_json, load_json  # noqa: E402
 from stage2.joint_planner import plan_joint_mission  # noqa: E402
 from stage2.mission_executor import MissionState  # noqa: E402
 from stage2.open_vocab_detector import (  # noqa: E402
+    AsyncOpenVocabularyDetector,
     LocalOpenVocabularyDetector,
+    PILOT_CLASS_THRESHOLDS,
+    apply_class_thresholds,
     associate_projection,
     project_detection_to_world,
     target_found,
 )
+from stage2.semantic_fusion import OnlineSemanticFusion  # noqa: E402
+from stage2.viewpoint_recovery import ViewpointRecovery  # noqa: E402
 from stage2.vlm_verifier import QwenImageVerifier  # noqa: E402
 
 
@@ -135,14 +140,25 @@ def main() -> None:
     )
     parser.add_argument("--owlv2-threshold", type=float, default=0.20)
     parser.add_argument(
+        "--owlv2-class-thresholds",
+        default=json.dumps(PILOT_CLASS_THRESHOLDS),
+        help="JSON per-class thresholds calibrated by the local Semantic-GT pilot",
+    )
+    parser.add_argument(
         "--owlv2-every", type=int, default=10,
         help="Run local open-vocabulary mapping every N flight frames; 0 disables keyframes",
     )
     parser.add_argument("--vlm-confidence-threshold", type=float, default=0.65)
     parser.add_argument("--vlm-no-cache", action="store_true")
+    parser.add_argument("--max-viewpoint-attempts", type=int, default=3)
+    parser.add_argument("--novel-object-min-support", type=int, default=2)
     args = parser.parse_args()
     minimum_pixels_by_task = {
         str(key): int(value) for key, value in json.loads(args.minimum_pixels_by_task).items()
+    }
+    class_thresholds = {
+        str(key).strip().lower(): float(value)
+        for key, value in json.loads(args.owlv2_class_thresholds).items()
     }
 
     task_graph = load_json(args.task_graph)
@@ -160,13 +176,16 @@ def main() -> None:
     open_vocab_modes = {"owlv2", "owlv2_qwen_fallback"}
     detector_prompts = sorted({task["verification_label"].strip().lower() for task in tasks.values()})
     open_vocab_detector = None
+    async_detector = None
     if args.verification_mode in open_vocab_modes:
         open_vocab_detector = LocalOpenVocabularyDetector(
             detector_prompts,
             threshold=args.owlv2_threshold,
             timeout_s=300.0,
         )
+        async_detector = AsyncOpenVocabularyDetector(open_vocab_detector)
         atexit.register(open_vocab_detector.close)
+        atexit.register(async_detector.close)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     frames_dir = args.output_dir / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
@@ -187,9 +206,33 @@ def main() -> None:
     observations_log = []
     map_updates = []
     open_vocab_observations = []
+    fusion = OnlineSemanticFusion(minimum_novel_support=args.novel_object_min_support)
+    recovery = ViewpointRecovery(maximum_attempts=args.max_viewpoint_attempts)
     replans = []
     frame_index = 0
     started = time.monotonic()
+
+    def consume_async(packet: dict | None) -> None:
+        if packet is None:
+            return
+        metadata = packet["metadata"]
+        detected = apply_class_thresholds(packet["result"], args.owlv2_threshold, class_thresholds)
+        lifted = [
+            associate_projection(projected, mapped_objects, ALIASES)
+            for item in detected["detections"]
+            if (projected := project_detection_to_world(
+                item, metadata["depth"], metadata["pose"]
+            )) is not None
+        ]
+        fused = fusion.update(lifted, metadata["frame_index"])
+        open_vocab_observations.append({
+            "frame_index": metadata["frame_index"], "pose": metadata["pose"],
+            "latency_ms": detected["latency_ms"], "detections_2d": detected["detections"],
+            "detections_3d": [item for item in lifted if item["confirmed"]],
+            "unassociated_3d": [item for item in lifted if not item["confirmed"]],
+            "fused_objects_3d": fused,
+        })
+
     with habitat_sim.Simulator(habitat_sim.Configuration(sim_cfg, [agent_cfg])) as sim:
         if not sim.pathfinder.is_loaded:
             raise RuntimeError("HM3D navmesh did not load")
@@ -203,10 +246,11 @@ def main() -> None:
         while not state.is_finished():
             if not state.active:
                 break
+            planning_candidates = recovery.filtered_candidates(candidates)
             plan = plan_joint_mission(
                 grid,
                 task_graph,
-                candidates,
+                planning_candidates,
                 current_f,
                 active_task_ids=state.active,
                 completed_task_ids=state.completed,
@@ -230,6 +274,8 @@ def main() -> None:
                 agent_state.rotation = quat_from_angle_axis(yaw, np.asarray([0.0, 1.0, 0.0]))
                 agent.set_state(agent_state)
                 observations = sim.get_sensor_observations()
+                if async_detector is not None:
+                    consume_async(async_detector.poll())
                 trajectory.append(pose_f)
                 save_frame = frame_index % max(1, args.save_every) == 0
                 detect_frame = bool(
@@ -240,22 +286,10 @@ def main() -> None:
                 frame_path = frames_dir / f"frame_{frame_index:06d}.jpg"
                 if save_frame or detect_frame:
                     Image.fromarray(np.asarray(observations["rgb"])[..., :3].astype(np.uint8)).save(frame_path, quality=90)
-                if detect_frame:
-                    detected = open_vocab_detector.detect(frame_path)
-                    lifted = [
-                        associate_projection(projected, mapped_objects, ALIASES)
-                        for item in detected["detections"]
-                        if (projected := project_detection_to_world(
-                            item, np.asarray(observations["depth"]), pose_f
-                        )) is not None
-                    ]
-                    open_vocab_observations.append({
-                        "frame_index": frame_index,
-                        "pose": pose_f,
-                        "latency_ms": detected["latency_ms"],
-                        "detections_2d": detected["detections"],
-                        "detections_3d": [item for item in lifted if item["confirmed"]],
-                        "unassociated_3d": [item for item in lifted if not item["confirmed"]],
+                if detect_frame and async_detector is not None:
+                    async_detector.submit(frame_path, {
+                        "frame_index": frame_index, "pose": list(pose_f),
+                        "depth": np.asarray(observations["depth"], dtype=np.float32).copy(),
                     })
                 frame_index += 1
                 previous = point_xy
@@ -278,7 +312,10 @@ def main() -> None:
             Image.fromarray(np.asarray(observations["rgb"])[..., :3].astype(np.uint8)).save(terminal_rgb, quality=95)
             open_vocab_verification = None
             if open_vocab_detector is not None:
-                local_result = open_vocab_detector.detect(terminal_rgb)
+                consume_async(async_detector.flush() if async_detector is not None else None)
+                local_result = apply_class_thresholds(
+                    open_vocab_detector.detect(terminal_rgb), args.owlv2_threshold, class_thresholds
+                )
                 local_found = target_found(local_result, tasks[visit["task_id"]]["verification_label"], ALIASES)
                 accepted = ALIASES.get(
                     tasks[visit["task_id"]]["verification_label"],
@@ -294,7 +331,18 @@ def main() -> None:
                         item, np.asarray(observations["depth"]), current_f
                     )) is not None
                 ]
-                geometry_confirmed = any(item["confirmed"] for item in lifted_targets)
+                terminal_fused = fusion.update(lifted_targets, frame_index)
+                target_label = tasks[visit["task_id"]]["verification_label"]
+                novel_confirmed = any(
+                    item["source"] == "online_novel"
+                    and item["label"] in ALIASES.get(target_label, {target_label})
+                    and any(
+                        math.dist(item["center"], projected["center"]) <= fusion.association_radius_m
+                        for projected in lifted_targets
+                    )
+                    for item in terminal_fused
+                )
+                geometry_confirmed = any(item["confirmed"] for item in lifted_targets) or novel_confirmed
                 planned_object_confirmed = any(
                     item["confirmed"] and item["associated_object_id"] == visit["object_id"]
                     for item in lifted_targets
@@ -304,6 +352,7 @@ def main() -> None:
                     "detected_2d": local_found,
                     "geometry_confirmed": geometry_confirmed,
                     "planned_object_confirmed": planned_object_confirmed,
+                    "novel_track_confirmed": novel_confirmed,
                     "target_label": tasks[visit["task_id"]]["verification_label"],
                     "latency_ms": local_result["latency_ms"],
                     "detections": target_detections,
@@ -354,12 +403,21 @@ def main() -> None:
                 outcome = "found" if selected_found else "not_found"
             else:
                 outcome = "done"
+            recovery_decision = recovery.decide(
+                visit["task_id"], visit["candidate_id"], selected_found,
+                candidates[visit["task_id"]],
+            ) if action in {"inspect", "find", "observe"} else {
+                "retry": False, "attempt_index": 1, "reason": "non_visual_action",
+            }
+            mission_outcome = "retry" if recovery_decision["retry"] else outcome
             observation_record = {
                 "sequence": len(observations_log),
                 "task_id": visit["task_id"],
                 "candidate_id": visit["candidate_id"],
                 "pose": current_f,
-                "outcome": outcome,
+                "outcome": mission_outcome,
+                "verification_outcome": outcome,
+                "recovery": recovery_decision,
                 "frame_index": frame_index,
                 "verification": verification,
                 "rgb": str(terminal_rgb.relative_to(args.output_dir)),
@@ -375,7 +433,7 @@ def main() -> None:
                 mapped_object["probability"] = new_probability
                 mapped_object["online_verification"] = {
                     "task_id": visit["task_id"],
-                    "outcome": outcome,
+                    "outcome": mission_outcome,
                     "matching_pixels": verification["matching_pixels"],
                     "mode": args.verification_mode,
                     "vlm_confidence": None if vlm_verification is None else vlm_verification["confidence"],
@@ -387,13 +445,19 @@ def main() -> None:
                     "object_id": visit["object_id"],
                     "old_probability": old_probability,
                     "new_probability": new_probability,
-                    "outcome": outcome,
+                    "outcome": mission_outcome,
                 })
-            state.finish_task(visit["task_id"], outcome)
-            print(f"task={visit['task_id']} outcome={outcome} pixels={verification['matching_pixels']} active={sorted(state.active)}", flush=True)
+            if not recovery_decision["retry"]:
+                state.finish_task(visit["task_id"], outcome)
+            print(f"task={visit['task_id']} outcome={mission_outcome} attempt={recovery_decision['attempt_index']} pixels={verification['matching_pixels']} active={sorted(state.active)}", flush=True)
 
+    if async_detector is not None:
+        consume_async(async_detector.flush())
+        async_detector.close()
     if open_vocab_detector is not None:
         open_vocab_detector.close()
+
+    updated_scene_graph, added_novel_objects = fusion.materialize_scene_graph(updated_scene_graph)
 
     trace = {
         "format": "pre_map_vln.habitat_execution.v1",
@@ -405,12 +469,19 @@ def main() -> None:
         "observations": observations_log,
         "map_updates": map_updates,
         "open_vocab_observations": open_vocab_observations,
+        "semantic_fusion": {
+            "tracks": fusion.snapshot(confirmed_only=False),
+            "confirmed_tracks": fusion.snapshot(confirmed_only=True),
+            "added_novel_object_ids": added_novel_objects,
+        },
         "open_vocab_detector": None if open_vocab_detector is None else {
             "backend": "local_owlv2",
             "prompts": detector_prompts,
             "threshold": args.owlv2_threshold,
+            "class_thresholds": class_thresholds,
             "keyframe_interval": args.owlv2_every,
             "startup": open_vocab_detector.ready,
+            "async": None if async_detector is None else async_detector.stats,
         },
         "replans": replans,
         "trajectory_xyz_yaw": trajectory,

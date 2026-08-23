@@ -1,8 +1,9 @@
 import unittest
+import time
 
 import numpy as np
 
-from stage2.open_vocab_detector import associate_projection, project_detection_to_world, target_found
+from stage2.open_vocab_detector import AsyncOpenVocabularyDetector, apply_class_thresholds, associate_projection, project_detection_to_world, target_found
 
 
 class OpenVocabularyDetectorTest(unittest.TestCase):
@@ -43,6 +44,30 @@ class OpenVocabularyDetectorTest(unittest.TestCase):
         self.assertTrue(near["confirmed"])
         self.assertEqual(near["associated_object_id"], "tv_1")
         self.assertFalse(far["confirmed"])
+
+    def test_class_specific_threshold_filters_weak_detection(self):
+        result = {"detections": [
+            {"label": "television", "score": 0.4},
+            {"label": "chair", "score": 0.4},
+        ]}
+        filtered = apply_class_thresholds(result, 0.2, {"television": 0.45})
+        self.assertEqual([item["label"] for item in filtered["detections"]], ["chair"])
+
+    def test_async_detector_drops_request_while_busy(self):
+        class FakeBackend:
+            def detect(self, image_path):
+                time.sleep(0.02)
+                return {"image_path": str(image_path), "detections": []}
+
+        detector = AsyncOpenVocabularyDetector(FakeBackend())
+        try:
+            self.assertTrue(detector.submit("first.jpg", {"frame_index": 1}))
+            self.assertFalse(detector.submit("second.jpg", {"frame_index": 2}))
+            result = detector.flush()
+            self.assertEqual(result["metadata"]["frame_index"], 1)
+            self.assertEqual(detector.stats, {"submitted": 1, "dropped_busy": 1})
+        finally:
+            detector.close()
 
 
 if __name__ == "__main__":

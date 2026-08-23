@@ -298,10 +298,10 @@ def main():
         }
         detected_objects = {}
         online_object_ids = sorted({
-            detected["associated_object_id"]
+            detected.get("associated_object_id") or detected.get("id")
             for item in execution.get("open_vocab_observations", [])
-            for detected in item.get("detections_3d", [])
-            if detected.get("associated_object_id")
+            for detected in item.get("fused_objects_3d", item.get("detections_3d", []))
+            if detected.get("associated_object_id") or detected.get("id")
         })
         online_marker_ids = {object_id: index for index, object_id in enumerate(online_object_ids)}
         replan_by_frame = {0: execution["replans"][0]}
@@ -353,8 +353,12 @@ def main():
             bag.write("/stage2/task_text", task_text_marker(current_text, pose, stamp), stamp)
 
             if frame_index in open_vocab_by_frame:
-                for detected in open_vocab_by_frame[frame_index].get("detections_3d", []):
-                    object_id = detected["associated_object_id"]
+                fused_values = open_vocab_by_frame[frame_index].get(
+                    "fused_objects_3d",
+                    open_vocab_by_frame[frame_index].get("detections_3d", []),
+                )
+                for detected in fused_values:
+                    object_id = detected.get("associated_object_id") or detected.get("id")
                     previous = detected_objects.get(object_id)
                     if previous is None or float(detected["score"]) >= float(previous["score"]):
                         detected_objects[object_id] = detected
