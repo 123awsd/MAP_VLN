@@ -4,13 +4,15 @@
   <arg name="rate" default="1.0"/>
   <arg name="topdown" default="true"/>
   <arg name="delay" default="2.0"/>
-  <arg name="roofless_min_z" default="0.50"/>
-  <arg name="roofless_max_z" default="2.25"/>
+  <arg name="roofless_floor_clearance" default="0.25"/>
+  <arg name="roofless_ceiling_min_height" default="1.65"/>
+  <arg name="roofless_ceiling_thickness" default="0.60"/>
   <param name="/use_sim_time" value="true"/>
   <node pkg="pre_map_bridge" type="roofless_visualization_node.py"
         name="roofless_visualization" output="screen">
-    <param name="min_z" value="$(arg roofless_min_z)"/>
-    <param name="max_z" value="$(arg roofless_max_z)"/>
+    <param name="floor_clearance" value="$(arg roofless_floor_clearance)"/>
+    <param name="ceiling_min_height" value="$(arg roofless_ceiling_min_height)"/>
+    <param name="ceiling_thickness" value="$(arg roofless_ceiling_thickness)"/>
   </node>
   <node pkg="rviz" type="rviz" name="pre_map_vln_rviz" output="screen"
         args="-d $(find pre_map_bridge)/config/stage1.rviz"/>

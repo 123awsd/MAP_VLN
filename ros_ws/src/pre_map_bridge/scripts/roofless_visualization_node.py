@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Publish a roofless occupied cloud and the currently active FALCON B-spline."""
 
-import copy
-
 import numpy as np
 import rospy
 from geometry_msgs.msg import Point
+from nav_msgs.msg import Odometry
 from sensor_msgs.msg import PointCloud2, PointField
 from trajectory.msg import Bspline
 from visualization_msgs.msg import Marker
@@ -13,8 +12,13 @@ from visualization_msgs.msg import Marker
 
 class RooflessVisualization:
     def __init__(self):
-        self.min_z = float(rospy.get_param("~min_z", 0.50))
-        self.max_z = float(rospy.get_param("~max_z", 2.25))
+        self.fallback_floor_z = float(rospy.get_param("~floor_z", 0.0))
+        self.sensor_height = float(rospy.get_param("~sensor_height", 1.0))
+        self.floor_clearance = float(rospy.get_param("~floor_clearance", 0.25))
+        self.ceiling_min_height = float(rospy.get_param("~ceiling_min_height", 1.65))
+        self.ceiling_thickness = float(rospy.get_param("~ceiling_thickness", 0.60))
+        self.voxel_resolution = float(rospy.get_param("~voxel_resolution", 0.10))
+        self.floor_z = self.fallback_floor_z
         self.plan_samples = max(8, int(rospy.get_param("~plan_samples", 64)))
         self.cloud_pub = rospy.Publisher(
             "/pre_map_vln/roofless_map", PointCloud2, queue_size=1
@@ -29,40 +33,121 @@ class RooflessVisualization:
             queue_size=1,
         )
         rospy.Subscriber("/planning/bspline", Bspline, self.plan_callback, queue_size=1)
+        rospy.Subscriber(
+            "/uav_simulator/odometry", Odometry, self.odom_callback, queue_size=1
+        )
         rospy.loginfo(
-            "Roofless visualization keeps %.2f <= world Z <= %.2f m",
-            self.min_z,
-            self.max_z,
+            "Envelope filter: floor +%.2f m, roof top %.2f m, min ceiling %.2f m",
+            self.floor_clearance,
+            self.ceiling_thickness,
+            self.ceiling_min_height,
         )
 
+    def odom_callback(self, message):
+        self.floor_z = float(message.pose.pose.position.z) - self.sensor_height
+
     def cloud_callback(self, message):
-        z_fields = [field for field in message.fields if field.name == "z"]
-        if len(z_fields) != 1 or z_fields[0].datatype != PointField.FLOAT32:
-            rospy.logwarn_throttle(5.0, "Cannot filter cloud: z is not FLOAT32")
+        xyz_fields = {
+            field.name: field
+            for field in message.fields
+            if field.name in ("x", "y", "z")
+        }
+        if len(xyz_fields) != 3 or any(
+            field.datatype != PointField.FLOAT32 for field in xyz_fields.values()
+        ):
+            rospy.logwarn_throttle(5.0, "Cannot filter cloud: XYZ are not FLOAT32")
             return
         if message.point_step <= 0 or not message.data:
             return
         point_count = len(message.data) // message.point_step
         endian = ">f4" if message.is_bigendian else "<f4"
-        z_values = np.ndarray(
-            shape=(point_count,),
-            dtype=endian,
-            buffer=message.data,
-            offset=z_fields[0].offset,
-            strides=(message.point_step,),
+        coordinates = {
+            axis: np.ndarray(
+                shape=(point_count,),
+                dtype=endian,
+                buffer=message.data,
+                offset=xyz_fields[axis].offset,
+                strides=(message.point_step,),
+            )
+            for axis in ("x", "y", "z")
+        }
+        finite = np.isfinite(coordinates["x"]) & np.isfinite(coordinates["y"]) & np.isfinite(
+            coordinates["z"]
         )
-        keep = np.isfinite(z_values) & (z_values >= self.min_z) & (z_values <= self.max_z)
-        packed = np.frombuffer(message.data, dtype=np.uint8).reshape(
-            point_count, message.point_step
+        valid_indices = np.flatnonzero(finite)
+        if not len(valid_indices):
+            return
+        x_values = coordinates["x"][valid_indices]
+        y_values = coordinates["y"][valid_indices]
+        z_values = coordinates["z"][valid_indices]
+
+        # Each XY voxel column has its own upper envelope. Removing an upper
+        # layer below that envelope follows horizontal or sloped ceilings while
+        # retaining vertical walls and obstacle sides below it.
+        x_cells = np.rint(x_values / self.voxel_resolution).astype(np.int64)
+        y_cells = np.rint(y_values / self.voxel_resolution).astype(np.int64)
+        y_min = int(y_cells.min())
+        y_span = int(y_cells.max()) - y_min + 1
+        column_keys = (x_cells - int(x_cells.min())) * y_span + (y_cells - y_min)
+        _, inverse = np.unique(column_keys, return_inverse=True)
+        column_top = np.full(int(inverse.max()) + 1, -np.inf, dtype=np.float32)
+        np.maximum.at(column_top, inverse, z_values)
+
+        floor_mask = z_values <= self.floor_z + self.floor_clearance
+        ceiling_columns = column_top[inverse] >= self.floor_z + self.ceiling_min_height
+        ceiling_mask = ceiling_columns & (
+            z_values >= column_top[inverse] - self.ceiling_thickness
         )
-        filtered = np.ascontiguousarray(packed[keep])
-        output = copy.copy(message)
+        visible = ~(floor_mask | ceiling_mask)
+        visible_z = z_values[visible]
+        height_span = max(0.1, self.ceiling_min_height - self.floor_clearance)
+        height_ratio = np.clip(
+            (visible_z - self.floor_z - self.floor_clearance) / height_span,
+            0.0,
+            1.0,
+        )
+
+        # FUEL's office demo is dominated by cyan explored surfaces and magenta
+        # upper boundaries. Use the same restrained palette instead of RViz's
+        # full rainbow, which makes a roofless wall-only view visually noisy.
+        red = np.interp(height_ratio, (0.0, 0.55, 1.0), (0, 35, 235)).astype(np.uint32)
+        green = np.interp(height_ratio, (0.0, 0.55, 1.0), (210, 70, 0)).astype(np.uint32)
+        blue = np.interp(height_ratio, (0.0, 0.55, 1.0), (230, 210, 210)).astype(np.uint32)
+        rgba = (np.uint32(255) << np.uint32(24)) | (red << 16) | (green << 8) | blue
+        endian = ">" if message.is_bigendian else "<"
+        colored = np.empty(
+            int(visible.sum()),
+            dtype=[("x", endian + "f4"), ("y", endian + "f4"),
+                   ("z", endian + "f4"), ("rgba", endian + "u4")],
+        )
+        colored["x"] = x_values[visible]
+        colored["y"] = y_values[visible]
+        colored["z"] = visible_z
+        colored["rgba"] = rgba
+
+        output = PointCloud2()
+        output.header = message.header
         output.height = 1
-        output.width = int(filtered.shape[0])
+        output.width = len(colored)
+        output.fields = [
+            PointField("x", 0, PointField.FLOAT32, 1),
+            PointField("y", 4, PointField.FLOAT32, 1),
+            PointField("z", 8, PointField.FLOAT32, 1),
+            PointField("rgba", 12, PointField.UINT32, 1),
+        ]
+        output.is_bigendian = message.is_bigendian
+        output.point_step = 16
         output.row_step = output.point_step * output.width
-        output.data = filtered.tobytes()
+        output.data = colored.tobytes()
         output.is_dense = True
         self.cloud_pub.publish(output)
+        rospy.loginfo_throttle(
+            5.0,
+            "Roofless cloud: %d -> %d points (floor %.2f m)",
+            point_count,
+            output.width,
+            self.floor_z,
+        )
 
     @staticmethod
     def de_boor(control, knots, degree, value):
@@ -99,9 +184,9 @@ class RooflessVisualization:
         marker.action = Marker.ADD
         marker.pose.orientation.w = 1.0
         marker.scale.x = 0.035
-        marker.color.r = 1.0
-        marker.color.g = 0.76
-        marker.color.b = 0.08
+        marker.color.r = 0.95
+        marker.color.g = 0.48
+        marker.color.b = 0.02
         marker.color.a = 0.95
         start, end = float(knots[degree]), float(knots[len(control)])
         for value in np.linspace(start, end, self.plan_samples):

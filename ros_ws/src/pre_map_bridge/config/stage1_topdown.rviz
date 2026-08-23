@@ -12,42 +12,42 @@ Visualization Manager:
       Name: Metric Grid
       Plane: XY
       Reference Frame: world
-    - Alpha: 0.48
+    - Alpha: 0.9
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds: true
       Axis: Z
       Channel Name: intensity
       Class: rviz/PointCloud2
-      Color: 185; 185; 185
-      Color Transformer: FlatColor
+      Color: 0; 210; 230
+      Color Transformer: RGB8
       Decay Time: 0
       Enabled: true
-      Name: Explored Boundary Map
+      Name: FUEL-style Roofless Map
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: false
-      Size (Pixels): 1
-      Size (m): 0.02
+      Size (Pixels): 2
+      Size (m): 0.025
       Style: Points
-      Topic: /voxel_mapping/occupancy_grid_occupied
+      Topic: /pre_map_vln/roofless_map
       Unreliable: false
       Use Fixed Frame: true
-    - Alpha: 0.78
+    - Alpha: 0.72
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds: true
       Axis: Z
       Channel Name: intensity
       Class: rviz/PointCloud2
-      Color: 255; 120; 25
-      Color Transformer: FlatColor
+      Color: 255; 210; 0
+      Color Transformer: RGB8
       Decay Time: 0
       Enabled: true
       Name: Frontier Cells
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: false
-      Size (Pixels): 3
-      Size (m): 0.06
+      Size (Pixels): 1
+      Size (m): 0.015
       Style: Points
       Topic: /planning_vis/frontier_pcl
       Unreliable: false
@@ -59,7 +59,7 @@ Visualization Manager:
       Namespaces: {}
       Queue Size: 100
     - Class: rviz/Marker
-      Enabled: true
+      Enabled: false
       Marker Topic: /planning/travel_traj
       Name: Executed Trajectory
       Namespaces: {}
@@ -67,7 +67,7 @@ Visualization Manager:
     - Alpha: 0.9
       Buffer Length: 1
       Class: rviz/Path
-      Color: 35; 220; 105
+      Color: 15; 45; 150
       Enabled: true
       Head Diameter: 0.15
       Head Length: 0.1
@@ -102,7 +102,7 @@ Visualization Manager:
       Unreliable: false
   Enabled: true
   Global Options:
-    Background Color: 25; 28; 32
+    Background Color: 255; 255; 255
     Default Light: true
     Fixed Frame: world
     Frame Rate: 15

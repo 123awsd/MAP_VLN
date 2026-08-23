@@ -3,8 +3,9 @@
   <arg name="box_csv" default="/workspace/shared/outputs/boxer/hm3d_stage1/boxer_3dbbs_visual.csv"/>
   <arg name="rviz" default="true"/>
   <arg name="topdown" default="true"/>
-  <arg name="roofless_min_z" default="0.50"/>
-  <arg name="roofless_max_z" default="2.25"/>
+  <arg name="roofless_floor_clearance" default="0.25"/>
+  <arg name="roofless_ceiling_min_height" default="1.65"/>
+  <arg name="roofless_ceiling_thickness" default="0.60"/>
 
   <include file="$(find pre_map_bridge)/launch/habitat_falcon.launch">
     <arg name="box_csv" value="$(arg box_csv)"/>
@@ -12,8 +13,9 @@
 
   <node pkg="pre_map_bridge" type="roofless_visualization_node.py"
         name="roofless_visualization" output="screen">
-    <param name="min_z" value="$(arg roofless_min_z)"/>
-    <param name="max_z" value="$(arg roofless_max_z)"/>
+    <param name="floor_clearance" value="$(arg roofless_floor_clearance)"/>
+    <param name="ceiling_min_height" value="$(arg roofless_ceiling_min_height)"/>
+    <param name="ceiling_thickness" value="$(arg roofless_ceiling_thickness)"/>
   </node>
 
   <node pkg="rosbag" type="record" name="stage1_bag_recorder" output="screen"
