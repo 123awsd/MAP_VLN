@@ -1,0 +1,36 @@
+services:
+  falcon:
+    build:
+      context: .
+      dockerfile: containers/falcon_noetic/Dockerfile
+      network: host
+    image: pre-map-vln/falcon-noetic:local
+    working_dir: /workspace/falcon_ws
+    volumes:
+      - ./outputs:/workspace/shared/outputs
+      - ./logs:/workspace/shared/logs
+      - ./runtime/bridge:/workspace/shared/bridge
+    stdin_open: true
+    tty: true
+    networks:
+      - pre_map_vln
+
+  occusg:
+    build:
+      context: .
+      dockerfile: containers/occusg_humble/Dockerfile
+      network: host
+    image: pre-map-vln/occusg-humble:local
+    working_dir: /workspace/occusg_ws
+    volumes:
+      - ./runtime/occusg:/workspace/shared/occusg
+      - ./outputs:/workspace/shared/outputs
+      - ./occusg_bridge:/workspace/bridge:ro
+    stdin_open: true
+    tty: true
+    networks:
+      - pre_map_vln
+
+networks:
+  pre_map_vln:
+    name: pre_map_vln

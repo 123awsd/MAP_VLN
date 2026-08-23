@@ -6,11 +6,15 @@ checkpoints/*
 data/*
 logs/*
 outputs/*
+runtime/bridge/*
+runtime/occusg/*
 third_party/*
 
 !checkpoints/README.md
 !data/README.md
 !outputs/README.md
+!runtime/bridge/.gitkeep
+!runtime/occusg/.gitkeep
 !third_party/README.md
 
 __pycache__/
@@ -19,4 +23,3 @@ __pycache__/
 .ruff_cache/
 .idea/
 .vscode/
-

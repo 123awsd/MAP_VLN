@@ -1,0 +1,16 @@
+.git
+.envs
+build
+cache
+checkpoints
+data
+logs
+outputs
+记忆
+third_party/boxer
+third_party/OccuSG/*
+!third_party/OccuSG/src
+third_party/OccuSG/src/*
+!third_party/OccuSG/src/incremental_dude_ros2
+third_party/habitat-lab
+third_party/Open3D

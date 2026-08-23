@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# FALCON only uses this command for an informational startup banner. The
+# planner container is intentionally CPU-only; Habitat owns the real GPU.
+if [[ "${1:-}" == "--query-gpu=name,memory.total,memory.free" ]]; then
+  printf 'CPU-only FALCON container, 0 MiB, 0 MiB\n'
+  exit 0
+fi
+printf 'NVIDIA device intentionally delegated to the Habitat process\n'

@@ -1,0 +1,23 @@
+<launch>
+  <arg name="map_name" default="hm3d_example"/>
+  <arg name="bridge_dir" default="/workspace/shared/bridge"/>
+  <rosparam command="load" file="$(find exploration_manager)/config/robot/uav_model_simulator.yaml"/>
+  <rosparam command="load" file="$(find voxel_mapping)/config/voxel_mapping.yaml"/>
+  <rosparam command="load" file="$(find pathfinding)/config/astar.yaml"/>
+  <rosparam command="load" file="$(find fast_planner)/config/fast_planner.yaml"/>
+  <rosparam command="load" file="$(find exploration_preprocessing)/config/frontier_finder.yaml"/>
+  <rosparam command="load" file="$(find exploration_preprocessing)/config/hgrid.yaml"/>
+  <rosparam command="load" file="$(find exploration_utils)/config/perception_utils.yaml"/>
+  <rosparam command="load" file="$(find exploration_manager)/config/exploration_manager.yaml"/>
+  <!-- Project-specific values must be loaded last so they override upstream defaults. -->
+  <rosparam command="load" file="$(find pre_map_bridge)/config/$(arg map_name).yaml"/>
+  <node pkg="pre_map_bridge" type="file_bridge_node.py" name="habitat_file_bridge" output="screen">
+    <param name="bridge_dir" value="$(arg bridge_dir)"/>
+  </node>
+  <node pkg="exploration_manager" name="exploration_node" type="exploration_node" output="screen">
+    <remap from="/odom_world" to="/uav_simulator/odometry"/>
+    <remap from="/voxel_mapping/depth_image" to="/uav_simulator/depth_image"/>
+    <remap from="/transformer/sensor_pose_topic" to="/uav_simulator/sensor_pose"/>
+  </node>
+  <node pkg="fast_planner" name="traj_server" type="traj_server" output="screen"/>
+</launch>

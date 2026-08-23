@@ -1,0 +1,36 @@
+diff --git a/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h b/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h
+index 671ab0f..61fdace 100644
+--- a/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h
++++ b/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h
+@@ -137,6 +137,7 @@ private:
+   double min_view_finish_fraction_;
+   double ground_height_, ground_offset_;
+   double viewpoint_z_score_cutoff_;
++  double viewpoint_height_;
+   double cell_height_clearance_;
+   vector<double> cell_heights_;
+ 
+diff --git a/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp b/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
+index 09fa824..044f55a 100644
+--- a/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
++++ b/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
+@@ -28,6 +28,7 @@ FrontierFinder::FrontierFinder(ros::NodeHandle &nh, const MapServer::Ptr &map_ser
+   nh.param("/frontier_finder/ground_height", ground_height_, 0.0);
+   nh.param("/frontier_finder/ground_offset", ground_offset_, 0.0);
+   nh.param("/frontier_finder/viewpoint_z_score_cutoff", viewpoint_z_score_cutoff_, 0.0);
++  nh.param("/frontier_finder/viewpoint_height", viewpoint_height_, -1.0);
+   nh.param("/frontier_finder/cell_height_clearance", cell_height_clearance_, 0.1);
+ 
+   raycaster_.reset(new RayCaster);
+@@ -745,7 +746,10 @@ void FrontierFinder::sampleViewpoints(Frontier &frontier) {
+     if (rc < 1.0)
+       candidate_dphi = candidate_dphi_ * 2.0;
+     for (double phi = -M_PI; phi < M_PI; phi += candidate_dphi) {
+-      const Vector3d sample_pos = frontier.average_ + rc * Vector3d(cos(phi), sin(phi), 0);
++      Vector3d sample_pos = frontier.average_ + rc * Vector3d(cos(phi), sin(phi), 0);
++      if (viewpoint_height_ >= 0.0) {
++        sample_pos.z() = viewpoint_height_;
++      }
+ 
+       // Qualified viewpoint is in bounding box and in safe region
+       if (!map_server_->isInBox(sample_pos) ||

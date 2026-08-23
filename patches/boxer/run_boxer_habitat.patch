@@ -1,0 +1,24 @@
+diff --git a/run_boxer.py b/run_boxer.py
+--- a/run_boxer.py
++++ b/run_boxer.py
+@@ -137,7 +137,10 @@ def main():
+ 
+     # Determine dataset type and seq_name from input string
+-    if bool(re.search(r"scene\d{4}_\d{2}", args.input)) or "/scannet/" in args.input:
++    if os.path.isfile(os.path.join(args.input, "manifest.json")):
++        dataset_type = "habitat"
++        seq_name = os.path.basename(args.input.rstrip("/"))
++    elif bool(re.search(r"scene\d{4}_\d{2}", args.input)) or "/scannet/" in args.input:
+         dataset_type = "scannet"
+         seq_name = os.path.basename(args.input.rstrip("/"))
+@@ -205,7 +208,11 @@ def main():
+         return
+ 
+     # Create data loader
+-    if dataset_type == "scannet":
++    if dataset_type == "habitat":
++        from habitat_loader import HabitatLoader
++        loader = HabitatLoader(args.input, start_frame=args.start_n - 1,
++                               skip_frames=args.skip_n, max_frames=args.max_n)
++    elif dataset_type == "scannet":
+         loader = ScanNetLoader(
