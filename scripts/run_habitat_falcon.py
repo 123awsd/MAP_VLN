@@ -86,7 +86,12 @@ def read_command() -> Optional[dict]:
 
 
 def follow_command(
-    sim, origin_h: np.ndarray, command: dict, dt: float, use_planner_yaw: bool = False
+    sim,
+    origin_h: np.ndarray,
+    command: dict,
+    dt: float,
+    use_planner_yaw: bool = False,
+    navmesh_constrained: bool = False,
 ) -> bool:
     agent = sim.get_agent(0)
     state = agent.get_state()
@@ -98,11 +103,19 @@ def follow_command(
     distance = float(np.linalg.norm(direction))
     moved = False
     if distance > 1e-4:
-        desired = current + direction / distance * min(distance, 1.0 * dt)
-        next_position = np.asarray(
-            sim.pathfinder.try_step(current.astype(np.float32), desired.astype(np.float32)),
-            dtype=np.float64,
-        )
+        if navmesh_constrained:
+            desired = current + direction / distance * min(distance, 1.0 * dt)
+            next_position = np.asarray(
+                sim.pathfinder.try_step(
+                    current.astype(np.float32), desired.astype(np.float32)
+                ),
+                dtype=np.float64,
+            )
+        else:
+            # PositionCommand is the time-sampled desired UAV pose. Track it
+            # directly: Habitat's navmesh is for a walking cylinder and blocks
+            # valid FALCON flight across railings, stairs and open voids.
+            next_position = target_h
         state.position = next_position
         moved = bool(np.linalg.norm(next_position - current) > 1e-4)
         if not use_planner_yaw:
@@ -130,6 +143,11 @@ def main() -> None:
     parser.add_argument("--hz", type=float, default=5.0)
     parser.add_argument("--follow-falcon", action="store_true")
     parser.add_argument(
+        "--navmesh-constrained",
+        action="store_true",
+        help="use Habitat ground-agent navmesh instead of exact UAV command tracking",
+    )
+    parser.add_argument(
         "--use-planner-yaw",
         action="store_true",
         help="use FALCON yaw instead of facing the actual movement direction",
@@ -149,6 +167,19 @@ def main() -> None:
     parser.add_argument("--panorama", action="store_true", help="rotate in place for a 360-degree scan")
     parser.add_argument("--record-dir", type=Path, default=None)
     parser.add_argument("--record-every", type=int, default=5)
+    parser.add_argument(
+        "--completion-file",
+        type=Path,
+        default=None,
+        help="stop after this FALCON-completion sentinel appears",
+    )
+    parser.add_argument(
+        "--finish-hold",
+        type=float,
+        default=3.0,
+        help="seconds to keep publishing frames after FALCON enters FINISH",
+    )
+    parser.add_argument("--result-file", type=Path, default=None)
     args = parser.parse_args()
     if not SCENE.exists():
         raise FileNotFoundError(SCENE)
@@ -179,8 +210,18 @@ def main() -> None:
         initial_sensor_h = np.asarray(agent.get_state().sensor_states["depth"].position, dtype=np.float64)
 
         period, started, sequence, idle_time = 1.0 / args.hz, time.monotonic(), 0, 0.0
+        completion_seen = None
         while time.monotonic() - started < args.duration:
             tick = time.monotonic()
+            if args.completion_file is not None and args.completion_file.exists():
+                if completion_seen is None:
+                    completion_seen = tick
+                    print(
+                        f"FALCON completion detected; holding {args.finish_hold:.1f}s for final frames",
+                        flush=True,
+                    )
+                elif tick - completion_seen >= args.finish_hold:
+                    break
             if args.follow_falcon:
                 command = read_command()
                 moved = False
@@ -191,6 +232,7 @@ def main() -> None:
                         command,
                         period,
                         use_planner_yaw=args.use_planner_yaw,
+                        navmesh_constrained=args.navmesh_constrained,
                     )
                 idle_time = 0.0 if moved else idle_time + period
                 if (
@@ -246,7 +288,22 @@ def main() -> None:
             if sequence % max(1, int(args.hz * 2)) == 0:
                 print(f"frame={sequence} position_falcon={position_f.round(3).tolist()}", flush=True)
             time.sleep(max(0.0, period - (time.monotonic() - tick)))
-        print(f"completed frames={sequence} bridge={BRIDGE_DIR}")
+        elapsed = time.monotonic() - started
+        termination = "complete" if completion_seen is not None else "timeout"
+        result = {
+            "termination": termination,
+            "elapsed_seconds": elapsed,
+            "frames": sequence,
+            "max_duration_seconds": args.duration,
+            "finish_hold_seconds": args.finish_hold,
+        }
+        if args.result_file is not None:
+            args.result_file.parent.mkdir(parents=True, exist_ok=True)
+            atomic_json(args.result_file, result)
+        print(
+            f"terminated={termination} elapsed={elapsed:.1f}s frames={sequence} bridge={BRIDGE_DIR}",
+            flush=True,
+        )
 
 
 if __name__ == "__main__":

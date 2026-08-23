@@ -11,6 +11,7 @@ from geometry_msgs.msg import Point, PoseStamped, TransformStamped
 from nav_msgs.msg import Odometry, Path as RosPath
 from quadrotor_msgs.msg import PositionCommand
 from sensor_msgs.msg import Image
+from std_msgs.msg import Int32, String
 from visualization_msgs.msg import Marker, MarkerArray
 
 
@@ -20,6 +21,8 @@ class FileBridge:
         self.root.mkdir(parents=True, exist_ok=True)
         self.last_sequence = -1
         self.latest = None
+        self.completion_path = self.root / "exploration_complete.json"
+        self.completion_written = False
         self.depth_pub = rospy.Publisher("/uav_simulator/depth_image", Image, queue_size=1)
         self.rgb_pub = rospy.Publisher("/habitat/rgb", Image, queue_size=1)
         self.odom_pub = rospy.Publisher("/uav_simulator/odometry", Odometry, queue_size=10)
@@ -28,9 +31,14 @@ class FileBridge:
         self.box_pub = rospy.Publisher(
             "/pre_map_vln/box_markers", MarkerArray, queue_size=1, latch=True
         )
+        self.status_pub = rospy.Publisher(
+            "/pre_map_vln/exploration_status", String, queue_size=1, latch=True
+        )
         self.path = RosPath()
         self.path.header.frame_id = "world"
         rospy.Subscriber("/planning/pos_cmd", PositionCommand, self.command_callback, queue_size=1)
+        rospy.Subscriber("/planning/replan", Int32, self.replan_callback, queue_size=10)
+        self.status_pub.publish(String(data="running"))
         rospy.Timer(rospy.Duration(1.0 / 30.0), self.pose_timer)
         rospy.Timer(rospy.Duration(1.0 / 10.0), self.frame_timer)
         rospy.Timer(rospy.Duration(1.0), self.publish_boxes)
@@ -50,6 +58,24 @@ class FileBridge:
             "acceleration": [msg.acceleration.x, msg.acceleration.y, msg.acceleration.z],
             "yaw": msg.yaw, "yaw_dot": msg.yaw_dot,
         })
+
+    def replan_callback(self, msg):
+        # FALCON publishes replan=2 continuously only after its FSM enters FINISH.
+        # Persist that state outside the ROS container so the Habitat driver and
+        # recorder can stop on planner completion instead of a fixed wall-clock cut.
+        if msg.data != 2 or self.completion_written:
+            return
+        self.completion_written = True
+        payload = {
+            "status": "complete",
+            "source": "/planning/replan",
+            "value": int(msg.data),
+            "ros_stamp": rospy.get_time(),
+            "last_habitat_sequence": self.last_sequence,
+        }
+        self.atomic_json(self.completion_path, payload)
+        self.status_pub.publish(String(data="complete"))
+        rospy.logwarn("FALCON entered FINISH; wrote %s", self.completion_path)
 
     def load_frame(self):
         state_path = self.root / "state.json"

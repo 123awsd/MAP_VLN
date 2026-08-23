@@ -22,7 +22,7 @@ cd /home/uav/map_VLN/PRE_MAP_VLN
 
 ## RViz 与 rosbag
 
-默认同步包：`outputs/bags/hm3d_stage1_scan_complete_final.bag`。它包含同一次探索的 400 帧 Habitat RGB、FALCON 轨迹与 frontier、地图点云、机体位姿，以及按首次稳定观测时间渐进出现的 Boxer 3D boxes。FALCON 等待重规划时相机会原地缓慢扫描，不再出现数秒重复画面的中段停顿。
+默认同步包：`outputs/bags/hm3d_stage1_complete_v3_final.bag`。它不是定时截断，而是在 FALCON 明确进入 `FINISH` 后自动停止：248.303 秒、2,479 帧 Habitat RGB、43,379 条消息，末帧 active Frontier 为 0、occupied map 为 234,056 点。包内包含 RGB-D、FALCON 轨迹/frontier、地图点云、实际相机姿态，以及 179 个 Boxer 3D boxes 的 118 次渐进事件。
 
 ```bash
 cd /home/uav/map_VLN/PRE_MAP_VLN
@@ -36,23 +36,23 @@ cd /home/uav/map_VLN/PRE_MAP_VLN
 循环播放：
 
 ```bash
-./scripts/replay_bag_rviz.sh hm3d_stage1_scan_complete_final true
+./scripts/replay_bag_rviz.sh hm3d_stage1_complete_v3_final true
 ```
 
-bag 播放完成后 RViz 会保持打开。第三个参数可调整回放倍速，第四个参数控制 2D 窗口，例如 `./scripts/replay_bag_rviz.sh hm3d_stage1_scan_complete_final false 2.0 false`。
+bag 播放完成后 RViz 会保持打开。第三个参数可调整回放倍速，第四个参数控制 2D 窗口，例如 `./scripts/replay_bag_rviz.sh hm3d_stage1_complete_v3_final false 2.0 false`。
 
 第五至七个参数依次调整离地净空、开始识别顶棚的最小室内高度和沿局部顶面的剥离厚度。例如使用默认的 0.25/1.65/0.60 m：
 
 ```bash
-./scripts/replay_bag_rviz.sh hm3d_stage1_scan_complete_final false 1.0 true 0.25 1.65 0.60
+./scripts/replay_bag_rviz.sh hm3d_stage1_complete_v3_final false 1.0 true 0.25 1.65 0.60
 ```
 
 重新录制一个同回合渐进包：
 
 ```bash
-./scripts/record_progressive_stage1.sh <episode_name> 40 10 25
+./scripts/record_progressive_stage1.sh <episode_name> 600 10 25
 ```
 
-最后一个参数是静止期相机扫描角速度（度/秒）。移动时相机仍立即朝向真实运动方向。
+第二个参数是最大安全时长，而不是正常结束时间；只有 FALCON FSM 进入 `FINISH` 才生成 complete 包，超时只保留 raw bag。最后一个参数是静止期相机扫描角速度（度/秒）。UAV 模式默认精确跟踪 PositionCommand；地面 VLN 可显式使用 `run_habitat_falcon.py --navmesh-constrained`。
 
 实时 FALCON 运行时，点云过滤、RGB、实际轨迹、当前规划和 Frontier 都在线发布；默认 bag 中的 Boxer 框按同回合首次观测时间渐进回放。当前 Boxer 推理仍是录制后的批处理，并非探索过程中在线运行。

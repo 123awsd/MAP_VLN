@@ -3,7 +3,7 @@ set -euo pipefail
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 episode_name="${1:-hm3d_stage1_progressive}"
-duration="${2:-40}"
+max_duration="${2:-600}"
 hz="${3:-10}"
 idle_scan_rate="${4:-25}"
 episode_dir="$root_dir/data/episodes/$episode_name"
@@ -33,12 +33,22 @@ trap cleanup EXIT INT TERM
 recorder_pid=$!
 sleep 3
 .envs/habitat/bin/python scripts/run_habitat_falcon.py \
-  --duration "$duration" --hz "$hz" --follow-falcon \
+  --duration "$max_duration" --hz "$hz" --follow-falcon \
   --idle-scan-rate "$idle_scan_rate" --idle-scan-after 0.3 \
-  --record-dir "$episode_dir" --record-every 5
+  --record-dir "$episode_dir" --record-every 5 \
+  --completion-file "$root_dir/runtime/bridge/exploration_complete.json" \
+  --finish-hold 3.0 \
+  --result-file "$root_dir/runtime/bridge/run_result.json"
 cleanup
 recorder_pid=""
 trap - EXIT INT TERM
+
+termination="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["termination"])' \
+  "$root_dir/runtime/bridge/run_result.json")"
+if [[ "$termination" != "complete" ]]; then
+  echo "达到最大时长 ${max_duration}s，但 FALCON 未进入 FINISH；保留 raw bag，拒绝生成 complete 包。" >&2
+  exit 2
+fi
 
 ./scripts/run_boxer_habitat.sh "$episode_dir" outputs/boxer
 PYTHONPATH="$root_dir/third_party/boxer" .envs/boxer/bin/python \

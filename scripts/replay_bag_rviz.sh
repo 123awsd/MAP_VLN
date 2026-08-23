@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-bag_name="${1:-hm3d_stage1_scan_complete_final}"
+bag_name="${1:-hm3d_stage1_complete_v3_final}"
 loop="${2:-false}"
 rate="${3:-1.0}"
 topdown="${4:-true}"

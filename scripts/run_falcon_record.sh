@@ -15,7 +15,9 @@ rm -f \
   runtime/bridge/depth_u16.raw \
   runtime/bridge/rgb_u8.raw \
   runtime/bridge/semantic_i32.raw \
-  runtime/bridge/command.json
+  runtime/bridge/command.json \
+  runtime/bridge/exploration_complete.json \
+  runtime/bridge/run_result.json
 if [[ "$show_rviz" == "true" ]]; then
   "$root_dir/scripts/prepare_rviz_xauth.sh"
 fi
