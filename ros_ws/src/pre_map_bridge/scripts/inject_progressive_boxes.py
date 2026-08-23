@@ -38,15 +38,15 @@ def marker_array(rows, stamp):
         cube.scale.x = float(row["scale_x"])
         cube.scale.y = float(row["scale_y"])
         cube.scale.z = float(row["scale_z"])
-        cube.color.r, cube.color.g, cube.color.b, cube.color.a = red, green, blue, 0.10
+        cube.color.r, cube.color.g, cube.color.b, cube.color.a = red, green, blue, 0.025
         markers.markers.append(cube)
 
         outline = Marker()
         outline.header.stamp, outline.header.frame_id = stamp, "world"
         outline.ns, outline.id = "boxer_outlines", index
         outline.type, outline.action, outline.pose = Marker.LINE_LIST, Marker.ADD, cube.pose
-        outline.scale.x = 0.055
-        outline.color.r, outline.color.g, outline.color.b, outline.color.a = red, green, blue, 1.0
+        outline.scale.x = 0.012
+        outline.color.r, outline.color.g, outline.color.b, outline.color.a = red, green, blue, 0.45
         hx, hy, hz = cube.scale.x * 0.5, cube.scale.y * 0.5, cube.scale.z * 0.5
         corners = [
             (-hx, -hy, -hz), (hx, -hy, -hz), (hx, hy, -hz), (-hx, hy, -hz),
@@ -66,8 +66,8 @@ def marker_array(rows, stamp):
         label.pose.position.y = cube.pose.position.y
         label.pose.position.z = cube.pose.position.z + cube.scale.z * 0.5 + 0.2
         label.pose.orientation.w = 1.0
-        label.scale.z = 0.34
-        label.color.r, label.color.g, label.color.b, label.color.a = red, green, blue, 1.0
+        label.scale.z = 0.24
+        label.color.r, label.color.g, label.color.b, label.color.a = red, green, blue, 0.78
         label.text = "%s %.2f" % (row["name"], float(row["prob"]))
         markers.markers.append(label)
     return markers
@@ -98,8 +98,11 @@ def main():
         ]
     if not rgb_stamps:
         raise RuntimeError("Input bag contains no /habitat/rgb frames")
-    crop_start_ns = rgb_stamps[0] - 50_000_000
-    crop_end_ns = rgb_stamps[-1] + 200_000_000
+    # Make the RGB stream define the replay interval.  This guarantees that
+    # every visible exploration timestamp has a corresponding first-person
+    # frame instead of leaving point-cloud-only margins at either end.
+    crop_start_ns = rgb_stamps[0]
+    crop_end_ns = rgb_stamps[-1]
 
     visible, event_index = [], 0
     with rosbag.Bag(str(args.input_bag), "r") as source, rosbag.Bag(
@@ -111,6 +114,13 @@ def main():
             stamp_ns = stamp.to_nsec()
             if stamp_ns < crop_start_ns or stamp_ns > crop_end_ns:
                 continue
+            # FALCON's executed trajectory is a SPHERE_LIST.  Its upstream
+            # 0.10 m spheres look like a thick dashed tube in this small scene.
+            if topic == "/planning/travel_traj" and message.type == Marker.SPHERE_LIST:
+                message.scale.x = min(message.scale.x, 0.025)
+                message.scale.y = min(message.scale.y, 0.025)
+                message.scale.z = min(message.scale.z, 0.025)
+                message.color.a = min(message.color.a, 0.58)
             while event_index < len(events) and events[event_index][0] <= stamp_ns:
                 event_ns, additions = events[event_index]
                 visible.extend(additions)

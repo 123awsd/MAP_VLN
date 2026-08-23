@@ -142,7 +142,7 @@ class FileBridge:
             cube.scale.x = float(row["scale_x"])
             cube.scale.y = float(row["scale_y"])
             cube.scale.z = float(row["scale_z"])
-            cube.color.r, cube.color.g, cube.color.b, cube.color.a = red, green, blue, 0.10
+            cube.color.r, cube.color.g, cube.color.b, cube.color.a = red, green, blue, 0.025
             cube.lifetime = rospy.Duration(0)
             markers.markers.append(cube)
 
@@ -151,9 +151,9 @@ class FileBridge:
             outline.ns, outline.id = "boxer_outlines", index
             outline.type, outline.action = Marker.LINE_LIST, Marker.ADD
             outline.pose = cube.pose
-            outline.scale.x = 0.055
+            outline.scale.x = 0.012
             outline.color.r, outline.color.g, outline.color.b, outline.color.a = (
-                red, green, blue, 1.0
+                red, green, blue, 0.45
             )
             hx, hy, hz = cube.scale.x * 0.5, cube.scale.y * 0.5, cube.scale.z * 0.5
             corners = [
@@ -178,8 +178,8 @@ class FileBridge:
             label.pose.position.y = cube.pose.position.y
             label.pose.position.z = cube.pose.position.z + cube.scale.z * 0.5 + 0.2
             label.pose.orientation.w = 1.0
-            label.scale.z = 0.34
-            label.color.r, label.color.g, label.color.b, label.color.a = red, green, blue, 1.0
+            label.scale.z = 0.24
+            label.color.r, label.color.g, label.color.b, label.color.a = red, green, blue, 0.78
             label.text = "%s %.2f" % (row["name"], float(row["prob"]))
             label.lifetime = rospy.Duration(0)
             markers.markers.append(label)

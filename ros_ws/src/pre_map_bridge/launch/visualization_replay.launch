@@ -1,12 +1,16 @@
 <launch>
-  <arg name="bag_path" default="/workspace/shared/outputs/bags/hm3d_stage1_progressive_final.bag"/>
+  <arg name="bag_path" default="/workspace/shared/outputs/bags/hm3d_stage1_active_scan_final.bag"/>
   <arg name="loop" default="false"/>
   <arg name="rate" default="1.0"/>
+  <arg name="topdown" default="true"/>
+  <arg name="delay" default="2.0"/>
   <param name="/use_sim_time" value="true"/>
   <node pkg="rviz" type="rviz" name="pre_map_vln_rviz" output="screen"
         args="-d $(find pre_map_bridge)/config/stage1.rviz"/>
+  <node if="$(arg topdown)" pkg="rviz" type="rviz" name="pre_map_vln_rviz_topdown" output="screen"
+        args="-d $(find pre_map_bridge)/config/stage1_topdown.rviz"/>
   <node unless="$(arg loop)" pkg="rosbag" type="play" name="stage1_bag_player" output="screen"
-        args="--quiet --clock -r $(arg rate) $(arg bag_path)"/>
+        args="--quiet --clock --delay=$(arg delay) -r $(arg rate) $(arg bag_path)"/>
   <node if="$(arg loop)" pkg="rosbag" type="play" name="stage1_bag_player_loop" output="screen"
-        args="--quiet --clock --loop -r $(arg rate) $(arg bag_path)"/>
+        args="--quiet --clock --loop --delay=$(arg delay) -r $(arg rate) $(arg bag_path)"/>
 </launch>

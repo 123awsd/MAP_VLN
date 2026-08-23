@@ -5,6 +5,7 @@ root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 episode_name="${1:-hm3d_stage1_progressive}"
 duration="${2:-40}"
 hz="${3:-10}"
+idle_scan_rate="${4:-25}"
 episode_dir="$root_dir/data/episodes/$episode_name"
 raw_bag="$root_dir/outputs/bags/${episode_name}_raw.bag"
 final_bag="$root_dir/outputs/bags/${episode_name}_final.bag"
@@ -33,6 +34,7 @@ recorder_pid=$!
 sleep 3
 .envs/habitat/bin/python scripts/run_habitat_falcon.py \
   --duration "$duration" --hz "$hz" --follow-falcon \
+  --idle-scan-rate "$idle_scan_rate" --idle-scan-after 0.3 \
   --record-dir "$episode_dir" --record-every 5
 cleanup
 recorder_pid=""

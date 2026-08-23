@@ -22,7 +22,7 @@ cd /home/uav/map_VLN/PRE_MAP_VLN
 
 ## RViz 与 rosbag
 
-最终同步包：`outputs/bags/hm3d_stage1_progressive_final.bag`。它包含同一次探索的 Habitat RGB/Depth、FALCON 轨迹与 frontier、地图点云、机体位姿，以及按首次稳定观测时间渐进出现的 Boxer 3D boxes。
+默认同步包：`outputs/bags/hm3d_stage1_active_scan_final.bag`。它包含同一次探索的 400 帧 Habitat RGB/Depth、FALCON 轨迹与 frontier、地图点云、机体位姿，以及按首次稳定观测时间渐进出现的 Boxer 3D boxes。FALCON 等待重规划时相机会原地缓慢扫描，不再出现数秒重复画面的中段停顿。
 
 ```bash
 cd /home/uav/map_VLN/PRE_MAP_VLN
@@ -31,16 +31,18 @@ cd /home/uav/map_VLN/PRE_MAP_VLN
 
 脚本会自动复制当前桌面的 X11 授权到项目内的忽略文件，不修改系统级 X11 配置。
 
-循环播放：
+回放会同时打开一个轻量 3D/RGB 窗口和一个俯视 2D 边界/frontier 窗口。循环播放：
 
 ```bash
-./scripts/replay_bag_rviz.sh hm3d_stage1_progressive_final true
+./scripts/replay_bag_rviz.sh hm3d_stage1_active_scan_final true
 ```
 
-bag 播放完成后 RViz 会保持打开。第三个参数可调整回放倍速，例如 `./scripts/replay_bag_rviz.sh hm3d_stage1_progressive_final false 2.0`。
+bag 播放完成后 RViz 会保持打开。第三个参数可调整回放倍速，第四个参数控制 2D 窗口，例如 `./scripts/replay_bag_rviz.sh hm3d_stage1_active_scan_final false 2.0 false`。
 
 重新录制一个同回合渐进包：
 
 ```bash
-./scripts/record_progressive_stage1.sh <episode_name> 40 10
+./scripts/record_progressive_stage1.sh <episode_name> 40 10 25
 ```
+
+最后一个参数是静止期相机扫描角速度（度/秒）。移动时相机仍立即朝向真实运动方向。

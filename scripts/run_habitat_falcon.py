@@ -87,7 +87,7 @@ def read_command() -> Optional[dict]:
 
 def follow_command(
     sim, origin_h: np.ndarray, command: dict, dt: float, use_planner_yaw: bool = False
-) -> None:
+) -> bool:
     agent = sim.get_agent(0)
     state = agent.get_state()
     current = np.asarray(state.position, dtype=np.float64)
@@ -96,6 +96,7 @@ def follow_command(
     direction = target_h - current
     direction[1] = 0.0
     distance = float(np.linalg.norm(direction))
+    moved = False
     if distance > 1e-4:
         desired = current + direction / distance * min(distance, 1.0 * dt)
         next_position = np.asarray(
@@ -103,6 +104,7 @@ def follow_command(
             dtype=np.float64,
         )
         state.position = next_position
+        moved = bool(np.linalg.norm(next_position - current) > 1e-4)
         if not use_planner_yaw:
             # Keep the optical camera facing the actual horizontal movement.  FALCON's
             # independent yaw command can lag the position trajectory and made Habitat
@@ -119,6 +121,7 @@ def follow_command(
             float(command.get("yaw", 0.0)), np.asarray([0.0, 1.0, 0.0])
         )
     agent.set_state(state)
+    return moved
 
 
 def main() -> None:
@@ -130,6 +133,18 @@ def main() -> None:
         "--use-planner-yaw",
         action="store_true",
         help="use FALCON yaw instead of facing the actual movement direction",
+    )
+    parser.add_argument(
+        "--idle-scan-rate",
+        type=float,
+        default=0.0,
+        help="camera yaw scan rate in degrees/s while the agent is stationary",
+    )
+    parser.add_argument(
+        "--idle-scan-after",
+        type=float,
+        default=0.5,
+        help="stationary delay in seconds before the camera starts scanning",
     )
     parser.add_argument("--panorama", action="store_true", help="rotate in place for a 360-degree scan")
     parser.add_argument("--record-dir", type=Path, default=None)
@@ -163,19 +178,37 @@ def main() -> None:
         agent = sim.initialize_agent(0, state)
         initial_sensor_h = np.asarray(agent.get_state().sensor_states["depth"].position, dtype=np.float64)
 
-        period, started, sequence = 1.0 / args.hz, time.monotonic(), 0
+        period, started, sequence, idle_time = 1.0 / args.hz, time.monotonic(), 0, 0.0
         while time.monotonic() - started < args.duration:
             tick = time.monotonic()
             if args.follow_falcon:
                 command = read_command()
+                moved = False
                 if command is not None:
-                    follow_command(
+                    moved = follow_command(
                         sim,
                         np.asarray(initial, dtype=np.float64),
                         command,
                         period,
                         use_planner_yaw=args.use_planner_yaw,
                     )
+                idle_time = 0.0 if moved else idle_time + period
+                if (
+                    not moved
+                    and not args.use_planner_yaw
+                    and args.idle_scan_rate != 0.0
+                    and idle_time >= args.idle_scan_after
+                ):
+                    # During a planning hover (including the initial wait for a
+                    # command), keep collecting real Habitat observations by
+                    # slowly scanning in place. Translation still faces actual
+                    # motion, so this does not reintroduce the backwards view.
+                    state = agent.get_state()
+                    delta_yaw = np.deg2rad(args.idle_scan_rate) * period
+                    state.rotation = quat_from_angle_axis(
+                        delta_yaw, np.asarray([0.0, 1.0, 0.0])
+                    ) * state.rotation
+                    agent.set_state(state)
             elif args.panorama:
                 state = agent.get_state()
                 yaw = 2.0 * np.pi * min(1.0, (time.monotonic() - started) / args.duration)

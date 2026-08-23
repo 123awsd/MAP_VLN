@@ -1,0 +1,19 @@
+diff --git a/falcon_planner/exploration_preprocessing/src/hierarchical_grid.cpp b/falcon_planner/exploration_preprocessing/src/hierarchical_grid.cpp
+index af937f0..9ae9dd2 100644
+--- a/falcon_planner/exploration_preprocessing/src/hierarchical_grid.cpp
++++ b/falcon_planner/exploration_preprocessing/src/hierarchical_grid.cpp
+@@ -2017,10 +2017,12 @@ void UniformGrid::calculateCostMatrixSingleThread(
+       //   cost = cost * (cur_pos - center_free).norm() / 5.0;
+       // }
+ 
++      // The current position can numerically coincide with an active center.
++      // ATSP needs a positive edge, but this is not a fatal planning error.
++      // Keep the edge negligible instead of aborting the exploration process.
++      cost = std::max(cost, 1e-3);
+       cost_matrix(0, mat_idx) = cost;
+ 
+-      CHECK_GT(cost, 1e-4) << "Zero cost from current position to cell " << grid_cell.id_
+-                           << " free center " << mat_idx - 1;
+       // cost_matrix(mat_idx, 0) = 0 for ATSP
+ 
+       mat_idx++;

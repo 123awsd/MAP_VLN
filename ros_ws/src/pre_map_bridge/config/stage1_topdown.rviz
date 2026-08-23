@@ -1,22 +1,18 @@
 Panels:
   - Class: rviz/Displays
     Name: Displays
-  - Class: rviz/Selection
-    Name: Selection
-  - Class: rviz/Tool Properties
-    Name: Tool Properties
 Visualization Manager:
   Class: ""
   Displays:
-    - Alpha: 0.4
+    - Alpha: 0.25
       Cell Size: 1
       Class: rviz/Grid
-      Color: 90; 90; 90
+      Color: 100; 100; 100
       Enabled: true
-      Name: Ground Grid
+      Name: Metric Grid
       Plane: XY
       Reference Frame: world
-    - Alpha: 0.22
+    - Alpha: 0.48
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds: true
       Axis: Z
@@ -26,116 +22,90 @@ Visualization Manager:
       Color Transformer: FlatColor
       Decay Time: 0
       Enabled: true
-      Name: Occupied Map
+      Name: Explored Boundary Map
       Position Transformer: XYZ
       Queue Size: 10
-      Selectable: true
+      Selectable: false
       Size (Pixels): 1
       Size (m): 0.02
       Style: Points
       Topic: /voxel_mapping/occupancy_grid_occupied
       Unreliable: false
       Use Fixed Frame: true
-    - Alpha: 0.35
+    - Alpha: 0.78
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds: true
       Axis: Z
       Channel Name: intensity
       Class: rviz/PointCloud2
-      Color: 80; 165; 255
+      Color: 255; 120; 25
       Color Transformer: FlatColor
-      Decay Time: 0.5
-      Enabled: false
-      Name: Current Depth Cloud
+      Decay Time: 0
+      Enabled: true
+      Name: Frontier Cells
       Position Transformer: XYZ
-      Queue Size: 5
+      Queue Size: 10
       Selectable: false
-      Size (Pixels): 2
-      Size (m): 0.03
+      Size (Pixels): 3
+      Size (m): 0.06
       Style: Points
-      Topic: /voxel_mapping/depth_pointcloud
+      Topic: /planning_vis/frontier_pcl
       Unreliable: false
       Use Fixed Frame: true
     - Class: rviz/Marker
       Enabled: false
       Marker Topic: /planning_vis/frontier
-      Name: Frontiers
+      Name: Frontier Labels (Optional)
       Namespaces: {}
       Queue Size: 100
     - Class: rviz/Marker
-      Enabled: false
-      Marker Topic: /planning_vis/viewpoints
-      Name: Candidate Viewpoints
-      Namespaces: {}
-      Queue Size: 100
-    - Class: rviz/Marker
-      Enabled: false
+      Enabled: true
       Marker Topic: /planning/travel_traj
-      Name: Planned Trajectory
+      Name: Executed Trajectory
       Namespaces: {}
-      Queue Size: 20
-    - Alpha: 1
+      Queue Size: 30
+    - Alpha: 0.9
       Buffer Length: 1
       Class: rviz/Path
-      Color: 30; 220; 100
+      Color: 35; 220; 105
       Enabled: true
-      Head Diameter: 0.25
-      Head Length: 0.15
-      Length: 0.3
+      Head Diameter: 0.15
+      Head Length: 0.1
+      Length: 0.2
       Line Style: Lines
-      Line Width: 0.015
-      Name: Habitat Agent Path
+      Line Width: 0.012
+      Name: Agent Path
       Offset: {X: 0, Y: 0, Z: 0}
       Pose Color: 255; 90; 30
       Pose Style: None
-      Radius: 0.03
-      Shaft Diameter: 0.08
-      Shaft Length: 0.15
+      Radius: 0.02
+      Shaft Diameter: 0.04
+      Shaft Length: 0.1
       Topic: /pre_map_vln/agent_path
-    - Class: rviz/MarkerArray
-      Enabled: true
-      Marker Topic: /pre_map_vln/box_markers
-      Name: Boxer 3D Boxes
-      Namespaces:
-        boxer_3d: false
-        boxer_labels: false
-        boxer_outlines: true
-      Queue Size: 10
     - Angle Tolerance: 0.1
       Class: rviz/Odometry
       Enabled: true
       Keep: 1
-      Name: UAV Pose
+      Name: Agent Pose
       Position Tolerance: 0.1
       Shape:
-        Alpha: 1
-        Axes Length: 0.5
-        Axes Radius: 0.05
+        Alpha: 0.85
+        Axes Length: 0.25
+        Axes Radius: 0.025
         Color: 255; 80; 20
-        Head Length: 0.2
-        Head Radius: 0.08
-        Shaft Length: 0.4
-        Shaft Radius: 0.04
+        Head Length: 0.12
+        Head Radius: 0.05
+        Shaft Length: 0.24
+        Shaft Radius: 0.025
         Value: Arrow
       Topic: /uav_simulator/odometry
       Unreliable: false
-    - Class: rviz/Image
-      Enabled: true
-      Image Topic: /habitat/rgb
-      Max Value: 1
-      Median window: 5
-      Min Value: 0
-      Name: Habitat First Person RGB
-      Normalize Range: true
-      Queue Size: 2
-      Transport Hint: raw
-      Unreliable: false
   Enabled: true
   Global Options:
-    Background Color: 28; 31; 36
+    Background Color: 25; 28; 32
     Default Light: true
     Fixed Frame: world
-    Frame Rate: 20
+    Frame Rate: 15
   Name: root
   Tools:
     - Class: rviz/Interact
@@ -145,17 +115,18 @@ Visualization Manager:
     - Class: rviz/Measure
   Views:
     Current:
-      Class: rviz/Orbit
-      Distance: 17
+      Angle: -1.5708
+      Class: rviz/TopDownOrtho
       Enable Stereo Rendering: false
-      Focal Point: {X: 0, Y: -2.5, Z: 0.8}
-      Name: Current View
+      Invert Z Axis: false
+      Name: Top-down Exploration
       Near Clip Distance: 0.01
-      Pitch: 0.72
+      Scale: 75
       Target Frame: world
-      Yaw: 3.9
+      X: 1.5
+      Y: 2.5
 Window Geometry:
   Height: 900
-  Width: 1080
-  X: 20
+  Width: 760
+  X: 1110
   Y: 40
