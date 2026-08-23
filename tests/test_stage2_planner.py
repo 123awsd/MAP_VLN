@@ -44,6 +44,18 @@ class PlannerTest(unittest.TestCase):
         result = plan_joint_mission(grid, graph, candidates, [1.5, 2.5, 1, 0])
         self.assertEqual([visit["task_id"] for visit in result["visits"]], ["far", "near"])
 
+    def test_estimated_time_accounts_for_yaw(self):
+        grid = OccupancyGrid(np.zeros((5, 5), dtype=np.int8), [0, 0], 1.0, inflation_m=0.0)
+        graph = {"tasks": [{"id": "look", "active_initially": True, "prerequisites": []}]}
+        candidates = {"look": [{
+            "id": "turn", "object_id": "target",
+            "pose": {"x": 1.5, "y": 1.5, "z": 1.0, "yaw": 3.141592653589793},
+            "terminal_cost": 0.0,
+        }]}
+        result = plan_joint_mission(grid, graph, candidates, [1.5, 1.5, 1.0, 0.0], yaw_rate_rps=1.0)
+        self.assertAlmostEqual(result["estimated_time_s"], 3.141592653589793)
+        self.assertGreater(result["objective_cost"], result["total_path_length_m"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -30,6 +30,7 @@ def main() -> None:
     parser.add_argument("--grid-prefix", type=Path, default=ROOT / "runtime/occusg/hm3d_stage1_grid")
     parser.add_argument("--bag-manifest", type=Path, default=ROOT / "outputs/bags/hm3d_stage2_complete.manifest.json")
     parser.add_argument("--multiscene-report", type=Path, default=ROOT / "outputs/stage2/multiscene/report.json")
+    parser.add_argument("--paper-report", type=Path, default=ROOT / "outputs/stage2/paper_benchmark/report.json")
     parser.add_argument("--output", type=Path, default=ROOT / "outputs/stage2/stage2_report.json")
     args = parser.parse_args()
 
@@ -42,6 +43,7 @@ def main() -> None:
     bag = load_json(args.bag_manifest)
     usage = load_json(ROOT / "outputs/stage2/api_usage.json")
     multiscene = load_json(args.multiscene_report)
+    paper = load_json(args.paper_report)
     grid = OccupancyGrid.load(args.grid_prefix, inflation_m=0.10)
 
     task_ids = {task["id"] for task in task_graph["tasks"]}
@@ -95,6 +97,20 @@ def main() -> None:
     require(len(multiscene["scenes"]) >= 3, "fewer than three HM3D scenes were tested")
     require(all(item["candidate_count"] >= 20 for item in multiscene["scenes"]), "multi-scene candidate coverage is too low")
     require(all(item["dynamic_status"] == "completed" for item in multiscene["scenes"]), "multi-scene dynamic execution failed")
+    require(paper["status"] == "passed", "paper benchmark failed")
+    require(paper["protocol"]["trial_count"] == 270, "paper benchmark does not contain 270 trials")
+    require(not paper["failures"], "paper benchmark contains failed trials")
+    paper_methods = {item["method"]: item for item in paper["summary"]}
+    require({
+        "fixed_order_nearest", "fixed_order_viewpoint", "task_graph_single_pose",
+        "euclidean_cost", "no_terminal_quality", "joint_astar",
+    } <= set(paper_methods), "paper benchmark is missing baselines or ablations")
+    require(all(item["mission_success_rate"] == 1.0 for item in paper_methods.values()), "paper benchmark mission success regressed")
+    require(all(item["constraint_satisfaction_rate"] == 1.0 for item in paper_methods.values()), "paper benchmark violates task constraints")
+    require(all(item["condition_satisfaction_rate"] == 1.0 for item in paper_methods.values()), "paper benchmark violates a condition branch")
+    require(paper_methods["joint_astar"]["improvement_vs_fixed_mean_percent"] > 20.0, "joint planner improvement is below acceptance threshold")
+    require(paper_methods["joint_astar"]["path_length_mean_m"] < paper_methods["euclidean_cost"]["path_length_mean_m"], "A* cost did not outperform Euclidean selection")
+    require(paper_methods["joint_astar"]["viewpoint_quality_mean"] > paper_methods["no_terminal_quality"]["viewpoint_quality_mean"], "terminal quality term has no measurable effect")
 
     report = {
         "format": "pre_map_vln.stage2_validation.v1",
@@ -117,6 +133,13 @@ def main() -> None:
         },
         "bag": bag,
         "multiscene": multiscene["scenes"],
+        "paper_benchmark": {
+            "trial_count": paper["protocol"]["trial_count"],
+            "failure_count": len(paper["failures"]),
+            "joint_improvement_percent": paper_methods["joint_astar"]["improvement_vs_fixed_mean_percent"],
+            "joint_path_length_mean_m": paper_methods["joint_astar"]["path_length_mean_m"],
+            "joint_viewpoint_quality": paper_methods["joint_astar"]["viewpoint_quality_mean"],
+        },
         "qwen_estimated_cny": usage["total_estimated_cny"],
     }
     atomic_json(args.output, report)

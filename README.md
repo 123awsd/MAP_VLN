@@ -10,12 +10,15 @@ Habitat 中的无人机预探索、全局 3D 语义地图与长时程多任务 V
 
 两个阶段的工程闭环均已在公开 HM3D example `00861-GLAQ4DNUx5U` 上通过。第二阶段默认演示完成 5 个任务、5 次动态重规划、112 帧连续 RGB；联合初始路径比固定顺序短 32.09%。详细结果见 [`docs/第一阶段设计.md`](docs/第一阶段设计.md) 与 [`docs/第二阶段设计.md`](docs/第二阶段设计.md)。
 
+论文级规划评测已增加 4 类 task graph、6 个基线/消融方法以及 3 scenes × 3 seeds × 5 task cases 的 270 次实验。实验设计、指标和结论边界见 [`docs/第三阶段实验评测.md`](docs/第三阶段实验评测.md)。
+
 第二阶段一键运行、三地图几何回归和 RViz 回放：
 
 ```bash
 cd /home/uav/map_VLN/PRE_MAP_VLN
 ./scripts/run_stage2_demo.sh
 ./scripts/run_stage2_multiscene.sh
+./scripts/run_stage2_experiments.sh
 ./scripts/replay_stage2_rviz.sh hm3d_stage2_complete false 1.0
 ```
 

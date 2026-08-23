@@ -12,8 +12,26 @@ class PlanningError(RuntimeError):
     pass
 
 
+DEFAULT_TERMINAL_WEIGHT = 2.0
+DEFAULT_TIME_WEIGHT = 0.25
+
+
 def _xy(candidate: dict[str, Any]) -> list[float]:
     return [candidate["pose"]["x"], candidate["pose"]["y"]]
+
+
+def _motion_time(
+    start_pose: list[float], end_pose: dict[str, float], horizontal_length_m: float,
+    speed_mps: float, climb_speed_mps: float, yaw_rate_rps: float,
+) -> float:
+    yaw_delta = abs(math.atan2(
+        math.sin(float(end_pose["yaw"]) - float(start_pose[3])),
+        math.cos(float(end_pose["yaw"]) - float(start_pose[3])),
+    ))
+    horizontal_time = horizontal_length_m / max(0.05, speed_mps)
+    vertical_time = abs(float(end_pose["z"]) - float(start_pose[2])) / max(0.05, climb_speed_mps)
+    yaw_time = yaw_delta / max(0.05, yaw_rate_rps)
+    return max(horizontal_time, vertical_time, yaw_time)
 
 
 def plan_joint_mission(
@@ -23,8 +41,11 @@ def plan_joint_mission(
     start_xyz_yaw: list[float],
     active_task_ids: set[str] | None = None,
     completed_task_ids: set[str] | None = None,
-    terminal_weight: float = 0.35,
+    terminal_weight: float = DEFAULT_TERMINAL_WEIGHT,
+    time_weight: float = DEFAULT_TIME_WEIGHT,
     speed_mps: float = 1.0,
+    climb_speed_mps: float = 0.5,
+    yaw_rate_rps: float = 1.0,
 ) -> dict[str, Any]:
     completed_task_ids = completed_task_ids or set()
     if active_task_ids is None:
@@ -53,7 +74,7 @@ def plan_joint_mission(
         prerequisite_masks.append(mask)
 
     start_xy = start_xyz_yaw[:2]
-    states: dict[tuple[int, int, int], tuple[float, float, tuple[int, int, int] | None, Any]] = {}
+    states: dict[tuple[int, int, int], tuple[float, float, float, tuple[int, int, int] | None, Any]] = {}
     for task_index, task in enumerate(tasks):
         if prerequisite_masks[task_index]:
             continue
@@ -62,16 +83,18 @@ def plan_joint_mission(
             if path is None:
                 continue
             terminal = float(candidate["terminal_cost"])
+            motion_time = _motion_time(start_xyz_yaw, candidate["pose"], path.length_m, speed_mps, climb_speed_mps, yaw_rate_rps)
             states[(1 << task_index, task_index, candidate_index)] = (
-                path.length_m + terminal_weight * terminal,
+                path.length_m + time_weight * motion_time + terminal_weight * terminal,
                 terminal,
+                motion_time,
                 None,
                 path,
             )
     full_mask = (1 << len(tasks)) - 1
     for visited_count in range(1, len(tasks)):
         snapshot = list(states.items())
-        for state, (cost, terminal_sum, _, _) in snapshot:
+        for state, (cost, terminal_sum, time_sum, _, _) in snapshot:
             mask, last_task_index, last_candidate_index = state
             if bin(mask).count("1") != visited_count:
                 continue
@@ -85,11 +108,14 @@ def plan_joint_mission(
                     if path is None:
                         continue
                     terminal = float(candidate["terminal_cost"])
+                    last_pose = last_candidate["pose"]
+                    start_pose = [last_pose["x"], last_pose["y"], last_pose["z"], last_pose["yaw"]]
+                    motion_time = _motion_time(start_pose, candidate["pose"], path.length_m, speed_mps, climb_speed_mps, yaw_rate_rps)
                     next_state = (mask | bit, next_task_index, next_candidate_index)
-                    next_cost = cost + path.length_m + terminal_weight * terminal
+                    next_cost = cost + path.length_m + time_weight * motion_time + terminal_weight * terminal
                     old = states.get(next_state)
                     if old is None or next_cost < old[0]:
-                        states[next_state] = (next_cost, terminal_sum + terminal, state, path)
+                        states[next_state] = (next_cost, terminal_sum + terminal, time_sum + motion_time, state, path)
     finals = [(state, value) for state, value in states.items() if state[0] == full_mask]
     if not finals:
         raise PlanningError("no collision-free route can cover all active tasks")
@@ -100,7 +126,7 @@ def plan_joint_mission(
     while state is not None:
         value = states[state]
         chain.append((state, value))
-        state = value[2]
+        state = value[3]
     chain.reverse()
     visits, segments = [], []
     previous_xy = start_xy
@@ -109,7 +135,7 @@ def plan_joint_mission(
         _, task_index, candidate_index = state
         task = tasks[task_index]
         candidate = candidates_by_task[task["id"]][candidate_index]
-        path = value[3]
+        path = value[4]
         path_length += path.length_m
         visits.append({
             "sequence": sequence,
@@ -134,8 +160,16 @@ def plan_joint_mission(
         "total_path_length_m": path_length,
         "total_terminal_cost": final_value[1],
         "objective_cost": final_value[0],
-        "estimated_time_s": path_length / max(0.05, speed_mps),
-        "weights": {"path_length": 1.0, "terminal_quality": terminal_weight},
+        "estimated_time_s": final_value[2],
+        "weights": {
+            "path_length": 1.0, "flight_time": time_weight,
+            "terminal_quality": terminal_weight,
+        },
+        "motion_limits": {
+            "horizontal_speed_mps": speed_mps,
+            "climb_speed_mps": climb_speed_mps,
+            "yaw_rate_rps": yaw_rate_rps,
+        },
     }
 
 
