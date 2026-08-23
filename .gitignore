@@ -8,6 +8,7 @@ logs/*
 outputs/*
 runtime/bridge/*
 runtime/occusg/*
+runtime/*.Xauthority
 third_party/*
 
 !checkpoints/README.md

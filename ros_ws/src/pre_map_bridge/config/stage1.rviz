@@ -1,0 +1,169 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Selection
+    Name: Selection
+  - Class: rviz/Tool Properties
+    Name: Tool Properties
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.4
+      Cell Size: 1
+      Class: rviz/Grid
+      Color: 90; 90; 90
+      Enabled: true
+      Name: Ground Grid
+      Plane: XY
+      Reference Frame: world
+    - Alpha: 0.75
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 185; 185; 185
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Name: Occupied Map
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.05
+      Style: Points
+      Topic: /voxel_mapping/occupancy_grid_occupied
+      Unreliable: false
+      Use Fixed Frame: true
+    - Alpha: 0.35
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 80; 165; 255
+      Color Transformer: FlatColor
+      Decay Time: 0.5
+      Enabled: true
+      Name: Current Depth Cloud
+      Position Transformer: XYZ
+      Queue Size: 5
+      Selectable: false
+      Size (Pixels): 2
+      Size (m): 0.03
+      Style: Points
+      Topic: /voxel_mapping/depth_pointcloud
+      Unreliable: false
+      Use Fixed Frame: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /planning_vis/frontier
+      Name: Frontiers
+      Namespaces: {}
+      Queue Size: 100
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /planning_vis/viewpoints
+      Name: Candidate Viewpoints
+      Namespaces: {}
+      Queue Size: 100
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /planning/travel_traj
+      Name: Planned Trajectory
+      Namespaces: {}
+      Queue Size: 20
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 30; 220; 100
+      Enabled: true
+      Head Diameter: 0.25
+      Head Length: 0.15
+      Length: 0.3
+      Line Style: Lines
+      Line Width: 0.04
+      Name: Habitat Agent Path
+      Offset: {X: 0, Y: 0, Z: 0}
+      Pose Color: 255; 90; 30
+      Pose Style: Axes
+      Radius: 0.03
+      Shaft Diameter: 0.08
+      Shaft Length: 0.15
+      Topic: /pre_map_vln/agent_path
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /pre_map_vln/box_markers
+      Name: Boxer 3D Boxes
+      Namespaces: {}
+      Queue Size: 10
+    - Angle Tolerance: 0.1
+      Class: rviz/Odometry
+      Enabled: true
+      Keep: 1
+      Name: UAV Pose
+      Position Tolerance: 0.1
+      Shape:
+        Alpha: 1
+        Axes Length: 0.5
+        Axes Radius: 0.05
+        Color: 255; 80; 20
+        Head Length: 0.2
+        Head Radius: 0.08
+        Shaft Length: 0.4
+        Shaft Radius: 0.04
+        Value: Arrow
+      Topic: /uav_simulator/odometry
+      Unreliable: false
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /habitat/rgb
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Habitat First Person RGB
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Unreliable: false
+    - Class: rviz/Image
+      Enabled: false
+      Image Topic: /uav_simulator/depth_image
+      Max Value: 8
+      Median window: 5
+      Min Value: 0
+      Name: Habitat Depth
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Unreliable: false
+  Enabled: true
+  Global Options:
+    Background Color: 28; 31; 36
+    Default Light: true
+    Fixed Frame: world
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 17
+      Enable Stereo Rendering: false
+      Focal Point: {X: 0, Y: -2.5, Z: 0.8}
+      Name: Current View
+      Near Clip Distance: 0.01
+      Pitch: 0.72
+      Target Frame: world
+      Yaw: 3.9
+Window Geometry:
+  Height: 900
+  Width: 1500
+  X: 80
+  Y: 40

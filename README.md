@@ -19,3 +19,20 @@ cd /home/uav/map_VLN/PRE_MAP_VLN
 ```
 
 大型数据、环境、权重、第三方仓库和实验输出均在本目录内但不进入 Git。OccuSG 构建必须使用 `./scripts/build_occusg.sh`，它会检查可用内存并将 C++ 编译限制为最多两个任务。
+
+## RViz 与 rosbag
+
+已经录制的完整探索可视化包：`outputs/bags/hm3d_stage1_visualization.bag`。它包含 Habitat RGB/Depth、FALCON 轨迹与 frontier、地图点云、无人机位姿，以及 Boxer 3D boxes。
+
+```bash
+cd /home/uav/map_VLN/PRE_MAP_VLN
+./scripts/replay_bag_rviz.sh hm3d_stage1_visualization
+```
+
+脚本会自动复制当前桌面的 X11 授权到项目内的忽略文件，不修改系统级 X11 配置。
+
+循环播放：
+
+```bash
+./scripts/replay_bag_rviz.sh hm3d_stage1_visualization true
+```

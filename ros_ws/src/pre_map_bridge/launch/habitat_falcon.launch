@@ -1,6 +1,7 @@
 <launch>
   <arg name="map_name" default="hm3d_example"/>
   <arg name="bridge_dir" default="/workspace/shared/bridge"/>
+  <arg name="box_csv" default="/workspace/shared/outputs/boxer/hm3d_stage1/boxer_3dbbs_fused.csv"/>
   <rosparam command="load" file="$(find exploration_manager)/config/robot/uav_model_simulator.yaml"/>
   <rosparam command="load" file="$(find voxel_mapping)/config/voxel_mapping.yaml"/>
   <rosparam command="load" file="$(find pathfinding)/config/astar.yaml"/>
@@ -13,6 +14,7 @@
   <rosparam command="load" file="$(find pre_map_bridge)/config/$(arg map_name).yaml"/>
   <node pkg="pre_map_bridge" type="file_bridge_node.py" name="habitat_file_bridge" output="screen">
     <param name="bridge_dir" value="$(arg bridge_dir)"/>
+    <param name="box_csv" value="$(arg box_csv)"/>
   </node>
   <node pkg="exploration_manager" name="exploration_node" type="exploration_node" output="screen">
     <remap from="/odom_world" to="/uav_simulator/odometry"/>
