@@ -16,6 +16,7 @@ services:
     environment:
       DISPLAY: ${DISPLAY:-:0}
       XAUTHORITY: /root/.Xauthority
+      DISABLE_ROS1_EOL_WARNINGS: "1"
     stdin_open: true
     tty: true
     networks:

@@ -1,5 +1,5 @@
 <launch>
-  <arg name="bag_path" default="/workspace/shared/outputs/bags/hm3d_visualization.bag"/>
+  <arg name="bag_path" default="/workspace/shared/outputs/bags/hm3d_stage1_visualization_final.bag"/>
   <arg name="loop" default="false"/>
   <param name="/use_sim_time" value="true"/>
   <node pkg="rviz" type="rviz" name="pre_map_vln_rviz" output="screen"

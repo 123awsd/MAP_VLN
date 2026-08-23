@@ -1,6 +1,6 @@
 <launch>
   <arg name="bag_path" default="/workspace/shared/outputs/bags/hm3d_visualization.bag"/>
-  <arg name="box_csv" default="/workspace/shared/outputs/boxer/hm3d_stage1/boxer_3dbbs_fused.csv"/>
+  <arg name="box_csv" default="/workspace/shared/outputs/boxer/hm3d_stage1/boxer_3dbbs_visual.csv"/>
   <arg name="rviz" default="true"/>
 
   <include file="$(find pre_map_bridge)/launch/habitat_falcon.launch">

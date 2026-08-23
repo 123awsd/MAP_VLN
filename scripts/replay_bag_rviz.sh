@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-bag_name="${1:-hm3d_visualization}"
+bag_name="${1:-hm3d_stage1_visualization_final}"
 loop="${2:-false}"
 
 cd "$root_dir"

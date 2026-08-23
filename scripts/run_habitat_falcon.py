@@ -85,7 +85,9 @@ def read_command() -> Optional[dict]:
         return None
 
 
-def follow_command(sim, origin_h: np.ndarray, command: dict, dt: float) -> None:
+def follow_command(
+    sim, origin_h: np.ndarray, command: dict, dt: float, use_planner_yaw: bool = False
+) -> None:
     agent = sim.get_agent(0)
     state = agent.get_state()
     current = np.asarray(state.position, dtype=np.float64)
@@ -96,9 +98,26 @@ def follow_command(sim, origin_h: np.ndarray, command: dict, dt: float) -> None:
     distance = float(np.linalg.norm(direction))
     if distance > 1e-4:
         desired = current + direction / distance * min(distance, 1.0 * dt)
-        state.position = sim.pathfinder.try_step(current.astype(np.float32), desired.astype(np.float32))
-    # FALCON yaw 0 faces +X; Habitat yaw 0 faces -Z, which maps to +X.
-    state.rotation = quat_from_angle_axis(float(command.get("yaw", 0.0)), np.asarray([0.0, 1.0, 0.0]))
+        next_position = np.asarray(
+            sim.pathfinder.try_step(current.astype(np.float32), desired.astype(np.float32)),
+            dtype=np.float64,
+        )
+        state.position = next_position
+        if not use_planner_yaw:
+            # Keep the optical camera facing the actual horizontal movement.  FALCON's
+            # independent yaw command can lag the position trajectory and made Habitat
+            # appear to fly backwards in first-person recordings.
+            movement_f = S_HABITAT_TO_FALCON @ (next_position - current)
+            if np.linalg.norm(movement_f[:2]) > 1e-4:
+                heading = float(np.arctan2(movement_f[1], movement_f[0]))
+                state.rotation = quat_from_angle_axis(
+                    heading, np.asarray([0.0, 1.0, 0.0])
+                )
+    if use_planner_yaw:
+        # FALCON yaw 0 faces +X; Habitat yaw 0 faces -Z, which maps to +X.
+        state.rotation = quat_from_angle_axis(
+            float(command.get("yaw", 0.0)), np.asarray([0.0, 1.0, 0.0])
+        )
     agent.set_state(state)
 
 
@@ -107,6 +126,11 @@ def main() -> None:
     parser.add_argument("--duration", type=float, default=30.0)
     parser.add_argument("--hz", type=float, default=5.0)
     parser.add_argument("--follow-falcon", action="store_true")
+    parser.add_argument(
+        "--use-planner-yaw",
+        action="store_true",
+        help="use FALCON yaw instead of facing the actual movement direction",
+    )
     parser.add_argument("--panorama", action="store_true", help="rotate in place for a 360-degree scan")
     parser.add_argument("--record-dir", type=Path, default=None)
     parser.add_argument("--record-every", type=int, default=5)
@@ -145,7 +169,13 @@ def main() -> None:
             if args.follow_falcon:
                 command = read_command()
                 if command is not None:
-                    follow_command(sim, np.asarray(initial, dtype=np.float64), command, period)
+                    follow_command(
+                        sim,
+                        np.asarray(initial, dtype=np.float64),
+                        command,
+                        period,
+                        use_planner_yaw=args.use_planner_yaw,
+                    )
             elif args.panorama:
                 state = agent.get_state()
                 yaw = 2.0 * np.pi * min(1.0, (time.monotonic() - started) / args.duration)
@@ -156,6 +186,7 @@ def main() -> None:
             position_h = np.asarray(sensor_state.position, dtype=np.float64)
             position_f = S_HABITAT_TO_FALCON @ (position_h - initial_sensor_h) + np.asarray([0.0, 0.0, 1.0])
             rotation_f_opt = S_HABITAT_TO_FALCON @ rotation_matrix(sensor_state.rotation) @ C_OPTICAL_TO_HABITAT_CAMERA
+            rotation_f_body = S_HABITAT_TO_FALCON @ rotation_matrix(sensor_state.rotation) @ S_HABITAT_TO_FALCON.T
 
             depth = np.nan_to_num(np.asarray(obs["depth"], dtype=np.float32), nan=0.0, posinf=0.0)
             depth_u16 = np.clip(np.rint(depth * 1000.0), 0, 65535).astype("<u2")
@@ -167,6 +198,7 @@ def main() -> None:
             atomic_json(BRIDGE_DIR / "state.json", {
                 "sequence": sequence, "width": 640, "height": 480,
                 "position": position_f.tolist(), "orientation_xyzw": matrix_to_xyzw(rotation_f_opt),
+                "body_orientation_xyzw": matrix_to_xyzw(rotation_f_body),
                 "depth_unit": "millimeter", "rgb_encoding": "rgb8", "semantic_dtype": "int32",
             })
             if args.record_dir is not None and sequence % args.record_every == 0:

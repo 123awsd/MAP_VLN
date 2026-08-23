@@ -1,7 +1,7 @@
 <launch>
   <arg name="map_name" default="hm3d_example"/>
   <arg name="bridge_dir" default="/workspace/shared/bridge"/>
-  <arg name="box_csv" default="/workspace/shared/outputs/boxer/hm3d_stage1/boxer_3dbbs_fused.csv"/>
+  <arg name="box_csv" default="/workspace/shared/outputs/boxer/hm3d_stage1/boxer_3dbbs_visual.csv"/>
   <rosparam command="load" file="$(find exploration_manager)/config/robot/uav_model_simulator.yaml"/>
   <rosparam command="load" file="$(find voxel_mapping)/config/voxel_mapping.yaml"/>
   <rosparam command="load" file="$(find pathfinding)/config/astar.yaml"/>

@@ -16,7 +16,7 @@ Visualization Manager:
       Name: Ground Grid
       Plane: XY
       Reference Frame: world
-    - Alpha: 0.75
+    - Alpha: 0.22
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds: true
       Axis: Z
@@ -30,8 +30,8 @@ Visualization Manager:
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
-      Size (Pixels): 3
-      Size (m): 0.05
+      Size (Pixels): 1
+      Size (m): 0.02
       Style: Points
       Topic: /voxel_mapping/occupancy_grid_occupied
       Unreliable: false
@@ -45,7 +45,7 @@ Visualization Manager:
       Color: 80; 165; 255
       Color Transformer: FlatColor
       Decay Time: 0.5
-      Enabled: true
+      Enabled: false
       Name: Current Depth Cloud
       Position Transformer: XYZ
       Queue Size: 5
@@ -63,7 +63,7 @@ Visualization Manager:
       Namespaces: {}
       Queue Size: 100
     - Class: rviz/Marker
-      Enabled: true
+      Enabled: false
       Marker Topic: /planning_vis/viewpoints
       Name: Candidate Viewpoints
       Namespaces: {}
@@ -87,7 +87,7 @@ Visualization Manager:
       Name: Habitat Agent Path
       Offset: {X: 0, Y: 0, Z: 0}
       Pose Color: 255; 90; 30
-      Pose Style: Axes
+      Pose Style: None
       Radius: 0.03
       Shaft Diameter: 0.08
       Shaft Length: 0.15
@@ -123,17 +123,6 @@ Visualization Manager:
       Median window: 5
       Min Value: 0
       Name: Habitat First Person RGB
-      Normalize Range: true
-      Queue Size: 2
-      Transport Hint: raw
-      Unreliable: false
-    - Class: rviz/Image
-      Enabled: false
-      Image Topic: /uav_simulator/depth_image
-      Max Value: 8
-      Median window: 5
-      Min Value: 0
-      Name: Habitat Depth
       Normalize Range: true
       Queue Size: 2
       Transport Hint: raw

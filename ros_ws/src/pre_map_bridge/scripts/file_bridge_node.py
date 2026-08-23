@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 import rospy
-from geometry_msgs.msg import PoseStamped, TransformStamped
+from geometry_msgs.msg import Point, PoseStamped, TransformStamped
 from nav_msgs.msg import Odometry, Path as RosPath
 from quadrotor_msgs.msg import PositionCommand
 from sensor_msgs.msg import Image
@@ -33,7 +33,7 @@ class FileBridge:
         rospy.Subscriber("/planning/pos_cmd", PositionCommand, self.command_callback, queue_size=1)
         rospy.Timer(rospy.Duration(1.0 / 30.0), self.pose_timer)
         rospy.Timer(rospy.Duration(1.0 / 10.0), self.frame_timer)
-        rospy.Timer(rospy.Duration(0.5), self.publish_boxes, oneshot=True)
+        rospy.Timer(rospy.Duration(1.0), self.publish_boxes)
 
     @staticmethod
     def atomic_json(path, value):
@@ -76,12 +76,16 @@ class FileBridge:
             return None
 
     @staticmethod
-    def fill_pose(state, stamp):
-        p, q = state["position"], state["orientation_xyzw"]
+    def fill_pose(state, stamp, body=False):
+        p = state["position"]
+        q = (
+            state.get("body_orientation_xyzw", state["orientation_xyzw"])
+            if body else state["orientation_xyzw"]
+        )
         transform = TransformStamped()
         transform.header.stamp = stamp
         transform.header.frame_id = "world"
-        transform.child_frame_id = "camera"
+        transform.child_frame_id = "base_link" if body else "camera_optical"
         transform.transform.translation.x, transform.transform.translation.y, transform.transform.translation.z = p
         transform.transform.rotation.x, transform.transform.rotation.y = q[0], q[1]
         transform.transform.rotation.z, transform.transform.rotation.w = q[2], q[3]
@@ -90,19 +94,20 @@ class FileBridge:
     def publish_pose(self, stamp):
         if self.latest is None:
             return
-        transform = self.fill_pose(self.latest, stamp)
-        self.pose_pub.publish(transform)
+        optical_transform = self.fill_pose(self.latest, stamp)
+        body_transform = self.fill_pose(self.latest, stamp, body=True)
+        self.pose_pub.publish(optical_transform)
         odom = Odometry()
-        odom.header = transform.header
+        odom.header = body_transform.header
         odom.child_frame_id = "base_link"
-        odom.pose.pose.position = transform.transform.translation
-        odom.pose.pose.orientation = transform.transform.rotation
+        odom.pose.pose.position = body_transform.transform.translation
+        odom.pose.pose.orientation = body_transform.transform.rotation
         self.odom_pub.publish(odom)
 
     def publish_boxes(self, _event):
         csv_path = Path(rospy.get_param(
             "~box_csv",
-            "/workspace/shared/outputs/boxer/hm3d_stage1/boxer_3dbbs_fused.csv",
+            "/workspace/shared/outputs/boxer/hm3d_stage1/boxer_3dbbs_visual.csv",
         ))
         markers = MarkerArray()
         clear = Marker()
@@ -137,9 +142,34 @@ class FileBridge:
             cube.scale.x = float(row["scale_x"])
             cube.scale.y = float(row["scale_y"])
             cube.scale.z = float(row["scale_z"])
-            cube.color.r, cube.color.g, cube.color.b, cube.color.a = red, green, blue, 0.28
+            cube.color.r, cube.color.g, cube.color.b, cube.color.a = red, green, blue, 0.10
             cube.lifetime = rospy.Duration(0)
             markers.markers.append(cube)
+
+            outline = Marker()
+            outline.header.stamp, outline.header.frame_id = stamp, "world"
+            outline.ns, outline.id = "boxer_outlines", index
+            outline.type, outline.action = Marker.LINE_LIST, Marker.ADD
+            outline.pose = cube.pose
+            outline.scale.x = 0.055
+            outline.color.r, outline.color.g, outline.color.b, outline.color.a = (
+                red, green, blue, 1.0
+            )
+            hx, hy, hz = cube.scale.x * 0.5, cube.scale.y * 0.5, cube.scale.z * 0.5
+            corners = [
+                (-hx, -hy, -hz), (hx, -hy, -hz), (hx, hy, -hz), (-hx, hy, -hz),
+                (-hx, -hy, hz), (hx, -hy, hz), (hx, hy, hz), (-hx, hy, hz),
+            ]
+            edges = [
+                (0, 1), (1, 2), (2, 3), (3, 0),
+                (4, 5), (5, 6), (6, 7), (7, 4),
+                (0, 4), (1, 5), (2, 6), (3, 7),
+            ]
+            for start, end in edges:
+                outline.points.append(Point(*corners[start]))
+                outline.points.append(Point(*corners[end]))
+            outline.lifetime = rospy.Duration(0)
+            markers.markers.append(outline)
 
             label = Marker()
             label.header.stamp, label.header.frame_id = stamp, "world"
@@ -148,13 +178,15 @@ class FileBridge:
             label.pose.position.y = cube.pose.position.y
             label.pose.position.z = cube.pose.position.z + cube.scale.z * 0.5 + 0.2
             label.pose.orientation.w = 1.0
-            label.scale.z = 0.28
+            label.scale.z = 0.34
             label.color.r, label.color.g, label.color.b, label.color.a = red, green, blue, 1.0
             label.text = "%s %.2f" % (row["name"], float(row["prob"]))
             label.lifetime = rospy.Duration(0)
             markers.markers.append(label)
         self.box_pub.publish(markers)
-        rospy.loginfo("Published %d Boxer 3D boxes from %s", len(rows), csv_path)
+        rospy.loginfo_throttle(
+            10.0, "Published %d Boxer 3D boxes from %s", len(rows), csv_path
+        )
 
     def pose_timer(self, _event):
         self.publish_pose(rospy.Time.now())
@@ -184,7 +216,7 @@ class FileBridge:
 
         pose = PoseStamped()
         pose.header = image.header
-        transform = self.fill_pose(state, stamp)
+        transform = self.fill_pose(state, stamp, body=True)
         pose.header.frame_id = "world"
         pose.pose.position = transform.transform.translation
         pose.pose.orientation = transform.transform.rotation
