@@ -120,8 +120,8 @@ Visualization Manager:
       Topic: /pre_map_vln/agent_path
     - Class: rviz/MarkerArray
       Enabled: true
-      Marker Topic: /pre_map_vln/box_markers
-      Name: Boxer 3D Boxes
+      Marker Topic: /pre_map_vln/styled_box_markers
+      Name: Boxer 3D Boxes (Styled)
       Namespaces:
         boxer_3d: false
         boxer_labels: false

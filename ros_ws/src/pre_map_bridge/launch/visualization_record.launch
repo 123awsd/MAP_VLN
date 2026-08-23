@@ -2,7 +2,7 @@
   <arg name="bag_path" default="/workspace/shared/outputs/bags/hm3d_visualization.bag"/>
   <arg name="box_csv" default="/workspace/shared/outputs/boxer/hm3d_stage1/boxer_3dbbs_visual.csv"/>
   <arg name="rviz" default="true"/>
-  <arg name="topdown" default="true"/>
+  <arg name="topdown" default="false"/>
   <arg name="roofless_floor_clearance" default="0.25"/>
   <arg name="roofless_ceiling_min_height" default="1.65"/>
   <arg name="roofless_ceiling_thickness" default="0.60"/>

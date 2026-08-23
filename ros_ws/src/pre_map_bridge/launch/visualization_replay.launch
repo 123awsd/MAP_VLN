@@ -2,7 +2,7 @@
   <arg name="bag_path" default="/workspace/shared/outputs/bags/hm3d_stage1_complete_v3_final.bag"/>
   <arg name="loop" default="false"/>
   <arg name="rate" default="1.0"/>
-  <arg name="topdown" default="true"/>
+  <arg name="topdown" default="false"/>
   <arg name="delay" default="2.0"/>
   <arg name="roofless_floor_clearance" default="0.25"/>
   <arg name="roofless_ceiling_min_height" default="1.65"/>

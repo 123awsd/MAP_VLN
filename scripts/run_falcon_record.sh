@@ -25,4 +25,4 @@ exec docker compose run --rm --name pre-map-vln-falcon-vis falcon \
   roslaunch pre_map_bridge visualization_record.launch \
   bag_path:="/workspace/shared/outputs/bags/${bag_name}.bag" \
   rviz:="$show_rviz" \
-  topdown:="$show_rviz"
+  topdown:=false

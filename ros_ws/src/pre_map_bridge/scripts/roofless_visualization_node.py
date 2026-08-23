@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Publish a roofless occupied cloud and the currently active FALCON B-spline."""
+"""Publish derived, balanced RViz layers for exploration visualization."""
 
+import copy
 import math
 
 import numpy as np
@@ -9,7 +10,7 @@ from geometry_msgs.msg import Point, TransformStamped
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import PointCloud2, PointField
 from trajectory.msg import Bspline
-from visualization_msgs.msg import Marker
+from visualization_msgs.msg import Marker, MarkerArray
 
 
 class RooflessVisualization:
@@ -23,6 +24,9 @@ class RooflessVisualization:
         self.frustum_length = float(rospy.get_param("~frustum_length", 0.9))
         self.camera_hfov = math.radians(float(rospy.get_param("~camera_hfov", 90.0)))
         self.camera_aspect = float(rospy.get_param("~camera_aspect", 4.0 / 3.0))
+        self.box_line_width = float(rospy.get_param("~box_line_width", 0.020))
+        self.box_color_scale = float(rospy.get_param("~box_color_scale", 0.72))
+        self.box_alpha = float(rospy.get_param("~box_alpha", 0.62))
         self.floor_z = self.fallback_floor_z
         self.plan_samples = max(8, int(rospy.get_param("~plan_samples", 64)))
         self.cloud_pub = rospy.Publisher(
@@ -33,6 +37,9 @@ class RooflessVisualization:
         )
         self.frustum_pub = rospy.Publisher(
             "/pre_map_vln/camera_frustum", Marker, queue_size=1
+        )
+        self.box_pub = rospy.Publisher(
+            "/pre_map_vln/styled_box_markers", MarkerArray, queue_size=1, latch=True
         )
         rospy.Subscriber(
             "/voxel_mapping/occupancy_grid_occupied",
@@ -50,12 +57,31 @@ class RooflessVisualization:
             self.sensor_pose_callback,
             queue_size=1,
         )
+        rospy.Subscriber(
+            "/pre_map_vln/box_markers",
+            MarkerArray,
+            self.box_callback,
+            queue_size=1,
+        )
         rospy.loginfo(
             "Envelope filter: floor +%.2f m, roof top %.2f m, min ceiling %.2f m",
             self.floor_clearance,
             self.ceiling_thickness,
             self.ceiling_min_height,
         )
+
+    def box_callback(self, message):
+        """Restyle outline markers without changing their progressive timing."""
+        output = copy.deepcopy(message)
+        for marker in output.markers:
+            if marker.ns != "boxer_outlines" or marker.action != Marker.ADD:
+                continue
+            marker.scale.x = max(self.box_line_width, marker.scale.x)
+            marker.color.r = max(0.0, min(1.0, marker.color.r * self.box_color_scale))
+            marker.color.g = max(0.0, min(1.0, marker.color.g * self.box_color_scale))
+            marker.color.b = max(0.0, min(1.0, marker.color.b * self.box_color_scale))
+            marker.color.a = max(marker.color.a, self.box_alpha)
+        self.box_pub.publish(output)
 
     def odom_callback(self, message):
         self.floor_z = float(message.pose.pose.position.z) - self.sensor_height
