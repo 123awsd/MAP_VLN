@@ -24,7 +24,7 @@ class RooflessVisualization:
         self.frustum_length = float(rospy.get_param("~frustum_length", 0.9))
         self.camera_hfov = math.radians(float(rospy.get_param("~camera_hfov", 90.0)))
         self.camera_aspect = float(rospy.get_param("~camera_aspect", 4.0 / 3.0))
-        self.box_line_width = float(rospy.get_param("~box_line_width", 0.020))
+        self.box_line_width = float(rospy.get_param("~box_line_width", 0.050))
         self.box_color_scale = float(rospy.get_param("~box_color_scale", 0.72))
         self.box_alpha = float(rospy.get_param("~box_alpha", 0.62))
         self.floor_z = self.fallback_floor_z
