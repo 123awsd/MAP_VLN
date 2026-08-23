@@ -100,6 +100,12 @@ Visualization Manager:
         Value: Arrow
       Topic: /uav_simulator/odometry
       Unreliable: false
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /pre_map_vln/camera_frustum
+      Name: Camera FoV
+      Namespaces: {}
+      Queue Size: 10
   Enabled: true
   Global Options:
     Background Color: 255; 255; 255

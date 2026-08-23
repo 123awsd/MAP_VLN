@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Publish a roofless occupied cloud and the currently active FALCON B-spline."""
 
+import math
+
 import numpy as np
 import rospy
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, TransformStamped
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import PointCloud2, PointField
 from trajectory.msg import Bspline
@@ -18,6 +20,9 @@ class RooflessVisualization:
         self.ceiling_min_height = float(rospy.get_param("~ceiling_min_height", 1.65))
         self.ceiling_thickness = float(rospy.get_param("~ceiling_thickness", 0.60))
         self.voxel_resolution = float(rospy.get_param("~voxel_resolution", 0.10))
+        self.frustum_length = float(rospy.get_param("~frustum_length", 0.9))
+        self.camera_hfov = math.radians(float(rospy.get_param("~camera_hfov", 90.0)))
+        self.camera_aspect = float(rospy.get_param("~camera_aspect", 4.0 / 3.0))
         self.floor_z = self.fallback_floor_z
         self.plan_samples = max(8, int(rospy.get_param("~plan_samples", 64)))
         self.cloud_pub = rospy.Publisher(
@@ -25,6 +30,9 @@ class RooflessVisualization:
         )
         self.plan_pub = rospy.Publisher(
             "/pre_map_vln/current_plan", Marker, queue_size=1, latch=True
+        )
+        self.frustum_pub = rospy.Publisher(
+            "/pre_map_vln/camera_frustum", Marker, queue_size=1
         )
         rospy.Subscriber(
             "/voxel_mapping/occupancy_grid_occupied",
@@ -36,6 +44,12 @@ class RooflessVisualization:
         rospy.Subscriber(
             "/uav_simulator/odometry", Odometry, self.odom_callback, queue_size=1
         )
+        rospy.Subscriber(
+            "/uav_simulator/sensor_pose",
+            TransformStamped,
+            self.sensor_pose_callback,
+            queue_size=1,
+        )
         rospy.loginfo(
             "Envelope filter: floor +%.2f m, roof top %.2f m, min ceiling %.2f m",
             self.floor_clearance,
@@ -45,6 +59,72 @@ class RooflessVisualization:
 
     def odom_callback(self, message):
         self.floor_z = float(message.pose.pose.position.z) - self.sensor_height
+
+    @staticmethod
+    def rotate_vector(vector, quaternion):
+        q_vector = np.asarray(
+            [quaternion.x, quaternion.y, quaternion.z], dtype=np.float64
+        )
+        norm = math.sqrt(float(np.dot(q_vector, q_vector)) + quaternion.w ** 2)
+        if norm < 1e-12:
+            return vector
+        q_vector /= norm
+        q_w = quaternion.w / norm
+        return vector + 2.0 * np.cross(q_vector, np.cross(q_vector, vector) + q_w * vector)
+
+    def sensor_pose_callback(self, message):
+        origin = np.asarray(
+            [
+                message.transform.translation.x,
+                message.transform.translation.y,
+                message.transform.translation.z,
+            ],
+            dtype=np.float64,
+        )
+        half_width = self.frustum_length * math.tan(0.5 * self.camera_hfov)
+        half_height = half_width / max(0.1, self.camera_aspect)
+        # camera_optical follows ROS convention: +X right, +Y down, +Z forward.
+        local_corners = [
+            np.asarray([x, y, self.frustum_length], dtype=np.float64)
+            for x, y in (
+                (-half_width, -half_height),
+                (half_width, -half_height),
+                (half_width, half_height),
+                (-half_width, half_height),
+            )
+        ]
+        corners = [
+            origin + self.rotate_vector(corner, message.transform.rotation)
+            for corner in local_corners
+        ]
+        center = origin + self.rotate_vector(
+            np.asarray([0.0, 0.0, self.frustum_length], dtype=np.float64),
+            message.transform.rotation,
+        )
+
+        marker = Marker()
+        marker.header = message.header
+        marker.header.frame_id = message.header.frame_id or "world"
+        marker.ns = "camera_fov"
+        marker.id = 0
+        marker.type = Marker.LINE_LIST
+        marker.action = Marker.ADD
+        marker.pose.orientation.w = 1.0
+        marker.scale.x = 0.018
+        marker.color.r = 0.95
+        marker.color.g = 0.12
+        marker.color.b = 0.04
+        marker.color.a = 0.88
+        segments = []
+        for corner in corners:
+            segments.append((origin, corner))
+        for index in range(4):
+            segments.append((corners[index], corners[(index + 1) % 4]))
+        segments.append((origin, center))
+        for start, end in segments:
+            marker.points.append(Point(*start))
+            marker.points.append(Point(*end))
+        self.frustum_pub.publish(marker)
 
     def cloud_callback(self, message):
         xyz_fields = {

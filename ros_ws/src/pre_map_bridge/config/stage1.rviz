@@ -145,6 +145,12 @@ Visualization Manager:
         Value: Arrow
       Topic: /uav_simulator/odometry
       Unreliable: false
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /pre_map_vln/camera_frustum
+      Name: Camera FoV (Actual RGB Direction)
+      Namespaces: {}
+      Queue Size: 10
     - Class: rviz/Image
       Enabled: true
       Image Topic: /habitat/rgb
