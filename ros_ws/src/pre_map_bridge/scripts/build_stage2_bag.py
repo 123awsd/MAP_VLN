@@ -266,6 +266,56 @@ def candidate_markers(candidates, stamp):
     return result
 
 
+def recovery_search_markers(events, objects, stamp):
+    """Show failed expected anchors and VLM-ranked search hypotheses progressively."""
+    result = MarkerArray()
+    marker_id = 0
+    for event in events:
+        failed_id = event.get("failed_expected_object_id")
+        if failed_id in objects:
+            _, obj = objects[failed_id]
+            center = obj["center_xyz_m"]
+            failed = Marker()
+            failed.header.frame_id, failed.header.stamp = "world", stamp
+            failed.ns, failed.id, failed.type, failed.action = "stage2_failed_expected", marker_id, Marker.LINE_LIST, Marker.ADD
+            failed.pose.orientation.w = 1.0
+            failed.scale.x = 0.075
+            failed.color.r, failed.color.g, failed.color.b, failed.color.a = 0.78, 0.08, 0.06, 0.95
+            radius = 0.32
+            failed.points.extend([
+                Point(center[0] - radius, center[1] - radius, center[2] + 0.5),
+                Point(center[0] + radius, center[1] + radius, center[2] + 0.5),
+                Point(center[0] - radius, center[1] + radius, center[2] + 0.5),
+                Point(center[0] + radius, center[1] - radius, center[2] + 0.5),
+            ])
+            result.markers.append(failed)
+            marker_id += 1
+        for rank, hypothesis in enumerate(event.get("plan", {}).get("hypotheses", []), start=1):
+            object_id = hypothesis.get("anchor_object_id")
+            if object_id not in objects:
+                continue
+            _, obj = objects[object_id]
+            center = obj["center_xyz_m"]
+            ring = Marker()
+            ring.header.frame_id, ring.header.stamp = "world", stamp
+            ring.ns, ring.id, ring.type, ring.action = "stage2_recovery_hypotheses", marker_id, Marker.CYLINDER, Marker.ADD
+            ring.pose.position.x, ring.pose.position.y, ring.pose.position.z = center[0], center[1], 0.18
+            ring.pose.orientation.w = 1.0
+            ring.scale.x = ring.scale.y = 0.42 - 0.05 * min(rank - 1, 2)
+            ring.scale.z = 0.045
+            colors = [(0.96, 0.55, 0.03), (0.95, 0.76, 0.05), (0.72, 0.62, 0.12)]
+            ring.color.r, ring.color.g, ring.color.b = colors[rank - 1]
+            ring.color.a = 0.90
+            result.markers.append(ring)
+            label = target_label_marker(obj, marker_id, stamp, f"SEARCH {rank}: {obj['label']}", "current")
+            label.ns = "stage2_recovery_labels"
+            label.scale.z = 0.13
+            label.color.r, label.color.g, label.color.b, label.color.a = ring.color.r, ring.color.g, ring.color.b, 0.95
+            result.markers.append(label)
+            marker_id += 1
+    return result
+
+
 def plan_markers(plan, stamp):
     tour = Marker()
     tour.header.frame_id = "world"
@@ -394,9 +444,6 @@ def main():
         for task_id, values in candidates.items()
         if values
     }
-    for replan in execution["replans"]:
-        for visit in replan.get("plan", {}).get("visits", []):
-            task_objects[visit["task_id"]] = visit["object_id"]
     task_states = {task_id: "pending" for task_id in task_order}
     reached_goals = {}
     current_task = execution["replans"][0]["plan"]["visits"][0]["task_id"]
@@ -423,6 +470,8 @@ def main():
         bag.write("/stage2/rooms", room_markers(scene_graph, initial_stamp), initial_stamp)
         bag.write("/stage2/candidate_poses", candidate_markers(candidates, initial_stamp), initial_stamp)
         bag.write("/stage2/reached_goals", MarkerArray(), initial_stamp)
+        active_recovery_events = []
+        bag.write("/stage2/recovery_search", MarkerArray(), initial_stamp)
 
         event_by_frame = {int(item["frame_index"]): item for item in execution["observations"]}
         open_vocab_by_frame = {
@@ -481,6 +530,12 @@ def main():
                 bag.write("/stage2/selected_goals", selected, stamp)
                 next_task = replan["plan"]["visits"][0]["task_id"]
                 current_task = next_task
+                task_objects[next_task] = replan["plan"]["visits"][0]["object_id"]
+                bag.write(
+                    "/stage2/semantic_boxes",
+                    task_box_markers(task_order, task_objects, objects, task_states, current_task, stamp),
+                    stamp,
+                )
                 bag.write("/stage2/task_status", String(data=json.dumps({"next_task": next_task, "active_task_ids": replan["active_task_ids"]})), stamp)
 
             if frame_index in open_vocab_by_frame:
@@ -502,8 +557,12 @@ def main():
 
             if frame_index in event_by_frame:
                 event = event_by_frame[frame_index]
-                task_states[event["task_id"]] = event["outcome"]
-                reached_goals[event["task_id"]] = {"pose": event["pose"], "outcome": event["outcome"]}
+                terminal_outcomes = {"found", "not_found", "done", "skipped"}
+                if event["outcome"] in terminal_outcomes:
+                    task_states[event["task_id"]] = event["outcome"]
+                    reached_goals[event["task_id"]] = {"pose": event["pose"], "outcome": event["outcome"]}
+                elif event["outcome"] == "recovery_activated":
+                    task_states[event["task_id"]] = "searching"
                 for rule in task_graph.get("conditional_rules", []):
                     if rule["source_task_id"] == event["task_id"] and rule["if_outcome"] != event["outcome"]:
                         for skipped_id in rule.get("activate_task_ids", []):
@@ -515,15 +574,20 @@ def main():
                 bag.write("/stage2/semantic_boxes", update, stamp)
                 bag.write("/stage2/reached_goals", reached_goal_markers(reached_goals, task_order, stamp), stamp)
                 bag.write("/stage2/task_status", String(data=json.dumps({"task_id": event["task_id"], "outcome": event["outcome"]})), stamp)
+                for recovery_event in execution.get("semantic_recovery", {}).get("events", []):
+                    if int(recovery_event.get("sequence", -1)) == int(event["sequence"]):
+                        active_recovery_events.append(recovery_event)
+                bag.write("/stage2/recovery_search", recovery_search_markers(active_recovery_events, objects, stamp), stamp)
             summary = task_summary_text(task_order, task_labels, task_states, current_task)
             bag.write("/stage2/task_text", task_text_marker(summary, status_anchor, stamp), stamp)
     topic_counts = {
         "/voxel_mapping/occupancy_grid_occupied": 1,
-        "/stage2/semantic_boxes": 1 + len(execution["observations"]),
+        "/stage2/semantic_boxes": 1 + len(execution["observations"]) + len(execution["replans"]),
         "/stage2/open_vocab_boxes": len(execution.get("open_vocab_observations", [])),
         "/stage2/rooms": 1,
         "/stage2/candidate_poses": 1,
         "/stage2/reached_goals": 1 + len(execution["observations"]),
+        "/stage2/recovery_search": 1 + len(execution["observations"]),
         "/stage2/executed_path": len(execution["trajectory_xyz_yaw"]),
         "/stage2/rgb": len(execution["trajectory_xyz_yaw"]),
         "/stage2/uav_pose": len(execution["trajectory_xyz_yaw"]),

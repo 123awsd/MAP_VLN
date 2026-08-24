@@ -13,6 +13,7 @@ ALLOWED_ACTIONS = {"inspect", "find", "observe", "deliver", "approach"}
 ALLOWED_RELATIONS = {
     "front", "behind", "left", "right", "above", "below", "on", "between", "near", "facing"
 }
+ALLOWED_SEARCH_MODES = {"fixed", "semantic_recovery"}
 IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
 
@@ -104,6 +105,15 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
         task["prerequisites"] = prerequisites
         task["active_initially"] = bool(task.get("active_initially", True))
         task["success_outcome"] = str(task.get("success_outcome", "found" if action in {"find", "inspect"} else "done"))
+        search_policy = task.get("search_policy") or {}
+        _require(isinstance(search_policy, dict), f"task {task_id} search_policy must be an object")
+        search_mode = str(search_policy.get("mode", "fixed")).strip().lower()
+        _require(search_mode in ALLOWED_SEARCH_MODES, f"unsupported search mode {search_mode!r}")
+        task["search_policy"] = {
+            "mode": search_mode,
+            "completion_policy": "first_success" if search_mode == "semantic_recovery" else "fixed_target",
+            "maximum_location_hypotheses": max(1, min(5, int(search_policy.get("maximum_location_hypotheses", 3)))),
+        }
         normalized_tasks.append(task)
 
     for task in normalized_tasks:

@@ -22,6 +22,18 @@ class ViewpointRecoveryTest(unittest.TestCase):
         recovery = ViewpointRecovery()
         self.assertFalse(recovery.decide("task", "a", True, self.candidates)["retry"])
 
+    def test_exhausted_location_is_filtered_but_other_location_remains(self):
+        candidates = [
+            {"id": "a", "object_id": "old"}, {"id": "b", "object_id": "old"},
+            {"id": "c", "location_hypothesis_id": "new"},
+        ]
+        recovery = ViewpointRecovery(maximum_attempts=5, maximum_attempts_per_location=2)
+        self.assertTrue(recovery.decide("task", "a", False, candidates)["retry"])
+        decision = recovery.decide("task", "b", False, candidates)
+        self.assertTrue(decision["location_exhausted"])
+        filtered = recovery.filtered_candidates({"task": candidates})["task"]
+        self.assertEqual([item["id"] for item in filtered], ["c"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,11 +2,13 @@
 
 Habitat 中的无人机预探索、全局 3D 语义地图与长时程多任务 VLN 工程。
 
-第一阶段使用 FALCON 完成自主探索，以 Boxer 构建全局 3D 物体框、OccuSG 划分房间区域。第二阶段使用 Qwen VLM 生成 task graph，在真实占据地图上联合优化任务顺序和观察位姿，并在 Habitat 中执行、视觉验证和动态重规划。
+第一阶段使用 FALCON 完成自主探索，以 Boxer 构建全局 3D 物体框、OccuSG 划分房间区域。第二阶段使用 Qwen VLM 生成 task graph，在真实占据地图上联合优化任务顺序和观察位姿；目标在旧位置未找到时，Qwen 仅生成可审计的房间/锚点假设，几何模块生成位姿并滚动全局重规划。
 
 项目状态和对话迁移入口见 [`记忆/README.md`](记忆/README.md)。
 
 ## 当前状态
+
+最终语义恢复闭环已完成：3 个自然条件长指令和 3 个目标缺失恢复任务均完成 Habitat 执行并录制独立 ROS bag。恢复任务覆盖 Semantic GT 真实命中、受控命中和候选耗尽明确失败；六 demo 自动验收与 37 项第二阶段测试通过。恢复候选只允许引用真实场景图 ID，Qwen 不生成坐标、不做逐帧检测，同一目标一次恢复最多调用一次。完整说明见 [`docs/第六阶段语义恢复搜索.md`](docs/第六阶段语义恢复搜索.md)。跨任务物品位置规律学习已冻结，不属于当前课题。
 
 两个阶段的工程闭环均已在公开 HM3D example `00861-GLAQ4DNUx5U` 上通过。第二阶段现以本地 GPU OWLv2 为默认开放词表检测器，在线演示完成 4 个实际访问任务、4 次动态重规划和 74 帧连续 RGB；找到电视后正确跳过条件柜子任务。联合初始路径比固定顺序短 32.09%。详细结果见 [`docs/第一阶段设计.md`](docs/第一阶段设计.md) 与 [`docs/第二阶段设计.md`](docs/第二阶段设计.md)。
 
@@ -29,6 +31,18 @@ cd /home/uav/map_VLN/PRE_MAP_VLN
 ./scripts/replay_stage2_rviz.sh hm3d_stage2_perception_v2_complete false 1.0
 .envs/habitat/bin/python scripts/check_external_baselines.py
 .envs/habitat/bin/python -m unittest tests.test_external_baselines
+```
+
+最终 6 demo 可完整重建并验收：
+
+```bash
+cd /home/uav/map_VLN/PRE_MAP_VLN
+./scripts/run_final_demos.sh
+.envs/habitat/bin/python scripts/validate_final_demos.py
+
+# 条件任务与恢复搜索回放（loop=true，跑完不会退出）
+./scripts/replay_stage2_rviz.sh final_demos/conditional_01_branch true 1.0
+./scripts/replay_stage2_rviz.sh final_demos/recovery_01_tv true 1.0
 ```
 
 Qwen 和 Matterport 凭据通过 `scripts/configure_secrets.py` 写入 Git 忽略的 `.secrets/`，不得写入命令记录、文档或提交。Qwen 只负责 task graph 和可选低置信度复核，不用于连续目标检测；预算由 `PRE_MAP_VLN_QWEN_BUDGET_CNY` 配置并写入审计 ledger。

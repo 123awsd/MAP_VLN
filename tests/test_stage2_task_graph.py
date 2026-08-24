@@ -76,6 +76,16 @@ class TaskGraphTest(unittest.TestCase):
         graph = normalize_and_validate_task_graph(value)
         self.assertEqual(graph["tasks"][0]["verification_label"], "cup")
 
+    def test_normalizes_semantic_recovery_policy(self):
+        value = self.base_graph()
+        value["tasks"][0]["search_policy"] = {
+            "mode": "semantic_recovery", "maximum_location_hypotheses": 9,
+        }
+        graph = normalize_and_validate_task_graph(value)
+        policy = graph["tasks"][0]["search_policy"]
+        self.assertEqual(policy["completion_policy"], "first_success")
+        self.assertEqual(policy["maximum_location_hypotheses"], 5)
+
 
 if __name__ == "__main__":
     unittest.main()

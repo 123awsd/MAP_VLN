@@ -35,6 +35,10 @@ from stage2.open_vocab_detector import (  # noqa: E402
     target_found,
 )
 from stage2.semantic_fusion import OnlineSemanticFusion  # noqa: E402
+from stage2.semantic_recovery import (  # noqa: E402
+    QwenSemanticRecoveryPlanner,
+    materialize_recovery_candidates,
+)
 from stage2.viewpoint_recovery import ViewpointRecovery  # noqa: E402
 from stage2.vlm_verifier import QwenImageVerifier  # noqa: E402
 
@@ -151,6 +155,20 @@ def main() -> None:
     parser.add_argument("--vlm-confidence-threshold", type=float, default=0.65)
     parser.add_argument("--vlm-no-cache", action="store_true")
     parser.add_argument("--max-viewpoint-attempts", type=int, default=3)
+    parser.add_argument("--semantic-recovery", action="store_true")
+    parser.add_argument("--max-recovery-hypotheses", type=int, default=3)
+    parser.add_argument("--max-recovery-visits", type=int, default=8)
+    parser.add_argument("--max-viewpoints-per-location", type=int, default=2)
+    parser.add_argument("--recovery-budget-cny", type=float, default=20.0)
+    parser.add_argument(
+        "--controlled-stale-object-ids",
+        default="[]",
+        help="JSON list of mapped anchors whose terminal result is forced missing for reproducible stale-map demos",
+    )
+    parser.add_argument(
+        "--controlled-found-object-ids", default="[]",
+        help="JSON list of anchors with a controlled positive detector result for branch-logic demos",
+    )
     parser.add_argument("--novel-object-min-support", type=int, default=2)
     args = parser.parse_args()
     minimum_pixels_by_task = {
@@ -160,6 +178,8 @@ def main() -> None:
         str(key).strip().lower(): float(value)
         for key, value in json.loads(args.owlv2_class_thresholds).items()
     }
+    controlled_stale_object_ids = {str(value) for value in json.loads(args.controlled_stale_object_ids)}
+    controlled_found_object_ids = {str(value) for value in json.loads(args.controlled_found_object_ids)}
 
     task_graph = load_json(args.task_graph)
     tasks = {task["id"]: task for task in task_graph["tasks"]}
@@ -209,7 +229,19 @@ def main() -> None:
     map_updates = []
     open_vocab_observations = []
     fusion = OnlineSemanticFusion(minimum_novel_support=args.novel_object_min_support)
-    recovery = ViewpointRecovery(maximum_attempts=args.max_viewpoint_attempts)
+    recovery = ViewpointRecovery(
+        maximum_attempts=args.max_recovery_visits if args.semantic_recovery else args.max_viewpoint_attempts,
+        maximum_attempts_per_location=(
+            args.max_viewpoints_per_location if args.semantic_recovery else None
+        ),
+    )
+    semantic_recovery_planner = (
+        QwenSemanticRecoveryPlanner(budget_cny=args.recovery_budget_cny)
+        if args.semantic_recovery else None
+    )
+    semantic_recovery_events = []
+    recovery_plans: dict[str, dict] = {}
+    failed_location_object_ids: dict[str, set[str]] = {}
     replans = []
     frame_index = 0
     started = time.monotonic()
@@ -389,6 +421,12 @@ def main() -> None:
                 selected_found = bool(semantic_verification["found"]) or vlm_found
             else:
                 selected_found = bool(open_vocab_verification and open_vocab_verification["found"]) or vlm_found
+            controlled_stale = visit["object_id"] in controlled_stale_object_ids
+            controlled_found = visit["object_id"] in controlled_found_object_ids
+            if controlled_found:
+                selected_found = True
+            if controlled_stale:
+                selected_found = False
             verification = dict(semantic_verification)
             verification.update({
                 "mode": args.verification_mode,
@@ -399,6 +437,8 @@ def main() -> None:
                 "vlm_found_at_threshold": vlm_found if vlm_verification is not None else None,
                 "vlm_confidence_threshold": args.vlm_confidence_threshold,
                 "vlm": vlm_verification,
+                "controlled_stale_map": controlled_stale,
+                "controlled_found": controlled_found,
             })
             action = tasks[visit["task_id"]]["action"]
             if action in {"inspect", "find", "observe"}:
@@ -411,7 +451,50 @@ def main() -> None:
             ) if action in {"inspect", "find", "observe"} else {
                 "retry": False, "attempt_index": 1, "reason": "non_visual_action",
             }
+            search_activated = False
+            if (
+                semantic_recovery_planner is not None
+                and action in {"inspect", "find", "observe"}
+                and tasks[visit["task_id"]].get("search_policy", {}).get("mode") == "semantic_recovery"
+                and not selected_found
+                and recovery_decision.get("location_exhausted")
+            ):
+                failed = failed_location_object_ids.setdefault(visit["task_id"], set())
+                failed.add(visit["object_id"])
+                if visit["task_id"] not in recovery_plans:
+                    search_plan = semantic_recovery_planner.plan(
+                        tasks[visit["task_id"]]["verification_label"],
+                        task_graph.get("instruction", ""),
+                        updated_scene_graph,
+                        failed,
+                        maximum_hypotheses=args.max_recovery_hypotheses,
+                    )
+                    new_candidates = materialize_recovery_candidates(
+                        grid, updated_scene_graph, tasks[visit["task_id"]], search_plan,
+                    )
+                    known_ids = {item["id"] for item in candidates[visit["task_id"]]}
+                    new_candidates = [item for item in new_candidates if item["id"] not in known_ids]
+                    candidates[visit["task_id"]].extend(new_candidates)
+                    recovery_plans[visit["task_id"]] = search_plan
+                    search_activated = bool(new_candidates)
+                    semantic_recovery_events.append({
+                        "sequence": len(observations_log),
+                        "task_id": visit["task_id"],
+                        "missing_target": tasks[visit["task_id"]]["verification_label"],
+                        "failed_expected_object_id": visit["object_id"],
+                        "plan": search_plan,
+                        "generated_candidate_ids": [item["id"] for item in new_candidates],
+                    })
+                    if search_activated:
+                        recovery_decision.update({
+                            "retry": True,
+                            "reason": "semantic_recovery_activated",
+                            "remaining_candidate_ids": [item["id"] for item in new_candidates],
+                            "semantic_search_plan": search_plan,
+                        })
             mission_outcome = "retry" if recovery_decision["retry"] else outcome
+            if search_activated:
+                mission_outcome = "recovery_activated"
             observation_record = {
                 "sequence": len(observations_log),
                 "task_id": visit["task_id"],
@@ -486,6 +569,20 @@ def main() -> None:
             "async": None if async_detector is None else async_detector.stats,
         },
         "replans": replans,
+        "semantic_recovery": {
+            "enabled": args.semantic_recovery,
+            "planner": "qwen3.7-plus" if args.semantic_recovery else None,
+            "events": semantic_recovery_events,
+            "plans_by_task": recovery_plans,
+            "failed_location_object_ids": {
+                key: sorted(value) for key, value in failed_location_object_ids.items()
+            },
+            "maximum_hypotheses": args.max_recovery_hypotheses,
+            "maximum_visits": args.max_recovery_visits,
+            "maximum_viewpoints_per_location": args.max_viewpoints_per_location,
+            "controlled_stale_object_ids": sorted(controlled_stale_object_ids),
+            "controlled_found_object_ids": sorted(controlled_found_object_ids),
+        },
         "trajectory_xyz_yaw": trajectory,
         "path_length_m": sum(math.dist(a[:3], b[:3]) for a, b in zip(trajectory, trajectory[1:])),
         "elapsed_wall_s": time.monotonic() - started,
@@ -494,6 +591,7 @@ def main() -> None:
     }
     atomic_json(args.output_dir / "habitat_execution.json", trace)
     atomic_json(args.output_dir / "updated_scene_graph.json", updated_scene_graph)
+    atomic_json(args.output_dir / "candidates_with_recovery.json", {"by_task": candidates})
     print(f"status={trace['status']} tasks={len(observations_log)} frames={frame_index} path={trace['path_length_m']:.2f}m elapsed={trace['elapsed_wall_s']:.1f}s")
 
 

@@ -64,6 +64,12 @@ Visualization Manager:
       Name: Reached Goal Stars (Green/Red)
       Namespaces: {}
       Queue Size: 10
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /stage2/recovery_search
+      Name: Semantic Recovery (Failed X + Ranked Locations)
+      Namespaces: {}
+      Queue Size: 10
     - Class: rviz/Marker
       Enabled: false
       Marker Topic: /stage2/global_tour

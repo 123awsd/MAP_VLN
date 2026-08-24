@@ -18,7 +18,7 @@ from .task_graph import normalize_and_validate_task_graph
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 MODEL = "qwen3.7-plus"
-PROMPT_VERSION = "stage2-task-graph-v3"
+PROMPT_VERSION = "stage2-task-graph-v4"
 INPUT_CNY_PER_MILLION = 2.0
 OUTPUT_CNY_PER_MILLION = 8.0
 
@@ -36,11 +36,12 @@ SYSTEM_PROMPT = """你是室内无人机长时程任务规划器。把中文长�
     "target":{"label":"与场景物体标签尽量一致","room":"房间或null","reference":"参照物或null"},
     "verification_label":"最终需要在RGB中确认的物体类别",
     "spatial_constraints":{"relation":null,"distance_m":[1.0,2.2],"height_m":null,"face_target":true,"visibility_required":true},
-    "prerequisites":[],"active_initially":true,"success_outcome":"found|done"
+    "prerequisites":[],"active_initially":true,"success_outcome":"found|done",
+    "search_policy":{"mode":"fixed|semantic_recovery","maximum_location_hypotheses":3}
   }],
   "conditional_rules":[{"source_task_id":"...","if_outcome":"not_found","activate_task_ids":["..."],"skip_task_ids":[]}]
 }
-deliver 任务的 target 是交付终点物体，reference 可写被运送物体。检查“台面上有没有水杯”时 target.label 是用于导航的 counter，verification_label 是 cup；检查“床边的灯”时 target.label 和 verification_label 都是 lamp，reference 是 bed。检查“有没有”使用 inspect，找到目标后的 outcome 为 found。"""
+deliver 任务的 target 是交付终点物体，reference 可写被运送物体。检查“台面上有没有水杯”时 target.label 是用于导航的 counter，verification_label 是 cup；检查“床边的灯”时 target.label 和 verification_label 都是 lamp，reference 是 bed。检查“有没有”使用 inspect，找到目标后的 outcome 为 found。只有指令明确要求“旧位置没有就继续在全局地图搜索”等恢复语义时，才将 search_policy.mode 设为 semantic_recovery，否则为 fixed。"""
 
 
 def compact_inventory(scene_graph: dict[str, Any]) -> dict[str, Any]:
