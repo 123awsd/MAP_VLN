@@ -275,7 +275,7 @@ def plan_markers(plan, stamp):
     tour.type = Marker.LINE_STRIP
     tour.action = Marker.ADD
     tour.pose.orientation.w = 1.0
-    tour.scale.x = 0.045
+    tour.scale.x = 0.075
     tour.color.r, tour.color.g, tour.color.b, tour.color.a = 0.50, 0.08, 0.72, 0.92
     if plan.get("segments"):
         first = plan["segments"][0]["from_xy_m"]

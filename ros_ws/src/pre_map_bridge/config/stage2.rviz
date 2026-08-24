@@ -71,7 +71,7 @@ Visualization Manager:
       Namespaces: {}
       Queue Size: 10
     - Class: rviz/Marker
-      Enabled: true
+      Enabled: false
       Marker Topic: /stage2/local_path
       Name: Current Local Path (Amber)
       Namespaces: {}
