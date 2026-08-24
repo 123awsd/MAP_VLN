@@ -14,6 +14,8 @@ Habitat 中的无人机预探索、全局 3D 语义地图与长时程多任务 V
 
 开放词表感知已升级为异步 OWLv2、RGB-D 多帧三维融合、未知物体两视角确认和最多 3 个观察位姿的失败恢复。三地图 144 帧 pilot 的平均/p95 延迟为 35.78/36.89 ms；带 Semantic GT 的开发图上 image-level micro precision/recall/F1 为 0.658/0.481/0.556。完整设计和结论边界见 [`docs/第四阶段开放词表感知.md`](docs/第四阶段开放词表感知.md)。
 
+开源方法对比已接入 Open-Nav、VLN-Zero 和 Spatial-X 的固定源码版本，建立了共享的 Habitat 0.1.7/Python 3.8 隔离环境、Open-Nav 官方 R2R-CE 100 episode、10 个所需 MP3D 场景、航点/视觉权重以及统一 NE/OSR/SR/SPL/nDTW 指标。Open-Nav + Qwen + 本地 OWLv2 的真实单 episode 闭环已通过；接入状态和结论边界见 [`docs/第五阶段开源方法对比.md`](docs/第五阶段开源方法对比.md)。
+
 第二阶段一键运行、三地图几何回归和 RViz 回放：
 
 ```bash
@@ -25,6 +27,8 @@ cd /home/uav/map_VLN/PRE_MAP_VLN
 .envs/habitat/bin/python scripts/evaluate_open_vocab_multiscene.py --views-per-scene 48
 ./scripts/validate_stage2_perception.py
 ./scripts/replay_stage2_rviz.sh hm3d_stage2_perception_v2_complete false 1.0
+.envs/habitat/bin/python scripts/check_external_baselines.py
+.envs/habitat/bin/python -m unittest tests.test_external_baselines
 ```
 
 Qwen 和 Matterport 凭据通过 `scripts/configure_secrets.py` 写入 Git 忽略的 `.secrets/`，不得写入命令记录、文档或提交。Qwen 只负责 task graph 和可选低置信度复核，不用于连续目标检测；预算由 `PRE_MAP_VLN_QWEN_BUDGET_CNY` 配置并写入审计 ledger。

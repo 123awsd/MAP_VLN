@@ -32,4 +32,6 @@ clone_at_commit OccuSG https://github.com/crcz25/OccuSG.git 2bca2fa06af87fd9dd05
 clone_at_commit habitat-lab https://github.com/facebookresearch/habitat-lab.git cdbb4880519505adf45fba0f0c0c3a3fd18a2a55
 clone_at_commit Open3D https://github.com/isl-org/Open3D.git 0f06a149c4fb9406fd3e432a5cb0c024f38e2f0e
 clone_at_commit nlopt https://github.com/stevengj/nlopt.git 09b3c2a6da71cabcb98d2c8facc6b83d2321ed71
-
+clone_at_commit Open-Nav https://github.com/YanyuanQiao/Open-Nav.git 3a8dcefe5bfdab5192c3c3bf80b14fb096cb08c7
+clone_at_commit VLN-Zero https://github.com/VLN-Zero/vln-zero.github.io.git 64b76cf9bbf4286803adb17477e5d0c222e3d63b true
+clone_at_commit Spatial-X https://github.com/IMNearth/Spatial-X.git 9afdacd294e54c76795c25005a0c4498f85f7ddf

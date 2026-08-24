@@ -1,12 +1,23 @@
 import unittest
 import time
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from stage2.open_vocab_detector import AsyncOpenVocabularyDetector, apply_class_thresholds, associate_projection, project_detection_to_world, target_found
+from stage2.open_vocab_detector import AsyncOpenVocabularyDetector, LocalOpenVocabularyDetector, apply_class_thresholds, associate_projection, project_detection_to_world, target_found
 
 
 class OpenVocabularyDetectorTest(unittest.TestCase):
+    @patch.object(LocalOpenVocabularyDetector, "_read_prefixed", return_value={"backend": "fake"})
+    @patch("stage2.open_vocab_detector.subprocess.Popen")
+    def test_worker_can_override_cuda_visibility(self, popen, _ready):
+        process = MagicMock()
+        process.poll.return_value = 0
+        popen.return_value = process
+        LocalOpenVocabularyDetector(["chair"], cuda_visible_devices="0")
+        environment = popen.call_args.kwargs["env"]
+        self.assertEqual(environment["CUDA_VISIBLE_DEVICES"], "0")
+
     def test_target_found_supports_aliases(self):
         result = {"detections": [{"label": "tv", "score": 0.4}]}
         self.assertTrue(target_found(result, "television", {"television": ["tv"]}))

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import selectors
 import subprocess
 import threading
@@ -36,6 +37,7 @@ class LocalOpenVocabularyDetector:
         threshold: float = 0.08,
         timeout_s: float = 180.0,
         python_path: Path | None = None,
+        cuda_visible_devices: str | None = None,
     ):
         if not prompts:
             raise ValueError("at least one prompt is required")
@@ -46,6 +48,10 @@ class LocalOpenVocabularyDetector:
             str(executable), "-u", str(ROOT / "boxer_ext/open_vocab_worker.py"),
             "--threshold", str(threshold), "--prompts", *self.prompts,
         ]
+        worker_environment = None
+        if cuda_visible_devices is not None:
+            worker_environment = os.environ.copy()
+            worker_environment["CUDA_VISIBLE_DEVICES"] = cuda_visible_devices
         self.process = subprocess.Popen(
             command,
             cwd=ROOT,
@@ -54,6 +60,7 @@ class LocalOpenVocabularyDetector:
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
+            env=worker_environment,
         )
         self._request_lock = threading.Lock()
         self.ready = self._read_prefixed(READY_PREFIX, timeout_s)

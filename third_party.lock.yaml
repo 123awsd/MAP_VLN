@@ -22,4 +22,13 @@ repositories:
     url: https://github.com/stevengj/nlopt.git
     ref: v2.7.1
     commit: 09b3c2a6da71cabcb98d2c8facc6b83d2321ed71
-
+  open_nav:
+    url: https://github.com/YanyuanQiao/Open-Nav.git
+    commit: 3a8dcefe5bfdab5192c3c3bf80b14fb096cb08c7
+  vln_zero:
+    url: https://github.com/VLN-Zero/vln-zero.github.io.git
+    commit: 64b76cf9bbf4286803adb17477e5d0c222e3d63b
+    recursive: true
+  spatial_x:
+    url: https://github.com/IMNearth/Spatial-X.git
+    commit: 9afdacd294e54c76795c25005a0c4498f85f7ddf

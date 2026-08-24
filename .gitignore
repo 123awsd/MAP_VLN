@@ -9,6 +9,7 @@ logs/*
 outputs/*
 runtime/bridge/*
 runtime/occusg/*
+runtime/baselines/*
 runtime/*.Xauthority
 third_party/*
 

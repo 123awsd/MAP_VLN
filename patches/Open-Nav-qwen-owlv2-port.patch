@@ -1,0 +1,276 @@
+diff --git a/vlnce_baselines/common/navigator/api.py b/vlnce_baselines/common/navigator/api.py
+index 77ce888..a6f7a08 100644
+--- a/vlnce_baselines/common/navigator/api.py
++++ b/vlnce_baselines/common/navigator/api.py
+@@ -4,6 +4,8 @@ import numpy as np
+ 
+ import sys
+ import os
++import json
++import time
+ 
+ from tenacity import retry, wait_random_exponential, stop_after_attempt
+ 
+@@ -12,18 +12,25 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
+ import warnings
+ 
+ from transformers import AutoConfig, AutoModelForCausalLM
+-from SpatialBot3B.configuration_bunny_phi import *
+-from SpatialBot3B.modeling_bunny_phi import *
+-
+-AutoConfig.register("bunny-phi", BunnyPhiConfig)
+-AutoModelForCausalLM.register(BunnyPhiConfig, BunnyPhiForCausalLM)
++try:
++    from SpatialBot3B.configuration_bunny_phi import *
++    from SpatialBot3B.modeling_bunny_phi import *
++    AutoConfig.register("bunny-phi", BunnyPhiConfig)
++    AutoModelForCausalLM.register(BunnyPhiConfig, BunnyPhiForCausalLM)
++    _SPATIALBOT_IMPORT_ERROR = None
++except ImportError as error:
++    _SPATIALBOT_IMPORT_ERROR = error
+ transformers.logging.set_verbosity_error()
+ transformers.logging.disable_progress_bar()
+ warnings.filterwarnings('ignore')
+ 
+-from recognize_anything.ram.models import ram
+-from recognize_anything.ram import inference_ram
+-from recognize_anything.ram import get_transform
++try:
++    from recognize_anything.ram.models import ram
++    from recognize_anything.ram import inference_ram
++    from recognize_anything.ram import get_transform
++    _RAM_IMPORT_ERROR = None
++except ImportError as error:
++    _RAM_IMPORT_ERROR = error
+ 
+ 
+ 
+@@ -48,7 +55,11 @@ class llmClient:
+                 base_url="http://0.0.0.0:23333/v1"
+             )
+         else:
+-            raise ValueError(f"Unknown model type: {model_type}. Use 'gpt' or 'opensource'.")
++            self.model = model_type
++            self.client = OpenAI(
++                api_key=api_key,
++                base_url=base_url or os.getenv("OPENAI_BASE_URL"),
++            )
+         
+         print(f"Initialized LLM client with model: {self.model}")
+ 
+@@ -59,6 +72,23 @@ class llmClient:
+     def _completion_with_backoff(self, **kwargs):
+         return self.client.chat.completions.create(**kwargs)
+ 
++    def _audit_usage(self, response):
++        ledger = os.getenv("PRE_MAP_VLN_API_LEDGER")
++        usage = getattr(response, "usage", None)
++        if not ledger or usage is None:
++            return
++        os.makedirs(os.path.dirname(ledger), exist_ok=True)
++        record = {
++            "timestamp_unix": time.time(),
++            "method": "open_nav_qwen_port",
++            "model": self.model,
++            "prompt_tokens": int(getattr(usage, "prompt_tokens", 0) or 0),
++            "completion_tokens": int(getattr(usage, "completion_tokens", 0) or 0),
++            "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
++        }
++        with open(ledger, "a", encoding="utf-8") as stream:
++            stream.write(json.dumps(record, ensure_ascii=False) + "\n")
++
+     def gpt_infer(self, system_prompt, user_prompt, num_output=1):
+         messages = [
+             {"role": "system", "content": system_prompt},
+@@ -68,17 +98,21 @@ class llmClient:
+         request_params = {
+             "model": self.model,
+             "messages": messages,
+             "temperature": 0
+         }
++        if "qwen" in self.model.lower():
++            request_params["extra_body"] = {"enable_thinking": False}
+         
+         if num_output == 1:
+             chat_response = self._completion_with_backoff(**request_params)
++            self._audit_usage(chat_response)
+             answer = chat_response.choices[0].message.content
+             return answer
+         else:
+             responses = []
+             for _ in range(num_output):
+                 chat_response = self._completion_with_backoff(**request_params)
++                self._audit_usage(chat_response)
+                 responses.append(chat_response.choices[0].message.content)
+             return responses
+ 
+@@ -90,6 +101,10 @@ class spatialClient:
+         self.spatialbot_path = "./SpatialBot3B"
+         view_record_path = "cache_files/view_cache.json"
+         try:
++            if _SPATIALBOT_IMPORT_ERROR or _RAM_IMPORT_ERROR:
++                raise RuntimeError(
++                    "SpatialBot/RAM unavailable; use PRE_MAP_VLN shared OWLv2 perception bridge"
++                )
+             self.spatialbot_model = AutoModelForCausalLM.from_pretrained(
+                 self.spatialbot_path,
+                 torch_dtype=torch.float16, # float32 for cpu
+@@ -103,6 +118,9 @@ class spatialClient:
+             self.ram_model = ram(pretrained=self.ram_path, image_size=224, vit='swin_l').eval().to(self.device)
+         except Exception as e:
+             print(f"Error in loading RAM or SpatialBot: {e}")
++            self.available = False
++        else:
++            self.available = True
+             
+     def ram_img_tagging(self, image):
+         ram_img = self.ram_transform(image).unsqueeze(0).to(self.device)
+@@ -137,9 +155,11 @@ class spatialClient:
+         return self.spatialbot_tokenizer.decode(output_ids[input_ids.shape[1]:], skip_special_tokens=True).strip()
+     
+     def observe_view(self, logger, current_step, direction_idx, direction_image):
++        if not self.available:
++            raise RuntimeError("Open-Nav upstream perception is unavailable; configure shared OWLv2 bridge")
+         img_tags = self.ram_img_tagging(direction_image['rgb'])
+         spatial_scene_description_prompt = "What objects are in the image, and how far are these objects from the camera, calculate the result in meter."
+         spatial_scene_description = self.spatialbot_description(direction_image, spatial_scene_description_prompt)
+         view_observation = f"Scene Description: {spatial_scene_description} Scene Objects: {img_tags}; "
+         observe_result = f"Direction {direction_idx} Direction Viewpoint ID: {direction_idx} in Step ID: {current_step} Elevation: Eye Level "  + view_observation
+-        return observe_result
+\ No newline at end of file
++        return observe_result
+diff --git a/vlnce_baselines/common/base_il_trainer_llm.py b/vlnce_baselines/common/base_il_trainer_llm.py
+index 779f06f..1fc86d2 100644
+--- a/vlnce_baselines/common/base_il_trainer_llm.py
++++ b/vlnce_baselines/common/base_il_trainer_llm.py
+@@ -60,7 +60,10 @@ from ..models.utils import (
+ 
+ with warnings.catch_warnings():
+     warnings.filterwarnings("ignore", category=FutureWarning)
+-    import tensorflow as tf  # noqa: F401
++    try:
++        import tensorflow as tf  # noqa: F401
++    except ImportError:
++        tf = None  # TensorFlow is optional; it is only used by TensorBoard video helpers.
+ 
+ class BaseVLNCETrainerLLM(BaseILTrainer):
+     r"""A base trainer for VLN-CE imitation learning."""
+@@ -71,7 +74,7 @@ class BaseVLNCETrainerLLM(BaseILTrainer):
+         self.policy = None
+         self.device = (
+             torch.device("cuda", self.config.TORCH_GPU_ID)
+-            if torch.cuda.is_available()
++            if torch.cuda.is_available() and os.getenv("PRE_MAP_VLN_FORCE_TORCH_CPU") != "1"
+             else torch.device("cpu")
+         )
+         self.obs_transforms = []
+@@ -556,7 +559,7 @@ class BaseVLNCETrainerLLM(BaseILTrainer):
+                 sum(v[stat_key] for v in stats_episodes.values())
+                 / num_episodes
+             )
+-        total = torch.tensor(num_episodes).cuda()
++        total = torch.tensor(num_episodes, device=self.device)
+         if self.world_size > 1:
+             dist.reduce(total,dst=0)
+         total = total.item()
+@@ -565,7 +568,7 @@ class BaseVLNCETrainerLLM(BaseILTrainer):
+             logger.info(
+                 f"rank {self.local_rank}'s {num_episodes}-episode results: {aggregated_stats}")
+             for k,v in aggregated_stats.items():
+-                v = torch.tensor(v*num_episodes).cuda()
++                v = torch.tensor(v*num_episodes, device=self.device)
+                 cat_v = gather_list_and_concat(v,self.world_size)
+                 v = (sum(cat_v)/total).item()
+                 aggregated_stats[k] = v
+@@ -613,7 +616,7 @@ class BaseVLNCETrainerLLM(BaseILTrainer):
+         """
+         self.device = (
+             torch.device("cuda", self.config.TORCH_GPU_ID)
+-            if torch.cuda.is_available()
++            if torch.cuda.is_available() and os.getenv("PRE_MAP_VLN_FORCE_TORCH_CPU") != "1"
+             else torch.device("cpu")
+         )
+ 
+@@ -672,7 +675,8 @@ class BaseVLNCETrainerLLM(BaseILTrainer):
+         self.config.SENSORS = config.SIMULATOR.AGENT_0.SENSORS
+         
+         self.config.freeze()
+-        torch.cuda.set_device(self.device)
++        if self.device.type == "cuda":
++            torch.cuda.set_device(self.device)
+         if world_size > 1:
+             distr.init_process_group(backend='nccl', init_method='env://')
+             self.device = self.config.TORCH_GPU_IDS[self.local_rank]
+diff --git a/vlnce_baselines/models/Policy_ViewSelection.py b/vlnce_baselines/models/Policy_ViewSelection.py
+index dcce8b7..dec3270 100644
+--- a/vlnce_baselines/models/Policy_ViewSelection.py
++++ b/vlnce_baselines/models/Policy_ViewSelection.py
+@@ -1,4 +1,5 @@
+ import numpy as np
++import os
+ import time
+ import torch
+ import torch.nn as nn
+@@ -80,7 +81,7 @@ class CMANet(Net):
+ 
+         device = (
+             torch.device("cuda", model_config.TORCH_GPU_ID)
+-            if torch.cuda.is_available()
++            if torch.cuda.is_available() and os.getenv("PRE_MAP_VLN_FORCE_TORCH_CPU") != "1"
+             else torch.device("cpu")
+         )
+         self.device = device
+diff --git a/run.py b/run.py
+index bccacec..aa5a75d 100644
+--- a/run.py
++++ b/run.py
+@@ -41,7 +41,7 @@ def main():
+     parser.add_argument(
+         "--api_key",
+         type=str,
+-        required=True,
++        default=os.getenv("OPENAI_API_KEY"),
+         help="API key for accessing the LLM service",
+     )
+     args = parser.parse_args()
+diff --git a/vlnce_baselines/common/navigator/spatialNavigator.py b/vlnce_baselines/common/navigator/spatialNavigator.py
+index 296522b..f077a6d 100644
+--- a/vlnce_baselines/common/navigator/spatialNavigator.py
++++ b/vlnce_baselines/common/navigator/spatialNavigator.py
+@@ -1,13 +1,18 @@
+ import re
+ import random
++import os
+ from vlnce_baselines.common.navigator.api import *
+ from vlnce_baselines.common.navigator.prompts import *
+ 
+ class Open_Nav():
+     def __init__(self, device, llm_type, api_key):
+         self.device = device
+         self.llm = llmClient(llm_type, api_key)
+-        self.spatial = spatialClient(self.device)
++        if os.getenv("PRE_MAP_VLN_SHARED_PERCEPTION") == "1":
++            from baselines.opennav_bridge import OpenNavObservationBridge
++            self.spatial = OpenNavObservationBridge()
++        else:
++            self.spatial = spatialClient(self.device)
+         
+     # =====================================
+     # ===== Instruction Comprehension =====
+@@ -74,12 +79,14 @@ class Open_Nav():
+     # =================================
+     def move_to_next_vp(self, logger, current_step, instruction, actions, landmarks, history_traj, estimation, observation, observe_dict):    
+         break_flag = True
+-        for i in range(2): # retry twice
++        retries = int(os.getenv("PRE_MAP_VLN_OPENNAV_RETRIES", "2"))
++        samples = int(os.getenv("PRE_MAP_VLN_OPENNAV_SAMPLES", "3"))
++        for i in range(retries):
+             effective_prediction, thought_list = [], []
+             batch_responses = self.llm.gpt_infer(NAVIGATOR['system'], 
+                                                   NAVIGATOR['user'].format(observe_dict.keys(), current_step, instruction,
+                                                                            actions, landmarks, history_traj, estimation, observation),
+-                                                  num_output=3)
++                                                  num_output=samples)
+             for decision_reasoning in batch_responses:
+                 logger.info(decision_reasoning)
+                 if "Prediction:" not in decision_reasoning:

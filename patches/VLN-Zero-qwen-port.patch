@@ -1,0 +1,151 @@
+diff --git a/demo_agent.py b/demo_agent.py
+index b91758e..7b46c0f 100644
+--- a/demo_agent.py
++++ b/demo_agent.py
+@@ -36,7 +36,9 @@ def openai_api_calculate_cost(usage):
+     }
+ 
+     prompt_cost = usage.prompt_tokens * model_pricing['prompt'] / 1000
+-    cached_cost = usage.prompt_tokens_details['cached_tokens'] * model_pricing['cached'] / 1000
++    details = getattr(usage, "prompt_tokens_details", None)
++    cached_tokens = int(getattr(details, "cached_tokens", 0) or 0)
++    cached_cost = cached_tokens * model_pricing['cached'] / 1000
+     completion_cost = usage.completion_tokens * model_pricing['completion'] / 1000
+ 
+     total_cost = prompt_cost + completion_cost + cached_cost
+@@ -45,6 +47,23 @@ def openai_api_calculate_cost(usage):
+ 
+     return total_cost
+ 
++def audit_api_usage(response):
++    ledger = os.getenv("PRE_MAP_VLN_API_LEDGER")
++    usage = getattr(response, "usage", None)
++    if not ledger or usage is None:
++        return
++    os.makedirs(os.path.dirname(ledger), exist_ok=True)
++    record = {
++        "timestamp_unix": time.time(),
++        "method": "vln_zero_qwen_port",
++        "model": os.getenv("VLN_ZERO_MODEL", "gpt-4.1"),
++        "prompt_tokens": int(getattr(usage, "prompt_tokens", 0) or 0),
++        "completion_tokens": int(getattr(usage, "completion_tokens", 0) or 0),
++        "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
++    }
++    with open(ledger, "a", encoding="utf-8") as stream:
++        stream.write(json.dumps(record, ensure_ascii=False) + "\n")
++
+ def find_nearest_waypoint_to(curr_pos, curr_sg, thresh=None):
+     
+     min_dist = 10000000.
+@@ -454,7 +473,10 @@ class MyGPTAgent(Agent):
+         from dotenv import load_dotenv
+ 
+         load_dotenv()
+-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
++        self.client = OpenAI(
++            api_key=os.getenv("OPENAI_API_KEY"),
++            base_url=os.getenv("OPENAI_BASE_URL") or None,
++        )
+ 
+         # Initialize tracking variables
+         self.rgb_list = []
+@@ -913,12 +935,15 @@ class MyGPTAgent(Agent):
+             try:
+                 if (use_cached_action == False):
+                     response = self.client.chat.completions.create(
+-                        model="gpt-4.1",
++                        model=os.getenv("VLN_ZERO_MODEL", "gpt-4.1"),
+                         messages=messages,
+                         max_tokens=300,
+                         temperature=0.3,
++                        extra_body={"enable_thinking": False},
+                     )
+ 
++                    audit_api_usage(response)
++
+                     print(response.choices[0].message.content)
+ 
+                     generated_text = response.choices[0].message.content.strip()
+diff --git a/eval_zero_vlnce.sh b/eval_zero_vlnce.sh
+index 4c29d88..3837b18 100644
+--- a/eval_zero_vlnce.sh
++++ b/eval_zero_vlnce.sh
+@@ -1,5 +1,4 @@
+ #!/bin/bash
+-import run
+ CHUNKS=1
+ 
+ # R2R
+@@ -23,4 +22,3 @@ for IDX in $(seq 0 $((CHUNKS-1))); do
+ done
+ 
+ wait
+-
+diff --git a/my_agent.py b/my_agent.py
+index 0a58b5f..711913e 100644
+--- a/my_agent.py
++++ b/my_agent.py
+@@ -34,7 +34,9 @@ def openai_api_calculate_cost(usage):
+     }
+ 
+     prompt_cost = usage.prompt_tokens * model_pricing['prompt'] / 1000
+-    cached_cost = usage.prompt_tokens_details['cached_tokens'] * model_pricing['cached'] / 1000
++    details = getattr(usage, "prompt_tokens_details", None)
++    cached_tokens = int(getattr(details, "cached_tokens", 0) or 0)
++    cached_cost = cached_tokens * model_pricing['cached'] / 1000
+     completion_cost = usage.completion_tokens * model_pricing['completion'] / 1000
+ 
+     total_cost = prompt_cost + completion_cost + cached_cost
+@@ -43,6 +45,23 @@ def openai_api_calculate_cost(usage):
+ 
+     return total_cost
+ 
++def audit_api_usage(response):
++    ledger = os.getenv("PRE_MAP_VLN_API_LEDGER")
++    usage = getattr(response, "usage", None)
++    if not ledger or usage is None:
++        return
++    os.makedirs(os.path.dirname(ledger), exist_ok=True)
++    record = {
++        "timestamp_unix": time.time(),
++        "method": "vln_zero_qwen_port",
++        "model": os.getenv("VLN_ZERO_MODEL", "gpt-4.1"),
++        "prompt_tokens": int(getattr(usage, "prompt_tokens", 0) or 0),
++        "completion_tokens": int(getattr(usage, "completion_tokens", 0) or 0),
++        "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
++    }
++    with open(ledger, "a", encoding="utf-8") as stream:
++        stream.write(json.dumps(record, ensure_ascii=False) + "\n")
++
+ def find_nearest_waypoint_to(curr_pos, curr_sg, thresh=None):
+     
+     min_dist = 10000000.
+@@ -451,7 +470,10 @@ class MyGPTAgent(Agent):
+         from dotenv import load_dotenv
+ 
+         load_dotenv()
+-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
++        self.client = OpenAI(
++            api_key=os.getenv("OPENAI_API_KEY"),
++            base_url=os.getenv("OPENAI_BASE_URL") or None,
++        )
+ 
+         # Initialize tracking variables
+         self.rgb_list = []
+@@ -910,12 +932,15 @@ class MyGPTAgent(Agent):
+             try:
+                 if (use_cached_action == False):
+                     response = self.client.chat.completions.create(
+-                        model="gpt-4.1",
++                        model=os.getenv("VLN_ZERO_MODEL", "gpt-4.1"),
+                         messages=messages,
+                         max_tokens=300,
+                         temperature=0.3,
++                        extra_body={"enable_thinking": False},
+                     )
+ 
++                    audit_api_usage(response)
++
+                     print(response)
+ 
+                     generated_text = response.choices[0].message.content.strip()
