@@ -85,7 +85,7 @@ Visualization Manager:
       Head Length: 0.12
       Length: 0.25
       Line Style: Lines
-      Line Width: 0.008
+      Line Width: 0.015
       Name: Executed Path (Blue)
       Offset: {X: 0, Y: 0, Z: 0}
       Pose Color: 255; 90; 30
