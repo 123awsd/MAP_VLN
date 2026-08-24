@@ -84,7 +84,7 @@ Visualization Manager:
       Head Diameter: 0.20
       Head Length: 0.12
       Length: 0.25
-      Line Style: Lines
+      Line Style: Billboards
       Line Width: 0.075
       Name: Actual UAV Flight Path (Green, Thick)
       Offset: {X: 0, Y: 0, Z: 0}
