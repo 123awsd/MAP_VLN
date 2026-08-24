@@ -79,14 +79,14 @@ Visualization Manager:
     - Alpha: 1
       Buffer Length: 1
       Class: rviz/Path
-      Color: 15; 45; 150
+      Color: 20; 125; 45
       Enabled: true
       Head Diameter: 0.20
       Head Length: 0.12
       Length: 0.25
       Line Style: Lines
-      Line Width: 0.015
-      Name: Executed Path (Blue)
+      Line Width: 0.025
+      Name: Actual UAV Flight Path (Green, Thick)
       Offset: {X: 0, Y: 0, Z: 0}
       Pose Color: 255; 90; 30
       Pose Style: None
