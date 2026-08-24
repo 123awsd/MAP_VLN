@@ -26,7 +26,9 @@ def _relation_ok(relation: str | None, angle: float, object_yaw: float) -> bool:
     return abs(difference) <= math.radians(55.0)
 
 
-def matching_objects(scene_graph: dict[str, Any], task: dict[str, Any]) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+def matching_objects(
+    scene_graph: dict[str, Any], task: dict[str, Any], prefer_room: bool = True,
+) -> list[tuple[dict[str, Any], dict[str, Any]]]:
     label = task["target"]["label"].lower()
     room_name = task["target"].get("room")
     aliases = {
@@ -57,8 +59,9 @@ def matching_objects(scene_graph: dict[str, Any], task: dict[str, Any]) -> list[
                 center = item[1]["center_xyz_m"]
                 distance = min(math.dist(center[:2], other[:2]) for other in reference_centers)
                 return distance, -float(item[1].get("probability", 0.0))
-            return sorted(all_matches, key=reference_key)[:12]
-    matches = room_matches or all_matches
+            preferred = room_matches if prefer_room and room_matches else all_matches
+            return sorted(preferred, key=reference_key)[:12]
+    matches = room_matches if prefer_room and room_matches else all_matches
     return sorted(matches, key=lambda item: float(item[1].get("probability", 0.0)), reverse=True)[:12]
 
 
@@ -67,6 +70,8 @@ def generate_candidates(
     scene_graph: dict[str, Any],
     task: dict[str, Any],
     max_candidates: int = 8,
+    allowed_object_ids: set[str] | None = None,
+    prefer_room: bool = True,
 ) -> list[dict[str, Any]]:
     constraints = task["spatial_constraints"]
     minimum, maximum = constraints["distance_m"]
@@ -79,7 +84,9 @@ def generate_candidates(
         for other_room in scene_graph.get("rooms", []) for other in other_room.get("objects", [])
         if reference_label and str(other.get("label", "")).lower() == reference_label
     ]
-    for room, obj in matching_objects(scene_graph, task):
+    for room, obj in matching_objects(scene_graph, task, prefer_room=prefer_room):
+        if allowed_object_ids is not None and obj["id"] not in allowed_object_ids:
+            continue
         center = [float(value) for value in obj["center_xyz_m"]]
         size = [float(value) for value in obj["size_xyz_m"]]
         object_yaw = _yaw_from_wxyz([float(value) for value in obj["orientation_wxyz"]])
@@ -141,8 +148,74 @@ def generate_candidates(
     return selected
 
 
-def generate_all_candidates(grid: OccupancyGrid, scene_graph: dict[str, Any], task_graph: dict[str, Any], max_candidates: int = 8) -> dict[str, list[dict[str, Any]]]:
-    return {
-        task["id"]: generate_candidates(grid, scene_graph, task, max_candidates=max_candidates)
-        for task in task_graph["tasks"]
-    }
+def select_spread_target_objects(scene_graph: dict[str, Any], task_graph: dict[str, Any]) -> dict[str, str]:
+    """Choose language-compatible instances in distinct, distant rooms.
+
+    This selects the mission anchors only. The downstream joint planner still
+    computes the geometrically shortest feasible tour between those anchors.
+    """
+    selected: dict[str, str] = {}
+    used_rooms: set[int] = set()
+    centers: list[list[float]] = []
+    def selection_order(task):
+        choices = matching_objects(scene_graph, task)
+        destination_groups = {
+            int(room.get("parent_room_id", room["id"]))
+            for room, _ in choices if room.get("space_role") == "room"
+        }
+        # Allocate scarce labels first (for example, chairs), leaving flexible
+        # labels such as doors available to fill another distant room.
+        return not task.get("active_initially", True), len(destination_groups) or len(choices)
+
+    tasks = sorted(task_graph["tasks"], key=selection_order)
+    for task in tasks:
+        choices = matching_objects(scene_graph, task)
+        if not choices:
+            continue
+        # Prefer true destination rooms. Objects assigned to corridor geometry
+        # are retained in the graph, but should not anchor a showcase mission
+        # when a compatible instance exists in a major room.
+        destination_choices = [item for item in choices if item[0].get("space_role") == "room"]
+        if destination_choices:
+            choices = destination_choices
+
+        def room_group(room):
+            return int(room.get("parent_room_id", room["id"]))
+
+        if not centers or not task.get("active_initially", True):
+            room, obj = choices[0]
+        else:
+            def spread_key(item):
+                room, obj = item
+                center = [float(value) for value in obj["center_xyz_m"][:2]]
+                separation = min(math.dist(center, old) for old in centers)
+                distinct_room = int(room_group(room) not in used_rooms)
+                return distinct_room, separation, float(obj.get("probability", 0.0))
+            room, obj = max(choices, key=spread_key)
+        selected[task["id"]] = obj["id"]
+        if task.get("active_initially", True):
+            used_rooms.add(room_group(room))
+            centers.append([float(value) for value in obj["center_xyz_m"][:2]])
+    return selected
+
+
+def generate_all_candidates(
+    grid: OccupancyGrid,
+    scene_graph: dict[str, Any],
+    task_graph: dict[str, Any],
+    max_candidates: int = 8,
+    selected_objects: dict[str, str] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    result = {}
+    for task in task_graph["tasks"]:
+        object_id = None if selected_objects is None else selected_objects.get(task["id"])
+        values = generate_candidates(
+            grid, scene_graph, task, max_candidates=max_candidates,
+            allowed_object_ids=None if object_id is None else {object_id},
+        )
+        if not values and object_id is not None:
+            values = generate_candidates(
+                grid, scene_graph, task, max_candidates=max_candidates, prefer_room=False,
+            )
+        result[task["id"]] = values
+    return result

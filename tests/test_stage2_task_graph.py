@@ -41,7 +41,7 @@ class TaskGraphTest(unittest.TestCase):
         tasks = {task["id"]: task for task in graph["tasks"]}
         self.assertFalse(tasks["inspect_living_cup"]["active_initially"])
         self.assertTrue(tasks["inspect_kitchen_cup"]["active_initially"])
-        self.assertEqual(tasks["deliver_folder"]["spatial_constraints"]["distance_m"], [0.8, 1.8])
+        self.assertEqual(tasks["deliver_folder"]["spatial_constraints"]["distance_m"], [1.0, 2.2])
 
     def test_rejects_cycle(self):
         value = self.base_graph()

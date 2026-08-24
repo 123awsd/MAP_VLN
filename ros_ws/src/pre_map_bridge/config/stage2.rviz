@@ -8,7 +8,7 @@ Panels:
 Visualization Manager:
   Class: ""
   Displays:
-    - Alpha: 0.62
+    - Alpha: 0.52
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds: true
       Axis: Z
@@ -29,21 +29,21 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
     - Class: rviz/MarkerArray
-      Enabled: false
+      Enabled: true
       Marker Topic: /stage2/rooms
-      Name: Room Boundaries
+      Name: Room Boundaries + Labels
       Namespaces: {}
       Queue Size: 3
     - Class: rviz/MarkerArray
-      Enabled: false
+      Enabled: true
       Marker Topic: /stage2/semantic_boxes
-      Name: Semantic 3D Boxes
+      Name: Context Boxes (Thin Blue) + Task Boxes (Thick Magenta)
       Namespaces: {}
       Queue Size: 10
     - Class: rviz/MarkerArray
       Enabled: true
       Marker Topic: /stage2/open_vocab_boxes
-      Name: Online OWLv2 Boxes
+      Name: Ordinary Online Detections (Blue)
       Namespaces: {}
       Queue Size: 10
     - Class: rviz/MarkerArray
@@ -56,6 +56,12 @@ Visualization Manager:
       Enabled: true
       Marker Topic: /stage2/selected_goals
       Name: Selected Goal Poses
+      Namespaces: {}
+      Queue Size: 10
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /stage2/reached_goals
+      Name: Reached Goal Stars (Green/Red)
       Namespaces: {}
       Queue Size: 10
     - Class: rviz/Marker

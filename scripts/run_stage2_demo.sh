@@ -9,9 +9,9 @@ scene_graph="$root_dir/outputs/scene_graph/hm3d_stage1_complete_v3.json"
 
 cd "$root_dir"
 mkdir -p "$run_dir"
-python3 scripts/fuse_rooms_boxes.py \
-  outputs/occusg/hm3d_stage1/regions.json \
-  outputs/boxer/hm3d_stage1_complete_v3/boxer_3dbbs_progressive.csv \
+.envs/habitat/bin/python scripts/fuse_rooms_boxes.py \
+  outputs/occusg/hm3d_stage1_complete_v3/regions.json \
+  outputs/boxer/hm3d_stage1_complete_v3/boxer_3dbbs_fused.csv \
   "$scene_graph"
 ./scripts/parse_stage2_instruction.py "$instruction" \
   --scene-graph "$scene_graph" \
@@ -19,14 +19,15 @@ python3 scripts/fuse_rooms_boxes.py \
 ./scripts/plan_stage2_mission.py \
   --task-graph "$run_dir/task_graph.json" \
   --scene-graph "$scene_graph" \
-  --grid-prefix runtime/occusg/hm3d_stage1_grid \
+  --grid-prefix runtime/occusg/hm3d_stage1_complete_v3_grid \
   --start 0 0 1 0 \
+  --spread-target-rooms \
   --output-dir "$run_dir"
 .envs/habitat/bin/python scripts/run_stage2_habitat.py \
   --task-graph "$run_dir/task_graph.json" \
   --candidates "$run_dir/candidates.json" \
   --scene-graph "$scene_graph" \
-  --grid-prefix runtime/occusg/hm3d_stage1_grid \
+  --grid-prefix runtime/occusg/hm3d_stage1_complete_v3_grid \
   --output-dir "$run_dir/habitat_demo" \
   --save-every 1 \
   --minimum-pixels-by-task '{"observe_living_room_tv":10000}'

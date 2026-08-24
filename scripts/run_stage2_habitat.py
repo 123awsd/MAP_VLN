@@ -189,6 +189,8 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     frames_dir = args.output_dir / "frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
+    for stale in list(frames_dir.glob("frame_*.jpg")) + list(frames_dir.glob("terminal_*.jpg")):
+        stale.unlink()
 
     sim_cfg = habitat_sim.SimulatorConfiguration()
     sim_cfg.scene_id = str(args.scene)

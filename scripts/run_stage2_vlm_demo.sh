@@ -16,7 +16,7 @@ cd "$root_dir"
   --task-graph "$source_run/task_graph.json" \
   --candidates "$source_run/candidates.json" \
   --scene-graph outputs/scene_graph/hm3d_stage1_complete_v3.json \
-  --grid-prefix runtime/occusg/hm3d_stage1_grid \
+  --grid-prefix runtime/occusg/hm3d_stage1_complete_v3_grid \
   --output-dir "$run_dir/habitat_demo" \
   --save-every 1 \
   --verification-mode qwen_vl \

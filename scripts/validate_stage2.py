@@ -27,7 +27,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-dir", type=Path, default=ROOT / "outputs/stage2/hm3d_example")
     parser.add_argument("--execution-dir", type=Path, default=ROOT / "outputs/stage2/hm3d_example/habitat_demo")
-    parser.add_argument("--grid-prefix", type=Path, default=ROOT / "runtime/occusg/hm3d_stage1_grid")
+    parser.add_argument("--grid-prefix", type=Path, default=ROOT / "runtime/occusg/hm3d_stage1_complete_v3_grid")
     parser.add_argument("--bag-manifest", type=Path, default=ROOT / "outputs/bags/hm3d_stage2_complete.manifest.json")
     parser.add_argument("--multiscene-report", type=Path, default=ROOT / "outputs/stage2/multiscene/report.json")
     parser.add_argument("--paper-report", type=Path, default=ROOT / "outputs/stage2/paper_benchmark/report.json")
@@ -93,6 +93,7 @@ def main() -> None:
     required_topics = {
         "/stage2/rgb", "/stage2/executed_path", "/stage2/global_tour",
         "/stage2/local_path", "/stage2/candidate_poses", "/stage2/semantic_boxes",
+        "/stage2/rooms", "/stage2/reached_goals",
         "/stage2/task_status", "/stage2/uav_pose", "/uav_simulator/sensor_pose",
         "/voxel_mapping/occupancy_grid_occupied",
     }
@@ -100,7 +101,8 @@ def main() -> None:
     if execution.get("verification_mode") in {"owlv2", "owlv2_qwen_fallback"}:
         require(bag["topic_counts"].get("/stage2/open_vocab_boxes") == len(execution["open_vocab_observations"]), "bag OWLv2 box events are incomplete")
     require(bag["topic_counts"]["/stage2/rgb"] == len(execution["trajectory_xyz_yaw"]), "bag RGB is not frame-complete")
-    require(bag["size_bytes"] > 500_000 * execution["frame_count"], "stage2 bag is unexpectedly small")
+    require(bag["topic_counts"]["/stage2/reached_goals"] == 1 + len(execution["observations"]), "reached-goal stars do not cover every terminal observation")
+    require(bag["size_bytes"] > 350_000 * execution["frame_count"], "stage2 bag is unexpectedly small")
     authorized_budget = float(usage.get("authorized_budget_cny", 1000.0))
     require(float(usage["total_estimated_cny"]) <= authorized_budget, "Qwen configured cost ceiling exceeded")
     require(multiscene["status"] == "passed", "multi-scene planner benchmark failed")

@@ -35,7 +35,7 @@ SYSTEM_PROMPT = """你是室内无人机长时程任务规划器。把中文长�
     "action":"inspect|find|observe|deliver|approach",
     "target":{"label":"与场景物体标签尽量一致","room":"房间或null","reference":"参照物或null"},
     "verification_label":"最终需要在RGB中确认的物体类别",
-    "spatial_constraints":{"relation":null,"distance_m":[0.8,1.8],"height_m":null,"face_target":true,"visibility_required":true},
+    "spatial_constraints":{"relation":null,"distance_m":[1.0,2.2],"height_m":null,"face_target":true,"visibility_required":true},
     "prerequisites":[],"active_initially":true,"success_outcome":"found|done"
   }],
   "conditional_rules":[{"source_task_id":"...","if_outcome":"not_found","activate_task_ids":["..."],"skip_task_ids":[]}]

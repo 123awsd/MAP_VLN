@@ -47,7 +47,10 @@ def main():
     graph_path = ROOT / "outputs/scene_graph" / f"{args.episode}.json"
     graph = json.loads(graph_path.read_text(encoding="utf-8"))
     summary = graph["summary"]
-    require(summary["room_count"] == regions["region_count"], "scene graph room mismatch")
+    require(summary.get("source_region_count", summary.get("region_count")) == regions["region_count"],
+            "scene graph source-region mismatch")
+    require(0 < summary["room_count"] <= summary.get("region_count", regions["region_count"]),
+            "scene graph major-room count is invalid")
     require(summary["object_count"] == len(boxes), "scene graph object mismatch")
 
     report = {
@@ -65,7 +68,11 @@ def main():
             "occupied_cells": grid_meta["occupied_cells"],
         },
         "fused_object_count": len(boxes),
-        "room_count": regions["region_count"],
+        "source_region_count": regions["region_count"],
+        "region_count": summary.get("region_count", regions["region_count"]),
+        "room_count": summary["room_count"],
+        "corridor_count": summary.get("corridor_count", 0),
+        "fragment_count": summary.get("fragment_count", 0),
         "room_adjacency_edge_count": summary["adjacency_edge_count"],
         "semantic_room_count": sum(room["semantic_type"] != "unknown" for room in graph["rooms"]),
     }

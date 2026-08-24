@@ -85,7 +85,7 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
         if relation is not None:
             relation = str(relation).lower().strip()
             _require(relation in ALLOWED_RELATIONS, f"unsupported relation {relation!r}")
-        distance = constraints.get("distance_m", [0.8, 1.8])
+        distance = constraints.get("distance_m", [1.0, 2.2])
         _require(isinstance(distance, list) and len(distance) == 2, f"task {task_id} distance_m must have two values")
         distance = [float(distance[0]), float(distance[1])]
         _require(0.2 <= distance[0] <= distance[1] <= 8.0, f"task {task_id} has invalid distance_m")
