@@ -24,7 +24,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--scene", type=Path, default=ROOT / "data/scene_datasets/hm3d/example/00861-GLAQ4DNUx5U/GLAQ4DNUx5U.basis.glb")
     parser.add_argument("--scene-config", type=Path, default=ROOT / "data/scene_datasets/hm3d/example/hm3d_annotated_example_basis.scene_dataset_config.json")
-    parser.add_argument("--grid-prefix", type=Path, default=ROOT / "runtime/occusg/hm3d_stage1_complete_v3_grid")
+    parser.add_argument("--grid-prefix", type=Path, default=ROOT / "runtime/occusg/hm3d_stage1_complete_v3_structure_grid")
     parser.add_argument("--scene-graph", type=Path, default=ROOT / "outputs/scene_graph/hm3d_stage1_complete_v3.json")
     parser.add_argument("--output", type=Path, default=ROOT / "outputs/room_comparison/hm3d_stage1_complete_v3.png")
     args = parser.parse_args()
@@ -73,7 +73,8 @@ def main():
         display_grid, origin="lower", extent=grid_extent, interpolation="nearest",
         cmap=occupancy_cmap, vmin=0, vmax=2,
     )
-    axes[1].set_title("Exploration occupancy\n(gray unknown / white free / black occupied)")
+    map_title = "Room structure occupancy" if grid_meta.get("map_role") == "room_structure" else "Navigation occupancy"
+    axes[1].set_title(f"{map_title}\n(gray unknown / white free / black occupied)")
     axes[2].scatter(nav_x, nav_y, s=1.2, c="#d7dce0", marker="s", linewidths=0)
     axes[2].set_title("Canonical room segmentation\nover official navmesh")
 

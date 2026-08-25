@@ -13,12 +13,23 @@ PYTHONPATH="$root_dir/third_party/boxer" .envs/boxer/bin/python \
   --input "outputs/boxer/$episode_name/boxer_3dbbs.csv" \
   --output "outputs/boxer/$episode_name/boxer_3dbbs_visual.csv" \
   --iou 0.2 --min_detections 2 --conf_threshold 0.3
+./scripts/classify_structure_objects.py \
+  --boxes "outputs/boxer/$episode_name/boxer_3dbbs_fused.csv" \
+  --output "outputs/stage1/$episode_name/structure_policy.json" \
+  --budget-cny "${PRE_MAP_VLN_QWEN_BUDGET_CNY:-20}"
+# Collision-safe navigation map: all observed obstacles remain occupied.
 .envs/habitat/bin/python scripts/build_occusg_grid.py \
   "$episode_dir" "runtime/occusg/${episode_name}_grid" \
   --semantic-labels "$semantic_labels"
-./scripts/run_occusg.sh "$episode_name"
+# Room-structure map: Qwen-approved interior instances are removed conservatively.
+.envs/habitat/bin/python scripts/build_occusg_grid.py \
+  "$episode_dir" "runtime/occusg/${episode_name}_structure_grid" \
+  --semantic-labels "$semantic_labels" \
+  --object-boxes "outputs/boxer/$episode_name/boxer_3dbbs_fused.csv" \
+  --structure-policy "outputs/stage1/$episode_name/structure_policy.json"
+./scripts/run_occusg.sh "${episode_name}_structure" 1.8
 .envs/habitat/bin/python scripts/fuse_rooms_boxes.py \
-  "outputs/occusg/$episode_name/regions.json" \
+  "outputs/occusg/${episode_name}_structure/regions.json" \
   "outputs/boxer/$episode_name/boxer_3dbbs_fused.csv" \
   "outputs/scene_graph/$episode_name.json" \
-  --grid-meta "runtime/occusg/${episode_name}_grid.json"
+  --grid-meta "runtime/occusg/${episode_name}_structure_grid.json"

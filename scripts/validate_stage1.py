@@ -34,6 +34,7 @@ def main():
     grid, grid_meta = np.load(grid_path), json.loads(grid_meta_path.read_text())
     require(grid.shape == (grid_meta["height"], grid_meta["width"]), "grid shape mismatch")
     require(np.count_nonzero(grid == 0) > 0, "occupancy grid contains no free cells")
+    require(grid_meta.get("map_role") == "navigation_occupancy", "planning grid is not the navigation map")
     single_floor = grid_meta.get("single_floor_policy", {})
     if args.episode == "hm3d_stage1_complete_v3":
         require(single_floor.get("excluded_navigation_semantic_ids") == [445, 462],
@@ -46,12 +47,28 @@ def main():
         boxes = list(csv.DictReader(handle))
     require(boxes, "Boxer produced no fused static objects")
 
-    regions_path = ROOT / "outputs/occusg" / args.episode / "regions.json"
-    regions = json.loads(regions_path.read_text(encoding="utf-8"))
-    require(regions["region_count"] > 0, "OccuSG produced no regions")
-
     graph_path = ROOT / "outputs/scene_graph" / f"{args.episode}.json"
     graph = json.loads(graph_path.read_text(encoding="utf-8"))
+    structure_meta_path = Path(graph.get("sources", {}).get("grid_metadata", ""))
+    if not structure_meta_path.is_absolute():
+        structure_meta_path = ROOT / structure_meta_path
+    structure_meta = json.loads(structure_meta_path.read_text(encoding="utf-8"))
+    require(structure_meta.get("map_role") == "room_structure", "scene graph was not built from the structure map")
+    structure_filter = structure_meta.get("object_filter", {})
+    require(structure_filter.get("removable_instance_count", 0) > 0,
+            "structure map removed no Qwen-approved objects")
+    policy_path = Path(structure_filter.get("structure_policy", ""))
+    if not policy_path.is_absolute():
+        policy_path = ROOT / policy_path
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    require(len(policy.get("instances", [])) == len(boxes), "structure policy does not cover every box")
+    regions_path = Path(graph.get("sources", {}).get(
+        "regions", ROOT / "outputs/occusg" / args.episode / "regions.json"
+    ))
+    if not regions_path.is_absolute():
+        regions_path = ROOT / regions_path
+    regions = json.loads(regions_path.read_text(encoding="utf-8"))
+    require(regions["region_count"] > 0, "OccuSG produced no regions")
     summary = graph["summary"]
     require(summary.get("source_region_count", summary.get("region_count")) == regions["region_count"],
             "scene graph source-region mismatch")
@@ -80,6 +97,12 @@ def main():
             "occupied_cells": grid_meta["occupied_cells"],
             "single_floor_height_band_m": single_floor.get("endpoint_height_band_m"),
             "navigation_exclusion_cell_count": single_floor.get("excluded_cell_count", 0),
+        },
+        "structure_map": {
+            "free_cells": structure_meta["free_cells"],
+            "occupied_cells": structure_meta["occupied_cells"],
+            "removable_instance_count": structure_filter["removable_instance_count"],
+            "filter_method": structure_filter["method"],
         },
         "fused_object_count": len(boxes),
         "source_region_count": regions["region_count"],

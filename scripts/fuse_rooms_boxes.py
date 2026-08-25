@@ -257,96 +257,6 @@ def canonicalize_rooms(rooms):
     return canonical, source_regions
 
 
-def merge_regions_split_by_beds(rooms, box_rows, resolution=0.05, contact_m=0.25):
-    """Merge only non-corridor regions split by the same large bed footprint."""
-    all_points = [point for room in rooms for point in room["polygon_xy_m"]]
-    lower = np.floor(np.min(np.asarray(all_points), axis=0) / resolution).astype(int) - 30
-    upper = np.ceil(np.max(np.asarray(all_points), axis=0) / resolution).astype(int) + 30
-    width, height = (upper - lower + 1).astype(int)
-
-    def pixels(points):
-        return np.asarray([
-            np.rint(np.asarray(point) / resolution).astype(int) - lower
-            for point in points
-        ], dtype=np.int32)
-
-    def room_mask(room):
-        mask = np.zeros((height, width), dtype=np.uint8)
-        cv2.fillPoly(mask, [pixels(room["polygon_xy_m"])], 1)
-        return mask
-
-    merges = []
-    for row_index, row in enumerate(box_rows):
-        if str(row.get("name", "")).strip().lower() != "bed":
-            continue
-        size = np.asarray([float(row["scale_x"]), float(row["scale_y"])])
-        if float(np.prod(size)) < 1.0:
-            continue
-        center = np.asarray([float(row["tx_world_object"]), float(row["ty_world_object"])])
-        w, x, y, z = [float(row[key]) for key in (
-            "qw_world_object", "qx_world_object", "qy_world_object", "qz_world_object"
-        )]
-        yaw = math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
-        rotation = np.asarray([[math.cos(yaw), -math.sin(yaw)], [math.sin(yaw), math.cos(yaw)]])
-        half = 0.55 * size
-        footprint = [
-            (center + rotation @ (half * np.asarray([sx, sy]))).tolist()
-            for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))
-        ]
-        bed_mask = np.zeros((height, width), dtype=np.uint8)
-        cv2.fillPoly(bed_mask, [pixels(footprint)], 1)
-        radius = max(1, int(round(contact_m / resolution)))
-        kernel = np.ones((2 * radius + 1, 2 * radius + 1), dtype=np.uint8)
-        candidates = []
-        masks = {}
-        for room in rooms:
-            if is_transition_geometry(room):
-                continue
-            mask = room_mask(room)
-            contact = int(np.count_nonzero(cv2.dilate(mask, kernel) & bed_mask))
-            if contact >= 20:
-                candidates.append(room)
-                masks[room["id"]] = mask
-        if len(candidates) < 2:
-            continue
-
-        merged_ids = {room["id"] for room in candidates}
-        union = bed_mask.copy()
-        for room in candidates:
-            union |= masks[room["id"]]
-        contours, _ = cv2.findContours(union, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        contour = max(contours, key=cv2.contourArea)
-        contour = cv2.approxPolyDP(contour, 1.0, True).reshape(-1, 2)
-        polygon = [((point + lower) * resolution).astype(float).tolist() for point in contour]
-        moments = cv2.moments(union)
-        centroid_pixel = np.asarray([
-            moments["m10"] / moments["m00"], moments["m01"] / moments["m00"]
-        ])
-        centroid = ((centroid_pixel + lower) * resolution).astype(float).tolist()
-        merged = {
-            "id": min(merged_ids),
-            "centroid_xy_m": centroid,
-            "area_m2": float(np.count_nonzero(union) * resolution * resolution),
-            "polygon_xy_m": polygon,
-            "adjacent_room_ids": sorted({
-                value for room in candidates for value in room["adjacent_room_ids"]
-                if value not in merged_ids
-            }),
-            "objects": [],
-            "merged_from_region_ids": sorted(merged_ids),
-            "merge_reason": f"large_bed_boxer_{row_index}",
-        }
-        rooms = [room for room in rooms if room["id"] not in merged_ids] + [merged]
-        replacement = {room_id: merged["id"] for room_id in merged_ids}
-        for room in rooms:
-            room["adjacent_room_ids"] = sorted({
-                replacement.get(value, value) for value in room["adjacent_room_ids"]
-                if replacement.get(value, value) != room["id"]
-            })
-        merges.append({"object_id": f"boxer_{row_index}", "region_ids": sorted(merged_ids), "result_id": merged["id"]})
-    return sorted(rooms, key=lambda room: room["id"]), merges
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("regions", type=Path)
@@ -378,8 +288,6 @@ def main():
 
     with args.boxes.open(newline="", encoding="utf-8") as handle:
         box_rows = list(csv.DictReader(handle))
-    rooms, furniture_merges = merge_regions_split_by_beds(rooms, box_rows)
-
     unassigned = []
     for index, row in enumerate(box_rows):
         center = [float(row["tx_world_object"]), float(row["ty_world_object"])]
@@ -421,7 +329,6 @@ def main():
     for room in rooms:
         room["semantic_type"], room["semantic_score"], room["space_role"] = classify_region(room)
     attach_small_fragments(rooms)
-    post_furniture_region_count = len(rooms)
     source_fragment_count = sum(room["space_role"] == "room_fragment" for room in rooms)
     rooms, geometric_regions = canonicalize_rooms(rooms)
 
@@ -442,7 +349,6 @@ def main():
             "source_region_count": int(region_data["region_count"]),
             "excluded_navigation_region_count": len(excluded_navigation_region_ids),
             "excluded_navigation_region_ids": excluded_navigation_region_ids,
-            "post_furniture_region_count": post_furniture_region_count,
             "region_count": len(rooms),
             "room_count": sum(room["space_role"] == "room" for room in rooms),
             "object_count": sum(len(room["objects"]) for room in rooms),
@@ -450,13 +356,11 @@ def main():
             "corridor_count": sum(room["space_role"] == "transition_space" for room in rooms),
             "fragment_count": sum(room["space_role"] == "room_fragment" for room in rooms),
             "source_fragment_count": source_fragment_count,
-            "furniture_region_merge_count": len(furniture_merges),
             "nearest_fallback_object_ids": unassigned,
         },
         "rooms": rooms,
         "geometric_regions": geometric_regions,
         "room_adjacency_edges": [{"source": a, "target": b} for a, b in edges],
-        "furniture_region_merges": furniture_merges,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(graph, indent=2, ensure_ascii=False), encoding="utf-8")

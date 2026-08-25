@@ -4,7 +4,13 @@ from pathlib import Path
 
 import numpy as np
 
-from scripts.build_occusg_grid import convex_hull, group_nearby_instances, semantic_ids_for_labels
+from scripts.build_occusg_grid import (
+    convex_hull,
+    clear_non_boundary_components,
+    group_nearby_instances,
+    points_in_removable_boxes,
+    semantic_ids_for_labels,
+)
 
 
 class Stage1FloorFilterTests(unittest.TestCase):
@@ -33,6 +39,28 @@ class Stage1FloorFilterTests(unittest.TestCase):
         ]
         groups = group_nearby_instances(instances, maximum_gap_m=0.5)
         self.assertEqual([sorted(group["semantic_ids"]) for group in groups], [[1, 2], [3]])
+
+    def test_oriented_box_filter_uses_geometry_not_detector_class_id(self):
+        row = {
+            "tx_world_object": "1", "ty_world_object": "2", "tz_world_object": "0.5",
+            "qw_world_object": "1", "qx_world_object": "0", "qy_world_object": "0", "qz_world_object": "0",
+            "scale_x": "2", "scale_y": "1", "scale_z": "1",
+        }
+        points = np.asarray([[1.0, 2.0, 0.5], [2.2, 2.0, 0.5], [1.0, 2.0, 1.2]])
+        mask = points_in_removable_boxes(points, [{"row": row}], expansion=1.0)
+        self.assertEqual(mask.tolist(), [True, False, False])
+
+    def test_only_unprotected_occupied_island_is_removed(self):
+        grid = np.zeros((8, 8), dtype=np.int8)
+        grid[0, :] = -1
+        grid[1, 1:4] = 100
+        grid[5:7, 5] = 100
+        protected = np.zeros_like(grid, dtype=bool)
+        protected[1, 1] = True
+        result, components, cells = clear_non_boundary_components(grid, protected)
+        self.assertTrue(np.all(result[1, 1:4] == 100))
+        self.assertTrue(np.all(result[5:7, 5] == 0))
+        self.assertEqual((components, cells), (1, 2))
 
 
 if __name__ == "__main__":

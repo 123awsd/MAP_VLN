@@ -13,12 +13,11 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 
-NON_STRUCTURAL_LABELS = {
-    "bed", "cabinet", "chair", "lamp", "plant", "shelf", "television", "tv",
-}
-FOOTPRINT_CLEAR_LABELS = {"bed"}
 DEFAULT_EXCLUDED_NAVIGATION_LABELS = {
     "stair", "stairs", "staircase", "stairway", "stairs railing", "stair railing",
+}
+DEFAULT_STRUCTURAL_BOUNDARY_LABELS = {
+    "wall", "recessed wall", "door frame", "column", "pillar",
 }
 
 
@@ -39,46 +38,128 @@ def semantic_ids_for_labels(path: Path | None, labels: set[str]) -> set[int]:
     return result
 
 
-def non_structural_semantic_ids(path: Path | None) -> set[int]:
-    if path is None:
-        return set()
-    result = set()
-    with path.open(newline="", encoding="utf-8") as handle:
-        for row in csv.DictReader(handle):
-            if str(row.get("name", "")).strip().lower() not in NON_STRUCTURAL_LABELS:
-                continue
-            try:
-                result.add(int(float(row["sem_id"])))
-            except (KeyError, TypeError, ValueError):
-                continue
+def policy_boxes(box_path: Path | None, policy_path: Path | None) -> list[dict]:
+    """Join Qwen decisions to Boxer rows without confusing detector class IDs with scene IDs."""
+    if box_path is None and policy_path is None:
+        return []
+    if box_path is None or policy_path is None:
+        raise ValueError("--object-boxes and --structure-policy must be provided together")
+    with box_path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    decisions = {str(item["instance_id"]): item for item in policy.get("instances", [])}
+    result = []
+    for index, row in enumerate(rows):
+        instance_id = f"boxer_{index}"
+        decision = decisions.get(instance_id)
+        if not decision:
+            continue
+        if str(decision.get("label", "")).strip().lower() != str(row.get("name", "")).strip().lower():
+            raise ValueError(f"structure policy no longer matches {instance_id}")
+        result.append({"instance_id": instance_id, "decision": decision, "row": row})
     return result
 
 
-def object_footprint_mask(path: Path | None, origin, resolution, width, height) -> np.ndarray:
+def removable_boxes_from_policy(box_path: Path | None, policy_path: Path | None) -> list[dict]:
+    return [
+        box for box in policy_boxes(box_path, policy_path)
+        if bool(box["decision"].get("remove_from_structure_map", False))
+    ]
+
+
+def quaternion_matrix_wxyz(row: dict) -> np.ndarray:
+    w, x, y, z = [float(row[key]) for key in (
+        "qw_world_object", "qx_world_object", "qy_world_object", "qz_world_object"
+    )]
+    norm = math.sqrt(w*w + x*x + y*y + z*z)
+    if norm == 0:
+        return np.eye(3)
+    w, x, y, z = w / norm, x / norm, y / norm, z / norm
+    return np.asarray([
+        [1 - 2*(y*y + z*z), 2*(x*y - z*w), 2*(x*z + y*w)],
+        [2*(x*y + z*w), 1 - 2*(x*x + z*z), 2*(y*z - x*w)],
+        [2*(x*z - y*w), 2*(y*z + x*w), 1 - 2*(x*x + y*y)],
+    ])
+
+
+def points_in_removable_boxes(points: np.ndarray, boxes: list[dict], expansion=1.05) -> np.ndarray:
+    selected = np.zeros(len(points), dtype=bool)
+    for box in boxes:
+        row = box["row"]
+        center = np.asarray([float(row[key]) for key in (
+            "tx_world_object", "ty_world_object", "tz_world_object"
+        )])
+        half = 0.5 * expansion * np.asarray([float(row[key]) for key in (
+            "scale_x", "scale_y", "scale_z"
+        )])
+        local = (points - center) @ quaternion_matrix_wxyz(row)
+        selected |= np.all(np.abs(local) <= half, axis=1)
+    return selected
+
+
+def object_footprint_mask(
+    boxes: list[dict], origin, resolution, width, height, expansion: float,
+) -> np.ndarray:
     image = Image.new("1", (width, height), 0)
-    if path is None:
+    if not boxes:
         return np.zeros((height, width), dtype=bool)
     draw = ImageDraw.Draw(image)
-    with path.open(newline="", encoding="utf-8") as handle:
-        for row in csv.DictReader(handle):
-            if str(row.get("name", "")).strip().lower() not in FOOTPRINT_CLEAR_LABELS:
-                continue
-            if float(row["scale_x"]) * float(row["scale_y"]) < 1.0:
-                continue
-            center = np.asarray([float(row["tx_world_object"]), float(row["ty_world_object"])])
-            # Expand 10% beyond the fitted OBB so the original occupancy
-            # dilation does not leave a furniture-shaped residual outline.
-            half = 0.55 * np.asarray([float(row["scale_x"]), float(row["scale_y"])])
-            w, x, y, z = [float(row[key]) for key in ("qw_world_object", "qx_world_object", "qy_world_object", "qz_world_object")]
-            yaw = math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
-            rotation = np.asarray([[math.cos(yaw), -math.sin(yaw)], [math.sin(yaw), math.cos(yaw)]])
-            corners = []
-            for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
-                point = center + rotation @ (half * np.asarray([sx, sy]))
-                pixel = np.floor((point - origin) / resolution).astype(int)
-                corners.append((int(pixel[0]), int(pixel[1])))
-            draw.polygon(corners, fill=1)
+    for box in boxes:
+        row = box["row"]
+        center = np.asarray([float(row["tx_world_object"]), float(row["ty_world_object"])])
+        # Detector boxes are approximate; a shared uncertainty margin prevents
+        # every furniture category from needing its own residual-shell rule.
+        half = 0.5 * expansion * np.asarray([float(row["scale_x"]), float(row["scale_y"])])
+        rotation = quaternion_matrix_wxyz(row)[:2, :2]
+        corners = []
+        for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+            point = center + rotation @ (half * np.asarray([sx, sy]))
+            pixel = np.floor((point - origin) / resolution).astype(int)
+            corners.append((int(pixel[0]), int(pixel[1])))
+        draw.polygon(corners, fill=1)
     return np.asarray(image, dtype=bool)
+
+
+def clear_non_boundary_components(
+    grid: np.ndarray, protected_mask: np.ndarray,
+) -> tuple[np.ndarray, int, int]:
+    """Remove observed obstacle islands that cannot enclose a physical room.
+
+    Enclosure walls are connected to unknown/exterior space. Explicit door or
+    structural boxes are protected separately. Remaining isolated components
+    are interior obstacles, regardless of their object category.
+    """
+    occupied = grid == 100
+    visited = np.zeros(grid.shape, dtype=bool)
+    removed_components = 0
+    removed_cells = 0
+    height, width = grid.shape
+    for start_y, start_x in zip(*np.nonzero(occupied & ~visited)):
+        if visited[start_y, start_x]:
+            continue
+        stack = [(int(start_y), int(start_x))]
+        visited[start_y, start_x] = True
+        component = []
+        keep = False
+        while stack:
+            y, x = stack.pop()
+            component.append((y, x))
+            keep |= bool(protected_mask[y, x])
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    yy, xx = y + dy, x + dx
+                    if 0 <= yy < height and 0 <= xx < width and occupied[yy, xx] and not visited[yy, xx]:
+                        visited[yy, xx] = True
+                        stack.append((yy, xx))
+        if keep:
+            continue
+        removed_components += 1
+        removed_cells += len(component)
+        yy, xx = zip(*component)
+        grid[np.asarray(yy), np.asarray(xx)] = 0
+    return grid, removed_components, removed_cells
 
 
 def quaternion_matrix_xyzw(quaternion: np.ndarray) -> np.ndarray:
@@ -193,14 +274,34 @@ def main():
     )
     parser.add_argument(
         "--object-boxes", type=Path, default=None,
-        help="Boxer CSV whose semantic instance IDs are removed from structural occupancy",
+        help="Boxer CSV paired with --structure-policy for room-structure filtering",
+    )
+    parser.add_argument(
+        "--structure-policy", type=Path, default=None,
+        help="audited per-instance decisions produced by classify_structure_objects.py",
+    )
+    parser.add_argument(
+        "--object-box-expansion", type=float, default=1.15,
+        help="shared uncertainty margin for removable 3-D boxes",
     )
     args = parser.parse_args()
 
     manifest = json.loads((args.episode / "manifest.json").read_text(encoding="utf-8"))
-    ignored_semantic_ids = non_structural_semantic_ids(args.object_boxes)
+    all_policy_boxes = policy_boxes(args.object_boxes, args.structure_policy)
+    removable_boxes = [
+        box for box in all_policy_boxes
+        if bool(box["decision"].get("remove_from_structure_map", False))
+    ]
+    explicit_boundary_boxes = [
+        box for box in all_policy_boxes
+        if box["decision"].get("role") in {"structural_boundary", "opening_boundary"}
+    ]
     excluded_navigation_ids = semantic_ids_for_labels(
         args.semantic_labels, DEFAULT_EXCLUDED_NAVIGATION_LABELS
+    )
+    structural_boundary_ids = (
+        semantic_ids_for_labels(args.semantic_labels, DEFAULT_STRUCTURAL_BOUNDARY_LABELS)
+        if args.structure_policy is not None else set()
     )
     frames = sorted(args.episode.glob("frame_*.npz"))
     if not frames:
@@ -280,24 +381,38 @@ def main():
     width, height = np.ceil((upper - origin) / args.resolution).astype(int) + 1
     free_votes = np.zeros((height, width), dtype=np.uint16)
     occupied_votes = np.zeros((height, width), dtype=np.uint16)
+    structural_boundary_votes = np.zeros((height, width), dtype=np.uint16)
 
     ignored_obstacle_endpoints = 0
     for camera, endpoints, endpoint_semantic_ids in ray_sets:
         start = np.floor((camera[:2] - origin) / args.resolution).astype(int)
-        for endpoint, semantic_id in zip(endpoints, endpoint_semantic_ids):
+        removable_endpoint_mask = points_in_removable_boxes(
+            endpoints, removable_boxes, expansion=args.object_box_expansion
+        )
+        # In simulation this is exact HM3D evidence. The same interface can be
+        # supplied by a wall/column segmenter on the real robot.
+        removable_endpoint_mask &= ~np.isin(endpoint_semantic_ids, list(structural_boundary_ids))
+        for endpoint, semantic_id, removable in zip(
+            endpoints, endpoint_semantic_ids, removable_endpoint_mask
+        ):
             finish = np.floor((endpoint[:2] - origin) / args.resolution).astype(int)
             cells = list(line_cells(start, finish))
             for x, y in cells[:-1]:
                 if 0 <= x < width and 0 <= y < height:
                     free_votes[y, x] = min(65535, int(free_votes[y, x]) + 1)
             x, y = cells[-1]
-            if int(semantic_id) in ignored_semantic_ids:
+            if removable:
                 ignored_obstacle_endpoints += 1
             elif (args.obstacle_min_z <= endpoint[2] <= args.obstacle_max_z
                     and 0 <= x < width and 0 <= y < height):
                 occupied_votes[y, x] = min(65535, int(occupied_votes[y, x]) + 1)
+                if int(semantic_id) in structural_boundary_ids:
+                    structural_boundary_votes[y, x] = min(
+                        65535, int(structural_boundary_votes[y, x]) + 1
+                    )
 
-    occupied = dilate(occupied_votes > 0, radius=1)
+    structural_seeds = occupied_votes > 0
+    occupied = dilate(structural_seeds, radius=1)
     navigation_exclusion = np.zeros((height, width), dtype=bool)
     exclusion_image = Image.new("1", (width, height), 0)
     exclusion_draw = ImageDraw.Draw(exclusion_image)
@@ -328,13 +443,31 @@ def main():
     grid[free_votes > 0] = 0
     grid[occupied] = 100
     footprint_mask = object_footprint_mask(
-        args.object_boxes, origin, args.resolution, width, height
+        removable_boxes, origin, args.resolution, width, height, args.object_box_expansion
     )
-    # Never clear near unknown space: this protects exterior and incompletely
-    # observed walls even when an object OBB overlaps them.
+    # Infer the floor beneath a removed object only inside its fitted footprint.
+    # Retained depth endpoints, stairs, and unknown exterior boundaries always win.
     protected_boundary = dilate(grid == -1, radius=2)
-    cleared_footprint = footprint_mask & (grid == 100) & ~protected_boundary
-    grid[cleared_footprint] = 0
+    protected_structure = dilate(structural_seeds, radius=1)
+    filled_footprint = (
+        footprint_mask & ~protected_boundary & ~protected_structure & ~navigation_exclusion
+    )
+    filled_unknown = filled_footprint & (grid == -1)
+    cleared_occupied = filled_footprint & (grid == 100)
+    grid[filled_footprint] = 0
+    removed_component_count = 0
+    removed_component_cell_count = 0
+    if args.structure_policy is not None:
+        explicit_boundary_mask = object_footprint_mask(
+            explicit_boundary_boxes, origin, args.resolution, width, height, 1.10
+        )
+        component_protection = (
+            protected_boundary | navigation_exclusion | explicit_boundary_mask
+            | dilate(structural_boundary_votes > 0, radius=1)
+        )
+        grid, removed_component_count, removed_component_cell_count = clear_non_boundary_components(
+            grid, component_protection
+        )
 
     args.output_prefix.parent.mkdir(parents=True, exist_ok=True)
     np.save(args.output_prefix.with_suffix(".npy"), grid)
@@ -350,13 +483,26 @@ def main():
         "free_cells": int(np.count_nonzero(grid == 0)),
         "occupied_cells": int(np.count_nonzero(grid == 100)),
         "unknown_cells": int(np.count_nonzero(grid == -1)),
+        "map_role": "room_structure" if args.structure_policy is not None else "navigation_occupancy",
         "object_filter": {
             "source_boxes": None if args.object_boxes is None else str(args.object_boxes),
-            "semantic_instance_count": len(ignored_semantic_ids),
+            "structure_policy": None if args.structure_policy is None else str(args.structure_policy),
+            "method": (
+                "oriented_box_endpoint_filter_and_guarded_floor_completion"
+                if args.structure_policy is not None else "none"
+            ),
+            "box_expansion": args.object_box_expansion,
+            "removable_instance_count": len(removable_boxes),
+            "removable_instance_ids": [box["instance_id"] for box in removable_boxes],
             "ignored_endpoint_count": ignored_obstacle_endpoints,
-            "cleared_footprint_cell_count": int(np.count_nonzero(cleared_footprint)),
-            "labels": sorted(NON_STRUCTURAL_LABELS),
-            "footprint_clear_labels": sorted(FOOTPRINT_CLEAR_LABELS),
+            "cleared_occupied_cell_count": int(np.count_nonzero(cleared_occupied)),
+            "filled_unknown_cell_count": int(np.count_nonzero(filled_unknown)),
+            "completed_footprint_cell_count": int(np.count_nonzero(filled_footprint)),
+            "removed_non_boundary_component_count": removed_component_count,
+            "removed_non_boundary_component_cell_count": removed_component_cell_count,
+            "protected_structural_labels": sorted(DEFAULT_STRUCTURAL_BOUNDARY_LABELS),
+            "protected_structural_semantic_ids": sorted(structural_boundary_ids),
+            "protected_structural_endpoint_cell_count": int(np.count_nonzero(structural_boundary_votes)),
         },
         "single_floor_policy": {
             "endpoint_height_band_m": [args.obstacle_min_z, args.obstacle_max_z],

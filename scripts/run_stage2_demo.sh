@@ -10,9 +10,10 @@ scene_graph="$root_dir/outputs/scene_graph/hm3d_stage1_complete_v3.json"
 cd "$root_dir"
 mkdir -p "$run_dir"
 .envs/habitat/bin/python scripts/fuse_rooms_boxes.py \
-  outputs/occusg/hm3d_stage1_complete_v3/regions.json \
+  outputs/occusg/hm3d_stage1_complete_v3_structure/regions.json \
   outputs/boxer/hm3d_stage1_complete_v3/boxer_3dbbs_fused.csv \
-  "$scene_graph"
+  "$scene_graph" \
+  --grid-meta runtime/occusg/hm3d_stage1_complete_v3_structure_grid.json
 ./scripts/parse_stage2_instruction.py "$instruction" \
   --scene-graph "$scene_graph" \
   --output "$run_dir/task_graph.json"
