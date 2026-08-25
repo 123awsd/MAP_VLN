@@ -37,7 +37,7 @@ Visualization Manager:
     - Class: rviz/MarkerArray
       Enabled: true
       Marker Topic: /stage2/semantic_boxes
-      Name: Context Boxes (Thin Blue) + Task Boxes (Thick Magenta)
+      Name: All Semantic Box Labels + Context/Task Boxes
       Namespaces: {}
       Queue Size: 10
     - Class: rviz/MarkerArray

@@ -144,10 +144,33 @@ def target_label_marker(obj, marker_id: int, stamp, label: str, status: str):
     return marker
 
 
+def context_label_marker(obj, marker_id: int, stamp):
+    """Persistent category + stable object id for every pre-map semantic box."""
+    marker = Marker()
+    marker.header.frame_id = "world"
+    marker.header.stamp = stamp
+    marker.ns = "stage2_context_labels"
+    marker.id = marker_id
+    marker.type = Marker.TEXT_VIEW_FACING
+    marker.action = Marker.ADD
+    center = np.asarray(obj["center_xyz_m"], dtype=np.float64)
+    size = np.asarray(obj["size_xyz_m"], dtype=np.float64)
+    marker.pose.position.x = float(center[0])
+    marker.pose.position.y = float(center[1])
+    marker.pose.position.z = float(center[2] + size[2] * 0.5 + 0.12)
+    marker.pose.orientation.w = 1.0
+    marker.scale.z = 0.13
+    marker.color.r, marker.color.g, marker.color.b, marker.color.a = 0.03, 0.18, 0.30, 0.96
+    marker.text = f"{obj.get('label', 'object')}  [{obj.get('id', marker_id)}]"
+    marker.lifetime = rospy.Duration(0)
+    return marker
+
+
 def task_box_markers(task_order, task_objects, objects, statuses, current_task, stamp):
     result = MarkerArray()
     for object_id, (marker_id, obj) in sorted(objects.items(), key=lambda item: item[1][0]):
         result.markers.append(box_marker(obj, marker_id, stamp, "context"))
+        result.markers.append(context_label_marker(obj, marker_id, stamp))
     for marker_id, task_id in enumerate(task_order):
         object_id = task_objects.get(task_id)
         if object_id not in objects:
