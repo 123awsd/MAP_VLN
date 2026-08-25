@@ -10,6 +10,7 @@ outputs/*
 runtime/bridge/*
 runtime/occusg/*
 runtime/baselines/*
+runtime/semantic_region_*_smoke/
 runtime/*.Xauthority
 third_party/*
 

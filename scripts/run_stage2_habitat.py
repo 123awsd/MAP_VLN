@@ -35,6 +35,10 @@ from stage2.open_vocab_detector import (  # noqa: E402
     target_found,
 )
 from stage2.semantic_fusion import OnlineSemanticFusion  # noqa: E402
+from stage2.semantic_region_search import (  # noqa: E402
+    SemanticRegionBelief,
+    materialize_room_frontier_fallback,
+)
 from stage2.semantic_recovery import (  # noqa: E402
     QwenSemanticRecoveryPlanner,
     materialize_recovery_candidates,
@@ -234,7 +238,9 @@ def main() -> None:
         if args.semantic_recovery else None
     )
     semantic_recovery_events = []
+    semantic_region_belief = SemanticRegionBelief()
     recovery_plans: dict[str, dict] = {}
+    room_fallback_candidates: dict[str, list[dict]] = {}
     failed_location_object_ids: dict[str, set[str]] = {}
     replans = []
     frame_index = 0
@@ -285,6 +291,10 @@ def main() -> None:
             )
             replans.append({"index": len(replans), "active_task_ids": sorted(state.active), "plan": plan})
             visit = plan["visits"][0]
+            executed_candidate = next(
+                item for item in candidates[visit["task_id"]]
+                if item["id"] == visit["candidate_id"]
+            )
             segment = plan["segments"][0]
             terminal = visit["pose"]
             points = interpolate_polyline(segment["points_xy_m"], args.step_m)
@@ -439,6 +449,10 @@ def main() -> None:
                 outcome = "found" if selected_found else "not_found"
             else:
                 outcome = "done"
+            region_belief_update = semantic_region_belief.observe(
+                executed_candidate, selected_found
+            ) if action in {"inspect", "find", "observe"} else None
+            semantic_region_belief.apply(candidates[visit["task_id"]])
             recovery_decision = recovery.decide(
                 visit["task_id"], visit["candidate_id"], selected_found,
                 candidates[visit["task_id"]],
@@ -469,6 +483,10 @@ def main() -> None:
                     known_ids = {item["id"] for item in candidates[visit["task_id"]]}
                     new_candidates = [item for item in new_candidates if item["id"] not in known_ids]
                     candidates[visit["task_id"]].extend(new_candidates)
+                    semantic_region_belief.register(new_candidates)
+                    room_fallback_candidates[visit["task_id"]] = materialize_room_frontier_fallback(
+                        grid, updated_scene_graph, tasks[visit["task_id"]], search_plan,
+                    )
                     recovery_plans[visit["task_id"]] = search_plan
                     search_activated = bool(new_candidates)
                     semantic_recovery_events.append({
@@ -486,6 +504,30 @@ def main() -> None:
                             "remaining_candidate_ids": [item["id"] for item in new_candidates],
                             "semantic_search_plan": search_plan,
                         })
+            if (
+                semantic_recovery_planner is not None
+                and action in {"inspect", "find", "observe"}
+                and not selected_found
+                and not recovery_decision["retry"]
+                and visit["task_id"] in room_fallback_candidates
+                and room_fallback_candidates[visit["task_id"]]
+                and recovery_decision["attempt_index"] < args.max_recovery_visits
+            ):
+                fallback = room_fallback_candidates.pop(visit["task_id"])
+                known_ids = {item["id"] for item in candidates[visit["task_id"]]}
+                fallback = [item for item in fallback if item["id"] not in known_ids]
+                if fallback:
+                    candidates[visit["task_id"]].extend(fallback)
+                    semantic_region_belief.register(fallback)
+                    recovery_decision.update({
+                        "retry": True,
+                        "reason": "room_frontier_fallback_activated",
+                        "remaining_candidate_ids": [item["id"] for item in fallback],
+                    })
+                    if semantic_recovery_events:
+                        semantic_recovery_events[-1]["fallback_candidate_ids"] = [
+                            item["id"] for item in fallback
+                        ]
             mission_outcome = "retry" if recovery_decision["retry"] else outcome
             if search_activated:
                 mission_outcome = "recovery_activated"
@@ -503,7 +545,16 @@ def main() -> None:
             }
             observations_log.append(observation_record)
             mapped_object = objects_by_id.get(visit["object_id"])
-            if mapped_object is not None:
+            target_labels = ALIASES.get(
+                tasks[visit["task_id"]]["verification_label"],
+                {tasks[visit["task_id"]]["verification_label"]},
+            )
+            mapped_is_target = bool(
+                mapped_object is not None
+                and str(mapped_object.get("label", "")).lower() in target_labels
+            )
+            object_map_update = None
+            if mapped_object is not None and mapped_is_target:
                 old_probability = float(mapped_object.get("probability", 0.0))
                 new_probability = (
                     old_probability + 0.2 * (1.0 - old_probability)
@@ -520,10 +571,26 @@ def main() -> None:
                     "projected_3d": None if not open_vocab_verification else open_vocab_verification["projected_3d"],
                     "sequence": len(observations_log) - 1,
                 }
-                map_updates.append({
+                object_map_update = {
+                    "type": "target_instance_confidence",
                     "object_id": visit["object_id"],
                     "old_probability": old_probability,
                     "new_probability": new_probability,
+                    "outcome": mission_outcome,
+                }
+            if region_belief_update is not None:
+                if object_map_update is not None:
+                    region_belief_update["target_instance_update"] = object_map_update
+                map_updates.append(region_belief_update)
+            elif object_map_update is not None:
+                map_updates.append(object_map_update)
+            else:
+                # A semantic recovery view may be anchored to a shelf/table.  A
+                # failed target observation must update the search-region belief,
+                # never the anchor object's existence confidence.
+                map_updates.append({
+                    "type": "observation_no_target_instance_update",
+                    "object_id": visit["object_id"],
                     "outcome": mission_outcome,
                 })
             if not recovery_decision["retry"]:
@@ -570,6 +637,10 @@ def main() -> None:
             "plans_by_task": recovery_plans,
             "failed_location_object_ids": {
                 key: sorted(value) for key, value in failed_location_object_ids.items()
+            },
+            "region_beliefs": semantic_region_belief.beliefs,
+            "region_observed_sample_ids": {
+                key: sorted(value) for key, value in semantic_region_belief.observed_samples.items()
             },
             "maximum_hypotheses": args.max_recovery_hypotheses,
             "maximum_visits": args.max_recovery_visits,

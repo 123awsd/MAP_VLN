@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import hashlib
 import json
 import os
@@ -11,23 +10,27 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from .candidate_poses import generate_candidates
 from .io_utils import atomic_json, load_json
+from .semantic_region_search import infer_region_type, materialize_semantic_regions
 
 
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 MODEL = "qwen3.7-plus"
-PROMPT_VERSION = "semantic-recovery-v2"
+PROMPT_VERSION = "semantic-recovery-v3"
 INPUT_CNY_PER_MILLION = 2.0
 OUTPUT_CNY_PER_MILLION = 8.0
 RANK_PENALTY = {"high": 0.0, "medium": 0.6, "low": 1.2}
+SEMANTIC_REGION_TYPES = {
+    "support_surface", "floor_near_anchor", "furniture_neighborhood",
+    "under_furniture", "fixed_instance",
+}
 
 SYSTEM_PROMPT = """你是家庭机器人目标恢复搜索规划器。目标在预期位置经过充分观察后未找到。
 根据给定的全局房间和物体清单，提出最多3个尚未失败的搜索位置；只要清单中还有可用锚点，就应尽量给满3个。同类房间不足时，可按目标常见支撑物、收纳物和相邻功能空间扩展。只输出严格JSON，不要Markdown。
 每个假设必须引用清单中真实存在的 room_id 和 anchor_object_id。优先选择与目标类别、房间用途、支撑物和日常放置习惯语义相关的位置；不要生成坐标，不要虚构房间或物体。
-relevance只能是high/medium/low。输出：
-{"target_label":"...","hypotheses":[{"room_id":1,"anchor_object_id":"boxer_1","relation":"near|on|inside|around","relevance":"high|medium|low","reason":"简短中文理由"}]}"""
+semantic_region描述目标相对锚点的功能区域，只能使用support_surface、floor_near_anchor、furniture_neighborhood、under_furniture或fixed_instance。relevance只能是high/medium/low，它是粗粒度语义优先级而非校准概率。输出：
+{"target_label":"...","hypotheses":[{"room_id":1,"anchor_object_id":"boxer_1","semantic_region":"support_surface","relation":"near|on|inside|around|under","relevance":"high|medium|low","reason":"简短中文理由"}]}"""
 
 
 def recovery_inventory(scene_graph: dict[str, Any]) -> dict[str, Any]:
@@ -67,12 +70,25 @@ def validate_hypotheses(
         relevance = str(source.get("relevance", "medium")).lower()
         if relevance not in RANK_PENALTY:
             continue
+        relation = str(source.get("relation", "near")).lower()
+        inferred_region = infer_region_type(
+            str(value.get("target_label", "")), obj["label"], relation
+        )
+        semantic_region = str(source.get("semantic_region") or inferred_region).lower()
+        if semantic_region not in SEMANTIC_REGION_TYPES:
+            semantic_region = inferred_region
+        # Fixed targets, explicit under-object searches, and floor-affordance
+        # targets have unambiguous geometry; do not let free-form VLM wording
+        # turn them back into generic room neighborhoods.
+        if inferred_region in {"fixed_instance", "under_furniture", "floor_near_anchor"}:
+            semantic_region = inferred_region
         result.append({
             "id": f"recovery_{len(result) + 1}",
             "room_id": actual_room,
             "anchor_object_id": object_id,
             "anchor_label": obj["label"],
-            "relation": str(source.get("relation", "near")).lower(),
+            "relation": relation,
+            "semantic_region": semantic_region,
             "relevance": relevance,
             "reason": str(source.get("reason", ""))[:240],
         })
@@ -174,29 +190,7 @@ def materialize_recovery_candidates(
     grid, scene_graph: dict[str, Any], task: dict[str, Any], search_plan: dict[str, Any],
     max_candidates_per_hypothesis: int = 4,
 ) -> list[dict[str, Any]]:
-    objects = {
-        obj["id"]: obj
-        for room in scene_graph.get("rooms", []) for obj in room.get("objects", [])
-    }
-    values = []
-    for hypothesis in search_plan.get("hypotheses", []):
-        object_id = hypothesis["anchor_object_id"]
-        obj = objects.get(object_id)
-        if obj is None:
-            continue
-        branch_task = copy.deepcopy(task)
-        branch_task["target"] = {
-            "label": str(obj["label"]).lower(), "room": None, "reference": None,
-        }
-        branch_task["spatial_constraints"]["relation"] = None
-        generated = generate_candidates(
-            grid, scene_graph, branch_task, max_candidates=max_candidates_per_hypothesis,
-            allowed_object_ids={object_id}, prefer_room=False,
-        )
-        for candidate in generated:
-            candidate["terminal_cost"] += RANK_PENALTY[hypothesis["relevance"]]
-            candidate["recovery_search"] = copy.deepcopy(hypothesis)
-            candidate["location_hypothesis_id"] = hypothesis["id"]
-            candidate["candidate_source"] = "vlm_semantic_recovery"
-        values.extend(generated)
-    return values
+    return materialize_semantic_regions(
+        grid, scene_graph, task, search_plan,
+        max_candidates_per_region=max_candidates_per_hypothesis,
+    )

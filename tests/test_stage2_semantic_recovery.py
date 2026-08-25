@@ -29,6 +29,15 @@ class SemanticRecoveryTest(unittest.TestCase):
         ]}
         result = validate_hypotheses(raw, self.scene, {"tv1"}, 3)
         self.assertEqual([item["anchor_object_id"] for item in result["hypotheses"]], ["shelf1"])
+        self.assertEqual(result["hypotheses"][0]["semantic_region"], "support_surface")
+
+    def test_invalid_region_name_falls_back_to_geometry_family(self):
+        raw = {"target_label": "television", "hypotheses": [{
+            "room_id": 1, "anchor_object_id": "tv1", "relation": "near",
+            "relevance": "high", "semantic_region": "magic_corner",
+        }]}
+        result = validate_hypotheses(raw, self.scene, set(), 3)
+        self.assertEqual(result["hypotheses"][0]["semantic_region"], "fixed_instance")
 
 
 if __name__ == "__main__":
