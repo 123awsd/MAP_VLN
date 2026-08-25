@@ -53,7 +53,8 @@ fi
 ./scripts/run_boxer_habitat.sh "$episode_dir" outputs/boxer
 PYTHONPATH="$root_dir/third_party/boxer" .envs/boxer/bin/python \
   scripts/build_progressive_boxes.py \
-  "$box_dir/boxer_3dbbs.csv" "$box_dir/boxer_3dbbs_progressive.csv"
+  "$box_dir/boxer_3dbbs.csv" "$box_dir/boxer_3dbbs_progressive.csv" \
+  --iou 0.2 --min-detections 4 --conf-threshold 0.45
 
 docker compose run --rm falcon python3 \
   /workspace/falcon_ws/src/pre_map_bridge/scripts/inject_progressive_boxes.py \

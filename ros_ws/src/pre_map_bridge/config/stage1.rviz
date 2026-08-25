@@ -124,7 +124,7 @@ Visualization Manager:
       Name: Boxer 3D Boxes (Styled)
       Namespaces:
         boxer_3d: false
-        boxer_labels: false
+        boxer_labels: true
         boxer_outlines: true
       Queue Size: 10
     - Angle Tolerance: 0.1

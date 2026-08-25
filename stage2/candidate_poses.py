@@ -6,6 +6,10 @@ import math
 from typing import Any
 
 from .grid_map import OccupancyGrid
+from .vocabulary import load_semantic_aliases
+
+
+ALIASES = load_semantic_aliases()
 
 
 def _yaw_from_wxyz(quaternion: list[float]) -> float:
@@ -31,12 +35,7 @@ def matching_objects(
 ) -> list[tuple[dict[str, Any], dict[str, Any]]]:
     label = task["target"]["label"].lower()
     room_name = task["target"].get("room")
-    aliases = {
-        "tv": {"tv", "television"}, "television": {"tv", "television"},
-        "couch": {"couch", "sofa"}, "sofa": {"couch", "sofa"},
-        "desk": {"desk", "table"}, "cup": {"cup", "mug"}, "mug": {"cup", "mug"},
-    }
-    accepted = aliases.get(label, {label})
+    accepted = ALIASES.get(label, {label})
     all_matches = []
     room_matches = []
     for room in scene_graph.get("rooms", []):

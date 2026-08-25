@@ -20,6 +20,8 @@ def require(condition, message):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--episode", default="hm3d_stage1")
+    parser.add_argument("--boxes", type=Path, default=None)
+    parser.add_argument("--scene-graph", type=Path, default=None)
     parser.add_argument("--output", type=Path, default=ROOT / "outputs/stage1_report.json")
     args = parser.parse_args()
     episode_dir = ROOT / "data/episodes" / args.episode
@@ -42,12 +44,12 @@ def main():
         require(single_floor.get("excluded_cell_count", 0) > 0,
                 "single-floor map contains no stair exclusion cells")
 
-    boxes_path = ROOT / "outputs/boxer" / args.episode / "boxer_3dbbs_fused.csv"
+    boxes_path = args.boxes or ROOT / "outputs/boxer" / args.episode / "boxer_3dbbs_fused.csv"
     with boxes_path.open(newline="", encoding="utf-8") as handle:
         boxes = list(csv.DictReader(handle))
     require(boxes, "Boxer produced no fused static objects")
 
-    graph_path = ROOT / "outputs/scene_graph" / f"{args.episode}.json"
+    graph_path = args.scene_graph or ROOT / "outputs/scene_graph" / f"{args.episode}.json"
     graph = json.loads(graph_path.read_text(encoding="utf-8"))
     structure_meta_path = Path(graph.get("sources", {}).get("grid_metadata", ""))
     if not structure_meta_path.is_absolute():
@@ -76,6 +78,7 @@ def main():
             "scene graph major-room count is invalid")
     require(summary["object_count"] == len(boxes), "scene graph object mismatch")
     object_ids = [obj["id"] for room in graph["rooms"] for obj in room.get("objects", [])]
+    object_ids.extend(obj["id"] for obj in graph.get("unassigned_objects", []))
     require(len(object_ids) == len(set(object_ids)), "an object appears in multiple canonical rooms")
     if "geometric_regions" in graph:
         require(summary.get("fragment_count") == 0, "room fragments leaked into canonical rooms")

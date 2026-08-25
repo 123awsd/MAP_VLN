@@ -91,8 +91,11 @@ def normalize_structure_policy(
         if not 0.0 <= confidence <= 1.0:
             raise ValueError(f"invalid confidence for {instance_id}")
         reason = str(raw.get("reason", "")).strip()
-        if not reason or len(reason) > 300:
-            raise ValueError(f"missing or excessive reason for {instance_id}")
+        # Preserve a valid role/confidence decision if one explanation is
+        # omitted in a large response, while making the omission auditable.
+        if not reason:
+            reason = "model returned no explanation; role retained for audit"
+        reason = reason[:300]
         box = expected[instance_id]
         decisions[instance_id] = {
             **box,

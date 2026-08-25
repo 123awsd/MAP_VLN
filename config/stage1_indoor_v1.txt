@@ -1,0 +1,57 @@
+# PRE_MAP_VLN stage-one offline indoor vocabulary, version indoor_v1.
+# One canonical OWLv2 prompt per line. Dynamic handheld objects are omitted on
+# purpose: the pre-map focuses on stable furniture, fixtures and room cues.
+door
+window
+mirror
+chair
+armchair
+stool
+bench
+ottoman
+sofa
+bed
+table
+coffee table
+dining table
+desk
+cabinet
+wardrobe
+dresser
+nightstand
+shelf
+bookshelf
+television
+monitor
+speaker
+lamp
+refrigerator
+oven
+microwave
+dishwasher
+washing machine
+dryer
+air conditioner
+heater
+range hood
+sink
+toilet
+bathtub
+shower
+faucet
+kitchen island
+countertop
+plant
+trash can
+laundry basket
+clothes rack
+vacuum cleaner
+exercise bike
+fireplace
+piano
+railing
+stairs
+curtain
+blinds
+rug
+picture

@@ -61,7 +61,7 @@ cd /home/uav/map_VLN/PRE_MAP_VLN
 
 ## RViz 与 rosbag
 
-默认同步包：`outputs/bags/hm3d_stage1_complete_v3_final.bag`。它不是定时截断，而是在 FALCON 明确进入 `FINISH` 后自动停止：248.303 秒、2,479 帧 Habitat RGB、43,379 条消息，末帧 active Frontier 为 0、occupied map 为 234,056 点。包内包含 RGB-D、FALCON 轨迹/frontier、地图点云、实际相机姿态，以及 179 个 Boxer 3D boxes 的 118 次渐进事件。
+默认同步包：`outputs/bags/hm3d_stage1_complete_v3_indoor_v1_final.bag`。它复用 FALCON 明确进入 `FINISH` 的完整探索回合：248.303 秒、2,479 帧 Habitat RGB、43,332 条消息。第一阶段在探索后对 497 个 RGB-D/Pose 关键帧用 54 类稳定室内词表离线检测；OWLv2 阈值 0.20、融合阈值 0.45、至少 4 帧支持，得到 89 个多视角 3D boxes，并按 71 个首次观测事件渐进注入。旧 10 类包 `hm3d_stage1_complete_v3_final.bag` 保留作对照。
 
 ```bash
 cd /home/uav/map_VLN/PRE_MAP_VLN
@@ -75,13 +75,13 @@ cd /home/uav/map_VLN/PRE_MAP_VLN
 循环播放：
 
 ```bash
-./scripts/replay_bag_rviz.sh hm3d_stage1_complete_v3_final true
+./scripts/replay_bag_rviz.sh hm3d_stage1_complete_v3_indoor_v1_final true
 ```
 
 bag 播放完成后 RViz 会保持打开。第三个参数是回放倍速：`0.5` 为半速，`2.0` 为 2 倍速，`4.0` 为 4 倍速；例如：
 
 ```bash
-./scripts/replay_bag_rviz.sh hm3d_stage1_complete_v3_final false 2.0
+./scripts/replay_bag_rviz.sh hm3d_stage1_complete_v3_indoor_v1_final false 2.0
 ```
 
 倍速会同步作用于 RGB、点云、轨迹和 Box。机器负载较高时建议使用 2–4 倍速，过高可能使 RViz 来不及渲染每一帧。第四个参数仅用于按需重新启用 2D 俯视窗口，默认是 `false`。
@@ -89,7 +89,7 @@ bag 播放完成后 RViz 会保持打开。第三个参数是回放倍速：`0.5
 第五至七个参数依次调整离地净空、开始识别顶棚的最小室内高度和沿局部顶面的剥离厚度。例如使用默认的 0.25/1.65/0.60 m：
 
 ```bash
-./scripts/replay_bag_rviz.sh hm3d_stage1_complete_v3_final false 1.0 false 0.25 1.65 0.60
+./scripts/replay_bag_rviz.sh hm3d_stage1_complete_v3_indoor_v1_final false 1.0 false 0.25 1.65 0.60
 ```
 
 重新录制一个同回合渐进包：

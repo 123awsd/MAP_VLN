@@ -17,7 +17,10 @@ ROOM_CUES = {
     "bedroom": {"bed", "nightstand", "dresser", "wardrobe"},
     "living_room": {"sofa", "couch", "television", "tv", "coffee table"},
     "dining_room": {"dining table", "table", "chair"},
-    "kitchen": {"refrigerator", "oven", "microwave", "sink", "cabinet"},
+    "kitchen": {
+        "refrigerator", "oven", "microwave", "dishwasher", "range hood",
+        "sink", "cabinet", "countertop", "kitchen island",
+    },
     "bathroom": {"toilet", "bathtub", "shower", "sink"},
     "office": {"desk", "computer", "monitor", "office chair"},
 }
@@ -29,10 +32,24 @@ CUE_WEIGHTS = {
     "bed": 2.0, "nightstand": 1.5, "dresser": 1.2, "wardrobe": 1.2,
     "sofa": 1.6, "couch": 1.6, "television": 0.7, "tv": 0.7,
     "refrigerator": 1.8, "oven": 1.8, "microwave": 1.5, "sink": 1.3,
+    "dishwasher": 1.5, "range hood": 1.4, "countertop": 1.0, "kitchen island": 1.4,
     "toilet": 2.0, "bathtub": 2.0, "shower": 2.0,
     "desk": 1.5, "computer": 1.5, "monitor": 1.2,
     "cabinet": 0.35, "chair": 0.25, "table": 0.4, "dining table": 1.4,
 }
+VOLUMETRIC_ROOM_CUES = {
+    "bed", "sofa", "couch", "refrigerator", "oven", "dishwasher",
+    "toilet", "bathtub", "shower", "washing machine", "dryer",
+}
+
+
+def plausible_room_cue_geometry(obj):
+    """Reject only physically impossible flat boxes for volumetric room cues."""
+    if obj["label"].lower() not in VOLUMETRIC_ROOM_CUES or "size_xyz_m" not in obj:
+        return True
+    height = float(obj["size_xyz_m"][2])
+    center_z = float(obj.get("center_xyz_m", [0.0, 0.0, 1.0])[2])
+    return height >= 0.15 and center_z + 0.5 * height >= 0.15
 
 
 def point_in_polygon(point, polygon):
@@ -47,6 +64,28 @@ def point_in_polygon(point, polygon):
             if x < crossing_x:
                 inside = not inside
     return inside
+
+
+def assign_room_for_point(rooms, point, maximum_fallback_distance_m=0.75):
+    """Assign a box center by polygon containment or nearest polygon boundary.
+
+    Centroid-only fallback can attach an object in an unexplored, sealed room to
+    a large but distant navigable room.  Boundary distance keeps wall-adjacent
+    boxes while leaving genuinely unmapped objects explicit and unassigned.
+    """
+    inside = [room for room in rooms if point_in_polygon(point, room["polygon_xy_m"])]
+    if inside:
+        room = min(inside, key=lambda item: math.dist(point, item["centroid_xy_m"]))
+        return room, "inside_polygon", 0.0
+    distances = []
+    for room in rooms:
+        contour = np.asarray(room["polygon_xy_m"], dtype=np.float32).reshape(-1, 1, 2)
+        signed = cv2.pointPolygonTest(contour, (float(point[0]), float(point[1])), True)
+        distances.append((max(0.0, -float(signed)), room))
+    distance, room = min(distances, key=lambda item: item[0])
+    if distance <= maximum_fallback_distance_m:
+        return room, "nearest_boundary_fallback", distance
+    return None, "unassigned_outside_mapped_rooms", distance
 
 
 def filter_navigation_exclusions(rooms, grid_metadata):
@@ -99,9 +138,23 @@ def classify_room(objects):
     for obj in objects:
         label = obj["label"].lower()
         probability = obj["probability"]
+        if not plausible_room_cue_geometry(obj):
+            continue
+        # A box merely near a room boundary remains visible in that room, but
+        # should not dominate the room label.  This matters for fixtures in a
+        # sealed/unexplored neighboring space.  Legacy objects without explicit
+        # assignment metadata keep full weight.
+        assignment = obj.get("room_assignment", "inside_polygon")
+        if assignment == "inside_polygon":
+            assignment_weight = 1.0
+        else:
+            distance = float(obj.get("room_assignment_distance_m", math.inf))
+            assignment_weight = 0.25 * max(0.0, 1.0 - distance / 0.75)
+        if assignment_weight <= 0.0:
+            continue
         for room_type, cues in ROOM_CUES.items():
             if label in cues:
-                scores[room_type] += probability * CUE_WEIGHTS.get(label, 1.0)
+                scores[room_type] += probability * CUE_WEIGHTS.get(label, 1.0) * assignment_weight
     if not scores:
         return "unknown", 0.0
     room_type, score = scores.most_common(1)[0]
@@ -266,6 +319,10 @@ def main():
         "--grid-meta", type=Path, default=None,
         help="occupancy metadata containing single-floor navigation exclusions",
     )
+    parser.add_argument(
+        "--max-room-assignment-distance", type=float, default=0.75,
+        help="maximum polygon-boundary distance for assigning boxes outside navigable rooms",
+    )
     args = parser.parse_args()
 
     region_data = json.loads(args.regions.read_text(encoding="utf-8"))
@@ -288,17 +345,13 @@ def main():
 
     with args.boxes.open(newline="", encoding="utf-8") as handle:
         box_rows = list(csv.DictReader(handle))
-    unassigned = []
+    fallback_assigned = []
+    unassigned_objects = []
     for index, row in enumerate(box_rows):
         center = [float(row["tx_world_object"]), float(row["ty_world_object"])]
-        candidates = [room for room in rooms if point_in_polygon(center, room["polygon_xy_m"])]
-        assignment = "inside_polygon"
-        if not candidates:
-            # Boxes on a wall or just outside an incomplete explored contour are
-            # retained, but the fallback is explicit in the output.
-            candidates = [min(rooms, key=lambda room: math.dist(center, room["centroid_xy_m"]))]
-            assignment = "nearest_centroid_fallback"
-        room = min(candidates, key=lambda item: math.dist(center, item["centroid_xy_m"]))
+        room, assignment, assignment_distance = assign_room_for_point(
+            rooms, center, args.max_room_assignment_distance
+        )
         obj = {
             "id": f"boxer_{index}",
             "label": row["name"],
@@ -314,10 +367,14 @@ def main():
             ],
             "probability": float(row["prob"]),
             "room_assignment": assignment,
+            "room_assignment_distance_m": round(float(assignment_distance), 4),
         }
+        if room is None:
+            unassigned_objects.append(obj)
+            continue
         room["objects"].append(obj)
         if assignment != "inside_polygon":
-            unassigned.append(obj["id"])
+            fallback_assigned.append(obj["id"])
 
     rooms, excluded_navigation_island_ids = filter_navigation_exclusion_islands(
         rooms, grid_metadata
@@ -351,14 +408,18 @@ def main():
             "excluded_navigation_region_ids": excluded_navigation_region_ids,
             "region_count": len(rooms),
             "room_count": sum(room["space_role"] == "room" for room in rooms),
-            "object_count": sum(len(room["objects"]) for room in rooms),
+            "object_count": sum(len(room["objects"]) for room in rooms) + len(unassigned_objects),
+            "assigned_object_count": sum(len(room["objects"]) for room in rooms),
+            "unassigned_object_count": len(unassigned_objects),
             "adjacency_edge_count": len(edges),
             "corridor_count": sum(room["space_role"] == "transition_space" for room in rooms),
             "fragment_count": sum(room["space_role"] == "room_fragment" for room in rooms),
             "source_fragment_count": source_fragment_count,
-            "nearest_fallback_object_ids": unassigned,
+            "nearest_fallback_object_ids": fallback_assigned,
+            "unassigned_object_ids": [obj["id"] for obj in unassigned_objects],
         },
         "rooms": rooms,
+        "unassigned_objects": unassigned_objects,
         "geometric_regions": geometric_regions,
         "room_adjacency_edges": [{"source": a, "target": b} for a, b in edges],
     }

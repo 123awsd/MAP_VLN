@@ -38,6 +38,14 @@ class StructurePolicyTests(unittest.TestCase):
         ]}, self.boxes)
         self.assertFalse(policy["instances"][0]["remove_from_structure_map"])
 
+    def test_missing_reason_is_made_auditable(self):
+        policy = normalize_structure_policy({"instances": [
+            {"instance_id": "boxer_0", "role": "interior_object", "confidence": 0.9, "reason": ""},
+            {"instance_id": "boxer_1", "role": "opening_boundary", "confidence": 0.9, "reason": "door"},
+        ]}, self.boxes)
+        self.assertIn("no explanation", policy["instances"][0]["reason"])
+        self.assertTrue(policy["instances"][0]["remove_from_structure_map"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -20,11 +20,36 @@ def main() -> None:
     parser.add_argument("--boxes", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--budget-cny", type=float, default=20.0)
+    parser.add_argument(
+        "--batch-size", type=int, default=40,
+        help="maximum boxes per Qwen request; keeps large indoor vocabularies within the JSON output limit",
+    )
     parser.add_argument("--no-cache", action="store_true")
     args = parser.parse_args()
-    policy = QwenStructurePolicy(budget_cny=args.budget_cny).classify(
-        read_boxes(args.boxes), use_cache=not args.no_cache
-    )
+    if args.batch_size < 1:
+        parser.error("--batch-size must be positive")
+    boxes = read_boxes(args.boxes)
+    classifier = QwenStructurePolicy(budget_cny=args.budget_cny)
+    batches = []
+    for start in range(0, len(boxes), args.batch_size):
+        batches.append(classifier.classify(
+            boxes[start:start + args.batch_size], use_cache=not args.no_cache
+        ))
+    instances = [item for batch in batches for item in batch["instances"]]
+    policy = {
+        "format": "pre_map_vln.structure_policy.v1",
+        "minimum_remove_confidence": batches[0]["minimum_remove_confidence"],
+        "instances": instances,
+        "provenance": {
+            "classifier": "qwen_llm_batched",
+            "batch_size": args.batch_size,
+            "batch_count": len(batches),
+            "cache_hit": all(
+                batch.get("provenance", {}).get("cache_hit", False) for batch in batches
+            ),
+            "batches": [batch.get("provenance", {}) for batch in batches],
+        },
+    }
     atomic_json(args.output, policy)
     print(json.dumps({
         "output": str(args.output),

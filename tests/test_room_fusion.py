@@ -1,6 +1,7 @@
 import unittest
 
 from scripts.fuse_rooms_boxes import (
+    assign_room_for_point,
     attach_small_fragments,
     canonicalize_rooms,
     classify_region,
@@ -10,6 +11,22 @@ from scripts.fuse_rooms_boxes import (
 
 
 class RoomFusionTests(unittest.TestCase):
+    def test_room_assignment_uses_boundary_and_rejects_distant_boxes(self):
+        rooms = [{
+            "id": 1, "centroid_xy_m": [5.0, 5.0],
+            "polygon_xy_m": [[0, 0], [10, 0], [10, 10], [0, 10]],
+        }, {
+            "id": 2, "centroid_xy_m": [12.0, 5.0],
+            "polygon_xy_m": [[11, 4], [13, 4], [13, 6], [11, 6]],
+        }]
+        room, method, distance = assign_room_for_point(rooms, [10.2, 5.0], 0.75)
+        self.assertEqual(room["id"], 1)
+        self.assertEqual(method, "nearest_boundary_fallback")
+        self.assertAlmostEqual(distance, 0.2, places=4)
+        room, method, _ = assign_room_for_point(rooms, [20.0, 20.0], 0.75)
+        self.assertIsNone(room)
+        self.assertEqual(method, "unassigned_outside_mapped_rooms")
+
     def test_small_connector_is_corridor(self):
         room = {
             "area_m2": 1.4,
@@ -25,6 +42,18 @@ class RoomFusionTests(unittest.TestCase):
             "objects": [{"label": "bed", "probability": 0.8}],
         }
         self.assertEqual(classify_region(room), ("bedroom", 1.6, "room"))
+
+    def test_flat_volumetric_false_positive_does_not_override_bedroom(self):
+        room = {
+            "area_m2": 8.0, "adjacent_room_ids": [2],
+            "objects": [
+                {"label": "bed", "probability": 0.65,
+                 "center_xyz_m": [0, 0, 0.4], "size_xyz_m": [2, 1.5, 0.7]},
+                {"label": "bathtub", "probability": 0.8,
+                 "center_xyz_m": [1, 0, 0.0], "size_xyz_m": [1.5, 1, 0.05]},
+            ],
+        }
+        self.assertEqual(classify_region(room)[0], "bedroom")
 
     def test_small_fragment_is_attached_without_deleting_geometry(self):
         rooms = [

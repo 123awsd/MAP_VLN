@@ -1,0 +1,26 @@
+{
+  "format": "pre_map_vln.semantic_aliases.v1",
+  "aliases": {
+    "television": ["television", "tv", "screen"],
+    "sofa": ["sofa", "couch", "sofa chair"],
+    "chair": ["chair", "desk chair", "office chair", "dining chair"],
+    "ottoman": ["ottoman", "pouffe"],
+    "table": ["table", "small table", "small table/stand"],
+    "desk": ["desk", "work desk"],
+    "cup": ["cup", "mug"],
+    "nightstand": ["nightstand", "bed stand", "bedside table"],
+    "cabinet": ["cabinet", "storage cabinet", "kitchen cabinet", "bathroom cabinet", "bath cabinet", "refrigerator cabinet"],
+    "bookshelf": ["bookshelf", "book rack"],
+    "lamp": ["lamp", "desk lamp", "floor lamp", "table lamp"],
+    "plant": ["plant", "decorative plant", "indoor plant", "flowerpot"],
+    "washing machine": ["washing machine", "washer", "washer dryer"],
+    "range hood": ["range hood", "ventilation hood"],
+    "sink": ["sink", "bath sink"],
+    "faucet": ["faucet", "tap"],
+    "trash can": ["trash can", "recycle bin"],
+    "laundry basket": ["laundry basket", "basket"],
+    "railing": ["railing", "stairs railing"],
+    "blinds": ["blinds", "window shutter"],
+    "picture": ["picture", "art frame", "wall art"]
+  }
+}

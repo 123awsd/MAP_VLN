@@ -41,19 +41,13 @@ from stage2.semantic_recovery import (  # noqa: E402
 )
 from stage2.viewpoint_recovery import ViewpointRecovery  # noqa: E402
 from stage2.vlm_verifier import QwenImageVerifier  # noqa: E402
+from stage2.vocabulary import load_semantic_aliases  # noqa: E402
 
 
 S_HABITAT_TO_FALCON = np.asarray(
     [[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=np.float64
 )
-ALIASES = {
-    "tv": {"tv", "television"}, "television": {"tv", "television"},
-    "couch": {"couch", "sofa"}, "sofa": {"couch", "sofa"},
-    "cabinet": {"cabinet", "bathroom cabinet", "kitchen cabinet"},
-    "plant": {"plant", "decorative plant", "indoor plant"},
-    "chair": {"chair", "office chair", "dining chair"},
-    "lamp": {"lamp", "floor lamp", "table lamp"},
-}
+ALIASES = load_semantic_aliases()
 
 
 def sensor(uuid: str, sensor_type: habitat_sim.SensorType) -> habitat_sim.CameraSensorSpec:
