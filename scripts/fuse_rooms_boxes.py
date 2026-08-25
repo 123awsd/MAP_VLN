@@ -49,6 +49,51 @@ def point_in_polygon(point, polygon):
     return inside
 
 
+def filter_navigation_exclusions(rooms, grid_metadata):
+    """Remove regions centered on semantic no-go structures such as stairs."""
+    exclusion_regions = (
+        (grid_metadata or {}).get("single_floor_policy", {})
+        .get("excluded_navigation_regions", [])
+    )
+    excluded_ids = {
+        room["id"] for room in rooms
+        if any(
+            point_in_polygon(room["centroid_xy_m"], exclusion["polygon_xy_m"])
+            for exclusion in exclusion_regions
+        )
+    }
+    if not excluded_ids:
+        return rooms, []
+    filtered = [room for room in rooms if room["id"] not in excluded_ids]
+    for room in filtered:
+        room["adjacent_room_ids"] = [
+            room_id for room_id in room["adjacent_room_ids"] if room_id not in excluded_ids
+        ]
+    return filtered, sorted(excluded_ids)
+
+
+def filter_navigation_exclusion_islands(rooms, grid_metadata, maximum_gap_m=0.80):
+    """Remove small empty islands left beside a blocked stair assembly."""
+    exclusion_regions = (
+        (grid_metadata or {}).get("single_floor_policy", {})
+        .get("excluded_navigation_regions", [])
+    )
+    excluded_ids = set()
+    for room in rooms:
+        if room.get("objects") or room.get("adjacent_room_ids") or float(room["area_m2"]) > 2.0:
+            continue
+        for exclusion in exclusion_regions:
+            gap = min(
+                math.dist(room_vertex, exclusion_vertex)
+                for room_vertex in room["polygon_xy_m"]
+                for exclusion_vertex in exclusion["polygon_xy_m"]
+            )
+            if gap <= maximum_gap_m:
+                excluded_ids.add(room["id"])
+                break
+    return [room for room in rooms if room["id"] not in excluded_ids], sorted(excluded_ids)
+
+
 def classify_room(objects):
     scores = Counter()
     for obj in objects:
@@ -307,6 +352,10 @@ def main():
     parser.add_argument("regions", type=Path)
     parser.add_argument("boxes", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument(
+        "--grid-meta", type=Path, default=None,
+        help="occupancy metadata containing single-floor navigation exclusions",
+    )
     args = parser.parse_args()
 
     region_data = json.loads(args.regions.read_text(encoding="utf-8"))
@@ -322,6 +371,10 @@ def main():
         })
     if not rooms:
         raise ValueError("OccuSG returned no rooms")
+    grid_metadata = None if args.grid_meta is None else json.loads(args.grid_meta.read_text())
+    rooms, excluded_navigation_region_ids = filter_navigation_exclusions(rooms, grid_metadata)
+    if not rooms:
+        raise ValueError("all OccuSG regions were removed by navigation exclusions")
 
     with args.boxes.open(newline="", encoding="utf-8") as handle:
         box_rows = list(csv.DictReader(handle))
@@ -358,6 +411,13 @@ def main():
         if assignment != "inside_polygon":
             unassigned.append(obj["id"])
 
+    rooms, excluded_navigation_island_ids = filter_navigation_exclusion_islands(
+        rooms, grid_metadata
+    )
+    excluded_navigation_region_ids = sorted(set(
+        excluded_navigation_region_ids + excluded_navigation_island_ids
+    ))
+
     for room in rooms:
         room["semantic_type"], room["semantic_score"], room["space_role"] = classify_region(room)
     attach_small_fragments(rooms)
@@ -374,9 +434,14 @@ def main():
     graph = {
         "format": "pre_map_vln.scene_graph.v1",
         "coordinate_frame": "falcon_world_z_up",
-        "sources": {"regions": str(args.regions), "boxes": str(args.boxes)},
+        "sources": {
+            "regions": str(args.regions), "boxes": str(args.boxes),
+            "grid_metadata": None if args.grid_meta is None else str(args.grid_meta),
+        },
         "summary": {
             "source_region_count": int(region_data["region_count"]),
+            "excluded_navigation_region_count": len(excluded_navigation_region_ids),
+            "excluded_navigation_region_ids": excluded_navigation_region_ids,
             "post_furniture_region_count": post_furniture_region_count,
             "region_count": len(rooms),
             "room_count": sum(room["space_role"] == "room" for room in rooms),

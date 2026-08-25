@@ -1,6 +1,12 @@
 import unittest
 
-from scripts.fuse_rooms_boxes import attach_small_fragments, canonicalize_rooms, classify_region
+from scripts.fuse_rooms_boxes import (
+    attach_small_fragments,
+    canonicalize_rooms,
+    classify_region,
+    filter_navigation_exclusions,
+    filter_navigation_exclusion_islands,
+)
 
 
 class RoomFusionTests(unittest.TestCase):
@@ -66,6 +72,36 @@ class RoomFusionTests(unittest.TestCase):
         self.assertGreater(len(room["polygon_xy_m"]), 3)
         self.assertEqual(raw[1]["object_ids"], ["shelf"])
         self.assertNotIn("objects", raw[1])
+
+    def test_stair_region_is_removed_from_single_floor_graph(self):
+        rooms = [
+            {"id": 1, "centroid_xy_m": [0.5, 0.5], "adjacent_room_ids": [2],
+             "polygon_xy_m": [[0, 0], [1, 0], [1, 1], [0, 1]]},
+            {"id": 2, "centroid_xy_m": [2.0, 0.5], "adjacent_room_ids": [1],
+             "polygon_xy_m": [[1.5, 0], [2.5, 0], [2.5, 1], [1.5, 1]]},
+        ]
+        metadata = {"single_floor_policy": {"excluded_navigation_regions": [{
+            "semantic_id": 12,
+            "polygon_xy_m": [[0, 0], [1, 0], [1, 1], [0, 1]],
+        }]}}
+        filtered, excluded = filter_navigation_exclusions(rooms, metadata)
+        self.assertEqual(excluded, [1])
+        self.assertEqual([room["id"] for room in filtered], [2])
+        self.assertEqual(filtered[0]["adjacent_room_ids"], [])
+
+    def test_empty_island_beside_stairs_is_not_a_room(self):
+        rooms = [{
+            "id": 4, "centroid_xy_m": [-2.0, 2.0], "area_m2": 1.0,
+            "adjacent_room_ids": [], "objects": [],
+            "polygon_xy_m": [[-2.0, 2.0], [-1.5, 2.0], [-1.5, 2.5]],
+        }]
+        metadata = {"single_floor_policy": {"excluded_navigation_regions": [{
+            "semantic_ids": [11, 12],
+            "polygon_xy_m": [[-2.0, 1.5], [-1.0, 1.5], [-1.0, 1.8]],
+        }]}}
+        filtered, excluded = filter_navigation_exclusion_islands(rooms, metadata)
+        self.assertEqual(filtered, [])
+        self.assertEqual(excluded, [4])
 
 
 if __name__ == "__main__":

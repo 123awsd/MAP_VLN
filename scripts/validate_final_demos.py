@@ -70,6 +70,13 @@ def main():
                         f"{name}: recovery anchor is not in canonical room {room_id}")
             require(any(item["outcome"] == "recovery_activated" for item in execution["observations"]),
                     f"{name}: activation event absent")
+            terminal_outcomes = [
+                item["verification_outcome"] for item in execution["observations"]
+                if item["outcome"] not in {"retry", "recovery_activated"}
+            ]
+            expected = "not_found" if name == "recovery_03_exhausted" else "found"
+            require(terminal_outcomes == [expected],
+                    f"{name}: expected terminal recovery outcome {expected}")
         else:
             require(graph["summary"]["conditional_rule_count"] >= 1,
                     f"{name}: no conditional constraint")

@@ -34,6 +34,12 @@ def main():
     grid, grid_meta = np.load(grid_path), json.loads(grid_meta_path.read_text())
     require(grid.shape == (grid_meta["height"], grid_meta["width"]), "grid shape mismatch")
     require(np.count_nonzero(grid == 0) > 0, "occupancy grid contains no free cells")
+    single_floor = grid_meta.get("single_floor_policy", {})
+    if args.episode == "hm3d_stage1_complete_v3":
+        require(single_floor.get("excluded_navigation_semantic_ids") == [445, 462],
+                "HM3D stair semantics are not excluded from the single-floor map")
+        require(single_floor.get("excluded_cell_count", 0) > 0,
+                "single-floor map contains no stair exclusion cells")
 
     boxes_path = ROOT / "outputs/boxer" / args.episode / "boxer_3dbbs_fused.csv"
     with boxes_path.open(newline="", encoding="utf-8") as handle:
@@ -72,6 +78,8 @@ def main():
             "resolution_m": grid_meta["resolution_m"],
             "free_cells": grid_meta["free_cells"],
             "occupied_cells": grid_meta["occupied_cells"],
+            "single_floor_height_band_m": single_floor.get("endpoint_height_band_m"),
+            "navigation_exclusion_cell_count": single_floor.get("excluded_cell_count", 0),
         },
         "fused_object_count": len(boxes),
         "source_region_count": regions["region_count"],

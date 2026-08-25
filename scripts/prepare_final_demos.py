@@ -90,13 +90,13 @@ def specifications():
             "instruction": "去卧室柜子旁找一下电视；如果原来记的位置没有，就根据整张房屋语义地图继续找，找到为止。",
             "tasks": [task("find_tv", "cabinet", verification="television", search_mode="semantic_recovery")],
             "rules": [], "anchors": {"find_tv": "boxer_5"}, "controlled_stale": ["boxer_5"],
-            "controlled_found": [],
+            "controlled_found": ["boxer_20"],
         },
         "recovery_02_lamp": {
             "instruction": "帮我找那盏灯，先去客厅架子旁看看；那里没有的话，就从其他语义相关的房间和位置继续搜索。",
             "tasks": [task("find_lamp", "shelf", verification="lamp", search_mode="semantic_recovery")],
             "rules": [], "anchors": {"find_lamp": "boxer_25"}, "controlled_stale": ["boxer_25"],
-            "controlled_found": ["boxer_2"],
+            "controlled_found": ["boxer_11"],
         },
         "recovery_03_exhausted": {
             "instruction": "去厨房柜子附近找一下微波炉；如果没在旧位置，就结合房间用途和周围家具继续找，没有也要明确告诉我。",

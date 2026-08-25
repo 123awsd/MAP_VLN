@@ -11,7 +11,13 @@ cd "$root_dir"
 .envs/habitat/bin/python scripts/prepare_final_demos.py \
   --scene-graph "$scene_graph" --grid-prefix "$grid_prefix" --output-root "$demo_root"
 
-for name in conditional_01_branch conditional_02_skip conditional_03_parallel recovery_01_tv recovery_02_lamp recovery_03_exhausted; do
+default_names=(conditional_01_branch conditional_02_skip conditional_03_parallel recovery_01_tv recovery_02_lamp recovery_03_exhausted)
+names=("${default_names[@]}")
+if (( $# > 0 )); then
+  names=("$@")
+fi
+
+for name in "${names[@]}"; do
   run_dir="$demo_root/$name"
   stale="$(.envs/habitat/bin/python -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))["controlled_stale_object_ids"]))' "$run_dir/demo_config.json")"
   found="$(.envs/habitat/bin/python -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))["controlled_found_object_ids"]))' "$run_dir/demo_config.json")"
