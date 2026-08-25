@@ -8,6 +8,7 @@ from scripts.build_occusg_grid import (
     convex_hull,
     clear_non_boundary_components,
     group_nearby_instances,
+    minimum_area_rectangle,
     points_in_removable_boxes,
     semantic_ids_for_labels,
 )
@@ -30,6 +31,13 @@ class Stage1FloorFilterTests(unittest.TestCase):
     def test_convex_hull_fills_stair_instance_footprint(self):
         points = np.asarray([[0, 0], [2, 0], [2, 2], [0, 2], [1, 1], [0, 0]])
         self.assertEqual(convex_hull(points).tolist(), [[0, 0], [2, 0], [2, 2], [0, 2]])
+
+    def test_stair_rectangle_fills_suspended_underflight_void(self):
+        # Visible stair/railing samples form a triangle.  Its enclosing flight
+        # footprint must also contain the otherwise unobserved lower-right void.
+        points = np.asarray([[0, 0], [0, 4], [6, 4]])
+        rectangle = minimum_area_rectangle(points)
+        self.assertEqual(set(map(tuple, rectangle)), {(0, 0), (6, 0), (6, 4), (0, 4)})
 
     def test_stair_and_nearby_railing_form_one_assembly(self):
         instances = [

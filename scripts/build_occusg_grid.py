@@ -227,6 +227,41 @@ def convex_hull(points: np.ndarray) -> np.ndarray:
     return np.asarray(lower[:-1] + upper[:-1], dtype=np.int32)
 
 
+def minimum_area_rectangle(points: np.ndarray) -> np.ndarray:
+    """Return the smallest oriented rectangle enclosing a 2-D point set.
+
+    A convex hull alone follows the visible stair/railing surfaces and can leave
+    the empty projection below a suspended flight unmasked.  The rectangle is
+    the conservative footprint of the whole stair assembly on our single floor.
+    """
+    hull = convex_hull(points).astype(np.float64)
+    if len(hull) < 3:
+        return hull.astype(np.int32)
+
+    edges = np.roll(hull, -1, axis=0) - hull
+    angles = np.unique(np.mod(np.arctan2(edges[:, 1], edges[:, 0]), np.pi / 2.0))
+    best_corners = None
+    best_area = np.inf
+    for angle in angles:
+        axis_long = np.asarray([np.cos(angle), np.sin(angle)])
+        axis_lat = np.asarray([-np.sin(angle), np.cos(angle)])
+        longitudinal = hull @ axis_long
+        lateral = hull @ axis_lat
+        long_min, long_max = longitudinal.min(), longitudinal.max()
+        lat_min, lat_max = lateral.min(), lateral.max()
+        area = (long_max - long_min) * (lat_max - lat_min)
+        if area >= best_area:
+            continue
+        best_area = area
+        best_corners = np.asarray([
+            long_min * axis_long + lat_min * axis_lat,
+            long_max * axis_long + lat_min * axis_lat,
+            long_max * axis_long + lat_max * axis_lat,
+            long_min * axis_long + lat_max * axis_lat,
+        ])
+    return np.rint(best_corners).astype(np.int32)
+
+
 def group_nearby_instances(instances, maximum_gap_m=0.50):
     """Group stair surfaces and their railings into physical stair assemblies."""
     groups = [{"semantic_ids": [semantic_id], "points": points} for semantic_id, points in instances]
@@ -424,15 +459,18 @@ def main():
     for group in group_nearby_instances(instances):
         points = group["points"]
         pixels = np.floor((points - origin) / args.resolution).astype(int)
-        hull = convex_hull(pixels)
-        if len(hull) >= 3:
-            exclusion_draw.polygon([tuple(point) for point in hull], fill=1)
+        footprint = minimum_area_rectangle(pixels)
+        if len(footprint) >= 3:
+            exclusion_draw.polygon([tuple(point) for point in footprint], fill=1)
             excluded_navigation_regions.append({
                 "semantic_ids": sorted(group["semantic_ids"]),
-                "polygon_xy_m": (origin + hull.astype(np.float64) * args.resolution).tolist(),
+                "footprint_method": "minimum_area_rectangle",
+                "polygon_xy_m": (
+                    origin + footprint.astype(np.float64) * args.resolution
+                ).tolist(),
             })
         else:
-            for point in hull:
+            for point in footprint:
                 exclusion_draw.point(tuple(point), fill=1)
     navigation_exclusion = np.asarray(exclusion_image, dtype=bool)
     if np.any(navigation_exclusion):
