@@ -43,7 +43,7 @@ def recovery_inventory(scene_graph: dict[str, Any]) -> dict[str, Any]:
                 ],
             }
             for room in scene_graph.get("rooms", [])
-            if room.get("space_role") != "transition_space"
+            if room.get("space_role") not in {"transition_space", "room_fragment"}
         ]
     }
 

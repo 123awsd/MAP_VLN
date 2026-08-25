@@ -2,6 +2,7 @@
 """Assign Boxer objects to OccuSG rooms and emit a compact scene graph."""
 
 import argparse
+import copy
 import csv
 import json
 import math
@@ -107,6 +108,108 @@ def attach_small_fragments(rooms, minimum_room_area_m2=1.0):
             parent = next(item for item in major_rooms if item["id"] == room["parent_room_id"])
             room["semantic_type"] = parent["semantic_type"]
             room["semantic_score"] = parent["semantic_score"]
+
+
+def merge_polygon_components(components, resolution=0.05, bridge_width_m=0.20):
+    """Return one display contour, bridging only components already assigned to one room."""
+    if len(components) == 1:
+        return copy.deepcopy(components[0])
+    all_points = np.asarray([point for polygon in components for point in polygon], dtype=np.float64)
+    lower = np.floor(np.min(all_points, axis=0) / resolution).astype(int) - 4
+    upper = np.ceil(np.max(all_points, axis=0) / resolution).astype(int) + 4
+    width, height = (upper - lower + 1).astype(int)
+
+    def pixels(points):
+        return np.asarray([
+            np.rint(np.asarray(point) / resolution).astype(int) - lower
+            for point in points
+        ], dtype=np.int32)
+
+    pixel_components = [pixels(polygon) for polygon in components]
+    mask = np.zeros((height, width), dtype=np.uint8)
+    cv2.fillPoly(mask, pixel_components, 1)
+    connected_vertices = pixel_components[0].reshape(-1, 2)
+    thickness = max(1, int(round(bridge_width_m / resolution)))
+    for polygon in pixel_components[1:]:
+        vertices = polygon.reshape(-1, 2)
+        distances = np.sum(
+            (connected_vertices[:, None, :] - vertices[None, :, :]) ** 2, axis=2
+        )
+        source_index, target_index = np.unravel_index(np.argmin(distances), distances.shape)
+        cv2.line(
+            mask,
+            tuple(int(value) for value in connected_vertices[source_index]),
+            tuple(int(value) for value in vertices[target_index]),
+            1,
+            thickness=thickness,
+        )
+        connected_vertices = np.concatenate([connected_vertices, vertices], axis=0)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contour = max(contours, key=cv2.contourArea)
+    contour = cv2.approxPolyDP(contour, 1.0, True).reshape(-1, 2)
+    return [((point + lower) * resolution).astype(float).tolist() for point in contour]
+
+
+def canonicalize_rooms(rooms):
+    """Aggregate fragments into semantic rooms while retaining raw geometry provenance."""
+    source_regions = []
+    for room in rooms:
+        source = copy.deepcopy(room)
+        source["object_ids"] = [obj["id"] for obj in source.pop("objects", [])]
+        source_regions.append(source)
+
+    parent_by_id = {
+        room["id"]: room.get("parent_room_id", room["id"])
+        if room.get("space_role") == "room_fragment" else room["id"]
+        for room in rooms
+    }
+    groups = {}
+    for room in rooms:
+        groups.setdefault(parent_by_id[room["id"]], []).append(room)
+
+    canonical = []
+    for canonical_id, members in sorted(groups.items()):
+        parent = next((room for room in members if room["id"] == canonical_id), None)
+        if parent is None:
+            raise ValueError(f"fragment group {canonical_id} has no parent room")
+        result = copy.deepcopy(parent)
+        components = [copy.deepcopy(room["polygon_xy_m"]) for room in members]
+        result["polygon_components_xy_m"] = components
+        result["polygon_xy_m"] = merge_polygon_components(components)
+        result["merged_from_region_ids"] = sorted(room["id"] for room in members)
+        result["area_m2"] = float(sum(float(room["area_m2"]) for room in members))
+        if result["area_m2"] > 0:
+            result["centroid_xy_m"] = (
+                sum(
+                    np.asarray(room["centroid_xy_m"], dtype=np.float64) * float(room["area_m2"])
+                    for room in members
+                ) / result["area_m2"]
+            ).astype(float).tolist()
+        result["objects"] = []
+        for room in members:
+            for obj in room.get("objects", []):
+                obj = copy.deepcopy(obj)
+                obj["source_region_id"] = room["id"]
+                obj["canonical_room_id"] = canonical_id
+                result["objects"].append(obj)
+        result.pop("parent_room_id", None)
+        result.pop("local_semantic_type", None)
+        result["space_role"] = parent["space_role"]
+        adjacent = {
+            parent_by_id.get(adjacent_id, adjacent_id)
+            for room in members for adjacent_id in room.get("adjacent_room_ids", [])
+        }
+        result["adjacent_room_ids"] = sorted(
+            room_id for room_id in adjacent if room_id != canonical_id
+        )
+        canonical.append(result)
+
+    valid_ids = {room["id"] for room in canonical}
+    for room in canonical:
+        room["adjacent_room_ids"] = sorted({
+            room_id for room_id in room["adjacent_room_ids"] if room_id in valid_ids
+        })
+    return canonical, source_regions
 
 
 def merge_regions_split_by_beds(rooms, box_rows, resolution=0.05, contact_m=0.25):
@@ -258,6 +361,9 @@ def main():
     for room in rooms:
         room["semantic_type"], room["semantic_score"], room["space_role"] = classify_region(room)
     attach_small_fragments(rooms)
+    post_furniture_region_count = len(rooms)
+    source_fragment_count = sum(room["space_role"] == "room_fragment" for room in rooms)
+    rooms, geometric_regions = canonicalize_rooms(rooms)
 
     valid_ids = {room["id"] for room in rooms}
     edges = sorted({
@@ -271,16 +377,19 @@ def main():
         "sources": {"regions": str(args.regions), "boxes": str(args.boxes)},
         "summary": {
             "source_region_count": int(region_data["region_count"]),
+            "post_furniture_region_count": post_furniture_region_count,
             "region_count": len(rooms),
             "room_count": sum(room["space_role"] == "room" for room in rooms),
             "object_count": sum(len(room["objects"]) for room in rooms),
             "adjacency_edge_count": len(edges),
             "corridor_count": sum(room["space_role"] == "transition_space" for room in rooms),
             "fragment_count": sum(room["space_role"] == "room_fragment" for room in rooms),
+            "source_fragment_count": source_fragment_count,
             "furniture_region_merge_count": len(furniture_merges),
             "nearest_fallback_object_ids": unassigned,
         },
         "rooms": rooms,
+        "geometric_regions": geometric_regions,
         "room_adjacency_edges": [{"source": a, "target": b} for a, b in edges],
         "furniture_region_merges": furniture_merges,
     }

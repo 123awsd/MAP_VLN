@@ -24,9 +24,22 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--demo-root", type=Path, default=ROOT / "outputs/final_demos")
     parser.add_argument("--bag-root", type=Path, default=ROOT / "outputs/bags/final_demos")
+    parser.add_argument(
+        "--scene-graph", type=Path,
+        default=ROOT / "outputs/scene_graph/hm3d_stage1_complete_v3.json",
+    )
     parser.add_argument("--output", type=Path, default=ROOT / "outputs/final_demos/report.json")
     args = parser.parse_args()
     manifest = load_json(args.demo_root / "manifest.json")
+    scene_graph = load_json(args.scene_graph)
+    canonical_rooms = {
+        room["id"]: {obj["id"] for obj in room.get("objects", [])}
+        for room in scene_graph["rooms"]
+    }
+    require(
+        all(room.get("space_role") != "room_fragment" for room in scene_graph["rooms"]),
+        "scene graph still exposes fragments as canonical rooms",
+    )
     require(len(manifest["demos"]) == 6, "exactly six demos are required")
     reports = []
     for entry in manifest["demos"]:
@@ -50,6 +63,11 @@ def main():
             require(event["plan"].get("provenance", {}).get("planner") == "qwen_vlm",
                     f"{name}: candidate ranking is not VLM-provenanced")
             require(event["generated_candidate_ids"], f"{name}: no geometric viewpoints generated")
+            for hypothesis in event["plan"].get("hypotheses", []):
+                room_id = hypothesis["room_id"]
+                require(room_id in canonical_rooms, f"{name}: recovery references non-canonical room {room_id}")
+                require(hypothesis["anchor_object_id"] in canonical_rooms[room_id],
+                        f"{name}: recovery anchor is not in canonical room {room_id}")
             require(any(item["outcome"] == "recovery_activated" for item in execution["observations"]),
                     f"{name}: activation event absent")
         else:

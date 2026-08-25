@@ -52,6 +52,12 @@ def main():
     require(0 < summary["room_count"] <= summary.get("region_count", regions["region_count"]),
             "scene graph major-room count is invalid")
     require(summary["object_count"] == len(boxes), "scene graph object mismatch")
+    object_ids = [obj["id"] for room in graph["rooms"] for obj in room.get("objects", [])]
+    require(len(object_ids) == len(set(object_ids)), "an object appears in multiple canonical rooms")
+    if "geometric_regions" in graph:
+        require(summary.get("fragment_count") == 0, "room fragments leaked into canonical rooms")
+        require(all(room.get("space_role") != "room_fragment" for room in graph["rooms"]),
+                "canonical room list still contains a fragment")
 
     report = {
         "format": "pre_map_vln.stage1_validation.v1",
@@ -73,6 +79,7 @@ def main():
         "room_count": summary["room_count"],
         "corridor_count": summary.get("corridor_count", 0),
         "fragment_count": summary.get("fragment_count", 0),
+        "source_fragment_count": summary.get("source_fragment_count", 0),
         "room_adjacency_edge_count": summary["adjacency_edge_count"],
         "semantic_room_count": sum(room["semantic_type"] != "unknown" for room in graph["rooms"]),
     }

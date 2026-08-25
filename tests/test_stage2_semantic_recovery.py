@@ -12,6 +12,9 @@ class SemanticRecoveryTest(unittest.TestCase):
             {"id": 2, "semantic_type": "corridor", "space_role": "transition_space", "objects": [
                 {"id": "door1", "label": "door"},
             ]},
+            {"id": 3, "semantic_type": "living_room", "space_role": "room_fragment", "objects": [
+                {"id": "duplicate_tv", "label": "television"},
+            ]},
         ]}
 
     def test_inventory_excludes_transition_space(self):
