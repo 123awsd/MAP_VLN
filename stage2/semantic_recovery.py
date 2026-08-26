@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
-import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
 
 from .io_utils import atomic_json, load_json
+from .qwen_http import open_json_with_retry
 from .semantic_region_search import infer_region_type, materialize_semantic_regions
 
 
@@ -153,12 +152,7 @@ class QwenSemanticRecoveryPlanner:
                 "Content-Type": "application/json",
             },
         )
-        try:
-            with urllib.request.urlopen(request, timeout=120) as response:
-                body = json.load(response)
-        except urllib.error.HTTPError as error:
-            detail = error.read().decode("utf-8", "replace")[:1000]
-            raise RuntimeError(f"DashScope HTTP {error.code}: {detail}") from error
+        body, request_attempts = open_json_with_retry(request, timeout=120)
         raw = json.loads(body["choices"][0]["message"]["content"])
         result = validate_hypotheses(raw, scene_graph, failed_object_ids, maximum_hypotheses)
         usage = body.get("usage") or {}
@@ -181,7 +175,7 @@ class QwenSemanticRecoveryPlanner:
         result["provenance"] = {
             "planner": "qwen_vlm", "model": body.get("model", MODEL),
             "prompt_version": PROMPT_VERSION, "cache_hit": False,
-            "estimated_cny": round(cost, 8),
+            "estimated_cny": round(cost, 8), "request_attempts": request_attempts,
         }
         return result
 

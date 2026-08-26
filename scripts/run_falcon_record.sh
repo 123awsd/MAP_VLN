@@ -4,6 +4,7 @@ set -euo pipefail
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 bag_name="${1:-hm3d_visualization}"
 show_rviz="${2:-true}"
+bag_path="${3:-/workspace/shared/outputs/bags/${bag_name}.bag}"
 
 cd "$root_dir"
 mkdir -p outputs/bags
@@ -23,6 +24,6 @@ if [[ "$show_rviz" == "true" ]]; then
 fi
 exec docker compose run --rm --name pre-map-vln-falcon-vis falcon \
   roslaunch pre_map_bridge visualization_record.launch \
-  bag_path:="/workspace/shared/outputs/bags/${bag_name}.bag" \
+  bag_path:="$bag_path" \
   rviz:="$show_rviz" \
   topdown:=false

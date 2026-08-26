@@ -24,9 +24,10 @@ class RooflessVisualization:
         self.frustum_length = float(rospy.get_param("~frustum_length", 0.9))
         self.camera_hfov = math.radians(float(rospy.get_param("~camera_hfov", 90.0)))
         self.camera_aspect = float(rospy.get_param("~camera_aspect", 4.0 / 3.0))
-        self.box_line_width = float(rospy.get_param("~box_line_width", 0.050))
-        self.box_color_scale = float(rospy.get_param("~box_color_scale", 0.72))
-        self.box_alpha = float(rospy.get_param("~box_alpha", 0.62))
+        self.box_line_width = float(rospy.get_param("~box_line_width", 0.060))
+        self.box_color_scale = float(rospy.get_param("~box_color_scale", 0.82))
+        self.box_alpha = float(rospy.get_param("~box_alpha", 0.92))
+        self.box_label_size = float(rospy.get_param("~box_label_size", 0.20))
         self.floor_z = self.fallback_floor_z
         self.plan_samples = max(8, int(rospy.get_param("~plan_samples", 64)))
         self.cloud_pub = rospy.Publisher(
@@ -74,13 +75,22 @@ class RooflessVisualization:
         """Restyle outline markers without changing their progressive timing."""
         output = copy.deepcopy(message)
         for marker in output.markers:
-            if marker.ns != "boxer_outlines" or marker.action != Marker.ADD:
+            if marker.action != Marker.ADD:
                 continue
-            marker.scale.x = max(self.box_line_width, marker.scale.x)
-            marker.color.r = max(0.0, min(1.0, marker.color.r * self.box_color_scale))
-            marker.color.g = max(0.0, min(1.0, marker.color.g * self.box_color_scale))
-            marker.color.b = max(0.0, min(1.0, marker.color.b * self.box_color_scale))
-            marker.color.a = max(marker.color.a, self.box_alpha)
+            if marker.ns == "boxer_outlines":
+                marker.scale.x = max(self.box_line_width, marker.scale.x)
+                marker.color.r = max(0.0, min(1.0, marker.color.r * self.box_color_scale))
+                marker.color.g = max(0.0, min(1.0, marker.color.g * self.box_color_scale))
+                marker.color.b = max(0.0, min(1.0, marker.color.b * self.box_color_scale))
+                marker.color.a = max(marker.color.a, self.box_alpha)
+            elif marker.ns == "boxer_labels":
+                marker.scale.z = max(self.box_label_size, marker.scale.z)
+                marker.color.r *= 0.62
+                marker.color.g *= 0.62
+                marker.color.b *= 0.62
+                marker.color.a = 1.0
+            elif marker.ns == "boxer_3d":
+                marker.color.a = min(0.10, marker.color.a)
         self.box_pub.publish(output)
 
     def odom_callback(self, message):

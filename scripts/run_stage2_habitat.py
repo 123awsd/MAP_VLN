@@ -124,6 +124,11 @@ def main() -> None:
     parser.add_argument("--grid-prefix", type=Path, required=True)
     parser.add_argument("--scene", type=Path, default=ROOT / "data/scene_datasets/hm3d/example/00861-GLAQ4DNUx5U/GLAQ4DNUx5U.basis.glb")
     parser.add_argument("--scene-config", type=Path, default=ROOT / "data/scene_datasets/hm3d/example/hm3d_annotated_example_basis.scene_dataset_config.json")
+    parser.add_argument("--no-scene-config", action="store_true")
+    parser.add_argument(
+        "--episode-manifest", type=Path, default=None,
+        help="reuse the exact Stage-1 Habitat origin so FALCON-local maps remain aligned",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--step-m", type=float, default=0.12)
     parser.add_argument("--minimum-pixels", type=int, default=40)
@@ -167,6 +172,10 @@ def main() -> None:
         "--controlled-found-object-ids", default="[]",
         help="JSON list of anchors with a controlled positive detector result for branch-logic demos",
     )
+    parser.add_argument(
+        "--controlled-recovery-task-outcomes", default="{}",
+        help="JSON task-id map to rediscovered/exhausted for auditable recovery-protocol trials",
+    )
     parser.add_argument("--novel-object-min-support", type=int, default=2)
     args = parser.parse_args()
     minimum_pixels_by_task = {
@@ -178,6 +187,11 @@ def main() -> None:
     }
     controlled_stale_object_ids = {str(value) for value in json.loads(args.controlled_stale_object_ids)}
     controlled_found_object_ids = {str(value) for value in json.loads(args.controlled_found_object_ids)}
+    controlled_recovery_task_outcomes = {
+        str(key): str(value) for key, value in json.loads(args.controlled_recovery_task_outcomes).items()
+    }
+    if not set(controlled_recovery_task_outcomes.values()) <= {"rediscovered", "exhausted"}:
+        raise ValueError("controlled recovery outcomes must be rediscovered or exhausted")
 
     task_graph = load_json(args.task_graph)
     tasks = {task["id"]: task for task in task_graph["tasks"]}
@@ -212,7 +226,8 @@ def main() -> None:
 
     sim_cfg = habitat_sim.SimulatorConfiguration()
     sim_cfg.scene_id = str(args.scene)
-    sim_cfg.scene_dataset_config_file = str(args.scene_config)
+    if not args.no_scene_config:
+        sim_cfg.scene_dataset_config_file = str(args.scene_config)
     sim_cfg.enable_physics = True
     agent_cfg = habitat_sim.agent.AgentConfiguration()
     agent_cfg.sensor_specifications = [
@@ -271,7 +286,18 @@ def main() -> None:
         if not sim.pathfinder.is_loaded:
             raise RuntimeError("HM3D navmesh did not load")
         sim.pathfinder.seed(7)
-        initial_agent_h = np.asarray(sim.pathfinder.get_random_navigable_point(), dtype=np.float64)
+        if args.episode_manifest is None:
+            initial_agent_h = np.asarray(sim.pathfinder.get_random_navigable_point(), dtype=np.float64)
+        else:
+            episode_manifest = load_json(args.episode_manifest)
+            initial_agent_h = np.asarray(
+                episode_manifest["habitat_agent_origin_xyz_m"], dtype=np.float64
+            )
+            if not sim.pathfinder.is_navigable(initial_agent_h):
+                snapped = np.asarray(sim.pathfinder.snap_point(initial_agent_h), dtype=np.float64)
+                if not np.all(np.isfinite(snapped)) or np.linalg.norm(snapped - initial_agent_h) > 0.10:
+                    raise RuntimeError("Stage-1 origin is not navigable in the requested scene")
+                initial_agent_h = snapped
         initial_state = habitat_sim.AgentState()
         initial_state.position = initial_agent_h
         initial_state.rotation = quat_from_angle_axis(0.0, np.asarray([0.0, 1.0, 0.0]))
@@ -427,9 +453,21 @@ def main() -> None:
                 selected_found = bool(open_vocab_verification and open_vocab_verification["found"]) or vlm_found
             controlled_stale = visit["object_id"] in controlled_stale_object_ids
             controlled_found = visit["object_id"] in controlled_found_object_ids
+            recovery_control = controlled_recovery_task_outcomes.get(visit["task_id"])
+            recovery_is_active = visit["task_id"] in recovery_plans
+            controlled_recovery_found = bool(
+                recovery_is_active and recovery_control == "rediscovered"
+            )
+            controlled_recovery_missing = bool(
+                recovery_is_active and recovery_control == "exhausted"
+            )
             if controlled_found:
                 selected_found = True
             if controlled_stale:
+                selected_found = False
+            if controlled_recovery_found:
+                selected_found = True
+            if controlled_recovery_missing:
                 selected_found = False
             verification = dict(semantic_verification)
             verification.update({
@@ -443,6 +481,7 @@ def main() -> None:
                 "vlm": vlm_verification,
                 "controlled_stale_map": controlled_stale,
                 "controlled_found": controlled_found,
+                "controlled_recovery_outcome": recovery_control if recovery_is_active else None,
             })
             action = tasks[visit["task_id"]]["action"]
             if action in {"inspect", "find", "observe"}:
@@ -647,6 +686,7 @@ def main() -> None:
             "maximum_viewpoints_per_location": args.max_viewpoints_per_location,
             "controlled_stale_object_ids": sorted(controlled_stale_object_ids),
             "controlled_found_object_ids": sorted(controlled_found_object_ids),
+            "controlled_recovery_task_outcomes": controlled_recovery_task_outcomes,
         },
         "trajectory_xyz_yaw": trajectory,
         "path_length_m": sum(math.dist(a[:3], b[:3]) for a, b in zip(trajectory, trajectory[1:])),

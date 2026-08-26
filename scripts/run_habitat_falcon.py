@@ -2,6 +2,7 @@
 """Feed synchronized HM3D RGB-D/semantic observations to the FALCON file bridge."""
 
 import argparse
+from collections import deque
 import json
 import os
 import time
@@ -15,10 +16,10 @@ from habitat_sim.utils.common import quat_from_angle_axis
 
 ROOT = Path(__file__).resolve().parents[1]
 SCENE_ROOT = ROOT / "data/scene_datasets/hm3d/example"
-SCENE_DIR = SCENE_ROOT / "00861-GLAQ4DNUx5U"
-SCENE = SCENE_DIR / "GLAQ4DNUx5U.basis.glb"
-SCENE_CONFIG = SCENE_ROOT / "hm3d_annotated_example_basis.scene_dataset_config.json"
-BRIDGE_DIR = ROOT / "runtime/bridge"
+DEFAULT_SCENE_DIR = SCENE_ROOT / "00861-GLAQ4DNUx5U"
+DEFAULT_SCENE = DEFAULT_SCENE_DIR / "GLAQ4DNUx5U.basis.glb"
+DEFAULT_SCENE_CONFIG = SCENE_ROOT / "hm3d_annotated_example_basis.scene_dataset_config.json"
+DEFAULT_BRIDGE_DIR = ROOT / "runtime/bridge"
 
 # Habitat world (right, up, back) -> FALCON world (forward, left, up).
 S_HABITAT_TO_FALCON = np.asarray([[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
@@ -78,9 +79,9 @@ def sensor(uuid: str, kind: habitat_sim.SensorType) -> habitat_sim.CameraSensorS
     return spec
 
 
-def read_command() -> Optional[dict]:
+def read_command(bridge_dir: Path) -> Optional[dict]:
     try:
-        return json.loads((BRIDGE_DIR / "command.json").read_text(encoding="utf-8"))
+        return json.loads((bridge_dir / "command.json").read_text(encoding="utf-8"))
     except (FileNotFoundError, OSError, json.JSONDecodeError):
         return None
 
@@ -180,20 +181,49 @@ def main() -> None:
         help="seconds to keep publishing frames after FALCON enters FINISH",
     )
     parser.add_argument("--result-file", type=Path, default=None)
+    parser.add_argument("--scene", type=Path, default=DEFAULT_SCENE)
+    parser.add_argument(
+        "--scene-config", type=Path, default=DEFAULT_SCENE_CONFIG,
+        help="optional Habitat scene-dataset config; omit with --no-scene-config for MP3D",
+    )
+    parser.add_argument("--no-scene-config", action="store_true")
+    parser.add_argument("--scene-id", default=None)
+    parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument(
+        "--floor-height", type=float, default=None,
+        help="preferred Habitat navmesh Y for single-floor benchmark runs",
+    )
+    parser.add_argument("--floor-tolerance", type=float, default=0.40)
+    parser.add_argument("--bridge-dir", type=Path, default=DEFAULT_BRIDGE_DIR)
+    parser.add_argument(
+        "--stagnation-window", type=float, default=0.0,
+        help="declare audited stagnation completion after this many seconds inside a small radius; 0 disables",
+    )
+    parser.add_argument("--stagnation-radius", type=float, default=0.75)
+    parser.add_argument("--stagnation-min-elapsed", type=float, default=180.0)
     args = parser.parse_args()
-    if not SCENE.exists():
-        raise FileNotFoundError(SCENE)
-    BRIDGE_DIR.mkdir(parents=True, exist_ok=True)
+    scene = args.scene.expanduser().resolve()
+    if not scene.exists():
+        raise FileNotFoundError(scene)
+    scene_id = args.scene_id or scene.parent.name
+    bridge_dir = args.bridge_dir.expanduser().resolve()
+    bridge_dir.mkdir(parents=True, exist_ok=True)
     if args.record_dir is not None:
         args.record_dir.mkdir(parents=True, exist_ok=True)
         (args.record_dir / "manifest.json").write_text(json.dumps({
-            "format": "pre_map_vln.habitat_episode.v1", "scene": "00861-GLAQ4DNUx5U",
+            "format": "pre_map_vln.habitat_episode.v1", "scene": scene_id,
+            "scene_path": str(scene),
             "width": 640, "height": 480, "fx": 320.0, "fy": 320.0, "cx": 320.0, "cy": 240.0,
             "coordinate_frame": "falcon_world_z_up_camera_optical",
         }, indent=2), encoding="utf-8")
 
     sim_cfg = habitat_sim.SimulatorConfiguration()
-    sim_cfg.scene_id, sim_cfg.scene_dataset_config_file = str(SCENE), str(SCENE_CONFIG)
+    sim_cfg.scene_id = str(scene)
+    if not args.no_scene_config:
+        scene_config = args.scene_config.expanduser().resolve()
+        if not scene_config.exists():
+            raise FileNotFoundError(scene_config)
+        sim_cfg.scene_dataset_config_file = str(scene_config)
     sim_cfg.enable_physics = True
     agent_cfg = habitat_sim.agent.AgentConfiguration()
     agent_cfg.sensor_specifications = [sensor("rgb", habitat_sim.SensorType.COLOR), sensor("depth", habitat_sim.SensorType.DEPTH), sensor("semantic", habitat_sim.SensorType.SEMANTIC)]
@@ -201,21 +231,53 @@ def main() -> None:
     with habitat_sim.Simulator(habitat_sim.Configuration(sim_cfg, [agent_cfg])) as sim:
         if not sim.pathfinder.is_loaded:
             raise RuntimeError("HM3D navmesh did not load")
-        sim.pathfinder.seed(7)
+        sim.pathfinder.seed(args.seed)
         initial = sim.pathfinder.get_random_navigable_point()
+        if args.floor_height is not None:
+            sampled = [initial]
+            sampled.extend(sim.pathfinder.get_random_navigable_point() for _ in range(499))
+            candidates = [
+                point for point in sampled
+                if abs(float(point[1]) - args.floor_height) <= args.floor_tolerance
+            ]
+            if not candidates:
+                raise RuntimeError(
+                    f"no navigable start within {args.floor_tolerance:.2f}m of floor "
+                    f"height {args.floor_height:.3f}"
+                )
+            initial = min(candidates, key=lambda point: abs(float(point[1]) - args.floor_height))
         state = habitat_sim.AgentState()
         state.position = initial
         state.rotation = quat_from_angle_axis(0.0, np.asarray([0.0, 1.0, 0.0]))
         agent = sim.initialize_agent(0, state)
         initial_sensor_h = np.asarray(agent.get_state().sensor_states["depth"].position, dtype=np.float64)
+        if args.record_dir is not None:
+            manifest_path = args.record_dir / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest.update({
+                "seed": args.seed,
+                "requested_floor_height_habitat_m": args.floor_height,
+                "habitat_agent_origin_xyz_m": np.asarray(initial, dtype=np.float64).tolist(),
+                "habitat_sensor_origin_xyz_m": initial_sensor_h.tolist(),
+                "scene_dataset_config": None if args.no_scene_config else str(args.scene_config.expanduser().resolve()),
+            })
+            manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
         period, started, sequence, idle_time = 1.0 / args.hz, time.monotonic(), 0, 0.0
         completion_seen = None
+        completion_status = None
+        recent_positions = deque(maxlen=max(2, int(round(args.stagnation_window * args.hz))))
         while time.monotonic() - started < args.duration:
             tick = time.monotonic()
             if args.completion_file is not None and args.completion_file.exists():
                 if completion_seen is None:
                     completion_seen = tick
+                    try:
+                        completion_status = json.loads(
+                            args.completion_file.read_text(encoding="utf-8")
+                        ).get("status", "falcon_finish")
+                    except (OSError, json.JSONDecodeError):
+                        completion_status = "falcon_finish"
                     print(
                         f"FALCON completion detected; holding {args.finish_hold:.1f}s for final frames",
                         flush=True,
@@ -223,7 +285,7 @@ def main() -> None:
                 elif tick - completion_seen >= args.finish_hold:
                     break
             if args.follow_falcon:
-                command = read_command()
+                command = read_command(bridge_dir)
                 moved = False
                 if command is not None:
                     moved = follow_command(
@@ -256,6 +318,35 @@ def main() -> None:
                 yaw = 2.0 * np.pi * min(1.0, (time.monotonic() - started) / args.duration)
                 state.rotation = quat_from_angle_axis(yaw, np.asarray([0.0, 1.0, 0.0]))
                 agent.set_state(state)
+            current_agent_position = np.asarray(agent.get_state().position, dtype=np.float64)
+            current_local = S_HABITAT_TO_FALCON @ (
+                current_agent_position - np.asarray(initial, dtype=np.float64)
+            )
+            recent_positions.append(current_local[:2])
+            if (
+                completion_seen is None
+                and args.completion_file is not None
+                and args.stagnation_window > 0.0
+                and time.monotonic() - started >= args.stagnation_min_elapsed
+                and len(recent_positions) == recent_positions.maxlen
+            ):
+                values = np.asarray(recent_positions, dtype=np.float64)
+                diameter = float(np.linalg.norm(values.max(axis=0) - values.min(axis=0)))
+                if diameter <= args.stagnation_radius:
+                    completion_status = "stagnation_complete"
+                    atomic_json(args.completion_file, {
+                        "status": completion_status,
+                        "source": "habitat_bridge_supervisor",
+                        "window_seconds": args.stagnation_window,
+                        "trajectory_diameter_m": diameter,
+                        "minimum_elapsed_seconds": args.stagnation_min_elapsed,
+                    })
+                    completion_seen = tick
+                    print(
+                        f"coverage-stagnation completion detected: window={args.stagnation_window:.1f}s "
+                        f"diameter={diameter:.3f}m",
+                        flush=True,
+                    )
             obs = sim.get_sensor_observations()
             sensor_state = agent.get_state().sensor_states["depth"]
             position_h = np.asarray(sensor_state.position, dtype=np.float64)
@@ -267,10 +358,10 @@ def main() -> None:
             depth_u16 = np.clip(np.rint(depth * 1000.0), 0, 65535).astype("<u2")
             rgb = np.asarray(obs["rgb"])[..., :3].astype(np.uint8)
             semantic = np.asarray(obs["semantic"], dtype="<i4")
-            atomic_bytes(BRIDGE_DIR / "depth_u16.raw", depth_u16.tobytes())
-            atomic_bytes(BRIDGE_DIR / "rgb_u8.raw", rgb.tobytes())
-            atomic_bytes(BRIDGE_DIR / "semantic_i32.raw", semantic.tobytes())
-            atomic_json(BRIDGE_DIR / "state.json", {
+            atomic_bytes(bridge_dir / "depth_u16.raw", depth_u16.tobytes())
+            atomic_bytes(bridge_dir / "rgb_u8.raw", rgb.tobytes())
+            atomic_bytes(bridge_dir / "semantic_i32.raw", semantic.tobytes())
+            atomic_json(bridge_dir / "state.json", {
                 "sequence": sequence, "width": 640, "height": 480,
                 "position": position_f.tolist(), "orientation_xyzw": matrix_to_xyzw(rotation_f_opt),
                 "body_orientation_xyzw": matrix_to_xyzw(rotation_f_body),
@@ -296,12 +387,13 @@ def main() -> None:
             "frames": sequence,
             "max_duration_seconds": args.duration,
             "finish_hold_seconds": args.finish_hold,
+            "completion_status": completion_status,
         }
         if args.result_file is not None:
             args.result_file.parent.mkdir(parents=True, exist_ok=True)
             atomic_json(args.result_file, result)
         print(
-            f"terminated={termination} elapsed={elapsed:.1f}s frames={sequence} bridge={BRIDGE_DIR}",
+            f"terminated={termination} elapsed={elapsed:.1f}s frames={sequence} bridge={bridge_dir}",
             flush=True,
         )
 

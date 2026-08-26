@@ -8,10 +8,11 @@ import json
 import os
 import re
 import tempfile
-import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+
+from stage2.qwen_http import open_json_with_retry
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -178,12 +179,7 @@ class QwenStructurePolicy:
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             method="POST",
         )
-        try:
-            with urllib.request.urlopen(request, timeout=180) as response:
-                body = json.load(response)
-        except urllib.error.HTTPError as error:
-            detail = error.read().decode("utf-8", "replace")[:1000]
-            raise RuntimeError(f"DashScope HTTP {error.code}: {detail}") from error
+        body, request_attempts = open_json_with_retry(request, timeout=180)
         usage = body.get("usage") or {}
         input_tokens = int(usage.get("prompt_tokens", 0))
         output_tokens = int(usage.get("completion_tokens", 0))
@@ -205,6 +201,7 @@ class QwenStructurePolicy:
             "classifier": "qwen_llm", "model": body.get("model", MODEL),
             "prompt_version": PROMPT_VERSION, "cache_hit": False,
             "usage": usage, "estimated_cny": round(cost, 8),
+            "request_attempts": request_attempts,
         }
         atomic_json(cache_path, result)
         return result

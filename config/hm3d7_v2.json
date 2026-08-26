@@ -1,0 +1,15 @@
+{
+  "format": "pre_map_vln.hm3d_scene_selection.v1",
+  "name": "PRE-MAP-VLN-HM3D7-v2",
+  "dataset": "HM3D-Semantics v0.2",
+  "split": "train",
+  "scenes": [
+    "00166-RaYrxWt5pR1",
+    "00033-oPj9qMxrDEa",
+    "00062-ACZZiU6BXLz",
+    "00087-YY8rqV6L6rf",
+    "00108-oStKKWkQ1id",
+    "00150-LcAd9dhvVwh",
+    "00299-bdp1XNEdvmW"
+  ]
+}

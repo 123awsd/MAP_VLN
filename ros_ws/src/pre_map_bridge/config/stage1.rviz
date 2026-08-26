@@ -36,6 +36,15 @@ Visualization Manager:
       Topic: /pre_map_vln/roofless_map
       Unreliable: false
       Use Fixed Frame: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /pre_map_vln/paper_rooms
+      Name: Smoothed Semantic Room Frames
+      Namespaces:
+        paper_room_fills: false
+        paper_room_labels: true
+        paper_room_outlines: true
+      Queue Size: 3
     - Alpha: 0.35
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds: true

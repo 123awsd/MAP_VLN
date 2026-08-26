@@ -10,8 +10,11 @@
     "cup": ["cup", "mug"],
     "nightstand": ["nightstand", "bed stand", "bedside table"],
     "cabinet": ["cabinet", "storage cabinet", "kitchen cabinet", "bathroom cabinet", "bath cabinet", "refrigerator cabinet"],
+    "dresser": ["dresser", "chest of drawers", "chest_of_drawers"],
+    "shelf": ["shelf", "shelving", "wall shelf"],
     "bookshelf": ["bookshelf", "book rack"],
     "lamp": ["lamp", "desk lamp", "floor lamp", "table lamp"],
+    "lighting": ["lighting", "ceiling light", "light fixture"],
     "plant": ["plant", "decorative plant", "indoor plant", "flowerpot"],
     "washing machine": ["washing machine", "washer", "washer dryer"],
     "range hood": ["range hood", "ventilation hood"],
@@ -21,6 +24,6 @@
     "laundry basket": ["laundry basket", "basket"],
     "railing": ["railing", "stairs railing"],
     "blinds": ["blinds", "window shutter"],
-    "picture": ["picture", "art frame", "wall art"]
+    "picture": ["picture", "painting", "art frame", "wall art"]
   }
 }

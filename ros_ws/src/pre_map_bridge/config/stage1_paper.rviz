@@ -1,0 +1,53 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Layers
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /pre_map_vln/paper_rooms
+      Name: Smoothed Semantic Rooms
+      Namespaces:
+        paper_room_fills: true
+        paper_room_labels: true
+        paper_room_outlines: true
+      Queue Size: 3
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /pre_map_vln/paper_boxes
+      Name: Paper-style Semantic Boxes
+      Namespaces:
+        paper_box_fills: true
+        paper_box_labels: false
+        paper_box_outlines: true
+      Queue Size: 3
+  Enabled: true
+  Global Options:
+    Background Color: 255; 255; 255
+    Default Light: true
+    Fixed Frame: world
+    Frame Rate: 20
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 18
+      Enable Stereo Rendering: false
+      Focal Point: {X: 1.4, Y: -0.1, Z: 0.45}
+      Name: Paper Semantic Map
+      Near Clip Distance: 0.01
+      Pitch: 1.18
+      Target Frame: world
+      Yaw: 3.85
+Window Geometry:
+  Height: 900
+  Width: 1050
+  X: 1090
+  Y: 40

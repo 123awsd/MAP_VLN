@@ -4,7 +4,7 @@ set -euo pipefail
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 episode="${1:-data/episodes/hm3d_stage1}"
 output_root="${2:-outputs/boxer}"
-vocabulary="${3:-config/stage1_indoor_v1.txt}"
+vocabulary="${3:-config/stage1_indoor_full_v1.txt}"
 write_name="${4:-boxer}"
 
 cd "$root_dir"

@@ -3,6 +3,8 @@
   <arg name="loop" default="false"/>
   <arg name="rate" default="1.0"/>
   <arg name="topdown" default="false"/>
+  <arg name="paper_view" default="false"/>
+  <arg name="scene_graph_path" default="/workspace/shared/outputs/scene_graph/hm3d_stage1_complete_v3_indoor_v1.json"/>
   <arg name="delay" default="2.0"/>
   <arg name="roofless_floor_clearance" default="0.25"/>
   <arg name="roofless_ceiling_min_height" default="1.65"/>
@@ -14,10 +16,18 @@
     <param name="ceiling_min_height" value="$(arg roofless_ceiling_min_height)"/>
     <param name="ceiling_thickness" value="$(arg roofless_ceiling_thickness)"/>
   </node>
+  <node pkg="pre_map_bridge" type="paper_map_visualization_node.py"
+        name="paper_map_visualization" output="screen">
+    <param name="scene_graph_path" value="$(arg scene_graph_path)"/>
+    <param name="room_simplify_tolerance" value="0.09"/>
+    <param name="room_smoothing_iterations" value="2"/>
+  </node>
   <node pkg="rviz" type="rviz" name="pre_map_vln_rviz" output="screen"
         args="-d $(find pre_map_bridge)/config/stage1.rviz"/>
   <node if="$(arg topdown)" pkg="rviz" type="rviz" name="pre_map_vln_rviz_topdown" output="screen"
         args="-d $(find pre_map_bridge)/config/stage1_topdown.rviz"/>
+  <node if="$(arg paper_view)" pkg="rviz" type="rviz" name="pre_map_vln_rviz_paper" output="screen"
+        args="-d $(find pre_map_bridge)/config/stage1_paper.rviz"/>
   <node unless="$(arg loop)" pkg="rosbag" type="play" name="stage1_bag_player" output="screen"
         args="--quiet --clock --delay=$(arg delay) -r $(arg rate) $(arg bag_path)"/>
   <node if="$(arg loop)" pkg="rosbag" type="play" name="stage1_bag_player_loop" output="screen"

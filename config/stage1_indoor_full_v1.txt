@@ -1,0 +1,226 @@
+# PRE_MAP_VLN comprehensive offline indoor vocabulary v1.
+# Canonical labels only. Synonyms are normalized after detection.
+
+# Architecture and fixed fixtures
+wall
+door
+door frame
+window
+window frame
+ceiling
+floor
+column
+pillar
+beam
+archway
+railing
+stairs
+fireplace
+radiator
+heater
+air conditioner
+vent
+range hood
+blinds
+curtain
+curtain rod
+mirror
+shower door
+bathtub
+shower
+toilet
+bidet
+sink
+faucet
+towel rack
+toilet paper holder
+electrical outlet
+light switch
+smoke detector
+thermostat
+
+# Furniture, storage, and support surfaces
+chair
+office chair
+armchair
+stool
+bench
+ottoman
+sofa
+sectional sofa
+bed
+bunk bed
+crib
+headboard
+mattress
+table
+dining table
+coffee table
+side table
+console table
+desk
+workbench
+nightstand
+cabinet
+kitchen cabinet
+bathroom cabinet
+wardrobe
+closet
+dresser
+chest of drawers
+drawer
+shelf
+bookshelf
+shoe rack
+coat rack
+clothes rack
+wine rack
+tv stand
+kitchen island
+countertop
+vanity
+room divider
+screen
+bean bag
+hammock
+pet bed
+
+# Appliances and electronics
+television
+monitor
+projector
+projector screen
+computer
+laptop
+tablet
+keyboard
+mouse
+printer
+speaker
+soundbar
+router
+telephone
+clock
+alarm clock
+lamp
+floor lamp
+desk lamp
+ceiling light
+fan
+ceiling fan
+refrigerator
+freezer
+oven
+stove
+cooktop
+microwave
+dishwasher
+washing machine
+dryer
+vacuum cleaner
+robot vacuum
+coffee maker
+kettle
+toaster
+blender
+rice cooker
+water dispenser
+water heater
+iron
+hair dryer
+
+# Kitchen and dining objects
+cup
+mug
+glass
+bottle
+water bottle
+can
+bowl
+plate
+saucer
+tray
+pot
+pan
+kettle pot
+cutting board
+knife
+fork
+spoon
+chopsticks
+spatula
+ladle
+tongs
+whisk
+food container
+lunch box
+storage jar
+pitcher
+thermos
+napkin
+paper towel
+dish towel
+dish rack
+trash can
+recycling bin
+
+# Personal, household, and movable objects
+mobile phone
+remote control
+camera
+headphones
+charger
+power strip
+book
+notebook
+magazine
+newspaper
+pen
+pencil
+backpack
+handbag
+purse
+suitcase
+wallet
+keys
+umbrella
+shoe
+slipper
+boot
+hat
+clothing
+coat
+towel
+blanket
+pillow
+cushion
+laundry basket
+basket
+storage box
+tissue box
+soap
+toothbrush
+toothpaste
+shampoo bottle
+cleaning bottle
+broom
+mop
+bucket
+dustpan
+plant
+vase
+picture
+painting
+photo frame
+sculpture
+candle
+toy
+ball
+board game
+exercise bike
+treadmill
+piano
+guitar
+pet bowl
+rug
+doormat

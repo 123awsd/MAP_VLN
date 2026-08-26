@@ -10,6 +10,7 @@ services:
       - ./outputs:/workspace/shared/outputs
       - ./logs:/workspace/shared/logs
       - ./runtime/bridge:/workspace/shared/bridge
+      - ${PRE_MAP_VLN_BENCHMARK_ROOT:-./runtime/benchmark}:/workspace/benchmark
       - ./ros_ws/src/pre_map_bridge:/workspace/falcon_ws/src/pre_map_bridge:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - ./runtime/rviz.Xauthority:/root/.Xauthority:ro
@@ -32,6 +33,7 @@ services:
     volumes:
       - ./runtime/occusg:/workspace/shared/occusg
       - ./outputs:/workspace/shared/outputs
+      - ${PRE_MAP_VLN_BENCHMARK_ROOT:-./runtime/benchmark}:/workspace/benchmark
       - ./occusg_bridge:/workspace/bridge:ro
     stdin_open: true
     tty: true
