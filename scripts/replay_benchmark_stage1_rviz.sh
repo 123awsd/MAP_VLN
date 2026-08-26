@@ -15,7 +15,7 @@ bag="$benchmark_root/bags/${scene_id}_stage1_final.bag"
 scene_graph="$benchmark_root/maps/scene_graph/${scene_id}.json"
 rviz_container="pre-map-vln-stage1-${scene_id}-${BASHPID}"
 
-if [[ ! "$scene_id" =~ ^[A-Za-z0-9]+$ ]]; then
+if [[ ! "$scene_id" =~ ^[A-Za-z0-9_-]+$ ]]; then
   echo "invalid scene id: $scene_id" >&2
   exit 2
 fi
