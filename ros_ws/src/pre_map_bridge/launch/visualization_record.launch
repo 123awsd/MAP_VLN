@@ -1,4 +1,5 @@
 <launch>
+  <arg name="map_name" default="hm3d_example"/>
   <arg name="bag_path" default="/workspace/shared/outputs/bags/hm3d_visualization.bag"/>
   <arg name="box_csv" default="/workspace/shared/outputs/boxer/hm3d_stage1/boxer_3dbbs_visual.csv"/>
   <arg name="rviz" default="true"/>
@@ -8,6 +9,7 @@
   <arg name="roofless_ceiling_thickness" default="0.60"/>
 
   <include file="$(find pre_map_bridge)/launch/habitat_falcon.launch">
+    <arg name="map_name" value="$(arg map_name)"/>
     <arg name="box_csv" value="$(arg box_csv)"/>
   </include>
 
@@ -19,7 +21,7 @@
   </node>
 
   <node pkg="rosbag" type="record" name="stage1_bag_recorder" output="screen"
-        args="--lz4 --buffsize=2048 -O $(arg bag_path) /habitat/rgb /uav_simulator/depth_image /uav_simulator/odometry /uav_simulator/sensor_pose /pre_map_vln/agent_path /pre_map_vln/exploration_status /planning/replan /planning/bspline /planning/travel_traj /planning_vis/frontier /planning_vis/frontier_pcl /planning_vis/dormant_frontier_pcl /voxel_mapping/occupancy_grid_occupied /voxel_mapping/depth_pointcloud /hgrid/visulization_marker /hgrid/visulization_markerarray"/>
+        args="--lz4 --buffsize=2048 -O $(arg bag_path) /habitat/rgb /uav_simulator/depth_image /uav_simulator/odometry /uav_simulator/sensor_pose /pre_map_vln/agent_path /pre_map_vln/exploration_status /planning/replan /planning/bspline /planning/travel_traj /planning_vis/frontier /planning_vis/frontier_pcl /planning_vis/dormant_frontier_pcl /voxel_mapping/map_coverage /voxel_mapping/occupancy_grid_occupied /voxel_mapping/occupancy_grid_free /voxel_mapping/occupancy_grid_unknown /voxel_mapping/depth_pointcloud /hgrid/visulization_marker /hgrid/visulization_markerarray"/>
 
   <node if="$(arg rviz)" pkg="rviz" type="rviz" name="pre_map_vln_rviz" output="screen"
         args="-d $(find pre_map_bridge)/config/stage1.rviz"/>

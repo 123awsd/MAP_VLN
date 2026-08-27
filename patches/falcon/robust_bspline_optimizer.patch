@@ -1,0 +1,45 @@
+diff --git a/falcon_planner/trajectory/src/bspline/bspline_optimizer.cpp b/falcon_planner/trajectory/src/bspline/bspline_optimizer.cpp
+--- a/falcon_planner/trajectory/src/bspline/bspline_optimizer.cpp
++++ b/falcon_planner/trajectory/src/bspline/bspline_optimizer.cpp
+@@ -1,3 +1,4 @@
++#include <cmath>
+ #include "bspline/bspline_optimizer.h"
+ 
+ namespace fast_planner {
+@@ -198,6 +199,16 @@ void BsplineOptimizer::optimize() {
+     opt.set_upper_bounds(ub);
+   }
+ 
++  for (const double value : q) {
++    if (!std::isfinite(value)) {
++      ROS_ERROR("[BsplineOptimizer] Non-finite initial optimization variable");
++      return;
++    }
++  }
++  // NLopt may throw before invoking the objective callback.  Keep a complete
++  // finite fallback so an exception cannot leave best_variable_ empty.
++  best_variable_ = q;
++
+   auto t1 = ros::Time::now();
+   try {
+     double final_cost;
+@@ -205,7 +215,19 @@ void BsplineOptimizer::optimize() {
+   } catch (std::exception &e) {
+     std::cout << e.what() << std::endl;
+   }
+ 
++  bool best_valid = best_variable_.size() == q.size();
++  if (best_valid) {
++    for (const double value : best_variable_)
++      best_valid = best_valid && std::isfinite(value);
++    if (optimize_time_)
++      best_valid = best_valid && best_variable_.back() > 1e-4;
++  }
++  if (!best_valid) {
++    ROS_WARN("[BsplineOptimizer] Invalid optimizer result; using the initial trajectory");
++    best_variable_ = q;
++  }
++
+   for (int i = 0; i < point_num_; ++i)
+     for (int j = 0; j < dim_; ++j)
+       control_points_(i, j) = best_variable_[dim_ * i + j];

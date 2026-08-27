@@ -18,7 +18,7 @@ SCENE_ROOT = ROOT / "data/scene_datasets/hm3d/example"
 SCENE_DIR = SCENE_ROOT / "00861-GLAQ4DNUx5U"
 SCENE = SCENE_DIR / "GLAQ4DNUx5U.basis.glb"
 SCENE_CONFIG = SCENE_ROOT / "hm3d_annotated_example_basis.scene_dataset_config.json"
-BRIDGE_DIR = ROOT / "runtime/bridge"
+DEFAULT_BRIDGE_DIR = ROOT / "runtime/bridge"
 
 # Habitat world (right, up, back) -> FALCON world (forward, left, up).
 S_HABITAT_TO_FALCON = np.asarray([[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
@@ -78,9 +78,9 @@ def sensor(uuid: str, kind: habitat_sim.SensorType) -> habitat_sim.CameraSensorS
     return spec
 
 
-def read_command() -> Optional[dict]:
+def read_command(bridge_dir: Path) -> Optional[dict]:
     try:
-        return json.loads((BRIDGE_DIR / "command.json").read_text(encoding="utf-8"))
+        return json.loads((bridge_dir / "command.json").read_text(encoding="utf-8"))
     except (FileNotFoundError, OSError, json.JSONDecodeError):
         return None
 
@@ -139,6 +139,10 @@ def follow_command(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--scene", type=Path, default=SCENE)
+    parser.add_argument("--scene-config", type=Path, default=SCENE_CONFIG)
+    parser.add_argument("--bridge-dir", type=Path, default=DEFAULT_BRIDGE_DIR)
+    parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--duration", type=float, default=30.0)
     parser.add_argument("--hz", type=float, default=5.0)
     parser.add_argument("--follow-falcon", action="store_true")
@@ -181,19 +185,27 @@ def main() -> None:
     )
     parser.add_argument("--result-file", type=Path, default=None)
     args = parser.parse_args()
-    if not SCENE.exists():
-        raise FileNotFoundError(SCENE)
-    BRIDGE_DIR.mkdir(parents=True, exist_ok=True)
+    if not args.scene.exists():
+        raise FileNotFoundError(args.scene)
+    if not args.scene_config.exists():
+        raise FileNotFoundError(args.scene_config)
+    bridge_dir = args.bridge_dir
+    bridge_dir.mkdir(parents=True, exist_ok=True)
     if args.record_dir is not None:
         args.record_dir.mkdir(parents=True, exist_ok=True)
-        (args.record_dir / "manifest.json").write_text(json.dumps({
-            "format": "pre_map_vln.habitat_episode.v1", "scene": "00861-GLAQ4DNUx5U",
+        manifest_path = args.record_dir / "manifest.json"
+        manifest_path.write_text(json.dumps({
+            "format": "pre_map_vln.habitat_episode.v1", "scene": args.scene.stem,
+            "scene_path": str(args.scene), "scene_config": str(args.scene_config),
+            "seed": args.seed,
             "width": 640, "height": 480, "fx": 320.0, "fy": 320.0, "cx": 320.0, "cy": 240.0,
             "coordinate_frame": "falcon_world_z_up_camera_optical",
         }, indent=2), encoding="utf-8")
+    else:
+        manifest_path = None
 
     sim_cfg = habitat_sim.SimulatorConfiguration()
-    sim_cfg.scene_id, sim_cfg.scene_dataset_config_file = str(SCENE), str(SCENE_CONFIG)
+    sim_cfg.scene_id, sim_cfg.scene_dataset_config_file = str(args.scene), str(args.scene_config)
     sim_cfg.enable_physics = True
     agent_cfg = habitat_sim.agent.AgentConfiguration()
     agent_cfg.sensor_specifications = [sensor("rgb", habitat_sim.SensorType.COLOR), sensor("depth", habitat_sim.SensorType.DEPTH), sensor("semantic", habitat_sim.SensorType.SEMANTIC)]
@@ -201,13 +213,25 @@ def main() -> None:
     with habitat_sim.Simulator(habitat_sim.Configuration(sim_cfg, [agent_cfg])) as sim:
         if not sim.pathfinder.is_loaded:
             raise RuntimeError("HM3D navmesh did not load")
-        sim.pathfinder.seed(7)
+        sim.pathfinder.seed(args.seed)
         initial = sim.pathfinder.get_random_navigable_point()
         state = habitat_sim.AgentState()
         state.position = initial
         state.rotation = quat_from_angle_axis(0.0, np.asarray([0.0, 1.0, 0.0]))
         agent = sim.initialize_agent(0, state)
         initial_sensor_h = np.asarray(agent.get_state().sensor_states["depth"].position, dtype=np.float64)
+        if manifest_path is not None:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest.update({
+                "initial_agent_habitat_xyz": np.asarray(initial, dtype=np.float64).tolist(),
+                "initial_sensor_habitat_xyz": initial_sensor_h.tolist(),
+                "main_floor_mapping": {
+                    "habitat_y": float(initial[1]),
+                    "falcon_sensor_z": 1.0,
+                    "transform": S_HABITAT_TO_FALCON.tolist(),
+                },
+            })
+            manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
         period, started, sequence, idle_time = 1.0 / args.hz, time.monotonic(), 0, 0.0
         completion_seen = None
@@ -223,7 +247,7 @@ def main() -> None:
                 elif tick - completion_seen >= args.finish_hold:
                     break
             if args.follow_falcon:
-                command = read_command()
+                command = read_command(bridge_dir)
                 moved = False
                 if command is not None:
                     moved = follow_command(
@@ -267,10 +291,10 @@ def main() -> None:
             depth_u16 = np.clip(np.rint(depth * 1000.0), 0, 65535).astype("<u2")
             rgb = np.asarray(obs["rgb"])[..., :3].astype(np.uint8)
             semantic = np.asarray(obs["semantic"], dtype="<i4")
-            atomic_bytes(BRIDGE_DIR / "depth_u16.raw", depth_u16.tobytes())
-            atomic_bytes(BRIDGE_DIR / "rgb_u8.raw", rgb.tobytes())
-            atomic_bytes(BRIDGE_DIR / "semantic_i32.raw", semantic.tobytes())
-            atomic_json(BRIDGE_DIR / "state.json", {
+            atomic_bytes(bridge_dir / "depth_u16.raw", depth_u16.tobytes())
+            atomic_bytes(bridge_dir / "rgb_u8.raw", rgb.tobytes())
+            atomic_bytes(bridge_dir / "semantic_i32.raw", semantic.tobytes())
+            atomic_json(bridge_dir / "state.json", {
                 "sequence": sequence, "width": 640, "height": 480,
                 "position": position_f.tolist(), "orientation_xyzw": matrix_to_xyzw(rotation_f_opt),
                 "body_orientation_xyzw": matrix_to_xyzw(rotation_f_body),
@@ -301,7 +325,7 @@ def main() -> None:
             args.result_file.parent.mkdir(parents=True, exist_ok=True)
             atomic_json(args.result_file, result)
         print(
-            f"terminated={termination} elapsed={elapsed:.1f}s frames={sequence} bridge={BRIDGE_DIR}",
+            f"terminated={termination} elapsed={elapsed:.1f}s frames={sequence} bridge={bridge_dir}",
             flush=True,
         )
 
