@@ -33,6 +33,7 @@ def main():
     grid = np.load(args.grid_prefix.with_suffix(".npy"))
     graph = json.loads(args.scene_graph.read_text())
     resolution = float(grid_meta["resolution_m"])
+    scene_label = args.scene.parent.name
 
     sim_cfg = habitat_sim.SimulatorConfiguration()
     sim_cfg.scene_id = str(args.scene)
@@ -124,7 +125,7 @@ def main():
         axis.set_xlabel("Falcon X (m)")
         axis.grid(alpha=0.12)
     axes[0].set_ylabel("Falcon Y (m)")
-    fig.suptitle("HM3D 00861 room-boundary diagnosis", fontsize=16)
+    fig.suptitle(f"HM3D {scene_label} room-boundary diagnosis", fontsize=16)
     fig.tight_layout()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.output, dpi=180, bbox_inches="tight")

@@ -34,6 +34,28 @@ class ViewpointRecoveryTest(unittest.TestCase):
         filtered = recovery.filtered_candidates({"task": candidates})["task"]
         self.assertEqual([item["id"] for item in filtered], ["c"])
 
+    def test_failed_viewpoints_continue_in_one_angular_direction(self):
+        candidates = [
+            {"id": "a", "object_id": "old", "candidate_angle_rad": 0.0},
+            {"id": "cw", "object_id": "old", "candidate_angle_rad": 0.4},
+            {"id": "ccw", "object_id": "old", "candidate_angle_rad": 2.0 * 3.141592653589793 - 0.4},
+            {"id": "far", "object_id": "old", "candidate_angle_rad": 1.2},
+        ]
+        recovery = ViewpointRecovery(maximum_attempts=4, maximum_attempts_per_location=4)
+        first = recovery.decide("task", "a", False, candidates)
+        self.assertTrue(first["retry"])
+        self.assertIn(first["direction"], (1, -1))
+        filtered = recovery.filtered_candidates({"task": candidates})["task"]
+        self.assertEqual(len(filtered), 1)
+        first_next = filtered[0]["id"]
+        self.assertIn(first_next, {"cw", "ccw"})
+
+        second = recovery.decide("task", first_next, False, candidates)
+        self.assertTrue(second["retry"])
+        filtered_again = recovery.filtered_candidates({"task": candidates})["task"]
+        self.assertEqual(len(filtered_again), 1)
+        self.assertEqual(filtered_again[0]["id"], "far")
+
 
 if __name__ == "__main__":
     unittest.main()

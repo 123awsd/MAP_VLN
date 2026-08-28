@@ -281,15 +281,22 @@ def main() -> None:
             if not state.active:
                 break
             planning_candidates = recovery.filtered_candidates(candidates)
+            focused_tasks = recovery.focused_task_ids(state.active, planning_candidates)
+            planning_task_ids = focused_tasks or state.active
             plan = plan_joint_mission(
                 grid,
                 task_graph,
                 planning_candidates,
                 current_f,
-                active_task_ids=state.active,
+                active_task_ids=planning_task_ids,
                 completed_task_ids=state.completed,
             )
-            replans.append({"index": len(replans), "active_task_ids": sorted(state.active), "plan": plan})
+            replans.append({
+                "index": len(replans),
+                "active_task_ids": sorted(state.active),
+                "focused_task_ids": sorted(focused_tasks),
+                "plan": plan,
+            })
             visit = plan["visits"][0]
             executed_candidate = next(
                 item for item in candidates[visit["task_id"]]

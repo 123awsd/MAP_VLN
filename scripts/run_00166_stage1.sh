@@ -4,8 +4,9 @@ set -euo pipefail
 # One-scene experiment entry point.  It intentionally hard-codes the supplied
 # 00166 assets so an accidental run on another HM3D map is rejected here.
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-scene="/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/train/00166-RaYrxWt5pR1/RaYrxWt5pR1.basis.glb"
-scene_config="/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/hm3d_annotated_basis.scene_dataset_config.json"
+scene_root="${PRE_MAP_VLN_HM3D_TRAIN_ROOT:-/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/train}"
+scene_config="${PRE_MAP_VLN_HM3D_SCENE_CONFIG:-/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/hm3d_annotated_basis.scene_dataset_config.json}"
+scene="$scene_root/00166-RaYrxWt5pR1/RaYrxWt5pR1.basis.glb"
 map_name="${5:-hm3d_00166}"
 
 run_name="${1:-ground_v1}"

@@ -14,6 +14,11 @@ ALLOWED_RELATIONS = {
     "front", "behind", "left", "right", "above", "below", "on", "between", "near", "facing"
 }
 ALLOWED_SEARCH_MODES = {"fixed", "semantic_recovery"}
+ALLOWED_REGION_TYPES = {
+    "auto", "support_surface", "below_region", "surrounding_region",
+    "instance_region", "between_region",
+}
+ALLOWED_OBSERVATION_DETAILS = {"normal", "fine"}
 IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
 
@@ -75,10 +80,33 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
         _require(isinstance(target, dict), f"task {task_id} target must be an object")
         label = str(target.get("label", "")).strip().lower()
         _require(bool(label), f"task {task_id} target label is empty")
+        reference = _optional_text(target.get("reference"))
+        reference_secondary = _optional_text(target.get("reference_secondary"))
+        raw_references = target.get("references")
+        if raw_references is not None:
+            _require(
+                isinstance(raw_references, list),
+                f"task {task_id} target references must be a list",
+            )
+            references = [
+                value for value in (_optional_text(item) for item in raw_references)
+                if value is not None
+            ]
+            if reference is None and references:
+                reference = references[0]
+            if reference_secondary is None and len(references) >= 2:
+                reference_secondary = references[1]
+            _require(
+                len(references) <= 2,
+                f"task {task_id} target references supports at most two reference objects",
+            )
+        references = [value for value in (reference, reference_secondary) if value is not None]
         normalized_target = {
             "label": label,
             "room": _optional_text(target.get("room")),
-            "reference": _optional_text(target.get("reference")),
+            "reference": reference,
+            "reference_secondary": reference_secondary,
+            "references": references,
         }
         constraints = task.get("spatial_constraints") or {}
         _require(isinstance(constraints, dict), f"task {task_id} spatial_constraints must be an object")
@@ -86,10 +114,46 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
         if relation is not None:
             relation = str(relation).lower().strip()
             _require(relation in ALLOWED_RELATIONS, f"unsupported relation {relation!r}")
+        if relation == "between":
+            _require(
+                len(references) >= 2,
+                f"task {task_id} relation 'between' requires two reference objects",
+            )
         distance = constraints.get("distance_m", [1.0, 2.2])
         _require(isinstance(distance, list) and len(distance) == 2, f"task {task_id} distance_m must have two values")
         distance = [float(distance[0]), float(distance[1])]
         _require(0.2 <= distance[0] <= distance[1] <= 8.0, f"task {task_id} has invalid distance_m")
+        region_type = str(constraints.get("region_type", "auto")).strip().lower()
+        _require(
+            region_type in ALLOWED_REGION_TYPES,
+            f"unsupported region_type {region_type!r} in {task_id}",
+        )
+        observation_detail = str(constraints.get("observation_detail", "normal")).strip().lower()
+        _require(
+            observation_detail in ALLOWED_OBSERVATION_DETAILS,
+            f"unsupported observation_detail {observation_detail!r} in {task_id}",
+        )
+        height_range = constraints.get("height_range_m")
+        if height_range is not None:
+            _require(
+                isinstance(height_range, list) and len(height_range) == 2,
+                f"task {task_id} height_range_m must have two values",
+            )
+            height_range = [float(height_range[0]), float(height_range[1])]
+            _require(
+                0.1 <= height_range[0] <= height_range[1] <= 10.0,
+                f"task {task_id} has invalid height_range_m",
+            )
+        height_m = constraints.get("height_m")
+        if height_m is not None:
+            height_m = float(height_m)
+            _require(0.1 <= height_m <= 10.0, f"task {task_id} has invalid height_m")
+        vertical_fov = float(constraints.get("vertical_fov_deg", 70.0))
+        _require(10.0 <= vertical_fov <= 170.0, f"task {task_id} has invalid vertical_fov_deg")
+        horizontal_fov = float(constraints.get("horizontal_fov_deg", 90.0))
+        _require(10.0 <= horizontal_fov <= 170.0, f"task {task_id} has invalid horizontal_fov_deg")
+        yaw_tolerance = float(constraints.get("yaw_tolerance_deg", 55.0))
+        _require(1.0 <= yaw_tolerance <= 180.0, f"task {task_id} has invalid yaw_tolerance_deg")
         prerequisites = sorted(set(str(item) for item in (task.get("prerequisites") or [])))
         task["id"] = task_id
         task["action"] = action
@@ -98,7 +162,13 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
         task["spatial_constraints"] = {
             "relation": relation,
             "distance_m": distance,
-            "height_m": None if constraints.get("height_m") is None else float(constraints["height_m"]),
+            "height_m": height_m,
+            "height_range_m": height_range,
+            "region_type": region_type,
+            "observation_detail": observation_detail,
+            "vertical_fov_deg": vertical_fov,
+            "horizontal_fov_deg": horizontal_fov,
+            "yaw_tolerance_deg": yaw_tolerance,
             "face_target": bool(constraints.get("face_target", True)),
             "visibility_required": bool(constraints.get("visibility_required", True)),
         }

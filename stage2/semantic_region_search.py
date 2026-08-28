@@ -146,6 +146,13 @@ def materialize_semantic_regions(
         branch_task = copy.deepcopy(task)
         branch_task["target"] = {"label": obj["label"], "room": None, "reference": None}
         branch_task["spatial_constraints"]["relation"] = None
+        branch_task["spatial_constraints"]["region_type"] = {
+            "support_surface": "support_surface",
+            "under_furniture": "below_region",
+            "floor_near_anchor": "surrounding_region",
+            "furniture_neighborhood": "surrounding_region",
+            "fixed_instance": "instance_region",
+        }.get(region_type, "surrounding_region")
         if region_type == "under_furniture":
             branch_task["spatial_constraints"]["height_m"] = 0.55
         generated = generate_candidates(
@@ -270,6 +277,9 @@ def materialize_room_frontier_fallback(
                 "object_label": "task_frontier", "room_id": room_id,
                 "room_type": room.get("semantic_type", "unknown"),
                 "pose": {"x": value["pose_xy"][0], "y": value["pose_xy"][1], "z": 1.0, "yaw": value["yaw"]},
+                "candidate_angle_rad": math.atan2(
+                    value["pose_xy"][1] - center[1], value["pose_xy"][0] - center[0]
+                ) % (2.0 * math.pi),
                 "target_xyz_m": [center[0], center[1], 1.0],
                 "line_of_sight": True,
                 "terminal_cost": base_geometry + SEMANTIC_BELIEF_PENALTY_WEIGHT * 0.85,

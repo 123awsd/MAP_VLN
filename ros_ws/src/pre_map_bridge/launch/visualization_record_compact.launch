@@ -1,0 +1,34 @@
+<launch>
+  <arg name="map_name" default="hm3d_example"/>
+  <arg name="bag_path" default="/workspace/shared/outputs/bags/hm3d_visualization_compact.bag"/>
+  <arg name="box_csv" default="/workspace/shared/outputs/boxer/hm3d_stage1/boxer_3dbbs_visual.csv"/>
+  <arg name="rviz" default="true"/>
+  <arg name="topdown" default="false"/>
+  <arg name="rgb_stride" default="5"/>
+  <arg name="roofless_floor_clearance" default="0.25"/>
+  <arg name="roofless_ceiling_min_height" default="1.65"/>
+  <arg name="roofless_ceiling_thickness" default="0.60"/>
+
+  <include file="$(find pre_map_bridge)/launch/habitat_falcon.launch">
+    <arg name="map_name" value="$(arg map_name)"/>
+    <arg name="box_csv" value="$(arg box_csv)"/>
+  </include>
+
+  <node pkg="pre_map_bridge" type="roofless_visualization_node.py"
+        name="roofless_visualization" output="screen">
+    <param name="floor_clearance" value="$(arg roofless_floor_clearance)"/>
+    <param name="ceiling_min_height" value="$(arg roofless_ceiling_min_height)"/>
+    <param name="ceiling_thickness" value="$(arg roofless_ceiling_thickness)"/>
+  </node>
+
+  <node pkg="pre_map_bridge" type="compact_bag_recorder.py"
+        name="stage1_compact_bag_recorder" output="screen">
+    <param name="bag_path" value="$(arg bag_path)"/>
+    <param name="rgb_stride" value="$(arg rgb_stride)"/>
+  </node>
+
+  <node if="$(arg rviz)" pkg="rviz" type="rviz" name="pre_map_vln_rviz" output="screen"
+        args="-d $(find pre_map_bridge)/config/stage1.rviz"/>
+  <node if="$(arg topdown)" pkg="rviz" type="rviz" name="pre_map_vln_rviz_topdown" output="screen"
+        args="-d $(find pre_map_bridge)/config/stage1_topdown.rviz"/>
+</launch>

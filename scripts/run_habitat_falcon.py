@@ -85,6 +85,39 @@ def read_command(bridge_dir: Path) -> Optional[dict]:
         return None
 
 
+def navmesh_path_step(pathfinder, current: np.ndarray, target: np.ndarray, max_step: float):
+    """Take one short step along Habitat's ground shortest path.
+
+    FALCON still chooses the target viewpoint. Habitat's navmesh is used only
+    as the execution-side ground motion primitive, so a target on the other
+    side of a wall cannot be reached by teleporting through the mesh.
+    """
+    snapped = np.asarray(pathfinder.snap_point(target.astype(np.float32)), dtype=np.float64)
+    if snapped.shape != (3,) or not np.all(np.isfinite(snapped)):
+        return None
+    shortest = habitat_sim.ShortestPath()
+    shortest.requested_start = current.astype(np.float32)
+    shortest.requested_end = snapped.astype(np.float32)
+    if not pathfinder.find_path(shortest) or not shortest.points:
+        return None
+    points = np.asarray(shortest.points, dtype=np.float64)
+    if len(points) == 1:
+        return points[0]
+    remaining = max(0.0, float(max_step))
+    anchor = current
+    for point in points[1:]:
+        segment = point - anchor
+        length = float(np.linalg.norm(segment))
+        if length <= 1e-6:
+            anchor = point
+            continue
+        if length >= remaining:
+            return anchor + segment * (remaining / length)
+        remaining -= length
+        anchor = point
+    return points[-1]
+
+
 def follow_command(
     sim,
     origin_h: np.ndarray,
@@ -92,6 +125,7 @@ def follow_command(
     dt: float,
     use_planner_yaw: bool = False,
     navmesh_constrained: bool = False,
+    navmesh_path_follow: bool = False,
 ) -> bool:
     agent = sim.get_agent(0)
     state = agent.get_state()
@@ -103,7 +137,10 @@ def follow_command(
     distance = float(np.linalg.norm(direction))
     moved = False
     if distance > 1e-4:
-        if navmesh_constrained:
+        if navmesh_path_follow:
+            path_step = navmesh_path_step(sim.pathfinder, current, target_h, 1.0 * dt)
+            next_position = current if path_step is None else path_step
+        elif navmesh_constrained:
             desired = current + direction / distance * min(distance, 1.0 * dt)
             next_position = np.asarray(
                 sim.pathfinder.try_step(
@@ -150,6 +187,11 @@ def main() -> None:
         "--navmesh-constrained",
         action="store_true",
         help="use Habitat ground-agent navmesh instead of exact UAV command tracking",
+    )
+    parser.add_argument(
+        "--navmesh-path-follow",
+        action="store_true",
+        help="follow each FALCON target along Habitat's ground shortest path",
     )
     parser.add_argument(
         "--use-planner-yaw",
@@ -230,6 +272,13 @@ def main() -> None:
                     "falcon_sensor_z": 1.0,
                     "transform": S_HABITAT_TO_FALCON.tolist(),
                 },
+                "execution_mode": (
+                    "habitat_navmesh_shortest_path"
+                    if args.navmesh_path_follow
+                    else "habitat_navmesh_try_step"
+                    if args.navmesh_constrained
+                    else "exact_falcon_command_tracking"
+                ),
             })
             manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
@@ -257,6 +306,7 @@ def main() -> None:
                         period,
                         use_planner_yaw=args.use_planner_yaw,
                         navmesh_constrained=args.navmesh_constrained,
+                        navmesh_path_follow=args.navmesh_path_follow,
                     )
                 idle_time = 0.0 if moved else idle_time + period
                 if (

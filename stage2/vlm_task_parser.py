@@ -33,15 +33,15 @@ SYSTEM_PROMPT = """你是室内无人机长时程任务规划器。把中文长�
   "tasks":[{
     "id":"英文snake_case唯一ID",
     "action":"inspect|find|observe|deliver|approach",
-    "target":{"label":"与场景物体标签尽量一致","room":"房间或null","reference":"参照物或null"},
+    "target":{"label":"与场景物体标签尽量一致","room":"房间或null","reference":"参照物或null","reference_secondary":"第二参照物或null","references":[]},
     "verification_label":"最终需要在RGB中确认的物体类别",
-    "spatial_constraints":{"relation":null,"distance_m":[1.0,2.2],"height_m":null,"face_target":true,"visibility_required":true},
+    "spatial_constraints":{"relation":null,"distance_m":[1.0,2.2],"height_m":null,"height_range_m":null,"region_type":"auto","observation_detail":"normal","vertical_fov_deg":70.0,"horizontal_fov_deg":90.0,"yaw_tolerance_deg":55.0,"face_target":true,"visibility_required":true},
     "prerequisites":[],"active_initially":true,"success_outcome":"found|done",
     "search_policy":{"mode":"fixed|semantic_recovery","maximum_location_hypotheses":3}
   }],
   "conditional_rules":[{"source_task_id":"...","if_outcome":"not_found","activate_task_ids":["..."],"skip_task_ids":[]}]
 }
-deliver 任务的 target 是交付终点物体，reference 可写被运送物体。检查“台面上有没有水杯”时 target.label 是用于导航的 counter，verification_label 是 cup；检查“床边的灯”时 target.label 和 verification_label 都是 lamp，reference 是 bed。检查“有没有”使用 inspect，找到目标后的 outcome 为 found。只有指令明确要求“旧位置没有就继续在全局地图搜索”等恢复语义时，才将 search_policy.mode 设为 semantic_recovery，否则为 fixed。"""
+deliver 任务的 target 是交付终点物体，reference 可写被运送物体。检查“台面上有没有水杯”时 target.label 是用于导航的 counter，verification_label 是 cup；检查“床边的灯”时 target.label 和 verification_label 都是 lamp，reference 是 bed。relation 表示无人机相对观察目标的空间关系：front/behind/left/right/facing 使用目标朝向，above/below 使用目标三维框高度，on 使用支撑面，near 使用周边区域，between 必须在 references 或 reference+reference_secondary 中提供两个参照物。region_type 可显式指定 support_surface、below_region、surrounding_region、instance_region 或 between_region；不确定时使用 auto。observation_detail 为 normal 或 fine，height_range_m 只有在有可靠的高度范围时填写。检查“有没有”使用 inspect，找到目标后的 outcome 为 found。只有指令明确要求“旧位置没有就继续在全局地图搜索”等恢复语义时，才将 search_policy.mode 设为 semantic_recovery，否则为 fixed。"""
 
 
 def compact_inventory(scene_graph: dict[str, Any]) -> dict[str, Any]:

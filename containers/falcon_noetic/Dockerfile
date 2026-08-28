@@ -57,10 +57,12 @@ COPY patches/falcon/habitat_ground_viewpoint.patch /tmp/habitat_ground_viewpoint
 COPY patches/falcon/zero_cost_guard.patch /tmp/zero_cost_guard.patch
 COPY patches/falcon/robust_ground_planner.patch /tmp/robust_ground_planner.patch
 COPY patches/falcon/robust_bspline_optimizer.patch /tmp/robust_bspline_optimizer.patch
+COPY patches/falcon/exploration_recovery_fallback.patch /tmp/exploration_recovery_fallback.patch
 RUN patch -d FALCON -p1 < /tmp/habitat_ground_viewpoint.patch
 RUN patch -d FALCON -p1 < /tmp/zero_cost_guard.patch
 RUN patch -d FALCON -p1 < /tmp/robust_ground_planner.patch
 RUN patch -d FALCON -p1 < /tmp/robust_bspline_optimizer.patch
+RUN patch --forward -d FALCON -p1 < /tmp/exploration_recovery_fallback.patch
 
 # Habitat replaces FALCON's built-in CUDA/Open3D sensor renderers.
 RUN touch FALCON/uav_simulator/camera_sensing/pointcloud_render/CATKIN_IGNORE \

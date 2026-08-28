@@ -68,6 +68,31 @@ class TaskGraphTest(unittest.TestCase):
         value["tasks"][0]["spatial_constraints"] = {"relation": "on"}
         graph = normalize_and_validate_task_graph(value)
         self.assertEqual(graph["tasks"][0]["spatial_constraints"]["relation"], "on")
+        self.assertEqual(graph["tasks"][0]["spatial_constraints"]["region_type"], "auto")
+        self.assertEqual(graph["tasks"][0]["spatial_constraints"]["observation_detail"], "normal")
+
+    def test_normalizes_between_references_and_height_constraints(self):
+        value = self.base_graph()
+        value["tasks"][0]["target"]["references"] = ["table", "sofa"]
+        value["tasks"][0]["spatial_constraints"] = {
+            "relation": "between",
+            "height_range_m": [0.7, 1.8],
+            "region_type": "between_region",
+            "observation_detail": "fine",
+        }
+        graph = normalize_and_validate_task_graph(value)
+        task = graph["tasks"][0]
+        self.assertEqual(task["target"]["references"], ["table", "sofa"])
+        self.assertEqual(task["target"]["reference"], "table")
+        self.assertEqual(task["target"]["reference_secondary"], "sofa")
+        self.assertEqual(task["spatial_constraints"]["height_range_m"], [0.7, 1.8])
+        self.assertEqual(task["spatial_constraints"]["region_type"], "between_region")
+
+    def test_rejects_between_without_two_references(self):
+        value = self.base_graph()
+        value["tasks"][0]["spatial_constraints"] = {"relation": "between"}
+        with self.assertRaisesRegex(TaskGraphError, "requires two reference"):
+            normalize_and_validate_task_graph(value)
 
     def test_preserves_explicit_verification_label(self):
         value = self.base_graph()
