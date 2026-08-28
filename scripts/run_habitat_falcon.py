@@ -15,9 +15,9 @@ from habitat_sim.utils.common import quat_from_angle_axis
 
 ROOT = Path(__file__).resolve().parents[1]
 SCENE_ROOT = ROOT / "data/scene_datasets/hm3d/example"
-SCENE_DIR = SCENE_ROOT / "00861-GLAQ4DNUx5U"
-SCENE = SCENE_DIR / "GLAQ4DNUx5U.basis.glb"
-SCENE_CONFIG = SCENE_ROOT / "hm3d_annotated_example_basis.scene_dataset_config.json"
+DEFAULT_SCENE_DIR = SCENE_ROOT / "00861-GLAQ4DNUx5U"
+DEFAULT_SCENE = DEFAULT_SCENE_DIR / "GLAQ4DNUx5U.basis.glb"
+DEFAULT_SCENE_CONFIG = SCENE_ROOT / "hm3d_annotated_example_basis.scene_dataset_config.json"
 BRIDGE_DIR = ROOT / "runtime/bridge"
 
 # Habitat world (right, up, back) -> FALCON world (forward, left, up).
@@ -116,6 +116,10 @@ def follow_command(
             # directly: Habitat's navmesh is for a walking cylinder and blocks
             # valid FALCON flight across railings, stairs and open voids.
             next_position = target_h
+        # HM3D can contain vertically overlapping floors and the upstream UAV
+        # spline may briefly dip in Z. Stage 1 is a single-floor 2-D run, so
+        # preserve the current Habitat floor while following horizontal motion.
+        next_position[1] = current[1]
         state.position = next_position
         moved = bool(np.linalg.norm(next_position - current) > 1e-4)
         if not use_planner_yaw:
@@ -141,6 +145,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--duration", type=float, default=30.0)
     parser.add_argument("--hz", type=float, default=5.0)
+    parser.add_argument("--scene", type=Path, default=DEFAULT_SCENE)
+    parser.add_argument("--scene-config", type=Path, default=DEFAULT_SCENE_CONFIG)
     parser.add_argument("--follow-falcon", action="store_true")
     parser.add_argument(
         "--navmesh-constrained",
@@ -181,19 +187,25 @@ def main() -> None:
     )
     parser.add_argument("--result-file", type=Path, default=None)
     args = parser.parse_args()
-    if not SCENE.exists():
-        raise FileNotFoundError(SCENE)
+    scene = args.scene.resolve()
+    scene_config = args.scene_config.resolve()
+    if not scene.exists():
+        raise FileNotFoundError(scene)
+    if not scene_config.exists():
+        raise FileNotFoundError(scene_config)
+    scene_name = scene.parent.name
     BRIDGE_DIR.mkdir(parents=True, exist_ok=True)
     if args.record_dir is not None:
         args.record_dir.mkdir(parents=True, exist_ok=True)
         (args.record_dir / "manifest.json").write_text(json.dumps({
-            "format": "pre_map_vln.habitat_episode.v1", "scene": "00861-GLAQ4DNUx5U",
+            "format": "pre_map_vln.habitat_episode.v1", "scene": scene_name,
+            "scene_path": str(scene), "scene_config": str(scene_config),
             "width": 640, "height": 480, "fx": 320.0, "fy": 320.0, "cx": 320.0, "cy": 240.0,
             "coordinate_frame": "falcon_world_z_up_camera_optical",
         }, indent=2), encoding="utf-8")
 
     sim_cfg = habitat_sim.SimulatorConfiguration()
-    sim_cfg.scene_id, sim_cfg.scene_dataset_config_file = str(SCENE), str(SCENE_CONFIG)
+    sim_cfg.scene_id, sim_cfg.scene_dataset_config_file = str(scene), str(scene_config)
     sim_cfg.enable_physics = True
     agent_cfg = habitat_sim.agent.AgentConfiguration()
     agent_cfg.sensor_specifications = [sensor("rgb", habitat_sim.SensorType.COLOR), sensor("depth", habitat_sim.SensorType.DEPTH), sensor("semantic", habitat_sim.SensorType.SEMANTIC)]
@@ -292,6 +304,7 @@ def main() -> None:
         termination = "complete" if completion_seen is not None else "timeout"
         result = {
             "termination": termination,
+            "scene": scene_name,
             "elapsed_seconds": elapsed,
             "frames": sequence,
             "max_duration_seconds": args.duration,

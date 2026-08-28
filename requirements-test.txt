@@ -1,0 +1,5 @@
+# Dependencies required by the repository's lightweight unittest suite.
+# Keep this environment independent from Habitat, Boxer, ROS, and legacy VLN-CE.
+numpy==1.26.4
+Pillow==10.4.0
+opencv-python-headless==4.10.0.84

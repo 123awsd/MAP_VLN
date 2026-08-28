@@ -6,12 +6,19 @@ episode_name="${1:-hm3d_stage1_progressive}"
 max_duration="${2:-600}"
 hz="${3:-10}"
 idle_scan_rate="${4:-25}"
+scene="${5:-$root_dir/data/scene_datasets/hm3d/example/00861-GLAQ4DNUx5U/GLAQ4DNUx5U.basis.glb}"
+scene_config="${6:-$root_dir/data/scene_datasets/hm3d/example/hm3d_annotated_example_basis.scene_dataset_config.json}"
+postprocess="${STAGE1_POSTPROCESS:-true}"
 episode_dir="$root_dir/data/episodes/$episode_name"
 raw_bag="$root_dir/outputs/bags/${episode_name}_raw.bag"
 final_bag="$root_dir/outputs/bags/${episode_name}_final.bag"
 box_dir="$root_dir/outputs/boxer/$episode_name"
 
-for target in "$episode_dir" "$raw_bag" "$final_bag" "$box_dir"; do
+targets=("$episode_dir" "$raw_bag")
+if [[ "$postprocess" == "true" ]]; then
+  targets+=("$final_bag" "$box_dir")
+fi
+for target in "${targets[@]}"; do
   if [[ -e "$target" ]]; then
     echo "目标已存在，拒绝覆盖：$target" >&2
     exit 1
@@ -33,6 +40,7 @@ trap cleanup EXIT INT TERM
 recorder_pid=$!
 sleep 3
 .envs/habitat/bin/python scripts/run_habitat_falcon.py \
+  --scene "$scene" --scene-config "$scene_config" \
   --duration "$max_duration" --hz "$hz" --follow-falcon \
   --idle-scan-rate "$idle_scan_rate" --idle-scan-after 0.3 \
   --record-dir "$episode_dir" --record-every 5 \
@@ -48,6 +56,11 @@ termination="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["
 if [[ "$termination" != "complete" ]]; then
   echo "达到最大时长 ${max_duration}s，但 FALCON 未进入 FINISH；保留 raw bag，拒绝生成 complete 包。" >&2
   exit 2
+fi
+
+if [[ "$postprocess" != "true" ]]; then
+  echo "探索建图录制完成（未执行后处理）：$raw_bag"
+  exit 0
 fi
 
 ./scripts/run_boxer_habitat.sh "$episode_dir" outputs/boxer

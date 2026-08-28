@@ -1,0 +1,51 @@
+diff --git a/falcon_planner/exploration_manager/include/exploration_manager/exploration_fsm.h b/falcon_planner/exploration_manager/include/exploration_manager/exploration_fsm.h
+index 2b5fd80..6db72fe 100644
+--- a/falcon_planner/exploration_manager/include/exploration_manager/exploration_fsm.h
++++ b/falcon_planner/exploration_manager/include/exploration_manager/exploration_fsm.h
+@@ -59,6 +59,8 @@ private:
+   ros::Publisher replan_pub_, bspline_pub_, grid_tour_pub_, uncertainty_pub_;
+ 
+   bool frontier_ready_;
++  int consecutive_collision_failures_;
++  int max_collision_failures_;
+ 
+   ros::Time trajectory_start_time_;
+ 
+diff --git a/falcon_planner/exploration_manager/src/exploration_fsm.cpp b/falcon_planner/exploration_manager/src/exploration_fsm.cpp
+index ed68d69..2640913 100644
+--- a/falcon_planner/exploration_manager/src/exploration_fsm.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_fsm.cpp
+@@ -20,7 +20,9 @@ void ExplorationFSM::init(ros::NodeHandle &nh) {
+   nh.param("/exploration_manager/fsm/replan_duration_fast", fp_->replan_duration_fast_, -1.0);
+   nh.param("/exploration_manager/fsm/replan_duration_default", fp_->replan_duration_default_, -1.0);
+   nh.param("/exploration_manager/fsm/replan_duration_slow", fp_->replan_duration_slow_, -1.0);
++  nh.param("/exploration_manager/fsm/max_collision_failures", max_collision_failures_, 20);
+   fp_->replan_duration_ = fp_->replan_duration_default_;
++  consecutive_collision_failures_ = 0;
+ 
+   /* Initialize main modules */
+   expl_manager_.reset(new ExplorationManager);
+@@ -416,12 +418,23 @@ void ExplorationFSM::FSMCallback(const ros::TimerEvent &e) {
+         ROS_ERROR("[FSM] Replan: collision also detected on the initial trajectory");
+ 
+         fd_->static_state_ = true;
++        ++consecutive_collision_failures_;
++        if (consecutive_collision_failures_ >= max_collision_failures_) {
++          ROS_WARN("[FSM] Finish exploration after %d consecutive collision planning failures",
++                   consecutive_collision_failures_);
++          std_msgs::Int32 finish_msg;
++          finish_msg.data = 2;
++          replan_pub_.publish(finish_msg);
++          transitState(FINISH, "FSM");
++          break;
++        }
+         transitState(PLAN_TRAJ, "FSM");
+         break;
+       }
+ 
+       ROS_WARN("[FSM] Replacing the trajectory with the safe initial trajectory");
+     }
++    consecutive_collision_failures_ = 0;
+ 
+     // Check traj avg vel
+     double pos_traj_length = planner_manager_->local_data_.position_traj_.getLength();

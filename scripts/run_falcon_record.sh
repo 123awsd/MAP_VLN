@@ -21,7 +21,7 @@ rm -f \
 if [[ "$show_rviz" == "true" ]]; then
   "$root_dir/scripts/prepare_rviz_xauth.sh"
 fi
-exec docker compose run --rm --name pre-map-vln-falcon-vis falcon \
+exec docker compose run --rm -T --name pre-map-vln-falcon-vis falcon \
   roslaunch pre_map_bridge visualization_record.launch \
   bag_path:="/workspace/shared/outputs/bags/${bag_name}.bag" \
   rviz:="$show_rviz" \

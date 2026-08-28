@@ -55,8 +55,10 @@ COPY third_party/FALCON /workspace/falcon_ws/src/FALCON
 COPY ros_ws/src/pre_map_bridge /workspace/falcon_ws/src/pre_map_bridge
 COPY patches/falcon/habitat_ground_viewpoint.patch /tmp/habitat_ground_viewpoint.patch
 COPY patches/falcon/zero_cost_guard.patch /tmp/zero_cost_guard.patch
+COPY patches/falcon/collision_stall_finish.patch /tmp/collision_stall_finish.patch
 RUN patch -d FALCON -p1 < /tmp/habitat_ground_viewpoint.patch
 RUN patch -d FALCON -p1 < /tmp/zero_cost_guard.patch
+RUN patch -d FALCON -p1 < /tmp/collision_stall_finish.patch
 
 # Habitat replaces FALCON's built-in CUDA/Open3D sensor renderers.
 RUN touch FALCON/uav_simulator/camera_sensing/pointcloud_render/CATKIN_IGNORE \

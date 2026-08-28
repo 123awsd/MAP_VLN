@@ -31,6 +31,11 @@ def main() -> None:
     parser.add_argument("--bag-manifest", type=Path, default=ROOT / "outputs/bags/hm3d_stage2_complete.manifest.json")
     parser.add_argument("--multiscene-report", type=Path, default=ROOT / "outputs/stage2/multiscene/report.json")
     parser.add_argument("--paper-report", type=Path, default=ROOT / "outputs/stage2/paper_benchmark/report.json")
+    parser.add_argument(
+        "--include-benchmarks",
+        action="store_true",
+        help="also require the optional multi-scene and paper comparison benchmarks",
+    )
     parser.add_argument("--output", type=Path, default=ROOT / "outputs/stage2/stage2_report.json")
     args = parser.parse_args()
 
@@ -42,8 +47,8 @@ def main() -> None:
     execution = load_json(args.execution_dir / "habitat_execution.json")
     bag = load_json(args.bag_manifest)
     usage = load_json(ROOT / "outputs/stage2/api_usage.json")
-    multiscene = load_json(args.multiscene_report)
-    paper = load_json(args.paper_report)
+    multiscene = load_json(args.multiscene_report) if args.include_benchmarks else None
+    paper = load_json(args.paper_report) if args.include_benchmarks else None
     grid = OccupancyGrid.load(args.grid_prefix, inflation_m=0.10)
 
     task_ids = {task["id"] for task in task_graph["tasks"]}
@@ -70,14 +75,24 @@ def main() -> None:
     require(all(value in {"completed", "skipped"} for value in execution["task_status"].values()), "some online tasks did not terminate")
     observations = {item["task_id"]: item for item in execution["observations"]}
     tv_not_found = observations["observe_living_room_tv"]["outcome"] == "not_found"
+    tv_not_found_rules = [
+        rule for rule in task_graph["conditional_rules"]
+        if rule["source_task_id"] == "observe_living_room_tv" and rule["if_outcome"] == "not_found"
+    ]
+    require(len(tv_not_found_rules) == 1, "expected one television not_found conditional rule")
+    cabinet_task_ids = set(tv_not_found_rules[0]["activate_task_ids"])
+    require(bool(cabinet_task_ids), "television not_found rule does not activate a fallback task")
     if tv_not_found:
-        require("inspect_cabinet" in observations, "not_found branch did not activate cabinet task")
+        require(cabinet_task_ids <= set(observations), "not_found branch did not activate cabinet task")
     else:
-        require(execution["task_status"]["inspect_cabinet"] == "skipped", "found branch did not skip cabinet task")
+        require(
+            all(execution["task_status"].get(task_id) == "skipped" for task_id in cabinet_task_ids),
+            "found branch did not skip cabinet task",
+        )
     activation = [
         change
         for event in execution["events"] for change in event.get("state_changes", [])
-        if change["task_id"] == "inspect_cabinet" and change["status"] == "pending"
+        if change["task_id"] in cabinet_task_ids and change["status"] == "pending"
     ]
     require(bool(activation) == tv_not_found, "condition branch state change is inconsistent")
     require(sum(item["verification"]["found"] for item in execution["observations"]) >= 3, "too few targets were visually verified")
@@ -105,24 +120,26 @@ def main() -> None:
     require(bag["size_bytes"] > 350_000 * execution["frame_count"], "stage2 bag is unexpectedly small")
     authorized_budget = float(usage.get("authorized_budget_cny", 1000.0))
     require(float(usage["total_estimated_cny"]) <= authorized_budget, "Qwen configured cost ceiling exceeded")
-    require(multiscene["status"] == "passed", "multi-scene planner benchmark failed")
-    require(len(multiscene["scenes"]) >= 3, "fewer than three HM3D scenes were tested")
-    require(all(item["candidate_count"] >= 20 for item in multiscene["scenes"]), "multi-scene candidate coverage is too low")
-    require(all(item["dynamic_status"] == "completed" for item in multiscene["scenes"]), "multi-scene dynamic execution failed")
-    require(paper["status"] == "passed", "paper benchmark failed")
-    require(paper["protocol"]["trial_count"] == 270, "paper benchmark does not contain 270 trials")
-    require(not paper["failures"], "paper benchmark contains failed trials")
-    paper_methods = {item["method"]: item for item in paper["summary"]}
-    require({
-        "fixed_order_nearest", "fixed_order_viewpoint", "task_graph_single_pose",
-        "euclidean_cost", "no_terminal_quality", "joint_astar",
-    } <= set(paper_methods), "paper benchmark is missing baselines or ablations")
-    require(all(item["mission_success_rate"] == 1.0 for item in paper_methods.values()), "paper benchmark mission success regressed")
-    require(all(item["constraint_satisfaction_rate"] == 1.0 for item in paper_methods.values()), "paper benchmark violates task constraints")
-    require(all(item["condition_satisfaction_rate"] == 1.0 for item in paper_methods.values()), "paper benchmark violates a condition branch")
-    require(paper_methods["joint_astar"]["improvement_vs_fixed_mean_percent"] > 20.0, "joint planner improvement is below acceptance threshold")
-    require(paper_methods["joint_astar"]["path_length_mean_m"] < paper_methods["euclidean_cost"]["path_length_mean_m"], "A* cost did not outperform Euclidean selection")
-    require(paper_methods["joint_astar"]["viewpoint_quality_mean"] > paper_methods["no_terminal_quality"]["viewpoint_quality_mean"], "terminal quality term has no measurable effect")
+    paper_methods = None
+    if args.include_benchmarks:
+        require(multiscene["status"] == "passed", "multi-scene planner benchmark failed")
+        require(len(multiscene["scenes"]) >= 3, "fewer than three HM3D scenes were tested")
+        require(all(item["candidate_count"] >= 20 for item in multiscene["scenes"]), "multi-scene candidate coverage is too low")
+        require(all(item["dynamic_status"] == "completed" for item in multiscene["scenes"]), "multi-scene dynamic execution failed")
+        require(paper["status"] == "passed", "paper benchmark failed")
+        require(paper["protocol"]["trial_count"] == 270, "paper benchmark does not contain 270 trials")
+        require(not paper["failures"], "paper benchmark contains failed trials")
+        paper_methods = {item["method"]: item for item in paper["summary"]}
+        require({
+            "fixed_order_nearest", "fixed_order_viewpoint", "task_graph_single_pose",
+            "euclidean_cost", "no_terminal_quality", "joint_astar",
+        } <= set(paper_methods), "paper benchmark is missing baselines or ablations")
+        require(all(item["mission_success_rate"] == 1.0 for item in paper_methods.values()), "paper benchmark mission success regressed")
+        require(all(item["constraint_satisfaction_rate"] == 1.0 for item in paper_methods.values()), "paper benchmark violates task constraints")
+        require(all(item["condition_satisfaction_rate"] == 1.0 for item in paper_methods.values()), "paper benchmark violates a condition branch")
+        require(paper_methods["joint_astar"]["improvement_vs_fixed_mean_percent"] > 20.0, "joint planner improvement is below acceptance threshold")
+        require(paper_methods["joint_astar"]["path_length_mean_m"] < paper_methods["euclidean_cost"]["path_length_mean_m"], "A* cost did not outperform Euclidean selection")
+        require(paper_methods["joint_astar"]["viewpoint_quality_mean"] > paper_methods["no_terminal_quality"]["viewpoint_quality_mean"], "terminal quality term has no measurable effect")
 
     report = {
         "format": "pre_map_vln.stage2_validation.v1",
@@ -146,17 +163,19 @@ def main() -> None:
             "open_vocab_keyframe_count": len(execution.get("open_vocab_observations", [])),
         },
         "bag": bag,
-        "multiscene": multiscene["scenes"],
-        "paper_benchmark": {
+        "benchmark_validation_included": args.include_benchmarks,
+        "qwen_estimated_cny": usage["total_estimated_cny"],
+        "qwen_authorized_budget_cny": authorized_budget,
+    }
+    if args.include_benchmarks:
+        report["multiscene"] = multiscene["scenes"]
+        report["paper_benchmark"] = {
             "trial_count": paper["protocol"]["trial_count"],
             "failure_count": len(paper["failures"]),
             "joint_improvement_percent": paper_methods["joint_astar"]["improvement_vs_fixed_mean_percent"],
             "joint_path_length_mean_m": paper_methods["joint_astar"]["path_length_mean_m"],
             "joint_viewpoint_quality": paper_methods["joint_astar"]["viewpoint_quality_mean"],
-        },
-        "qwen_estimated_cny": usage["total_estimated_cny"],
-        "qwen_authorized_budget_cny": authorized_budget,
-    }
+        }
     atomic_json(args.output, report)
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
