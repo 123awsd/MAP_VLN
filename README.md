@@ -184,6 +184,18 @@ docker compose run --rm occusg bash -lc 'ros2 --version'
 
 ## 6. 第一阶段运行
 
+### 00337 三维探索验证基线
+
+2026-08-28 已在 `00337-CFVBbU9Rsyb` 完成一次真实三维 FALCON 探索验证。Habitat 执行完整三维 `PositionCommand` 和规划 yaw，FALCON 保留三维 A*、三维 viewpoint 与发布前碰撞检查；轨迹没有固定或压平 z。该次运行完整探索了两层楼，并由 FALCON 以 `No frontier detected` 正常进入 `FINISH`：
+
+- Habitat elapsed：288.5 s；FALCON exploration duration：283.0 s；
+- 最终 map coverage：1229.23；轨迹 z 范围：0.808–10.002 m；
+- 条件式安全 A* 前缀成功发布 26 次，最长连续静止约 3 s，未出现持续振荡；
+- 44 次预测碰撞均在轨迹发布前被拒绝，没有把碰撞轨迹作为正常探索执行；
+- 验证镜像：`pre-map-vln/falcon-noetic:local`，image ID `sha256:1f539038fb69e30246da8b0743333b52ae2c176258d5f2edd3ceca2e6d9a8b6c`。
+
+成功 Bag 名为 `hm3d_stage1_00337_conditionalprefix_full_20260828_raw.bag`，约 17.2 GB。Bag、HM3D 数据和本地 Docker 镜像不进入 Git；在其他机器上应从本提交重新获取固定版本依赖并构建镜像。
+
 ### 单场景 00166
 
 这是最适合第一次完整运行的入口。它拒绝未登记的场景名，并且如果输出已存在会拒绝覆盖：

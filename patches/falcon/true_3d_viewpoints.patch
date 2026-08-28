@@ -1,0 +1,43 @@
+diff --git a/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h b/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h
+--- a/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h
++++ b/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h
+@@ -138,6 +138,7 @@ private:
+   double ground_height_, ground_offset_;
+   double viewpoint_z_score_cutoff_;
+   double viewpoint_height_;
++  bool use_3d_viewpoints_;
+   double cell_height_clearance_;
+   vector<double> cell_heights_;
+ 
+diff --git a/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp b/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
+--- a/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
++++ b/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
+@@ -29,6 +29,7 @@ FrontierFinder::FrontierFinder(ros::NodeHandle &nh, const shared_ptr<MapServer> &map_server) {
+   nh.param("/frontier_finder/ground_offset", ground_offset_, 0.0);
+   nh.param("/frontier_finder/viewpoint_z_score_cutoff", viewpoint_z_score_cutoff_, 0.0);
+   nh.param("/frontier_finder/viewpoint_height", viewpoint_height_, -1.0);
++  nh.param("/frontier_finder/use_3d_viewpoints", use_3d_viewpoints_, false);
+   nh.param("/frontier_finder/cell_height_clearance", cell_height_clearance_, 0.1);
+ 
+   raycaster_.reset(new RayCaster);
+@@ -571,7 +571,9 @@ void FrontierFinder::computeFrontiersToVisit() {
+   for (auto &tmp_ftr : tmp_frontiers_) {
+     // Search viewpoints around frontier
+-    sampleViewpoints(tmp_ftr);
+-    // sampleViewpoints3D(tmp_ftr);
++    if (use_3d_viewpoints_)
++      sampleViewpoints3D(tmp_ftr);
++    else
++      sampleViewpoints(tmp_ftr);
+     if (!tmp_ftr.viewpoints_.empty()) {
+       ++new_num;
+       list<Frontier>::iterator inserted = frontiers_.insert(frontiers_.end(), tmp_ftr);
+@@ -584,3 +586,7 @@ void FrontierFinder::computeFrontiersToVisit() {
+     } else {
+-      CHECK_LE(tmp_ftr.visib_num_, min_visib_num_) << "Frontier with valid viewpoint but dormant";
++      if (use_3d_viewpoints_ && tmp_ftr.visib_num_ > min_visib_num_) {
++        ROS_WARN("[FrontierFinder] 3-D frontier has no collision-free viewpoint; keeping it dormant");
++      } else {
++        CHECK_LE(tmp_ftr.visib_num_, min_visib_num_) << "Frontier with valid viewpoint but dormant";
++      }
+       // Find no viewpoint, move cluster to dormant list

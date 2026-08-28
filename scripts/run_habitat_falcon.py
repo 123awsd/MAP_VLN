@@ -126,6 +126,7 @@ def follow_command(
     use_planner_yaw: bool = False,
     navmesh_constrained: bool = False,
     navmesh_path_follow: bool = False,
+    allow_vertical_motion: bool = False,
 ) -> bool:
     agent = sim.get_agent(0)
     state = agent.get_state()
@@ -133,7 +134,8 @@ def follow_command(
     target_f = np.asarray(command["position"], dtype=np.float64) - np.asarray([0.0, 0.0, 1.0])
     target_h = origin_h + S_HABITAT_TO_FALCON.T @ target_f
     direction = target_h - current
-    direction[1] = 0.0
+    if not allow_vertical_motion:
+        direction[1] = 0.0
     distance = float(np.linalg.norm(direction))
     moved = False
     if distance > 1e-4:
@@ -192,6 +194,11 @@ def main() -> None:
         "--navmesh-path-follow",
         action="store_true",
         help="follow each FALCON target along Habitat's ground shortest path",
+    )
+    parser.add_argument(
+        "--allow-vertical-motion",
+        action="store_true",
+        help="track the full 3-D PositionCommand, including Habitat vertical motion",
     )
     parser.add_argument(
         "--use-planner-yaw",
@@ -307,6 +314,7 @@ def main() -> None:
                         use_planner_yaw=args.use_planner_yaw,
                         navmesh_constrained=args.navmesh_constrained,
                         navmesh_path_follow=args.navmesh_path_follow,
+                        allow_vertical_motion=args.allow_vertical_motion,
                     )
                 idle_time = 0.0 if moved else idle_time + period
                 if (

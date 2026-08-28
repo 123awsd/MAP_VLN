@@ -1,0 +1,53 @@
+diff --git a/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h b/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h
+--- a/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h
++++ b/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h
+@@ -69,6 +69,8 @@
+ 
+   shared_ptr<EDTEnvironment> edt_environment_;
+   voxel_mapping::MapServer::Ptr map_server_;
++  bool voxel_astar_fallback_enabled_;
++  double voxel_astar_fallback_max_search_time_;
+ 
+   vector<int> dijkstra(vector<vector<double>> &graph, int start, int end);
+ 
+diff --git a/falcon_planner/exploration_manager/src/exploration_manager.cpp b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+@@ -41,6 +41,10 @@
+   nh.param("/exploration_manager/auto_start", ep_->auto_start_, false);
+   nh.param("/exploration_manager/hybrid_search_radius", ep_->hybrid_search_radius_, 10.0);
+   nh.param("/exploration_manager/unknown_penalty_factor", ep_->unknown_penalty_factor_, 1.0);
++  nh.param("/exploration_manager/voxel_astar_fallback_enabled",
++           voxel_astar_fallback_enabled_, false);
++  nh.param("/exploration_manager/voxel_astar_fallback_max_search_time",
++           voxel_astar_fallback_max_search_time_, 0.5);
+ 
+   // Disable hybrid search for small map
+   Position bbox_min, bbox_max;
+@@ -1079,7 +1083,25 @@
+       ROS_ERROR(
+           "[ExplorationManager] planTrajToView: No path to next viewpoint using coarse A*");
+       planner_manager_->path_finder_->setProfile(Astar::PROFILE::DEFAULT);
+-      return FAIL;
++
++      if (!voxel_astar_fallback_enabled_)
++        return FAIL;
++
++      const double map_resolution = map_server_->getResolution();
++      planner_manager_->path_finder_->reset();
++      planner_manager_->path_finder_->setResolution(map_resolution);
++      planner_manager_->path_finder_->setMaxSearchTime(voxel_astar_fallback_max_search_time_);
++      const int voxel_astar_result =
++          planner_manager_->path_finder_->search(pos, next_pos_local);
++      planner_manager_->path_finder_->setProfile(Astar::PROFILE::DEFAULT);
++
++      if (voxel_astar_result != Astar::REACH_END) {
++        ROS_ERROR("[ExplorationManager] planTrajToView: No path using %.2f m voxel A* "
++                  "(timeout %.2f s)",
++                  map_resolution, voxel_astar_fallback_max_search_time_);
++        return FAIL;
++      }
++      ROS_WARN("[ExplorationManager] Recovered path using %.2f m voxel A*", map_resolution);
+     }
+     planner_manager_->path_finder_->setProfile(Astar::PROFILE::DEFAULT);
+   }

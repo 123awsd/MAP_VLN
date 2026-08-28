@@ -54,15 +54,28 @@ WORKDIR /workspace/falcon_ws/src
 COPY third_party/FALCON /workspace/falcon_ws/src/FALCON
 COPY ros_ws/src/pre_map_bridge /workspace/falcon_ws/src/pre_map_bridge
 COPY patches/falcon/habitat_ground_viewpoint.patch /tmp/habitat_ground_viewpoint.patch
+COPY patches/falcon/true_3d_viewpoints.patch /tmp/true_3d_viewpoints.patch
+COPY patches/falcon/astar_start_voxel_escape.patch /tmp/astar_start_voxel_escape.patch
+COPY patches/falcon/voxel_astar_fallback.patch /tmp/voxel_astar_fallback.patch
+COPY patches/falcon/conditional_safe_astar_segment.patch /tmp/conditional_safe_astar_segment.patch
 COPY patches/falcon/zero_cost_guard.patch /tmp/zero_cost_guard.patch
 COPY patches/falcon/robust_ground_planner.patch /tmp/robust_ground_planner.patch
 COPY patches/falcon/robust_bspline_optimizer.patch /tmp/robust_bspline_optimizer.patch
 COPY patches/falcon/exploration_recovery_fallback.patch /tmp/exploration_recovery_fallback.patch
 RUN patch -d FALCON -p1 < /tmp/habitat_ground_viewpoint.patch
+RUN patch -d FALCON -p1 < /tmp/true_3d_viewpoints.patch
+RUN patch -d FALCON -p1 < /tmp/astar_start_voxel_escape.patch
+RUN patch -d FALCON -p1 < /tmp/voxel_astar_fallback.patch
+RUN patch -d FALCON -p1 < /tmp/conditional_safe_astar_segment.patch
 RUN patch -d FALCON -p1 < /tmp/zero_cost_guard.patch
 RUN patch -d FALCON -p1 < /tmp/robust_ground_planner.patch
 RUN patch -d FALCON -p1 < /tmp/robust_bspline_optimizer.patch
-RUN patch --forward -d FALCON -p1 < /tmp/exploration_recovery_fallback.patch
+RUN if grep -q "No reachable recovery candidate for selected frontier" \
+      FALCON/falcon_planner/exploration_manager/src/exploration_manager.cpp; then \
+      echo "exploration recovery fallback already present"; \
+    else \
+      patch -d FALCON -p1 < /tmp/exploration_recovery_fallback.patch; \
+    fi
 
 # Habitat replaces FALCON's built-in CUDA/Open3D sensor renderers.
 RUN touch FALCON/uav_simulator/camera_sensing/pointcloud_render/CATKIN_IGNORE \

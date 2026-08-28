@@ -1,0 +1,138 @@
+diff --git a/falcon_planner/pathfinding/src/astar.cpp b/falcon_planner/pathfinding/src/astar.cpp
+--- a/falcon_planner/pathfinding/src/astar.cpp
++++ b/falcon_planner/pathfinding/src/astar.cpp
+@@ -97,6 +97,9 @@
+            p.y() < bbox_max.y() && p.z() > bbox_min.z() && p.z() < bbox_max.z();
+   };
+ 
++  const VoxelIndex start_voxel_idx =
++      map_server_->getOccupancyGrid()->positionToIndex(start_pt);
++
+   auto isValidVoxel = [&](const Position &p) {
+     bool is_valid = false;
+ 
+@@ -105,9 +108,16 @@
+ 
+     switch (mode) {
+     case Astar::MODE::FREE_ONLY:
+-    case Astar::MODE::FREE_ONLY_BBOX:
+-      is_valid = (voxel_type == voxel_mapping::OccupancyType::FREE && isInBox(p));
++    case Astar::MODE::FREE_ONLY_BBOX: {
++      const bool is_start_voxel = (idx.array() == start_voxel_idx.array()).all();
++      // The TSDF ray caster intentionally excludes the sensor endpoint, so the
++      // voxel physically occupied by the UAV can remain UNKNOWN. Permit only
++      // that one voxel while leaving it; OCCUPIED and every other UNKNOWN stay blocked.
++      is_valid = ((voxel_type == voxel_mapping::OccupancyType::FREE ||
++                   (is_start_voxel && voxel_type == voxel_mapping::OccupancyType::UNKNOWN)) &&
++                  isInBox(p));
+       break;
++    }
+     case Astar::MODE::FREE_UNKNOWN:
+     case Astar::MODE::FREE_UNKNOWN_BBOX:
+       is_valid = (voxel_type == voxel_mapping::OccupancyType::FREE ||
+@@ -271,6 +281,16 @@
+   use_node_num_ += 1;
+ 
+   const auto t1 = ros::Time::now();
++  const VoxelIndex start_voxel_idx =
++      map_server_->getOccupancyGrid()->positionToIndex(start_pt);
++  auto isFreeOrUnknownStartVoxel = [&](const Position &p) {
++    const VoxelIndex idx = map_server_->getOccupancyGrid()->positionToIndex(p);
++    const voxel_mapping::OccupancyType voxel_type =
++        map_server_->getOccupancyGrid()->getVoxel(idx).value;
++    const bool is_start_voxel = (idx.array() == start_voxel_idx.array()).all();
++    return voxel_type == voxel_mapping::OccupancyType::FREE ||
++           (is_start_voxel && voxel_type == voxel_mapping::OccupancyType::UNKNOWN);
++  };
+ 
+   /* ---------- search loop ---------- */
+   while (!open_set_.empty()) {
+@@ -295,10 +315,7 @@
+       dir.normalize();
+       for (double l = 0.1; l < len; l += 0.1) {
+         Vector3d ckpt = cur_node->position + l * dir;
+-        if (map_server_->getOccupancyGrid()->getVoxel(ckpt).value ==
+-                voxel_mapping::OccupancyType::OCCUPIED ||
+-            map_server_->getOccupancyGrid()->getVoxel(ckpt).value ==
+-                voxel_mapping::OccupancyType::UNKNOWN) {
++        if (!isFreeOrUnknownStartVoxel(ckpt)) {
+           safe = false;
+           break;
+         }
+@@ -340,10 +357,7 @@
+             continue;
+           }
+ 
+-          if (map_server_->getOccupancyGrid()->getVoxel(nbr_pos).value ==
+-                  voxel_mapping::OccupancyType::OCCUPIED ||
+-              map_server_->getOccupancyGrid()->getVoxel(nbr_pos).value ==
+-                  voxel_mapping::OccupancyType::UNKNOWN) {
++          if (!isFreeOrUnknownStartVoxel(nbr_pos)) {
+             continue;
+           }
+ 
+@@ -353,10 +367,7 @@
+           dir.normalize();
+           for (double l = 0.1; l < len; l += 0.1) {
+             Vector3d ckpt = cur_pos + l * dir;
+-            if (map_server_->getOccupancyGrid()->getVoxel(ckpt).value ==
+-                    voxel_mapping::OccupancyType::OCCUPIED ||
+-                map_server_->getOccupancyGrid()->getVoxel(ckpt).value ==
+-                    voxel_mapping::OccupancyType::UNKNOWN) {
++            if (!isFreeOrUnknownStartVoxel(ckpt)) {
+               safe = false;
+               break;
+             }
+@@ -420,6 +431,16 @@
+   use_node_num_ += 1;
+ 
+   const auto t1 = ros::Time::now();
++  const VoxelIndex start_voxel_idx =
++      map_server_->getOccupancyGrid()->positionToIndex(start_pt);
++  auto isFreeOrUnknownStartVoxel = [&](const Position &p) {
++    const VoxelIndex idx = map_server_->getOccupancyGrid()->positionToIndex(p);
++    const voxel_mapping::OccupancyType voxel_type =
++        map_server_->getOccupancyGrid()->getVoxel(idx).value;
++    const bool is_start_voxel = (idx.array() == start_voxel_idx.array()).all();
++    return voxel_type == voxel_mapping::OccupancyType::FREE ||
++           (is_start_voxel && voxel_type == voxel_mapping::OccupancyType::UNKNOWN);
++  };
+ 
+   /* ---------- search loop ---------- */
+   while (!open_set_.empty()) {
+@@ -442,10 +463,7 @@
+       dir.normalize();
+       for (double l = 0.1; l < len; l += 0.1) {
+         Vector3d ckpt = cur_node->position + l * dir;
+-        if (map_server_->getOccupancyGrid()->getVoxel(ckpt).value ==
+-                voxel_mapping::OccupancyType::OCCUPIED ||
+-            map_server_->getOccupancyGrid()->getVoxel(ckpt).value ==
+-                voxel_mapping::OccupancyType::UNKNOWN) {
++        if (!isFreeOrUnknownStartVoxel(ckpt)) {
+           safe = false;
+           break;
+         }
+@@ -495,10 +513,7 @@
+             continue;
+           }
+ 
+-          if (map_server_->getOccupancyGrid()->getVoxel(nbr_pos).value ==
+-                  voxel_mapping::OccupancyType::OCCUPIED ||
+-              map_server_->getOccupancyGrid()->getVoxel(nbr_pos).value ==
+-                  voxel_mapping::OccupancyType::UNKNOWN) {
++          if (!isFreeOrUnknownStartVoxel(nbr_pos)) {
+             continue;
+           }
+ 
+@@ -508,10 +523,7 @@
+           dir.normalize();
+           for (double l = 0.1; l < len; l += 0.1) {
+             Vector3d ckpt = cur_pos + l * dir;
+-            if (map_server_->getOccupancyGrid()->getVoxel(ckpt).value ==
+-                    voxel_mapping::OccupancyType::OCCUPIED ||
+-                map_server_->getOccupancyGrid()->getVoxel(ckpt).value ==
+-                    voxel_mapping::OccupancyType::UNKNOWN) {
++            if (!isFreeOrUnknownStartVoxel(ckpt)) {
+               safe = false;
+               break;
+             }

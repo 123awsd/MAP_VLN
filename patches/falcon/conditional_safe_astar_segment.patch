@@ -1,0 +1,153 @@
+diff --git a/falcon_planner/exploration_manager/include/exploration_manager/exploration_data.h b/falcon_planner/exploration_manager/include/exploration_manager/exploration_data.h
+--- a/falcon_planner/exploration_manager/include/exploration_manager/exploration_data.h
++++ b/falcon_planner/exploration_manager/include/exploration_manager/exploration_data.h
+@@ -64,6 +64,7 @@ struct ExplorationData {
+ 
+   Vector3d next_goal_;
+   vector<Vector3d> path_next_goal_;
++  vector<Vector3d> raw_path_next_goal_;
+   Vector3d next_pos_;
+   double next_yaw_;
+ 
+diff --git a/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h b/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h
+--- a/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h
++++ b/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h
+@@ -45,6 +45,9 @@ public:
+   EXPL_RESULT planTrajToView(const Vector3d &pos, const Vector3d &vel, const Vector3d &acc,
+                              const Vector3d &yaw, const Vector3d &next_pos, const double &next_yaw);
+ 
++  bool planSafeAstarPrefix(const Vector3d &pos, const double yaw,
++                           const double max_prefix_length);
++
+   void initializeHierarchicalGrid(const Vector3d &pos, const Vector3d &vel);
+ 
+   shared_ptr<ExplorationData> ed_;
+diff --git a/falcon_planner/exploration_manager/src/exploration_manager.cpp b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+@@ -1084,7 +1084,9 @@ EXPL_RESULT ExplorationManager::planTrajToView(const Vector3d &pos, const Vector
+     planner_manager_->path_finder_->setProfile(Astar::PROFILE::DEFAULT);
+   }
+ 
+-  ed_->path_next_goal_ = planner_manager_->path_finder_->getPath();
++  // Keep the native 3-D voxel path. The shortened path is suitable for normal
++  // optimization, while the native path is needed for a collision-safe prefix.
++  ed_->raw_path_next_goal_ = ed_->path_next_goal_ = planner_manager_->path_finder_->getPath();
+   planner_manager_->path_finder_->shortenPath(ed_->path_next_goal_);
+ 
+   const double radius_far = 7.0;
+@@ -1401,6 +1403,73 @@ EXPL_RESULT ExplorationManager::planTrajToView(const Vector3d &pos, const Vector
+   return SUCCEED;
+ }
+ 
++bool ExplorationManager::planSafeAstarPrefix(const Vector3d &pos, const double yaw,
++                                             const double max_prefix_length) {
++  const auto &path = ed_->raw_path_next_goal_;
++  if (path.size() < 2 || max_prefix_length <= 0.0) {
++    ROS_ERROR("[ExplorationManager] No native A* path for conservative prefix");
++    return false;
++  }
++
++  // Collect native A* points up to the requested distance. Try farther points
++  // first so this fallback makes useful progress, but require a FREE straight
++  // corridor from the current pose. UNKNOWN is never accepted as flyable.
++  vector<Vector3d> endpoints;
++  double traversed = 0.0;
++  Vector3d previous = path.front();
++  for (size_t i = 1; i < path.size(); ++i) {
++    const double segment_length = (path[i] - previous).norm();
++    if (segment_length <= 1e-6)
++      continue;
++    if (traversed + segment_length > max_prefix_length)
++      break;
++    traversed += segment_length;
++    previous = path[i];
++    if ((path[i] - pos).norm() >= 0.20)
++      endpoints.push_back(path[i]);
++  }
++
++  if (endpoints.empty()) {
++    ROS_ERROR("[ExplorationManager] Native A* path has no usable conservative prefix");
++    return false;
++  }
++
++  const double sample_step = std::max(0.02, 0.5 * map_server_->getResolution());
++  for (auto endpoint_it = endpoints.rbegin(); endpoint_it != endpoints.rend(); ++endpoint_it) {
++    const Vector3d endpoint = *endpoint_it;
++    const Vector3d delta = endpoint - pos;
++    const double distance = delta.norm();
++    bool free_corridor = true;
++    const int sample_count = std::max(1, int(std::ceil(distance / sample_step)));
++    for (int sample = 0; sample <= sample_count; ++sample) {
++      const Vector3d point = pos + delta * (double(sample) / double(sample_count));
++      if (map_server_->getOccupancy(point) != voxel_mapping::OccupancyType::FREE) {
++        free_corridor = false;
++        break;
++      }
++    }
++    if (!free_corridor)
++      continue;
++
++    const vector<Vector3d> prefix = {pos, pos + 0.5 * delta, endpoint};
++    planner_manager_->planExplorationPositionTraj(
++        prefix, Vector3d::Zero(), Vector3d::Zero(), 0.0, false);
++    planner_manager_->planExplorationYawWaypointsTraj(
++        yaw, 0.0, yaw, vector<Vector3d>(), vector<int>());
++
++    ed_->next_goal_ = endpoint;
++    ed_->path_next_goal_ = prefix;
++    ROS_WARN("[ExplorationManager] Generated conditional safe A* prefix: %.2f m to "
++             "(%.2f, %.2f, %.2f); final viewpoint remains (%.2f, %.2f, %.2f)",
++             distance, endpoint.x(), endpoint.y(), endpoint.z(), ed_->next_pos_.x(),
++             ed_->next_pos_.y(), ed_->next_pos_.z());
++    return true;
++  }
++
++  ROS_ERROR("[ExplorationManager] No FREE straight prefix on native 3-D A* path");
++  return false;
++}
++
+ int ExplorationManager::updateFrontierStruct(const Eigen::Vector3d &pos) {
+ 
+   auto t1 = ros::Time::now();
+diff --git a/falcon_planner/exploration_manager/src/exploration_fsm.cpp b/falcon_planner/exploration_manager/src/exploration_fsm.cpp
+--- a/falcon_planner/exploration_manager/src/exploration_fsm.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_fsm.cpp
+@@ -414,13 +414,31 @@ void ExplorationFSM::FSMCallback(const ros::TimerEvent &e) {
+ 
+       if (!safe_init_path) {
+         ROS_ERROR("[FSM] Replan: collision also detected on the initial trajectory");
+-
+-        fd_->static_state_ = true;
+-        transitState(PLAN_TRAJ, "FSM");
+-        break;
++
++        // Only after both full B-splines fail, advance along a short FREE
++        // prefix of the same native 3-D A* path. This keeps the final frontier
++        // target while avoiding global path truncation on normal plans.
++        const bool prefix_planned = expl_manager_->planSafeAstarPrefix(
++            fd_->start_pos_, fd_->start_yaw_[0], 1.0);
++        if (prefix_planned) {
++          planner_manager_->local_data_.start_time_ = trajectory_start_time_;
++          const bool safe_prefix = planner_manager_->checkTrajCollision();
++          if (safe_prefix) {
++            ROS_WARN("[FSM] Publishing collision-safe conditional A* prefix");
++            safe = true;
++          } else {
++            ROS_ERROR("[FSM] Conditional A* prefix failed final collision check");
++          }
++        }
++
++        if (!prefix_planned || !safe) {
++          fd_->static_state_ = true;
++          transitState(PLAN_TRAJ, "FSM");
++          break;
++        }
++      } else {
++        ROS_WARN("[FSM] Replacing the trajectory with the safe initial trajectory");
+       }
+-
+-      ROS_WARN("[FSM] Replacing the trajectory with the safe initial trajectory");
+     }
+ 
+     // Check traj avg vel
