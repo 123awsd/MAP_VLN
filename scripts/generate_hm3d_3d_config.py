@@ -113,6 +113,14 @@ exploration_manager:
   dormant_finish_block_threshold: 3
   voxel_astar_fallback_enabled: true
   voxel_astar_fallback_max_search_time: 0.5
+  floor_priority_enabled: true
+  floor_histogram_resolution: 0.5
+  floor_min_separation: 2.0
+  floor_same_band_tolerance: 1.35
+  floor_min_viewpoint_support: 3
+  floor_crossing_penalty: 12.0
+  floor_switch_lock_seconds: 20.0
+  floor_candidate_limit: 8
   fsm:
     replan_thresh2: 1.0
     oscillation_detection_enabled: true

@@ -1,0 +1,12 @@
+--- a/falcon_planner/exploration_manager/src/exploration_fsm.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_fsm.cpp
+@@ -446,6 +446,9 @@
+         }
+
+         if (!prefix_planned || !safe) {
++          expl_manager_->blockViewpoint(
++              expl_manager_->ed_->next_pos_, 20.0,
++              "optimized, initial and conditional-prefix trajectories rejected before publish");
+           fd_->static_state_ = true;
+           transitState(PLAN_TRAJ, "FSM");
+           break;

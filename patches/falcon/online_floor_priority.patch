@@ -1,0 +1,293 @@
+--- a/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h
++++ b/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h
+@@ -93,6 +93,10 @@
+
+   bool isTemporarilyBlocked(const Vector3d &pos) const;
+   void notePlanningFailure(const Vector3d &pos);
++  void updateOnlineFloorModel(const Vector3d &pos);
++  int classifyFloorCandidate(const Vector3d &pos) const;
++  void applyFloorPriority(const Vector3d &pos, const Vector3d &vel, const Vector3d &yaw,
++                          Vector3d &next_pos, double &next_yaw);
+
+   template <typename T>
+   void saveCostMatrix(const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &mat,
+@@ -106,8 +110,23 @@
+   };
+   vector<FrontierBlockState> blocked_frontiers_;
+   int dormant_finish_block_threshold_;
++
++  bool floor_priority_enabled_;
++  double floor_histogram_resolution_;
++  double floor_min_separation_;
++  double floor_same_band_tolerance_;
++  int floor_min_viewpoint_support_;
++  double floor_crossing_penalty_;
++  double floor_switch_lock_seconds_;
++  int floor_candidate_limit_;
++  bool active_floor_initialized_;
++  double active_floor_z_;
++  bool pending_floor_valid_;
++  double pending_floor_z_;
++  ros::Time floor_lock_until_;
++  vector<double> online_floor_levels_;
+ };
+
+ } // namespace fast_planner
+
+ #endif
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+@@ -1,5 +1,6 @@
+ #include <fstream>
+ #include <iostream>
++#include <map>
+ #include <pcl/point_cloud.h>
+ #include <pcl/point_types.h>
+ #include <ros/package.h>
+@@ -75,6 +76,215 @@
+             pos.x(), pos.y(), pos.z(), seconds, reason.c_str());
+ }
+
++void ExplorationManager::updateOnlineFloorModel(const Vector3d &pos) {
++  if (!floor_priority_enabled_)
++    return;
++
++  vector<double> samples;
++  auto add_sample = [&](const Vector3d &candidate) {
++    if (!candidate.allFinite() || isTemporarilyBlocked(candidate))
++      return;
++    if (map_server_->getOccupancy(candidate) != voxel_mapping::OccupancyType::FREE)
++      return;
++    samples.push_back(candidate.z());
++  };
++  for (const auto &candidate : ed_->points_)
++    add_sample(candidate);
++  for (const auto &group : ed_->n_points_)
++    for (const auto &candidate : group)
++      add_sample(candidate);
++
++  // The current executed pose is observed FREE and anchors the active floor,
++  // but cannot create additional floors by itself.
++  std::map<int, int> histogram;
++  for (double z : samples)
++    ++histogram[static_cast<int>(std::floor(z / floor_histogram_resolution_))];
++  const int current_bin = static_cast<int>(std::floor(pos.z() / floor_histogram_resolution_));
++  histogram[current_bin] += floor_min_viewpoint_support_;
++
++  struct Peak {
++    double z;
++    int support;
++  };
++  vector<Peak> peaks;
++  for (const auto &entry : histogram) {
++    int support = 0;
++    for (int offset = -1; offset <= 1; ++offset) {
++      auto it = histogram.find(entry.first + offset);
++      if (it != histogram.end())
++        support += it->second;
++    }
++    int previous_support = 0;
++    int next_support = 0;
++    for (int offset = -1; offset <= 1; ++offset) {
++      auto previous = histogram.find(entry.first - 1 + offset);
++      auto next = histogram.find(entry.first + 1 + offset);
++      if (previous != histogram.end())
++        previous_support += previous->second;
++      if (next != histogram.end())
++        next_support += next->second;
++    }
++    if (support >= floor_min_viewpoint_support_ && support >= previous_support &&
++        support >= next_support)
++      peaks.push_back({(entry.first + 0.5) * floor_histogram_resolution_, support});
++  }
++
++  std::sort(peaks.begin(), peaks.end(), [](const Peak &lhs, const Peak &rhs) {
++    return lhs.support > rhs.support;
++  });
++  online_floor_levels_.clear();
++  for (const auto &peak : peaks) {
++    bool separated = true;
++    for (double level : online_floor_levels_)
++      if (std::abs(level - peak.z) < floor_min_separation_) {
++        separated = false;
++        break;
++      }
++    if (!separated)
++      continue;
++
++    double weighted_z = 0.0;
++    int count = 0;
++    for (double sample : samples)
++      if (std::abs(sample - peak.z) <= floor_same_band_tolerance_) {
++        weighted_z += sample;
++        ++count;
++      }
++    online_floor_levels_.push_back(count > 0 ? weighted_z / count : peak.z);
++  }
++  if (online_floor_levels_.empty())
++    online_floor_levels_.push_back(pos.z());
++  std::sort(online_floor_levels_.begin(), online_floor_levels_.end());
++
++  if (!active_floor_initialized_) {
++    active_floor_z_ = pos.z();
++    active_floor_initialized_ = true;
++    floor_lock_until_ = ros::Time::now() + ros::Duration(floor_switch_lock_seconds_);
++  }
++
++  // A floor switch is committed only after a previously selected cross-floor
++  // target is physically reached. Merely discovering a high viewpoint cannot
++  // change the active floor.
++  if (pending_floor_valid_ &&
++      std::abs(pos.z() - pending_floor_z_) <= floor_same_band_tolerance_ &&
++      std::abs(active_floor_z_ - pending_floor_z_) >= 0.5 * floor_min_separation_) {
++    ROS_WARN("[ExplorationManager] Online floor switch committed: %.2f -> %.2f",
++             active_floor_z_, pending_floor_z_);
++    active_floor_z_ = pending_floor_z_;
++    pending_floor_valid_ = false;
++    floor_lock_until_ = ros::Time::now() + ros::Duration(floor_switch_lock_seconds_);
++  }
++
++  double nearest_active = online_floor_levels_.front();
++  for (double level : online_floor_levels_)
++    if (std::abs(level - active_floor_z_) < std::abs(nearest_active - active_floor_z_))
++      nearest_active = level;
++  if (std::abs(nearest_active - active_floor_z_) <= floor_same_band_tolerance_)
++    active_floor_z_ = 0.8 * active_floor_z_ + 0.2 * nearest_active;
++
++  string levels;
++  for (double level : online_floor_levels_)
++    levels += std::to_string(level) + " ";
++  ROS_INFO("[ExplorationManager] Online floors=[%s], active=%.2f, samples=%zu",
++           levels.c_str(), active_floor_z_, samples.size());
++}
++
++int ExplorationManager::classifyFloorCandidate(const Vector3d &pos) const {
++  if (!floor_priority_enabled_ || !active_floor_initialized_)
++    return 0;
++  if (std::abs(pos.z() - active_floor_z_) <= floor_same_band_tolerance_)
++    return 0;
++
++  for (double level : online_floor_levels_)
++    if (std::abs(pos.z() - level) <= floor_same_band_tolerance_ &&
++        std::abs(level - active_floor_z_) >= 0.5 * floor_min_separation_)
++      return 2; // A viewpoint assigned to another observed floor.
++  return 1;     // Transition or insufficient online floor evidence.
++}
++
++void ExplorationManager::applyFloorPriority(const Vector3d &pos, const Vector3d &vel,
++                                            const Vector3d &yaw, Vector3d &next_pos,
++                                            double &next_yaw) {
++  if (!floor_priority_enabled_)
++    return;
++  updateOnlineFloorModel(pos);
++
++  const int selected_class = classifyFloorCandidate(next_pos);
++  if (selected_class == 0)
++    return;
++
++  struct Candidate {
++    Vector3d pos;
++    double yaw;
++    double distance;
++  };
++  vector<Candidate> candidates;
++  auto add_candidate = [&](const Vector3d &candidate, double candidate_yaw) {
++    if (!candidate.allFinite() || !std::isfinite(candidate_yaw) ||
++        classifyFloorCandidate(candidate) != 0 || isTemporarilyBlocked(candidate) ||
++        (candidate - pos).norm() < 0.20)
++      return;
++    for (const auto &existing : candidates)
++      if ((existing.pos - candidate).norm() < 0.05)
++        return;
++    candidates.push_back({candidate, candidate_yaw, (candidate - pos).norm()});
++  };
++  for (size_t i = 0; i < ed_->n_points_.size(); ++i)
++    for (size_t j = 0; j < ed_->n_points_[i].size(); ++j)
++      add_candidate(ed_->n_points_[i][j], ed_->n_yaws_[i][j]);
++  for (size_t i = 0; i < ed_->points_.size(); ++i)
++    add_candidate(ed_->points_[i], ed_->yaws_[i]);
++
++  std::sort(candidates.begin(), candidates.end(), [](const Candidate &lhs, const Candidate &rhs) {
++    return lhs.distance < rhs.distance;
++  });
++  if (candidates.size() > static_cast<size_t>(floor_candidate_limit_))
++    candidates.resize(floor_candidate_limit_);
++
++  vector<Vector3d> selected_path;
++  double selected_cost = PathCostEvaluator::computeCost(pos, next_pos, yaw[0], next_yaw, vel,
++                                                        yaw[1], selected_path);
++  double best_cost = std::numeric_limits<double>::max();
++  Candidate best_candidate;
++  for (const auto &candidate : candidates) {
++    vector<Vector3d> path;
++    const double cost = PathCostEvaluator::computeCost(pos, candidate.pos, yaw[0], candidate.yaw,
++                                                       vel, yaw[1], path);
++    if (cost < best_cost) {
++      best_cost = cost;
++      best_candidate = candidate;
++    }
++  }
++
++  const double lock_multiplier = ros::Time::now() < floor_lock_until_ ? 2.0 : 1.0;
++  const double crossing_penalty = floor_crossing_penalty_ * lock_multiplier * selected_class;
++  if (std::isfinite(best_cost) && best_cost < 499.0 &&
++      (!std::isfinite(selected_cost) || selected_cost >= 499.0 ||
++       best_cost <= selected_cost + crossing_penalty)) {
++    ROS_WARN("[ExplorationManager] Floor priority keeps active floor %.2f: "
++             "replace z=%.2f (class=%d, cost=%.2f) with z=%.2f (cost=%.2f)",
++             active_floor_z_, next_pos.z(), selected_class, selected_cost,
++             best_candidate.pos.z(), best_cost);
++    next_pos = best_candidate.pos;
++    next_yaw = best_candidate.yaw;
++    ed_->refined_points_ = {next_pos};
++    ed_->refined_views_ = {
++        next_pos + 2.0 * Vector3d(cos(next_yaw), sin(next_yaw), 0)};
++    return;
++  }
++
++  if (selected_class == 2 && !online_floor_levels_.empty()) {
++    pending_floor_z_ = online_floor_levels_.front();
++    for (double level : online_floor_levels_)
++      if (std::abs(level - next_pos.z()) < std::abs(pending_floor_z_ - next_pos.z()))
++        pending_floor_z_ = level;
++    pending_floor_valid_ = true;
++  }
++  ROS_WARN("[ExplorationManager] Floor priority permits transition from %.2f toward z=%.2f; "
++           "no competitive reachable active-floor viewpoint",
++           active_floor_z_, next_pos.z());
++}
++
+ ExplorationManager::~ExplorationManager() {
+   PathCostEvaluator::astar_.reset();
+   PathCostEvaluator::caster_.reset();
+@@ -112,6 +322,20 @@
+   nh.param("/exploration_manager/max_decay", ep_->max_decay_, -1.0);
+   nh.param("/exploration_manager/dormant_finish_block_threshold",
+            dormant_finish_block_threshold_, 0);
++  nh.param("/exploration_manager/floor_priority_enabled", floor_priority_enabled_, false);
++  nh.param("/exploration_manager/floor_histogram_resolution",
++           floor_histogram_resolution_, 0.5);
++  nh.param("/exploration_manager/floor_min_separation", floor_min_separation_, 2.0);
++  nh.param("/exploration_manager/floor_same_band_tolerance",
++           floor_same_band_tolerance_, 1.35);
++  nh.param("/exploration_manager/floor_min_viewpoint_support",
++           floor_min_viewpoint_support_, 3);
++  nh.param("/exploration_manager/floor_crossing_penalty", floor_crossing_penalty_, 12.0);
++  nh.param("/exploration_manager/floor_switch_lock_seconds",
++           floor_switch_lock_seconds_, 20.0);
++  nh.param("/exploration_manager/floor_candidate_limit", floor_candidate_limit_, 24);
++  active_floor_initialized_ = false;
++  pending_floor_valid_ = false;
+
+   ep_->tsp_dir_ = ros::package::getPath("exploration_utils") + "/resource";
+
+@@ -1057,6 +1281,9 @@
+
+   ed_->next_pos_ = next_pos;
+   ed_->next_yaw_ = next_yaw;
++  applyFloorPriority(pos, vel, yaw, next_pos, next_yaw);
++  ed_->next_pos_ = next_pos;
++  ed_->next_yaw_ = next_yaw;
+   ROS_INFO("[ExplorationManager] Next pos: %.2lf, %.2lf, %.2lf, yaw: %.2lf", next_pos[0],
+            next_pos[1], next_pos[2], next_yaw);
+   LOG(INFO) << "[ExplorationManager] Next pos: " << next_pos[0] << ", " << next_pos[1] << ", "
