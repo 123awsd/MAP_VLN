@@ -115,6 +115,13 @@ exploration_manager:
   voxel_astar_fallback_max_search_time: 0.5
   fsm:
     replan_thresh2: 1.0
+    oscillation_detection_enabled: true
+    oscillation_window: 10.0
+    oscillation_position_tolerance: 0.35
+    oscillation_min_separation: 0.35
+    oscillation_coverage_epsilon: 0.2
+    oscillation_max_trajectory_length: 1.2
+    oscillation_cooldown: 45.0
 
 traj_server:
   init_dx: 0.0

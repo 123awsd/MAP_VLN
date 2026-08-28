@@ -67,6 +67,7 @@ COPY patches/falcon/visualization_bspline_guard.patch /tmp/visualization_bspline
 COPY patches/falcon/disable_async_bspline_visualization.patch /tmp/disable_async_bspline_visualization.patch
 COPY patches/falcon/active_frontier_block.patch /tmp/active_frontier_block.patch
 COPY patches/falcon/invalid_frontier_candidate_guard.patch /tmp/invalid_frontier_candidate_guard.patch
+COPY patches/falcon/executed_goal_oscillation_guard.patch /tmp/executed_goal_oscillation_guard.patch
 RUN patch -d FALCON -p1 < /tmp/habitat_ground_viewpoint.patch
 RUN patch -d FALCON -p1 < /tmp/true_3d_viewpoints.patch
 RUN patch -d FALCON -p1 < /tmp/astar_start_voxel_escape.patch
@@ -86,6 +87,7 @@ RUN patch -d FALCON -p1 < /tmp/visualization_bspline_guard.patch
 RUN patch -d FALCON -p1 < /tmp/disable_async_bspline_visualization.patch
 RUN patch -d FALCON -p1 < /tmp/active_frontier_block.patch
 RUN patch -d FALCON -p1 < /tmp/invalid_frontier_candidate_guard.patch
+RUN patch -d FALCON -p1 < /tmp/executed_goal_oscillation_guard.patch
 
 # Habitat replaces FALCON's built-in CUDA/Open3D sensor renderers.
 RUN touch FALCON/uav_simulator/camera_sensing/pointcloud_render/CATKIN_IGNORE \

@@ -1,0 +1,201 @@
+--- a/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h
++++ b/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h
+@@ -51,6 +51,8 @@
+
+   void initializeHierarchicalGrid(const Vector3d &pos, const Vector3d &vel);
+
++  void blockViewpoint(const Vector3d &pos, double seconds, const string &reason);
++
+   shared_ptr<ExplorationData> ed_;
+   shared_ptr<ExplorationParam> ep_;
+   shared_ptr<ExplorationExpData> ee_;
+--- a/falcon_planner/exploration_manager/include/exploration_manager/exploration_data.h
++++ b/falcon_planner/exploration_manager/include/exploration_manager/exploration_data.h
+@@ -36,6 +36,14 @@
+   double replan_duration_fast_;
+   double replan_duration_default_;
+   double replan_duration_slow_;
++
++  bool oscillation_detection_enabled_;
++  double oscillation_window_;
++  double oscillation_position_tolerance_;
++  double oscillation_min_separation_;
++  double oscillation_coverage_epsilon_;
++  double oscillation_max_trajectory_length_;
++  double oscillation_cooldown_;
+ };
+
+ struct ExplorationData {
+--- a/falcon_planner/exploration_manager/include/exploration_manager/exploration_fsm.h
++++ b/falcon_planner/exploration_manager/include/exploration_manager/exploration_fsm.h
+@@ -2,6 +2,7 @@
+ #define _EXPLORATION_FSM_H_
+
+ #include <algorithm>
++#include <deque>
+ #include <iostream>
+ #include <memory>
+ #include <string>
+@@ -62,8 +63,21 @@
+
+   ros::Time trajectory_start_time_;
+
++  struct ExecutedGoalRecord {
++    Vector3d viewpoint;
++    Vector3d actual_end;
++    double coverage;
++    double trajectory_length;
++    ros::Time completed_at;
++  };
++  std::deque<ExecutedGoalRecord> executed_goal_history_;
++  Vector3d executing_viewpoint_;
++  double executing_trajectory_length_;
++  bool executing_goal_valid_;
++
+   /* helper functions */
+   int callExplorationPlanner();
++  bool recordExecutedGoalAndDetectOscillation();
+   void transitState(EXPL_STATE new_state, string pos_call);
+
+   /* ROS functions */
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+@@ -51,6 +51,30 @@
+   blocked_frontiers_.push_back({pos, 1, ros::Time(0)});
+ }
+
++void ExplorationManager::blockViewpoint(const Vector3d &pos, double seconds,
++                                        const string &reason) {
++  if (!pos.allFinite() || !std::isfinite(seconds) || seconds <= 0.0)
++    return;
++
++  const ros::Time now = ros::Time::now();
++  const ros::Time blocked_until = now + ros::Duration(seconds);
++  for (auto &state : blocked_frontiers_) {
++    if ((pos - state.position).norm() >= 0.35)
++      continue;
++    state.position = pos;
++    state.failures = std::max(state.failures, 2);
++    if (state.blocked_until < blocked_until)
++      state.blocked_until = blocked_until;
++    ROS_ERROR("[ExplorationManager] Blocking viewpoint (%.2f, %.2f, %.2f) for %.1fs: %s",
++              pos.x(), pos.y(), pos.z(), seconds, reason.c_str());
++    return;
++  }
++
++  blocked_frontiers_.push_back({pos, 2, blocked_until});
++  ROS_ERROR("[ExplorationManager] Blocking viewpoint (%.2f, %.2f, %.2f) for %.1fs: %s",
++            pos.x(), pos.y(), pos.z(), seconds, reason.c_str());
++}
++
+ ExplorationManager::~ExplorationManager() {
+   PathCostEvaluator::astar_.reset();
+   PathCostEvaluator::caster_.reset();
+--- a/falcon_planner/exploration_manager/src/exploration_fsm.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_fsm.cpp
+@@ -20,6 +20,18 @@
+   nh.param("/exploration_manager/fsm/replan_duration_fast", fp_->replan_duration_fast_, -1.0);
+   nh.param("/exploration_manager/fsm/replan_duration_default", fp_->replan_duration_default_, -1.0);
+   nh.param("/exploration_manager/fsm/replan_duration_slow", fp_->replan_duration_slow_, -1.0);
++  nh.param("/exploration_manager/fsm/oscillation_detection_enabled",
++           fp_->oscillation_detection_enabled_, true);
++  nh.param("/exploration_manager/fsm/oscillation_window", fp_->oscillation_window_, 10.0);
++  nh.param("/exploration_manager/fsm/oscillation_position_tolerance",
++           fp_->oscillation_position_tolerance_, 0.35);
++  nh.param("/exploration_manager/fsm/oscillation_min_separation",
++           fp_->oscillation_min_separation_, 0.35);
++  nh.param("/exploration_manager/fsm/oscillation_coverage_epsilon",
++           fp_->oscillation_coverage_epsilon_, 0.2);
++  nh.param("/exploration_manager/fsm/oscillation_max_trajectory_length",
++           fp_->oscillation_max_trajectory_length_, 1.2);
++  nh.param("/exploration_manager/fsm/oscillation_cooldown", fp_->oscillation_cooldown_, 45.0);
+   fp_->replan_duration_ = fp_->replan_duration_default_;
+
+   /* Initialize main modules */
+@@ -37,6 +49,8 @@
+   fd_->triggered_ = false;
+
+   frontier_ready_ = false;
++  executing_goal_valid_ = false;
++  executing_trajectory_length_ = 0.0;
+
+   /* Ros sub, pub and timer */
+   exec_timer_ =
+@@ -497,6 +511,10 @@
+     // ROS_BLUE_STREAM("[FSM] Traj dt: " << dt);
+     if (dt > 0.0) {
+       bspline_pub_.publish(fd_->newest_traj_);
++      executing_viewpoint_ = expl_manager_->ed_->next_pos_;
++      executing_trajectory_length_ = pos_traj_length;
++      executing_goal_valid_ = executing_viewpoint_.allFinite() &&
++                              std::isfinite(executing_trajectory_length_);
+       fd_->static_state_ = false;
+       transitState(EXEC_TRAJ, "FSM");
+
+@@ -535,6 +553,9 @@
+     }
+
+     if (need_replan) {
++      if (replan_type == 2)
++        recordExecutedGoalAndDetectOscillation();
++
+       {
+         // Log replan type
+         string replan_type_str;
+@@ -600,5 +621,56 @@
+   last_time = ros::Time::now();
+ }
+
++bool ExplorationFSM::recordExecutedGoalAndDetectOscillation() {
++  if (!fp_->oscillation_detection_enabled_ || !executing_goal_valid_)
++    return false;
++
++  const ros::Time now = ros::Time::now();
++  const double coverage = planner_manager_->map_server_->getMapCoverage();
++  executed_goal_history_.push_back({executing_viewpoint_, fd_->odom_pos_, coverage,
++                                    executing_trajectory_length_, now});
++  executing_goal_valid_ = false;
++
++  while (!executed_goal_history_.empty() &&
++         (now - executed_goal_history_.front().completed_at).toSec() >
++             fp_->oscillation_window_)
++    executed_goal_history_.pop_front();
++  while (executed_goal_history_.size() > 4)
++    executed_goal_history_.pop_front();
++
++  if (executed_goal_history_.size() < 3)
++    return false;
++
++  const size_t n = executed_goal_history_.size();
++  const auto &a = executed_goal_history_[n - 3];
++  const auto &b = executed_goal_history_[n - 2];
++  const auto &c = executed_goal_history_[n - 1];
++  const double target_closure = (a.viewpoint - c.viewpoint).norm();
++  const double actual_closure = (a.actual_end - c.actual_end).norm();
++  const double target_separation = (a.viewpoint - b.viewpoint).norm();
++  const double actual_separation = (a.actual_end - b.actual_end).norm();
++  const double coverage_delta = c.coverage - a.coverage;
++  const bool short_trajectories =
++      a.trajectory_length <= fp_->oscillation_max_trajectory_length_ &&
++      b.trajectory_length <= fp_->oscillation_max_trajectory_length_ &&
++      c.trajectory_length <= fp_->oscillation_max_trajectory_length_;
++
++  if (!short_trajectories || target_closure > fp_->oscillation_position_tolerance_ ||
++      actual_closure > fp_->oscillation_position_tolerance_ ||
++      target_separation < fp_->oscillation_min_separation_ ||
++      actual_separation < fp_->oscillation_min_separation_ ||
++      coverage_delta > fp_->oscillation_coverage_epsilon_)
++    return false;
++
++  ROS_ERROR("[FSM] Oscillation detected: A->B->A, target closure %.2fm, actual closure %.2fm, "
++            "coverage delta %.3f; blocking recent viewpoints for %.1fs",
++            target_closure, actual_closure, coverage_delta, fp_->oscillation_cooldown_);
++  for (const auto &record : executed_goal_history_)
++    expl_manager_->blockViewpoint(record.viewpoint, fp_->oscillation_cooldown_,
++                                  "executed A-B-A loop without coverage gain");
++  executed_goal_history_.clear();
++  return true;
++}
++
+ int ExplorationFSM::callExplorationPlanner() {
+   ros::Time time_r = ros::Time::now() + ros::Duration(fp_->replan_duration_);
