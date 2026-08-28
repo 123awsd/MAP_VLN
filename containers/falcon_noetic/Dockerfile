@@ -62,6 +62,11 @@ COPY patches/falcon/zero_cost_guard.patch /tmp/zero_cost_guard.patch
 COPY patches/falcon/robust_ground_planner.patch /tmp/robust_ground_planner.patch
 COPY patches/falcon/robust_bspline_optimizer.patch /tmp/robust_bspline_optimizer.patch
 COPY patches/falcon/exploration_recovery_fallback.patch /tmp/exploration_recovery_fallback.patch
+COPY patches/falcon/dormant_frontier_recovery.patch /tmp/dormant_frontier_recovery.patch
+COPY patches/falcon/visualization_bspline_guard.patch /tmp/visualization_bspline_guard.patch
+COPY patches/falcon/disable_async_bspline_visualization.patch /tmp/disable_async_bspline_visualization.patch
+COPY patches/falcon/active_frontier_block.patch /tmp/active_frontier_block.patch
+COPY patches/falcon/invalid_frontier_candidate_guard.patch /tmp/invalid_frontier_candidate_guard.patch
 RUN patch -d FALCON -p1 < /tmp/habitat_ground_viewpoint.patch
 RUN patch -d FALCON -p1 < /tmp/true_3d_viewpoints.patch
 RUN patch -d FALCON -p1 < /tmp/astar_start_voxel_escape.patch
@@ -76,6 +81,11 @@ RUN if grep -q "No reachable recovery candidate for selected frontier" \
     else \
       patch -d FALCON -p1 < /tmp/exploration_recovery_fallback.patch; \
     fi
+RUN patch -d FALCON -p1 < /tmp/dormant_frontier_recovery.patch
+RUN patch -d FALCON -p1 < /tmp/visualization_bspline_guard.patch
+RUN patch -d FALCON -p1 < /tmp/disable_async_bspline_visualization.patch
+RUN patch -d FALCON -p1 < /tmp/active_frontier_block.patch
+RUN patch -d FALCON -p1 < /tmp/invalid_frontier_candidate_guard.patch
 
 # Habitat replaces FALCON's built-in CUDA/Open3D sensor renderers.
 RUN touch FALCON/uav_simulator/camera_sensing/pointcloud_render/CATKIN_IGNORE \

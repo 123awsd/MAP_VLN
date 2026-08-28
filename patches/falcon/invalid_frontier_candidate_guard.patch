@@ -1,0 +1,71 @@
+diff -ruN a/falcon_planner/exploration_manager/src/exploration_fsm.cpp b/falcon_planner/exploration_manager/src/exploration_fsm.cpp
+--- a/falcon_planner/exploration_manager/src/exploration_fsm.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_fsm.cpp
+@@ -823,9 +823,11 @@
+                                   "points", 0, PlanningVisualization::PUBLISHER::VIEWPOINT);
+     }
+
+-    if (ed->frontiers_.size() > 0) {
+-      frontier_ready_ = true;
+-    }
++    frontier_ready_ = !ed->frontiers_.empty() && !ed->points_.empty() &&
++                      ed->points_.size() == ed->frontiers_.size() &&
++                      ed->yaws_.size() == ed->points_.size();
++    if (!frontier_ready_)
++      ROS_WARN("[FSM] Frontier callback has no executable active viewpoint; staying idle");
+   }
+
+   if (expl_manager_->ep_->auto_start_ && frontier_ready_ && state_ == WAIT_TRIGGER) {
+diff -ruN a/falcon_planner/exploration_manager/src/exploration_manager.cpp b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+@@ -720,6 +720,12 @@
+       // No frontier in next grid, find a nearest viewpoint
+       ROS_WARN("[ExplorationManager] No frontier average in next grid cell either");
+
++      if (ed_->points_.empty() || ed_->points_.size() != ed_->yaws_.size()) {
++        ROS_ERROR("[ExplorationManager] No valid active frontier viewpoint; refusing to "
++                  "generate a fallback target");
++        return FAIL;
++      }
++
+       Eigen::Vector3d grid_center = ed_->grid_tour2_[1];
+       double min_cost = std::numeric_limits<double>::max();
+       int min_cost_id = -1;
+@@ -746,6 +752,11 @@
+         }
+       }
+
++      if (min_cost_id < 0) {
++        ROS_ERROR("[ExplorationManager] No finite frontier candidate near the next grid cell");
++        return FAIL;
++      }
++
+       // Check reachability from current position
+       vector<Eigen::Vector3d> path;
+       double cost = PathCostEvaluator::computeCost(pos, ed_->points_[min_cost_id], yaw[0],
+@@ -768,6 +779,12 @@
+             min_cost_id = i;
+           }
+         }
++
++        if (min_cost_id < 0 || !std::isfinite(min_cost) || min_cost > 499.0) {
++          ROS_ERROR("[ExplorationManager] Active frontier viewpoints are not reachable from "
++                    "the current FREE-space component");
++          return FAIL;
++        }
+       }
+
+       next_pos = ed_->points_[min_cost_id];
+@@ -1531,6 +1554,12 @@
+     ROS_WARN("[ExplorationManager] No frontier");
+     return 0;
+   }
++  if (ed_->points_.empty() || ed_->points_.size() != ed_->frontiers_.size() ||
++      ed_->yaws_.size() != ed_->points_.size()) {
++    ROS_ERROR("[ExplorationManager] Active frontiers exist without matching executable "
++              "viewpoints; refusing to plan or report completion");
++    return -1;
++  }
+
+   double view_time = (ros::Time::now() - t1).toSec();

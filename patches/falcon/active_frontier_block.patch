@@ -1,0 +1,116 @@
+diff -ruN a/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h b/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h
+--- a/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h
++++ b/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h
+@@ -88,7 +88,16 @@
+   void clearExplorationData();
+
++  bool isTemporarilyBlocked(const Vector3d &pos) const;
++  void notePlanningFailure(const Vector3d &pos);
++
+   template <typename T>
+   void saveCostMatrix(const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &mat,
+                       const string &filename);
+
+   double latest_frontier_time_;
++  struct FrontierBlockState {
++    Vector3d position;
++    int failures;
++    ros::Time blocked_until;
++  };
++  vector<FrontierBlockState> blocked_frontiers_;
+ };
+
+ } // namespace fast_planner
+diff -ruN a/falcon_planner/exploration_manager/src/exploration_manager.cpp b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+@@ -21,5 +21,34 @@
+ namespace fast_planner {
+
+ ExplorationManager::ExplorationManager() {}
++
++bool ExplorationManager::isTemporarilyBlocked(const Vector3d &pos) const {
++  const ros::Time now = ros::Time::now();
++  for (const auto &state : blocked_frontiers_)
++    if ((pos - state.position).norm() < 0.35 && state.failures >= 2 &&
++        now < state.blocked_until)
++      return true;
++  return false;
++}
++
++void ExplorationManager::notePlanningFailure(const Vector3d &pos) {
++  const ros::Time now = ros::Time::now();
++  for (auto &state : blocked_frontiers_) {
++    if ((pos - state.position).norm() >= 0.35)
++      continue;
++    if (state.failures >= 2 && now >= state.blocked_until)
++      state.failures = 0;
++    ++state.failures;
++    state.position = pos;
++    if (state.failures >= 2) {
++      state.blocked_until = now + ros::Duration(45.0);
++      ROS_ERROR("[ExplorationManager] Temporarily blocking repeatedly unreachable frontier "
++                "viewpoint (%.2f, %.2f, %.2f) for 45s",
++                pos.x(), pos.y(), pos.z());
++    }
++    return;
++  }
++  blocked_frontiers_.push_back({pos, 1, ros::Time(0)});
++}
+
+ ExplorationManager::~ExplorationManager() {
+@@ -940,1 +962,43 @@
+   ed_->next_pos_ = next_pos;
++
++  // A stale viewpoint can remain selected after its frontier loses a FREE
++  // connection. Try another FALCON-generated observation pose while keeping
++  // the normal 3-D A* and B-spline pipeline unchanged.
++  if (isTemporarilyBlocked(next_pos)) {
++    ROS_WARN("[ExplorationManager] Selected viewpoint is temporarily blocked; "
++             "trying alternate FALCON viewpoints");
++    Position alternate_pos;
++    double alternate_yaw = 0.0;
++    double alternate_distance = std::numeric_limits<double>::max();
++    bool found_alternate = false;
++    auto consider_alternate = [&](const Position &candidate, double candidate_yaw) {
++      if (!candidate.allFinite() || !std::isfinite(candidate_yaw) ||
++          isTemporarilyBlocked(candidate) || (candidate - pos).norm() < 0.20)
++        return;
++      const double distance = (candidate - pos).norm();
++      if (distance < alternate_distance) {
++        alternate_pos = candidate;
++        alternate_yaw = candidate_yaw;
++        alternate_distance = distance;
++        found_alternate = true;
++      }
++    };
++    for (size_t i = 0; i < ed_->n_points_.size(); ++i)
++      for (size_t j = 0; j < ed_->n_points_[i].size(); ++j)
++        consider_alternate(ed_->n_points_[i][j], ed_->n_yaws_[i][j]);
++    for (size_t i = 0; i < ed_->points_.size(); ++i)
++      consider_alternate(ed_->points_[i], ed_->yaws_[i]);
++
++    if (!found_alternate) {
++      ROS_ERROR("[ExplorationManager] No unblocked alternate viewpoint available");
++      return FAIL;
++    }
++    next_pos = alternate_pos;
++    next_yaw = alternate_yaw;
++    ed_->next_pos_ = next_pos;
++    ed_->refined_points_ = {next_pos};
++    ed_->refined_views_ = {
++        next_pos + 2.0 * Vector3d(cos(next_yaw), sin(next_yaw), 0)};
++    ROS_WARN("[ExplorationManager] Alternate viewpoint: %.2f, %.2f, %.2f, yaw %.2f",
++             next_pos.x(), next_pos.y(), next_pos.z(), next_yaw);
++  }
+@@ -964,4 +1028,6 @@
+     auto addRecoveryCandidate = [&](const Position &candidate, double candidate_yaw) {
+       if (!candidate.allFinite() || !std::isfinite(candidate_yaw))
+         return;
++      if (isTemporarilyBlocked(candidate))
++        return;
+       if ((candidate - pos).norm() < 0.20)
+@@ -1016,2 +1082,3 @@
+     ROS_ERROR("[ExplorationManager] No reachable recovery candidate for selected frontier");
++    notePlanningFailure(next_pos);
+     return FAIL;

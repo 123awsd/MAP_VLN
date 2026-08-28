@@ -182,6 +182,14 @@ def main() -> None:
     parser.add_argument("--scene-config", type=Path, default=SCENE_CONFIG)
     parser.add_argument("--bridge-dir", type=Path, default=DEFAULT_BRIDGE_DIR)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument(
+        "--initial-position",
+        type=float,
+        nargs=3,
+        default=None,
+        metavar=("X", "Y", "Z"),
+        help="explicit Habitat agent start generated from the same navmesh bounds",
+    )
     parser.add_argument("--duration", type=float, default=30.0)
     parser.add_argument("--hz", type=float, default=5.0)
     parser.add_argument("--follow-falcon", action="store_true")
@@ -263,7 +271,13 @@ def main() -> None:
         if not sim.pathfinder.is_loaded:
             raise RuntimeError("HM3D navmesh did not load")
         sim.pathfinder.seed(args.seed)
-        initial = sim.pathfinder.get_random_navigable_point()
+        initial = (
+            sim.pathfinder.get_random_navigable_point()
+            if args.initial_position is None
+            else np.asarray(args.initial_position, dtype=np.float32)
+        )
+        if not sim.pathfinder.is_navigable(initial):
+            raise RuntimeError(f"initial Habitat position is not navigable: {initial.tolist()}")
         state = habitat_sim.AgentState()
         state.position = initial
         state.rotation = quat_from_angle_axis(0.0, np.asarray([0.0, 1.0, 0.0]))

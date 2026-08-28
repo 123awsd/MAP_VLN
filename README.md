@@ -196,6 +196,14 @@ docker compose run --rm occusg bash -lc 'ros2 --version'
 
 成功 Bag 名为 `hm3d_stage1_00337_conditionalprefix_full_20260828_raw.bag`，约 17.2 GB。Bag、HM3D 数据和本地 Docker 镜像不进入 Git；在其他机器上应从本提交重新获取固定版本依赖并构建镜像。
 
+其他 HM3D 场景不需要手写三维边界。通用入口会根据固定 seed 的 Habitat 起点和 navmesh 自动生成场景专用三维 YAML，并将同一精确起点传给实际运行：
+
+~~~bash
+./scripts/run_hm3d_stage1_3d.sh 00166-RaYrxWt5pR1 full3d_v1 600 5 5 true
+~~~
+
+参数依次为场景 ID、实验名、最大时长、Habitat 频率、关键帧间隔和是否打开 RViz。默认录制 compact Bag：保留最终点云地图、轨迹和稀疏 RGB，避免重复保存每一帧完整占据图。
+
 ### 单场景 00166
 
 这是最适合第一次完整运行的入口。它拒绝未登记的场景名，并且如果输出已存在会拒绝覆盖：

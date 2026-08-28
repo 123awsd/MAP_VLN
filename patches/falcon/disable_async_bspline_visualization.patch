@@ -1,0 +1,24 @@
+--- a/falcon_planner/exploration_manager/src/exploration_fsm.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_fsm.cpp
+@@ -740,15 +740,12 @@ void ExplorationFSM::visualize() {
+   // visualization_->drawPolynomialTraj(info->init_traj_poly_, 0.1,
+   // PlanningVisualization::Color::Red(), 0); visualization_->drawPolynomialTraj(info->init_traj2_,
+   // 0.1, PlanningVisualization::Color::Red(), 1);
+-  if (info->position_traj_.getKnot().size() > 0) {
+-    visualization_->drawBspline(planner_manager_->local_data_.init_traj_bspline_, 0.05,
+-                                PlanningVisualization::Color::DeepGreen(), true, 0.1,
+-                                PlanningVisualization::Color::DeepGreen(), 0);
+-    visualization_->drawBspline(planner_manager_->local_data_.position_traj_, 0.05,
+-                                PlanningVisualization::Color::DeepBlue(), true, 0.1,
+-                                PlanningVisualization::Color::DeepBlue(), 1);
+-    // visualization_->drawBsplineWithVelocity(info->position_traj_, info->velocity_traj_);
+-  }
++  // visualize() runs in a detached thread while replanning mutates local_data_'s
++  // B-splines. Sampling those shared splines here can observe inconsistent knots
++  // and control points and abort inside Eigen/evaluateDeBoorT. Keep trajectory
++  // visualization disabled until the planner publishes an immutable snapshot.
++  // This only removes the two RViz B-spline markers; planning and execution still
++  // use the complete 3-D trajectories.
+
+   // visualization_->drawLines(ed_ptr->path_next_goal_, 0.05, Vector4d(0, 1, 1, 1), "next_goal", 1,
+   // 6);

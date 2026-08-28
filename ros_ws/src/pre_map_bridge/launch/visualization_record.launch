@@ -1,5 +1,6 @@
 <launch>
   <arg name="map_name" default="hm3d_example"/>
+  <arg name="map_config" default="$(find pre_map_bridge)/config/$(arg map_name).yaml"/>
   <arg name="bag_path" default="/workspace/shared/outputs/bags/hm3d_visualization.bag"/>
   <arg name="box_csv" default="/workspace/shared/outputs/boxer/hm3d_stage1/boxer_3dbbs_visual.csv"/>
   <arg name="rviz" default="true"/>
@@ -10,6 +11,7 @@
 
   <include file="$(find pre_map_bridge)/launch/habitat_falcon.launch">
     <arg name="map_name" value="$(arg map_name)"/>
+    <arg name="map_config" value="$(arg map_config)"/>
     <arg name="box_csv" value="$(arg box_csv)"/>
   </include>
 

@@ -55,6 +55,7 @@ frontier_finder:
   min_candidate_occupied_clearance: 0.3
 
 exploration_manager:
+  dormant_finish_block_threshold: 3
   # Normal 0.5/1.0 m 3-D A* stays fast. Only if both fail, retry on the
   # occupancy grid's native 0.2 m voxels to pass narrow FREE corridors.
   voxel_astar_fallback_enabled: true

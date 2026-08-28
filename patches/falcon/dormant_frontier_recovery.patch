@@ -1,0 +1,193 @@
+diff -ruN /tmp/pre-map-vln-patchbase.rufIkh/FALCON/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h /tmp/pre-map-vln-patchgen.yksEqo/FALCON/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h
+--- a/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h	2026-08-29 00:01:23.023338160 +0800
++++ b/falcon_planner/exploration_manager/include/exploration_manager/exploration_manager.h	2026-08-29 00:02:54.465323470 +0800
+@@ -94,6 +94,7 @@
+                       const string &filename);
+
+   double latest_frontier_time_;
++  int dormant_finish_block_threshold_;
+ };
+
+ } // namespace fast_planner
+diff -ruN /tmp/pre-map-vln-patchbase.rufIkh/FALCON/falcon_planner/exploration_manager/src/exploration_fsm.cpp /tmp/pre-map-vln-patchgen.yksEqo/FALCON/falcon_planner/exploration_manager/src/exploration_fsm.cpp
+--- a/falcon_planner/exploration_manager/src/exploration_fsm.cpp	2026-08-29 00:01:23.023617665 +0800
++++ b/falcon_planner/exploration_manager/src/exploration_fsm.cpp	2026-08-29 00:01:12.878524496 +0800
+@@ -564,7 +564,8 @@
+                                  PlanningVisualization::PUBLISHER::DEBUG);
+       }
+
+-      if (expl_manager_->updateFrontierStruct(fd_->odom_pos_) != 0) {
++      const int frontier_result = expl_manager_->updateFrontierStruct(fd_->odom_pos_);
++      if (frontier_result > 0) {
+         // Update frontier and plan new motion
+         thread vis_thread(&ExplorationFSM::visualize, this);
+         vis_thread.detach();
+@@ -575,10 +576,14 @@
+         // transitState(WAIT_TRIGGER, "FSM");
+         // fd_->static_state_ = true;
+
+-      } else {
++      } else if (frontier_result == 0) {
+         // No frontier detected, finish exploration
+         transitState(FINISH, "FSM");
+         ROS_WARN("[FSM] Finish exploration: No frontier detected");
++      } else {
++        fd_->static_state_ = true;
++        transitState(WAIT_TRIGGER, "FSM");
++        ROS_ERROR("[FSM] Exploration blocked: dormant frontiers remain; not complete");
+         // clearVisMarker();
+         // visualize();
+       }
+diff -ruN /tmp/pre-map-vln-patchbase.rufIkh/FALCON/falcon_planner/exploration_manager/src/exploration_manager.cpp /tmp/pre-map-vln-patchgen.yksEqo/FALCON/falcon_planner/exploration_manager/src/exploration_manager.cpp
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp	2026-08-29 00:01:23.023455718 +0800
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp	2026-08-29 00:01:12.793549011 +0800
+@@ -57,6 +57,8 @@
+   nh.param("/exploration_manager/refined_radius", ep_->refined_radius_, -1.0);
+   nh.param("/exploration_manager/top_view_num", ep_->top_view_num_, -1);
+   nh.param("/exploration_manager/max_decay", ep_->max_decay_, -1.0);
++  nh.param("/exploration_manager/dormant_finish_block_threshold",
++           dormant_finish_block_threshold_, 0);
+
+   ep_->tsp_dir_ = ros::package::getPath("exploration_utils") + "/resource";
+
+@@ -1510,6 +1512,10 @@
+
+   // Retrieve the updated info
+   frontier_finder_->getFrontiers(ed_->frontiers_);
++  if (ed_->frontiers_.empty()) {
++    frontier_finder_->recoverDormantFrontiers();
++    frontier_finder_->getFrontiers(ed_->frontiers_);
++  }
+   frontier_finder_->getTinyFrontiers(ed_->tiny_frontiers_);
+   frontier_finder_->getDormantFrontiers(ed_->dormant_frontiers_);
+   frontier_finder_->getFrontierBoxes(ed_->frontier_boxes_);
+@@ -1526,6 +1532,13 @@
+     ed_->views2_.insert(ed_->views2_.end(), v2.begin(), v2.end());
+   }
+   if (ed_->frontiers_.empty()) {
++    if (dormant_finish_block_threshold_ > 0 &&
++        ed_->dormant_frontiers_.size() >= dormant_finish_block_threshold_) {
++      ROS_ERROR("[ExplorationManager] Active frontiers empty but %zu dormant frontiers remain; "
++                "refusing to report completion",
++                ed_->dormant_frontiers_.size());
++      return -1;
++    }
+     ROS_WARN("[ExplorationManager] No frontier");
+     return 0;
+   }
+diff -ruN /tmp/pre-map-vln-patchbase.rufIkh/FALCON/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h /tmp/pre-map-vln-patchgen.yksEqo/FALCON/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h
+--- a/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h	2026-08-29 00:01:23.020520541 +0800
++++ b/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h	2026-08-29 00:01:12.460645053 +0800
+@@ -77,6 +77,7 @@
+   void getFrontiersVisibleNums(vector<int> &visib_nums);
+   void getDormantFrontiersVisibleNums(vector<int> &visib_nums);
+   void getFrontierBoxes(vector<pair<Vector3d, Vector3d>> &boxes);
++  int recoverDormantFrontiers();
+   // Get viewpoint with highest coverage for each frontier
+   void getTopViewpointsInfo(const Vector3d &cur_pos, vector<Vector3d> &points, vector<double> &yaws,
+                             vector<Vector3d> &averages);
+@@ -103,7 +104,8 @@
+   void computeFrontierInfo(Frontier &frontier);
+   void downsample(const vector<Vector3d> &cluster_in, vector<Vector3d> &cluster_out);
+   void sampleViewpoints(Frontier &frontier);
+-  void sampleViewpoints3D(Frontier &frontier);
++  void sampleViewpoints3D(Frontier &frontier, double vertical_range = 0.5,
++                          double radius_scale = 1.0);
+
+   bool isNearUnknown(const Vector3d &pos);
+   bool isNearOccupied(const Vector3d &pos);
+@@ -147,4 +149,4 @@
+ };
+
+ } // namespace fast_planner
+-#endif
+\ No newline at end of file
++#endif
+diff -ruN /tmp/pre-map-vln-patchbase.rufIkh/FALCON/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp /tmp/pre-map-vln-patchgen.yksEqo/FALCON/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
+--- a/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp	2026-08-29 00:01:23.020632552 +0800
++++ b/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp	2026-08-29 00:01:12.547619961 +0800
+@@ -573,9 +573,16 @@
+   // viewpoint number
+   for (auto &tmp_ftr : tmp_frontiers_) {
+     // Search viewpoints around frontier
+-    if (use_3d_viewpoints_)
++    if (use_3d_viewpoints_) {
+       sampleViewpoints3D(tmp_ftr);
+-    else
++      if (tmp_ftr.viewpoints_.empty()) {
++        ROS_WARN("[FrontierFinder] Standard 3-D viewpoints unavailable; trying expanded "
++                 "dormant-frontier recovery candidates");
++        sampleViewpoints3D(tmp_ftr, 1.5, 1.5);
++        if (!tmp_ftr.viewpoints_.empty())
++          ROS_WARN("[FrontierFinder] Recovered frontier using expanded 3-D viewpoints");
++      }
++    } else
+       sampleViewpoints(tmp_ftr);
+     if (!tmp_ftr.viewpoints_.empty()) {
+       ++new_num;
+@@ -900,15 +907,18 @@
+   }
+ }
+
+-void FrontierFinder::sampleViewpoints3D(Frontier &frontier) {
++void FrontierFinder::sampleViewpoints3D(Frontier &frontier, double vertical_range,
++                                        double radius_scale) {
+   CHECK_EQ(frontier.viewpoints_.size(), 0) << "Frontier already has viewpoints";
+
+   std::vector<fast_planner::Viewpoint> viewpoints, viewpoints_near_occupied;
+   // Evaluate sample viewpoints on cylinders, find ones that cover most cells
+-  for (double viewpoint_height = frontier.average_.z() - 0.5;
+-       viewpoint_height <= frontier.average_.z() + 0.51; viewpoint_height += 0.5) {
+-    for (double rc = candidate_rmin_, dr = (candidate_rmax_ - candidate_rmin_) / candidate_rnum_;
+-         rc <= candidate_rmax_ + 1e-3; rc += dr) {
++  const double recovery_rmax = candidate_rmax_ * radius_scale;
++  for (double viewpoint_height = frontier.average_.z() - vertical_range;
++       viewpoint_height <= frontier.average_.z() + vertical_range + 1e-3;
++       viewpoint_height += 0.5) {
++    for (double rc = candidate_rmin_, dr = (recovery_rmax - candidate_rmin_) / candidate_rnum_;
++         rc <= recovery_rmax + 1e-3; rc += dr) {
+       double candidate_dphi = candidate_dphi_;
+       if (rc < 1.0)
+         candidate_dphi = candidate_dphi_ * 2.0;
+@@ -1061,6 +1071,9 @@
+     }
+   }
+
++  if (!viewpoints.empty() && frontier.viewpoints_.empty())
++    frontier.viewpoints_ = viewpoints;
++
+   // cout << "viewpoints before: " << viewpoints.size() << endl;
+   // cout << "viewpoints after: " << frontier.viewpoints_.size() << endl;
+ }
+@@ -1256,4 +1269,29 @@
+   cell_heights_ = cell_heights;
+ }
+
+-} // namespace fast_planner
+\ No newline at end of file
++int FrontierFinder::recoverDormantFrontiers() {
++  if (!use_3d_viewpoints_ || dormant_frontiers_.empty())
++    return 0;
++
++  list<Frontier> retry;
++  retry.swap(dormant_frontiers_);
++  int recovered = 0;
++  for (auto &frontier : retry) {
++    frontier.viewpoints_.clear();
++    frontier.visib_num_ = 0;
++    sampleViewpoints3D(frontier, 1.5, 1.5);
++    if (!frontier.viewpoints_.empty()) {
++      frontier.id_ = frontiers_.size();
++      frontiers_.push_back(frontier);
++      ++recovered;
++    } else {
++      dormant_frontiers_.push_back(frontier);
++    }
++  }
++  if (recovered > 0)
++    ROS_WARN("[FrontierFinder] Reactivated %d dormant frontier(s) with expanded 3-D viewpoints",
++             recovered);
++  return recovered;
++}
++
++} // namespace fast_planner

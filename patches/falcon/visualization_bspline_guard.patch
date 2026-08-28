@@ -1,0 +1,25 @@
+--- a/falcon_planner/trajectory/src/traj_utils/planning_visualization.cpp	2026-08-29 01:34:46.658759198 +0800
++++ b/falcon_planner/trajectory/src/traj_utils/planning_visualization.cpp	2026-08-29 01:34:46.664940315 +0800
+@@ -589,12 +589,20 @@
+ void PlanningVisualization::drawBspline(NonUniformBspline &bspline, double size,
+                                         const Eigen::Vector4d &color, bool show_ctrl_pts,
+                                         double size2, const Eigen::Vector4d &color2, int id1) {
+-  if (bspline.getControlPoint().size() == 0)
++  const Eigen::MatrixXd control_points = bspline.getControlPoint();
++  const Eigen::VectorXd knots = bspline.getKnot();
++  if (control_points.rows() < 2 || control_points.cols() < 3 || knots.size() < 4 ||
++      !control_points.allFinite() || !knots.allFinite())
++    return;
++  const long degree = knots.size() - control_points.rows() - 1;
++  if (degree < 1 || control_points.rows() <= degree || knots.size() <= 2 * degree + 1)
+     return;
+
+   vector<Eigen::Vector3d> traj_pts;
+   double tm, tmp;
+   bspline.getTimeSpan(tm, tmp);
++  if (!std::isfinite(tm) || !std::isfinite(tmp) || tmp <= tm)
++    return;
+
+-  for (double t = tm; t <= tmp; t += 0.01) {
++  for (double t = tm; t < tmp; t += 0.01) {
+     Eigen::Vector3d pt = bspline.evaluateDeBoorT(t);
