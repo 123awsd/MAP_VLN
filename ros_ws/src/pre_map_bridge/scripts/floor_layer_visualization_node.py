@@ -46,6 +46,8 @@ class FloorLayerVisualization:
         self.cloud_path = Path(rospy.get_param("~cloud_path"))
         self.boxes_path = Path(rospy.get_param("~boxes_path"))
         self.trajectory_path = Path(rospy.get_param("~trajectory_path"))
+        self.transition_json_path = Path(rospy.get_param("~transition_json_path", ""))
+        self.transition_points_path = Path(rospy.get_param("~transition_points_path", ""))
         self.floor_json_path = Path(rospy.get_param("~floor_json_path", ""))
         self.floor_detection_mode = rospy.get_param("~floor_detection_mode", "falcon")
         self.selected_floor = int(rospy.get_param("~selected_floor", 0))
@@ -64,6 +66,12 @@ class FloorLayerVisualization:
         )
         self.trajectory_pub = rospy.Publisher(
             "/pre_map_vln/floor_trajectory", MarkerArray, queue_size=1, latch=True
+        )
+        self.transition_cloud_pub = rospy.Publisher(
+            "/pre_map_vln/stair_transition_points", PointCloud2, queue_size=1, latch=True
+        )
+        self.transition_marker_pub = rospy.Publisher(
+            "/pre_map_vln/stair_transition_markers", MarkerArray, queue_size=1, latch=True
         )
         self.status_pub = rospy.Publisher(
             "/pre_map_vln/floor_view_status", Marker, queue_size=1, latch=True
@@ -100,6 +108,14 @@ class FloorLayerVisualization:
             self.points
         )
         self.boxes = self.load_boxes(self.boxes_path)
+        self.transition_data = self.load_transition_data(self.transition_json_path)
+        self.transition_points = (
+            self.load_pcd(self.transition_points_path)
+            if self.transition_points_path.is_file() else np.empty((0, 3), dtype=np.float32)
+        )
+        self.transition_point_space_ids = self.assign_transition_spaces(
+            self.transition_points, self.transition_data
+        )
         self.trajectory_floors = (
             self.assign_floors(self.trajectory[:, 2])
             if len(self.trajectory)
@@ -112,6 +128,10 @@ class FloorLayerVisualization:
         rospy.loginfo(
             "Floor viewer ready: %d points, %d boxes, %d trajectory points, %d levels",
             len(self.points), len(self.boxes), len(self.trajectory), len(self.floor_z),
+        )
+        rospy.loginfo(
+            "Transition reconstruction: %d spaces, %d highlighted occupied points",
+            len(self.transition_data), len(self.transition_points),
         )
         rospy.loginfo(
             "Floor planes (%s): %s",
@@ -297,9 +317,44 @@ class FloorLayerVisualization:
         if data_line is None:
             raise RuntimeError(f"Only ASCII PCD is supported: {path}")
         points = np.loadtxt(path, dtype=np.float32, skiprows=data_line, ndmin=2)
+        if points.size == 0:
+            return np.empty((0, 3), dtype=np.float32)
         if points.shape[1] < 3:
             raise RuntimeError(f"PCD has fewer than three fields: {path}")
         return points[:, :3]
+
+    @staticmethod
+    def load_transition_data(path):
+        if not path.is_file():
+            return []
+        with path.open(encoding="utf-8") as stream:
+            return json.load(stream).get("transitions", [])
+
+    @staticmethod
+    def assign_transition_spaces(points, transitions):
+        """Associate highlighted points with a transition, not just a z layer."""
+        if not len(points) or not transitions:
+            return np.full(len(points), -1, dtype=np.int32)
+        centerlines = []
+        space_ids = []
+        for space_id, transition in enumerate(transitions):
+            sections = transition.get("boundary_sections", [])
+            line = np.asarray([item["center_xyz"] for item in sections], dtype=np.float32)
+            if not len(line):
+                continue
+            centerlines.append(line)
+            space_ids.extend([space_id] * len(line))
+        if not centerlines:
+            return np.full(len(points), -1, dtype=np.int32)
+        samples = np.vstack(centerlines)
+        # Point count is small enough for chunked vector distances and this
+        # avoids adding a SciPy dependency to the ROS1 container.
+        nearest = np.empty(len(points), dtype=np.int32)
+        for start in range(0, len(points), 2048):
+            chunk = points[start:start + 2048]
+            distances = ((chunk[:, None, :] - samples[None, :, :]) ** 2).sum(axis=2)
+            nearest[start:start + len(chunk)] = np.argmin(distances, axis=1)
+        return np.asarray(space_ids, dtype=np.int32)[nearest]
 
     @staticmethod
     def load_boxes(path):
@@ -439,6 +494,17 @@ class FloorLayerVisualization:
         message.is_dense = True
         return message
 
+    def make_transition_cloud(self, points):
+        floor_ids = self.assign_floors(points[:, 2]) if len(points) else np.empty(0, dtype=np.int32)
+        message = self.make_cloud(points, floor_ids, context=True)
+        if len(points):
+            colored = np.frombuffer(message.data, dtype=[
+                ("x", "<f4"), ("y", "<f4"), ("z", "<f4"), ("rgba", "<u4")
+            ]).copy()
+            colored["rgba"] = packed_rgba(255, 118, 0)
+            message.data = colored.tobytes()
+        return message
+
     @staticmethod
     def label_color(label):
         digest = hashlib.sha1(label.encode("utf-8")).digest()
@@ -547,6 +613,81 @@ class FloorLayerVisualization:
             result.markers.append(marker)
         return result
 
+    def transition_markers(self):
+        result = MarkerArray()
+        delete = Marker(); delete.action = Marker.DELETEALL; result.markers.append(delete)
+        marker_id = 1
+
+        def line_marker(namespace, color, alpha, width):
+            marker = Marker()
+            marker.header.frame_id = self.frame_id
+            marker.header.stamp = rospy.Time.now()
+            marker.ns = namespace
+            marker.id = 0
+            marker.type = Marker.LINE_LIST
+            marker.action = Marker.ADD
+            marker.pose.orientation.w = 1.0
+            marker.scale.x = width
+            marker.color.r, marker.color.g, marker.color.b = color
+            marker.color.a = alpha
+            return marker
+
+        observed = line_marker("observed_boundary", (1.0, 0.32, 0.0), 0.98, 0.075)
+        uncertain = line_marker("uncertain_boundary", (0.45, 0.48, 0.52), 0.70, 0.045)
+        reconstructed = line_marker("reconstructed_extent", (1.0, 0.66, 0.18), 0.55, 0.035)
+
+        for transition in self.transition_data:
+            connected = [int(value) for value in transition.get("connected_floors", [])]
+            if connected and max(connected) > self.visible_floor_count:
+                continue
+            if self.selected_floor > 0 and self.selected_floor not in connected:
+                continue
+            for traversal_index, traversal in enumerate(transition.get("traversals", [])):
+                path = np.asarray(traversal.get("centerline_xyz", []), dtype=np.float32)
+                if len(path) < 2:
+                    continue
+                core = Marker()
+                core.header.frame_id = self.frame_id; core.header.stamp = rospy.Time.now()
+                core.ns = "transition_core"; core.id = marker_id; marker_id += 1
+                core.type = Marker.LINE_STRIP; core.action = Marker.ADD; core.pose.orientation.w = 1.0
+                core.scale.x = 0.095; core.color.r = 0.82; core.color.g = 0.0; core.color.b = 1.0
+                core.color.a = 0.98 if traversal_index == 0 else 0.48
+                core.points = [Point(*point) for point in path]
+                result.markers.append(core)
+
+            sections = transition.get("boundary_sections", [])
+            for side in ("left", "right"):
+                key = f"{side}_xyz"; confidence = f"{side}_observed_wall"
+                for first, second in zip(sections, sections[1:]):
+                    target = observed if first.get(confidence) and second.get(confidence) else uncertain
+                    target.points.extend((Point(*first[key]), Point(*second[key])))
+            if sections:
+                for section, score_name in (
+                    (sections[0], "lower_floor_opening_score"),
+                    (sections[-1], "upper_floor_opening_score"),
+                ):
+                    target = reconstructed if transition.get(score_name, 0.0) >= 0.15 else uncertain
+                    target.points.extend((Point(*section["left_xyz"]), Point(*section["right_xyz"])))
+
+            for name, xyz, color in (
+                ("lower_entrance", transition.get("lower_entrance_xyz"), (1.0, 0.78, 0.0)),
+                ("upper_entrance", transition.get("upper_entrance_xyz"), (0.0, 0.74, 0.86)),
+            ):
+                if not xyz:
+                    continue
+                entrance = Marker()
+                entrance.header.frame_id = self.frame_id; entrance.header.stamp = rospy.Time.now()
+                entrance.ns = name; entrance.id = marker_id; marker_id += 1
+                entrance.type = Marker.SPHERE; entrance.action = Marker.ADD
+                entrance.pose.position = Point(*xyz); entrance.pose.orientation.w = 1.0
+                entrance.scale.x = entrance.scale.y = entrance.scale.z = 0.30
+                entrance.color.r, entrance.color.g, entrance.color.b = color; entrance.color.a = 0.98
+                result.markers.append(entrance)
+
+        for marker in (observed, uncertain, reconstructed):
+            marker.id = marker_id; marker_id += 1; result.markers.append(marker)
+        return result
+
     def publish_status(self):
         marker = Marker()
         marker.header.frame_id = self.frame_id
@@ -592,6 +733,21 @@ class FloorLayerVisualization:
         )
         self.box_pub.publish(self.box_markers())
         self.trajectory_pub.publish(self.trajectory_markers())
+        if len(self.transition_points):
+            transition_floor = self.assign_floors(self.transition_points[:, 2])
+            transition_mask = transition_floor <= self.visible_floor_count
+            if self.selected_floor > 0:
+                allowed_spaces = [
+                    index for index, transition in enumerate(self.transition_data)
+                    if self.selected_floor in transition.get("connected_floors", [])
+                    and max(transition.get("connected_floors", [0])) <= self.visible_floor_count
+                ]
+                transition_mask &= np.isin(self.transition_point_space_ids, allowed_spaces)
+            selected_transition_points = self.transition_points[transition_mask]
+        else:
+            selected_transition_points = self.transition_points
+        self.transition_cloud_pub.publish(self.make_transition_cloud(selected_transition_points))
+        self.transition_marker_pub.publish(self.transition_markers())
         self.publish_status()
         rospy.loginfo("Selected floor view: %s", "ALL" if self.selected_floor == 0 else self.selected_floor)
 

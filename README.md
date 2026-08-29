@@ -309,6 +309,22 @@ Qwen 根据每个房间的物体清单推断 bedroom/kitchen 等语义
   outputs/wall_extraction/<output-name> --max-floor 3
 ~~~
 
+多楼层 RViz 可视化会根据真实换层轨迹、occupied/free 点云离线重建跨层通道候选，并用独立图层显示，不修改 OccuSG：
+
+~~~bash
+./scripts/view_floor_boxes.sh <run-dir> <fused-boxes.csv> 0 3
+~~~
+
+算法、置信度与颜色说明见 `docs/跨层通道重建.md`。
+
+基于几何墙图运行 OccuSG，并在其原始输出之后应用 transition mask：
+
+~~~bash
+.envs/habitat/bin/python scripts/run_transition_room_pipeline.py \
+  <run-dir> <geometry-wall-grid-dir> <output-dir> \
+  --max-floor 3 --decomp-threshold 1.8
+~~~
+
 Qwen 不生成房间坐标，也不创建、合并或拆分几何房间。房间几何来自 Occupancy/OccuSG；房间语义是物体证据驱动的提示，不是 HM3D 人工房间真值。
 
 论文图建议使用房间外墙/外轮廓；第二阶段候选视角必须使用 free 区域和障碍物安全距离。两者应共享同一个 room_id，不能把外墙轮廓直接当作可飞行空间。
@@ -434,4 +450,5 @@ echo "$DISPLAY"
 - third_party.lock.yaml：第三方源码锁定版本；
 - environment.lock.yml：已验证宿主机环境版本记录；
 - docs/新机器完整复现.md：从 clone、外部资产到三维运行的换机清单；
+- docs/跨层通道重建.md：轨迹播种、局部截面和不确定边界可视化；
 - 记忆/环境与版本.md：数据、权重、镜像和系统版本记录。

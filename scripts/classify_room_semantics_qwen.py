@@ -23,7 +23,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 MODEL = "qwen3.7-plus"
-PROMPT_VERSION = "stage1-room-semantic-v1"
+PROMPT_VERSION = "stage1-room-semantic-v2"
 INPUT_CNY_PER_MILLION = 2.0
 OUTPUT_CNY_PER_MILLION = 8.0
 ROOM_TYPES = {
@@ -54,6 +54,7 @@ SYSTEM_PROMPT = """你是室内场景图的房间语义分类器。几何分割�
 - 证据不足时必须输出 unknown，不要猜测；
 - 只引用输入中已有的 object_id 作为 evidence_object_ids；
 - corridor 主要由狭长几何和多邻接关系判断；
+- assignment=nearest_boundary_fallback 的物体只是边界附近的弱证据，不能像 inside_polygon 一样主导房间类型；
 - 不要把一个孤立的 chair、table、cabinet 或 television 当成足够的房间证据；
 - confidence 表示房间语义判断置信度，不是 Boxer 检测置信度；
 - 每个输入 room_id 必须且只能返回一次；

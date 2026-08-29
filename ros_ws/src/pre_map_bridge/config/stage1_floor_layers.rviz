@@ -58,6 +58,27 @@ Visualization Manager:
       Name: Executed 3D Trajectory
       Namespaces: {}
       Queue Size: 5
+    - Alpha: 0.95
+      Class: rviz/PointCloud2
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Name: Transition Structure Points
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 4
+      Size (m): 0.055
+      Style: Points
+      Topic: /pre_map_vln/stair_transition_points
+      Unreliable: false
+      Use Fixed Frame: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /pre_map_vln/stair_transition_markers
+      Name: Transition Reconstruction
+      Namespaces: {}
+      Queue Size: 5
     - Class: rviz/Marker
       Enabled: true
       Marker Topic: /pre_map_vln/floor_view_status
