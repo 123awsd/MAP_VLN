@@ -9,6 +9,10 @@ idle_scan_rate="${4:-25}"
 scene="${5:-$root_dir/data/scene_datasets/hm3d/example/00861-GLAQ4DNUx5U/GLAQ4DNUx5U.basis.glb}"
 scene_config="${6:-$root_dir/data/scene_datasets/hm3d/example/hm3d_annotated_example_basis.scene_dataset_config.json}"
 postprocess="${STAGE1_POSTPROCESS:-true}"
+use_planner_yaw="${STAGE1_USE_PLANNER_YAW:-true}"
+use_planner_z="${STAGE1_USE_PLANNER_Z:-true}"
+start_floor="${STAGE1_START_FLOOR:-1}"
+start_samples="${STAGE1_START_SAMPLES:-10000}"
 episode_dir="$root_dir/data/episodes/$episode_name"
 raw_bag="$root_dir/outputs/bags/${episode_name}_raw.bag"
 final_bag="$root_dir/outputs/bags/${episode_name}_final.bag"
@@ -39,9 +43,18 @@ trap cleanup EXIT INT TERM
 ./scripts/run_falcon_record.sh "${episode_name}_raw" false &
 recorder_pid=$!
 sleep 3
+habitat_motion_args=()
+if [[ "$use_planner_yaw" == "true" ]]; then
+  habitat_motion_args+=(--use-planner-yaw)
+fi
+if [[ "$use_planner_z" == "true" ]]; then
+  habitat_motion_args+=(--use-planner-z)
+fi
 .envs/habitat/bin/python scripts/run_habitat_falcon.py \
   --scene "$scene" --scene-config "$scene_config" \
+  --start-floor "$start_floor" --start-samples "$start_samples" \
   --duration "$max_duration" --hz "$hz" --follow-falcon \
+  "${habitat_motion_args[@]}" \
   --idle-scan-rate "$idle_scan_rate" --idle-scan-after 0.3 \
   --record-dir "$episode_dir" --record-every 5 \
   --completion-file "$root_dir/runtime/bridge/exploration_complete.json" \
@@ -54,7 +67,7 @@ trap - EXIT INT TERM
 termination="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["termination"])' \
   "$root_dir/runtime/bridge/run_result.json")"
 if [[ "$termination" != "complete" ]]; then
-  echo "达到最大时长 ${max_duration}s，但 FALCON 未进入 FINISH；保留 raw bag，拒绝生成 complete 包。" >&2
+  echo "探索未正常完成（termination=$termination）；保留 raw bag，拒绝生成 complete 包。" >&2
   exit 2
 fi
 

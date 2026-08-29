@@ -1,0 +1,79 @@
+diff --git a/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h b/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h
+--- a/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h
++++ b/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h
+@@ -127,6 +127,7 @@ private:
+   list<Frontier> frontiers_, dormant_frontiers_, tmp_frontiers_;
+   list<Frontier> tiny_frontiers_;
+   vector<int> removed_ids_;
++  vector<Vector3d> rejected_viewpoint_positions_;
+   list<Frontier>::iterator first_new_ftr_;
+   Frontier next_frontier_;
+   Position update_bbox_min_, update_bbox_max_;
+@@ -135,7 +136,8 @@ private:
+   int cluster_min_;
+   double cluster_size_xy_, cluster_size_z_;
+   double candidate_rmax_, candidate_rmin_, candidate_dphi_, min_candidate_dist_,
+-      min_candidate_clearance_, min_candidate_occupied_clearance_;
++      min_candidate_clearance_, min_candidate_occupied_clearance_,
++      failed_viewpoint_exclusion_radius_;
+   int down_sample_;
+   double min_view_finish_fraction_, resolution_;
+   int min_visib_num_, candidate_rnum_;
+diff --git a/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp b/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
+--- a/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
++++ b/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
+@@ -18,6 +18,8 @@ FrontierFinder::FrontierFinder(ros::NodeHandle &nh, const shared_ptr<MapServer>
+   nh.param("/frontier_finder/min_candidate_clearance", min_candidate_clearance_, -1.0);
+   nh.param("/frontier_finder/min_candidate_occupied_clearance", min_candidate_occupied_clearance_,
+            -1.0);
++  nh.param("/frontier_finder/failed_viewpoint_exclusion_radius",
++           failed_viewpoint_exclusion_radius_, 0.25);
+   nh.param("/frontier_finder/candidate_dphi", candidate_dphi_, -1.0);
+   nh.param("/frontier_finder/candidate_rmax", candidate_rmax_, -1.0);
+   nh.param("/frontier_finder/candidate_rmin", candidate_rmin_, -1.0);
+@@ -751,11 +753,25 @@ bool FrontierFinder::rejectViewpointNear(const Vector3d &failed_pos, const doubl
+ 
+   ROS_WARN("[FrontierFinder] Reject collision-stalled viewpoint at (%.2f, %.2f, %.2f), "
+            "distance %.2f m", failed_pos.x(), failed_pos.y(), failed_pos.z(), best_distance);
++  rejected_viewpoint_positions_.push_back(best_frontier->viewpoints_[best_viewpoint].pos_);
+   best_frontier->viewpoints_.erase(best_frontier->viewpoints_.begin() + best_viewpoint);
+   if (best_frontier->viewpoints_.empty()) {
+-    ROS_WARN("[FrontierFinder] Frontier %d has no remaining viewpoints; moving it dormant",
+-             best_frontier->id_);
+-    dormant_frontiers_.splice(dormant_frontiers_.end(), frontiers_, best_frontier);
++    // Re-run the circular sampler with the failed endpoint excluded.  The
++    // visibility z-score filter can leave a frontier with only one preferred
++    // viewpoint even though several slightly less informative poses exist.
++    // A local A* failure should try those alternatives before retiring the
++    // entire frontier cluster.
++    sampleViewpoints(*best_frontier);
++    if (best_frontier->viewpoints_.empty()) {
++      ROS_WARN("[FrontierFinder] Frontier %d has no alternative viewpoints; moving it dormant",
++               best_frontier->id_);
++      dormant_frontiers_.splice(dormant_frontiers_.end(), frontiers_, best_frontier);
++    } else {
++      sort(best_frontier->viewpoints_.begin(), best_frontier->viewpoints_.end(),
++           [](const Viewpoint &v1, const Viewpoint &v2) { return v1.visib_num_ > v2.visib_num_; });
++      ROS_WARN("[FrontierFinder] Resampled %zu alternative viewpoints for frontier %d",
++               best_frontier->viewpoints_.size(), best_frontier->id_);
++    }
+   }
+ 
+   int id = 0;
+@@ -783,6 +799,16 @@ void FrontierFinder::sampleViewpoints(Frontier &frontier) {
+         sample_pos.z() = viewpoint_height_;
+       }
+ 
++      bool previously_rejected = false;
++      for (const auto &rejected_pos : rejected_viewpoint_positions_) {
++        if ((sample_pos - rejected_pos).norm() < failed_viewpoint_exclusion_radius_) {
++          previously_rejected = true;
++          break;
++        }
++      }
++      if (previously_rejected)
++        continue;
++
+       // Qualified viewpoint is in bounding box and in safe region
+       if (!map_server_->isInBox(sample_pos) ||
+           map_server_->getOccupancy(sample_pos) == voxel_mapping::OccupancyType::OCCUPIED ||

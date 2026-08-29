@@ -1,5 +1,7 @@
 map_config:
   map_file: "hm3d_example"
+  # Keep the efficient single-layer connectivity graph while allowing the UAV
+  # trajectory and frontier viewpoints themselves to vary in Z.
   map_dimension: 2
   init_x: 0.0
   init_y: 0.0
@@ -37,16 +39,46 @@ map_config:
     - [0.0, 0.0, 0.0, 1.0]
 
 frontier_finder:
-  # Habitat VLN is ground navigation. FALCON upstream samples UAV viewpoints at
-  # each 3-D frontier's mean Z, which leaves indoor wall/ceiling frontiers dormant.
-  viewpoint_height: 1.0
+  # Keep the active floor's frontier viewpoints until that floor is exhausted,
+  # then advance monotonically to the next observed floor.  This avoids
+  # spending long cross-floor moves while same-floor frontiers remain.
+  floor_priority_enabled: true
+  floor_priority_band: 0.85
+  floor_priority_min_separation: 1.2
+  # Negative restores FALCON's native behavior: sample at each 3-D frontier's
+  # mean height instead of forcing every candidate onto z=1.0.
+  viewpoint_height: -1.0
   cluster_min: 40
   min_visib_num: 8
   candidate_rmin: 0.5
   candidate_rmax: 2.0
   candidate_rnum: 4
+  # Keep the upstream HM3D sampling envelope.  Increasing these clearances to
+  # 0.5 m made valid viewpoints around narrow doors dormant in scene 00150.
   min_candidate_clearance: 0.1
   min_candidate_occupied_clearance: 0.3
+  # Exclude only the failed pose's immediate neighborhood, then resample the
+  # same frontier before allowing it to become dormant.
+  failed_viewpoint_exclusion_radius: 0.25
+
+fast_planner:
+  # Two coarse voxels per control-point interval gives indoor splines more room
+  # to bend around walls than the upstream 0.5 m interval.
+  control_points_distance: 0.4
+
+bspline_opt:
+  # Match the occupied-viewpoint clearance.  The upstream 0.7 m UAV margin is
+  # too conservative for a point-like Habitat agent in narrow indoor passages.
+  safe_distance: 0.3
+
+exploration_manager:
+  fsm:
+    collision_failures_per_viewpoint: 3
+    collision_viewpoint_rejection_radius: 0.6
+    completed_viewpoint_rejection_radius: 0.3
+    completed_viewpoint_max_visits: 3
+    plan_failures_per_viewpoint: 3
+    max_collision_failures: 40
 
 traj_server:
   init_dx: 0.0

@@ -12,6 +12,10 @@ Habitat 中的无人机预探索、全局 3D 语义地图与长时程多任务 V
 
 房间表示已规范化为 6 个语义房间与 4 个 corridor；单层高度带与 HM3D `stairs/stairs railing` 语义禁行区防止楼梯和下层混入 2D 规划。2 个家具遮挡源碎片只保留为来源证据。官方 navmesh、探索占据图、楼梯禁行区和房间分割的同坐标对照见 [`docs/房间分割与真值对比.md`](docs/房间分割与真值对比.md)。
 
+逐层占据图将障碍端点高度带与相机帧高度带分离，并按端点相对相机的垂直位移剔除地板/天花板回波；默认端点带为楼层高度 ±0.45 m、相机带为 ±1.15 m、垂直位移阈值为 0.75 m。这样黑色只由具有多帧支持的墙体/物体端点产生，射线中间段才贡献空闲栅格。
+
+navmesh/map 对比图默认显示两栏（官方 Habitat navmesh 与记录探索地图）；诊断统计仍写入 JSON。对比时优先使用录制 episode manifest 中的初始 Habitat 坐标，避免官方几何因随机原点而产生平移。
+
 两个阶段的工程闭环均已在公开 HM3D example `00861-GLAQ4DNUx5U` 上通过。第二阶段现以本地 GPU OWLv2 为默认开放词表检测器，在线演示完成 4 个实际访问任务、4 次动态重规划和 74 帧连续 RGB；找到电视后正确跳过条件柜子任务。联合初始路径比固定顺序短 32.09%。详细结果见 [`docs/第一阶段设计.md`](docs/第一阶段设计.md) 与 [`docs/第二阶段设计.md`](docs/第二阶段设计.md)。
 
 论文级规划评测已增加 4 类 task graph、6 个基线/消融方法以及 3 scenes × 3 seeds × 5 task cases 的 270 次实验。实验设计、指标和结论边界见 [`docs/第三阶段实验评测.md`](docs/第三阶段实验评测.md)。
@@ -98,6 +102,6 @@ bag 播放完成后 RViz 会保持打开。第三个参数是回放倍速：`0.5
 ./scripts/record_progressive_stage1.sh <episode_name> 600 10 25
 ```
 
-第二个参数是最大安全时长，而不是正常结束时间；只有 FALCON FSM 进入 `FINISH` 才生成 complete 包，超时只保留 raw bag。最后一个参数是静止期相机扫描角速度（度/秒）。UAV 模式默认精确跟踪 PositionCommand；地面 VLN 可显式使用 `run_habitat_falcon.py --navmesh-constrained`。
+第二个参数是最大安全时长，而不是正常结束时间；只有 FALCON FSM 进入 `FINISH` 才生成 complete 包，超时只保留 raw bag。最后一个参数是静止期相机扫描角速度（度/秒）。UAV 模式默认精确跟踪 PositionCommand，并在自动识别的最低楼层选择开阔起点；可用 `STAGE1_START_FLOOR`、`STAGE1_START_SAMPLES` 调整。地面 VLN 可显式使用 `run_habitat_falcon.py --navmesh-constrained`。
 
 实时 FALCON 运行时，点云过滤、RGB、实际轨迹、当前规划和 Frontier 都在线发布；默认 bag 中的 Boxer 框按同回合首次观测时间渐进回放。当前 Boxer 推理仍是录制后的批处理，并非探索过程中在线运行。

@@ -85,12 +85,110 @@ def read_command() -> Optional[dict]:
         return None
 
 
+def read_completion_status(path: Path) -> Optional[str]:
+    """Return a validated terminal status from the atomic bridge sentinel."""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return None
+    status = payload.get("status")
+    return status if status in {"complete", "collision_stall"} else None
+
+
+def detect_navmesh_floor_levels(pathfinder, sample_count: int = 10000) -> list[float]:
+    """Return one-based-floor candidates as Habitat Y heights, lowest first.
+
+    Navigable samples form dense horizontal bands on each floor.  A smoothed
+    histogram suppresses stairs and ramps without assuming a fixed number of
+    floors.
+    """
+    sample_count = max(100, int(sample_count))
+    samples = np.asarray(
+        [pathfinder.get_random_navigable_point()[1] for _ in range(sample_count)],
+        dtype=np.float64,
+    )
+    samples = samples[np.isfinite(samples)]
+    if len(samples) < 100:
+        return []
+    bin_size = 0.10
+    lower = np.floor(float(samples.min()) / bin_size) * bin_size - bin_size
+    upper = np.ceil(float(samples.max()) / bin_size) * bin_size + bin_size
+    edges = np.arange(lower, upper + bin_size * 0.5, bin_size)
+    histogram, _ = np.histogram(samples, bins=edges)
+    window = max(3, int(round(0.6 / bin_size)))
+    if window % 2 == 0:
+        window += 1
+    smoothed = np.convolve(histogram.astype(np.float64), np.ones(window), mode="same")
+    threshold = max(20.0, float(smoothed.max()) * 0.08)
+    candidates = [
+        index for index in range(1, len(smoothed) - 1)
+        if smoothed[index] >= smoothed[index - 1]
+        and smoothed[index] >= smoothed[index + 1]
+        and smoothed[index] >= threshold
+    ]
+    candidates.sort(key=lambda index: smoothed[index], reverse=True)
+    selected = []
+    min_bins = max(1, int(round(1.5 / bin_size)))
+    for index in candidates:
+        if all(abs(index - other) >= min_bins for other in selected):
+            selected.append(index)
+    return sorted(float((edges[index] + edges[index + 1]) * 0.5) for index in selected)
+
+
+def choose_initial_point(pathfinder, floor_number: int, sample_count: int) -> tuple[np.ndarray, dict]:
+    """Choose a reproducible, open navmesh point on a one-based floor."""
+    sample_count = max(100, int(sample_count))
+    points = np.asarray(
+        [pathfinder.get_random_navigable_point() for _ in range(sample_count)],
+        dtype=np.float64,
+    )
+    points = points[np.all(np.isfinite(points), axis=1)]
+    if len(points) == 0:
+        raise RuntimeError("HM3D navmesh returned no finite navigable points")
+    levels = detect_navmesh_floor_levels(pathfinder, sample_count)
+    requested = int(floor_number)
+    if requested < 1:
+        requested = 1
+    level_index = min(requested - 1, len(levels) - 1) if levels else None
+    target_level = levels[level_index] if level_index is not None else float(points[:, 1].min())
+    band = 0.35
+    floor_points = points[np.abs(points[:, 1] - target_level) <= band]
+    if len(floor_points) == 0:
+        nearest = np.argsort(np.abs(points[:, 1] - target_level))[: max(20, min(200, len(points)))]
+        floor_points = points[nearest]
+
+    # Prefer the largest connected island on the requested floor, then the
+    # point with maximum obstacle clearance within that island.
+    island_ids = np.asarray([pathfinder.get_island(point) for point in floor_points], dtype=np.int64)
+    unique_islands = np.unique(island_ids)
+    island_areas = {int(island): float(pathfinder.island_area(int(island))) for island in unique_islands}
+    largest_island = max(unique_islands, key=lambda island: island_areas[int(island)])
+    island_points = floor_points[island_ids == largest_island]
+    clearances = np.asarray(
+        [pathfinder.distance_to_closest_obstacle(point) for point in island_points],
+        dtype=np.float64,
+    )
+    best = int(np.nanargmax(np.where(np.isfinite(clearances), clearances, -np.inf)))
+    selected = island_points[best]
+    return selected, {
+        "requested_floor": int(floor_number),
+        "selected_floor": int(level_index + 1) if level_index is not None else 1,
+        "detected_floor_levels_habitat_y": levels,
+        "habitat_xyz": selected.tolist(),
+        "obstacle_clearance_m": float(clearances[best]),
+        "navmesh_island": int(largest_island),
+        "navmesh_island_area_m2": island_areas[int(largest_island)],
+        "candidate_count": int(len(island_points)),
+    }
+
+
 def follow_command(
     sim,
     origin_h: np.ndarray,
     command: dict,
     dt: float,
     use_planner_yaw: bool = False,
+    use_planner_z: bool = False,
     navmesh_constrained: bool = False,
 ) -> bool:
     agent = sim.get_agent(0)
@@ -99,7 +197,8 @@ def follow_command(
     target_f = np.asarray(command["position"], dtype=np.float64) - np.asarray([0.0, 0.0, 1.0])
     target_h = origin_h + S_HABITAT_TO_FALCON.T @ target_f
     direction = target_h - current
-    direction[1] = 0.0
+    if not use_planner_z:
+        direction[1] = 0.0
     distance = float(np.linalg.norm(direction))
     moved = False
     if distance > 1e-4:
@@ -116,10 +215,9 @@ def follow_command(
             # directly: Habitat's navmesh is for a walking cylinder and blocks
             # valid FALCON flight across railings, stairs and open voids.
             next_position = target_h
-        # HM3D can contain vertically overlapping floors and the upstream UAV
-        # spline may briefly dip in Z. Stage 1 is a single-floor 2-D run, so
-        # preserve the current Habitat floor while following horizontal motion.
-        next_position[1] = current[1]
+        if not use_planner_z:
+            # Compatibility mode for ground/single-floor experiments.
+            next_position[1] = current[1]
         state.position = next_position
         moved = bool(np.linalg.norm(next_position - current) > 1e-4)
         if not use_planner_yaw:
@@ -147,6 +245,14 @@ def main() -> None:
     parser.add_argument("--hz", type=float, default=5.0)
     parser.add_argument("--scene", type=Path, default=DEFAULT_SCENE)
     parser.add_argument("--scene-config", type=Path, default=DEFAULT_SCENE_CONFIG)
+    parser.add_argument(
+        "--start-floor", type=int, default=1,
+        help="one-based navmesh floor for the initial pose; floor 1 is the lowest",
+    )
+    parser.add_argument(
+        "--start-samples", type=int, default=10000,
+        help="navmesh samples used to find an open initial pose",
+    )
     parser.add_argument("--follow-falcon", action="store_true")
     parser.add_argument(
         "--navmesh-constrained",
@@ -157,6 +263,11 @@ def main() -> None:
         "--use-planner-yaw",
         action="store_true",
         help="use FALCON yaw instead of facing the actual movement direction",
+    )
+    parser.add_argument(
+        "--use-planner-z",
+        action="store_true",
+        help="track the vertical component of FALCON PositionCommand",
     )
     parser.add_argument(
         "--idle-scan-rate",
@@ -187,6 +298,12 @@ def main() -> None:
     )
     parser.add_argument("--result-file", type=Path, default=None)
     args = parser.parse_args()
+    if args.navmesh_constrained and args.use_planner_z:
+        parser.error("--use-planner-z cannot be combined with --navmesh-constrained")
+    if args.start_floor < 1:
+        parser.error("--start-floor must be at least 1")
+    if args.start_samples < 100:
+        parser.error("--start-samples must be at least 100")
     scene = args.scene.resolve()
     scene_config = args.scene_config.resolve()
     if not scene.exists():
@@ -214,22 +331,47 @@ def main() -> None:
         if not sim.pathfinder.is_loaded:
             raise RuntimeError("HM3D navmesh did not load")
         sim.pathfinder.seed(7)
-        initial = sim.pathfinder.get_random_navigable_point()
+        initial, initial_meta = choose_initial_point(
+            sim.pathfinder, args.start_floor, args.start_samples
+        )
+        print(
+            "initial_start floor=%d habitat_xyz=%s clearance=%.3f m candidates=%d"
+            % (
+                initial_meta["selected_floor"],
+                np.round(initial, 3).tolist(),
+                initial_meta["obstacle_clearance_m"],
+                initial_meta["candidate_count"],
+            ),
+            flush=True,
+        )
         state = habitat_sim.AgentState()
         state.position = initial
         state.rotation = quat_from_angle_axis(0.0, np.asarray([0.0, 1.0, 0.0]))
         agent = sim.initialize_agent(0, state)
         initial_sensor_h = np.asarray(agent.get_state().sensor_states["depth"].position, dtype=np.float64)
+        if args.record_dir is not None:
+            manifest_path = args.record_dir / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["initial_start"] = initial_meta
+            manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
         period, started, sequence, idle_time = 1.0 / args.hz, time.monotonic(), 0, 0.0
         completion_seen = None
+        completion_status = None
         while time.monotonic() - started < args.duration:
             tick = time.monotonic()
             if args.completion_file is not None and args.completion_file.exists():
                 if completion_seen is None:
+                    completion_status = read_completion_status(args.completion_file)
+                    if completion_status is None:
+                        # The bridge writes atomically, but tolerate an invalid
+                        # or future sentinel without falsely declaring success.
+                        time.sleep(max(0.0, period - (time.monotonic() - tick)))
+                        continue
                     completion_seen = tick
                     print(
-                        f"FALCON completion detected; holding {args.finish_hold:.1f}s for final frames",
+                        f"FALCON terminal status={completion_status}; "
+                        f"holding {args.finish_hold:.1f}s for final frames",
                         flush=True,
                     )
                 elif tick - completion_seen >= args.finish_hold:
@@ -244,6 +386,7 @@ def main() -> None:
                         command,
                         period,
                         use_planner_yaw=args.use_planner_yaw,
+                        use_planner_z=args.use_planner_z,
                         navmesh_constrained=args.navmesh_constrained,
                     )
                 idle_time = 0.0 if moved else idle_time + period
@@ -301,7 +444,7 @@ def main() -> None:
                 print(f"frame={sequence} position_falcon={position_f.round(3).tolist()}", flush=True)
             time.sleep(max(0.0, period - (time.monotonic() - tick)))
         elapsed = time.monotonic() - started
-        termination = "complete" if completion_seen is not None else "timeout"
+        termination = completion_status if completion_seen is not None else "timeout"
         result = {
             "termination": termination,
             "scene": scene_name,
@@ -309,6 +452,13 @@ def main() -> None:
             "frames": sequence,
             "max_duration_seconds": args.duration,
             "finish_hold_seconds": args.finish_hold,
+            "motion_mode": {
+                "follow_falcon": args.follow_falcon,
+                "planner_z": args.use_planner_z,
+                "planner_yaw": args.use_planner_yaw,
+                "navmesh_constrained": args.navmesh_constrained,
+            },
+            "initial_start": initial_meta,
         }
         if args.result_file is not None:
             args.result_file.parent.mkdir(parents=True, exist_ok=True)

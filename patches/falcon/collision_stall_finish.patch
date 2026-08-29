@@ -1,41 +1,98 @@
 diff --git a/falcon_planner/exploration_manager/include/exploration_manager/exploration_fsm.h b/falcon_planner/exploration_manager/include/exploration_manager/exploration_fsm.h
-index 2b5fd80..6db72fe 100644
 --- a/falcon_planner/exploration_manager/include/exploration_manager/exploration_fsm.h
 +++ b/falcon_planner/exploration_manager/include/exploration_manager/exploration_fsm.h
-@@ -59,6 +59,8 @@ private:
+@@ -59,6 +59,16 @@ private:
    ros::Publisher replan_pub_, bspline_pub_, grid_tour_pub_, uncertainty_pub_;
  
    bool frontier_ready_;
 +  int consecutive_collision_failures_;
 +  int max_collision_failures_;
++  int collision_failures_per_viewpoint_;
++  double collision_viewpoint_rejection_radius_;
++  double completed_viewpoint_rejection_radius_;
++  int completed_viewpoint_max_visits_;
++  std::vector<Eigen::Vector3d> completed_viewpoint_positions_;
++  std::vector<int> completed_viewpoint_visits_;
++  int consecutive_plan_failures_;
++  int plan_failures_per_viewpoint_;
  
    ros::Time trajectory_start_time_;
  
 diff --git a/falcon_planner/exploration_manager/src/exploration_fsm.cpp b/falcon_planner/exploration_manager/src/exploration_fsm.cpp
-index ed68d69..2640913 100644
 --- a/falcon_planner/exploration_manager/src/exploration_fsm.cpp
 +++ b/falcon_planner/exploration_manager/src/exploration_fsm.cpp
-@@ -20,7 +20,9 @@ void ExplorationFSM::init(ros::NodeHandle &nh) {
+@@ -20,7 +20,20 @@ void ExplorationFSM::init(ros::NodeHandle &nh) {
    nh.param("/exploration_manager/fsm/replan_duration_fast", fp_->replan_duration_fast_, -1.0);
    nh.param("/exploration_manager/fsm/replan_duration_default", fp_->replan_duration_default_, -1.0);
    nh.param("/exploration_manager/fsm/replan_duration_slow", fp_->replan_duration_slow_, -1.0);
 +  nh.param("/exploration_manager/fsm/max_collision_failures", max_collision_failures_, 20);
++  nh.param("/exploration_manager/fsm/collision_failures_per_viewpoint",
++           collision_failures_per_viewpoint_, 3);
++  nh.param("/exploration_manager/fsm/collision_viewpoint_rejection_radius",
++           collision_viewpoint_rejection_radius_, 0.6);
++  nh.param("/exploration_manager/fsm/completed_viewpoint_rejection_radius",
++           completed_viewpoint_rejection_radius_, 0.3);
++  nh.param("/exploration_manager/fsm/completed_viewpoint_max_visits",
++           completed_viewpoint_max_visits_, 3);
++  nh.param("/exploration_manager/fsm/plan_failures_per_viewpoint",
++           plan_failures_per_viewpoint_, 3);
    fp_->replan_duration_ = fp_->replan_duration_default_;
 +  consecutive_collision_failures_ = 0;
++  consecutive_plan_failures_ = 0;
  
    /* Initialize main modules */
    expl_manager_.reset(new ExplorationManager);
-@@ -416,12 +418,23 @@ void ExplorationFSM::FSMCallback(const ros::TimerEvent &e) {
+@@ -359,9 +372,24 @@ void ExplorationFSM::FSMCallback(const ros::TimerEvent &e) {
+     // Exploration plannner main function
+     int res = callExplorationPlanner();
+     if (res == SUCCEED) {
++      consecutive_plan_failures_ = 0;
+       transitState(PUB_TRAJ, "FSM");
+     } else if (res == FAIL) { // Keep trying to replan
+       fd_->static_state_ = true;
++      ++consecutive_plan_failures_;
++      if (plan_failures_per_viewpoint_ > 0 &&
++          consecutive_plan_failures_ % plan_failures_per_viewpoint_ == 0 &&
++          expl_manager_->frontier_finder_->rejectViewpointNear(
++              expl_manager_->ed_->next_pos_, collision_viewpoint_rejection_radius_)) {
++        const int remaining_frontiers = expl_manager_->updateFrontierStruct(fd_->odom_pos_);
++        ROS_WARN("[FSM] Reject unreachable viewpoint after %d plan failures; %d active frontiers remain",
++                 consecutive_plan_failures_, remaining_frontiers);
++        if (remaining_frontiers == 0) {
++          ROS_WARN("[FSM] Finish exploration: all reachable frontier viewpoints exhausted");
++          transitState(FINISH, "FSM");
++          break;
++        }
++      }
+       ROS_WARN("[FSM] Plan fail");
+     } else if (res == NO_GRID) {
+       fd_->static_state_ = true;
+@@ -416,12 +444,38 @@ void ExplorationFSM::FSMCallback(const ros::TimerEvent &e) {
          ROS_ERROR("[FSM] Replan: collision also detected on the initial trajectory");
  
          fd_->static_state_ = true;
 +        ++consecutive_collision_failures_;
-+        if (consecutive_collision_failures_ >= max_collision_failures_) {
-+          ROS_WARN("[FSM] Finish exploration after %d consecutive collision planning failures",
++        bool no_alternative_viewpoint = false;
++        if (collision_failures_per_viewpoint_ > 0 &&
++            consecutive_collision_failures_ % collision_failures_per_viewpoint_ == 0) {
++          const bool rejected = expl_manager_->frontier_finder_->rejectViewpointNear(
++              expl_manager_->ed_->next_pos_, collision_viewpoint_rejection_radius_);
++          if (rejected) {
++            const int remaining_frontiers = expl_manager_->updateFrontierStruct(fd_->odom_pos_);
++            no_alternative_viewpoint = remaining_frontiers == 0;
++            ROS_WARN("[FSM] Collision recovery refreshed frontier pool: %d active frontiers",
++                     remaining_frontiers);
++          } else {
++            ROS_WARN("[FSM] Collision recovery could not match the failed endpoint");
++          }
++        }
++        if (consecutive_collision_failures_ >= max_collision_failures_ ||
++            no_alternative_viewpoint) {
++          ROS_WARN("[FSM] Stop exploration after %d consecutive collision planning failures",
 +                   consecutive_collision_failures_);
-+          std_msgs::Int32 finish_msg;
-+          finish_msg.data = 2;
-+          replan_pub_.publish(finish_msg);
++          std_msgs::Int32 stall_msg;
++          stall_msg.data = 3;
++          replan_pub_.publish(stall_msg);
 +          transitState(FINISH, "FSM");
 +          break;
 +        }
@@ -49,3 +106,44 @@ index ed68d69..2640913 100644
  
      // Check traj avg vel
      double pos_traj_length = planner_manager_->local_data_.position_traj_.getLength();
+@@ -519,4 +573,26 @@ void ExplorationFSM::FSMCallback(const ros::TimerEvent &e) {
+     if (need_replan) {
++      if (replan_type == 2 && completed_viewpoint_rejection_radius_ > 0.0) {
++        const Eigen::Vector3d completed_pos = expl_manager_->ed_->next_pos_;
++        int matched = -1;
++        for (int i = 0; i < completed_viewpoint_positions_.size(); ++i) {
++          if ((completed_viewpoint_positions_[i] - completed_pos).norm() <=
++              completed_viewpoint_rejection_radius_) {
++            matched = i;
++            break;
++          }
++        }
++        if (matched < 0) {
++          completed_viewpoint_positions_.push_back(completed_pos);
++          completed_viewpoint_visits_.push_back(1);
++        } else if (++completed_viewpoint_visits_[matched] >= completed_viewpoint_max_visits_) {
++          if (expl_manager_->frontier_finder_->rejectViewpointNear(
++                  completed_pos, completed_viewpoint_rejection_radius_))
++            ROS_WARN("[FSM] Retire repeatedly completed frontier viewpoint after %d visits",
++                     completed_viewpoint_visits_[matched]);
++          completed_viewpoint_positions_.erase(completed_viewpoint_positions_.begin() + matched);
++          completed_viewpoint_visits_.erase(completed_viewpoint_visits_.begin() + matched);
++        }
++      }
+       {
+         // Log replan type
+         string replan_type_str;
+diff --git a/falcon_planner/fast_planner/src/traj_server.cpp b/falcon_planner/fast_planner/src/traj_server.cpp
+--- a/falcon_planner/fast_planner/src/traj_server.cpp
++++ b/falcon_planner/fast_planner/src/traj_server.cpp
+@@ -246,6 +246,10 @@ void replanCallback(std_msgs::Int32 msg) {
+     ROS_WARN_ONCE("[TrajServer] Replan type 2: exploration finished, stop trajectory immediately");
+     t_stop = (time_now - start_time_).toSec();
+     task_finished_ = true;
++  } else if (msg.data == 3) {
++    ROS_ERROR_ONCE("[TrajServer] Replan type 3: collision stall, stop trajectory immediately");
++    t_stop = (time_now - start_time_).toSec();
++    task_finished_ = true;
+   } else {
+     ROS_ERROR("[TrajServer] Invalid replan type: %d", msg.data);
+     return;

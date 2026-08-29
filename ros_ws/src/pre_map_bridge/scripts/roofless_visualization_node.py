@@ -2,6 +2,7 @@
 """Publish derived, balanced RViz layers for exploration visualization."""
 
 import copy
+from collections import deque
 import math
 
 import numpy as np
@@ -9,6 +10,7 @@ import rospy
 from geometry_msgs.msg import Point, TransformStamped
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import PointCloud2, PointField
+from std_msgs.msg import String
 from trajectory.msg import Bspline
 from visualization_msgs.msg import Marker, MarkerArray
 
@@ -27,11 +29,34 @@ class RooflessVisualization:
         self.box_line_width = float(rospy.get_param("~box_line_width", 0.050))
         self.box_color_scale = float(rospy.get_param("~box_color_scale", 0.72))
         self.box_alpha = float(rospy.get_param("~box_alpha", 0.62))
+        self.multi_floor = bool(rospy.get_param("~multi_floor", False))
+        requested_floor_layers = int(rospy.get_param("~floor_layer_count", 0))
+        # Zero means fully automatic: publish as many layers as the observed
+        # map supports. A positive value is an optional safety cap.
+        self.floor_layer_limit = requested_floor_layers if requested_floor_layers > 0 else None
+        self.floor_detection_bin = float(rospy.get_param("~floor_detection_bin", 0.10))
+        self.floor_detection_min_separation = float(
+            rospy.get_param("~floor_detection_min_separation", 1.0)
+        )
+        self.floor_detection_min_samples = max(
+            20, int(rospy.get_param("~floor_detection_min_samples", 100))
+        )
+        self.multi_floor_z_min = float(rospy.get_param("~multi_floor_z_min", -1.0))
+        self.multi_floor_z_max = float(rospy.get_param("~multi_floor_z_max", 10.0))
+        if self.multi_floor_z_min >= self.multi_floor_z_max:
+            rospy.logwarn("multi_floor_z_min must be below multi_floor_z_max; using -1..10 m")
+            self.multi_floor_z_min, self.multi_floor_z_max = -1.0, 10.0
         self.floor_z = self.fallback_floor_z
+        self.z_samples = deque(maxlen=20000)
+        self.floor_surface_samples = np.empty(0, dtype=np.float64)
+        self.floor_levels = []
+        self.map_complete = False
+        self.last_visible_cloud = None
         self.plan_samples = max(8, int(rospy.get_param("~plan_samples", 64)))
         self.cloud_pub = rospy.Publisher(
             "/pre_map_vln/roofless_map", PointCloud2, queue_size=1
         )
+        self.floor_pubs = []
         self.plan_pub = rospy.Publisher(
             "/pre_map_vln/current_plan", Marker, queue_size=1, latch=True
         )
@@ -52,6 +77,10 @@ class RooflessVisualization:
             "/uav_simulator/odometry", Odometry, self.odom_callback, queue_size=1
         )
         rospy.Subscriber(
+            "/pre_map_vln/exploration_status", String,
+            self.status_callback, queue_size=1,
+        )
+        rospy.Subscriber(
             "/uav_simulator/sensor_pose",
             TransformStamped,
             self.sensor_pose_callback,
@@ -64,11 +93,19 @@ class RooflessVisualization:
             queue_size=1,
         )
         rospy.loginfo(
-            "Envelope filter: floor +%.2f m, roof top %.2f m, min ceiling %.2f m",
+            "Envelope filter: floor +%.2f m, roof top %.2f m, min ceiling %.2f m; multi_floor=%s",
             self.floor_clearance,
             self.ceiling_thickness,
             self.ceiling_min_height,
+            self.multi_floor,
         )
+        if self.multi_floor:
+            rospy.loginfo(
+                "Multi-floor layers: %s topics /pre_map_vln/floor_1..floor_%s; "
+                "automatic height clustering enabled",
+                "auto" if self.floor_layer_limit is None else self.floor_layer_limit,
+                "N",
+            )
 
     def box_callback(self, message):
         """Restyle outline markers without changing their progressive timing."""
@@ -85,6 +122,147 @@ class RooflessVisualization:
 
     def odom_callback(self, message):
         self.floor_z = float(message.pose.pose.position.z) - self.sensor_height
+        if self.multi_floor:
+            self.z_samples.append(float(message.pose.pose.position.z))
+            if len(self.z_samples) % 20 == 0:
+                self.update_floor_levels()
+
+    def status_callback(self, message):
+        status = str(message.data).strip().lower()
+        if status not in {"complete", "finished", "done"}:
+            return
+        self.map_complete = True
+        if self.multi_floor:
+            rospy.loginfo(
+                "Exploration complete: final floor detection from %d surface samples and cached cloud=%s",
+                len(self.floor_surface_samples),
+                self.last_visible_cloud is not None,
+            )
+            self.update_floor_levels(self.floor_surface_samples)
+            self.publish_floor_layers()
+
+    def update_floor_levels(self, floor_samples=None):
+        """Estimate discrete floor heights from the accumulated UAV trajectory.
+
+        The lowest occupied point in each XY column is a floor-surface cue;
+        trajectory heights provide a fallback while the map is still sparse.
+        Histogram peaks are therefore tied to physical floors, while the point
+        cloud itself remains untouched in multi-floor mode.
+        """
+        if not self.map_complete:
+            return
+        source = self.floor_surface_samples if floor_samples is None else floor_samples
+        if len(source) < self.floor_detection_min_samples:
+            source = np.asarray(self.z_samples, dtype=np.float64)
+        if len(source) < self.floor_detection_min_samples:
+            return
+        values = np.asarray(source, dtype=np.float64)
+        values = values[np.isfinite(values)]
+        if len(values) < self.floor_detection_min_samples:
+            return
+        bin_size = max(0.05, self.floor_detection_bin)
+        lower = math.floor(float(values.min()) / bin_size) * bin_size - bin_size
+        upper = math.ceil(float(values.max()) / bin_size) * bin_size + bin_size
+        edges = np.arange(lower, upper + bin_size * 0.5, bin_size)
+        if len(edges) < 3:
+            return
+        histogram, _ = np.histogram(values, bins=edges)
+        # Smooth over 0.6 m so small command oscillations do not create layers.
+        window = max(3, int(round(0.6 / bin_size)))
+        if window % 2 == 0:
+            window += 1
+        smoothed = np.convolve(histogram.astype(np.float64), np.ones(window), mode="same")
+        if not np.any(smoothed):
+            return
+        threshold = max(20.0, float(smoothed.max()) * 0.08)
+        candidates = [
+            index for index in range(1, len(smoothed) - 1)
+            if smoothed[index] >= smoothed[index - 1]
+            and smoothed[index] >= smoothed[index + 1]
+            and smoothed[index] >= threshold
+        ]
+        candidates.sort(key=lambda index: smoothed[index], reverse=True)
+        min_bins = max(1, int(round(max(1.5, self.floor_detection_min_separation) / bin_size)))
+        selected = []
+        for index in candidates:
+            if all(abs(index - other) >= min_bins for other in selected):
+                selected.append(index)
+            if self.floor_layer_limit is not None and len(selected) >= self.floor_layer_limit:
+                break
+        if not selected:
+            return
+        candidates_z = [float((edges[index] + edges[index + 1]) * 0.5) for index in selected]
+        # Quantize final floor surfaces before publishing. A 0.25 m bin absorbs
+        # voxel/sloped-floor noise while remaining far below floor separation.
+        levels = sorted(round(candidate / 0.25) * 0.25 for candidate in candidates_z)
+        if levels != self.floor_levels:
+            self.floor_levels = levels
+            rospy.loginfo(
+                "Detected multi-floor levels (world Z, final floor surfaces): %s",
+                ", ".join(f"{z:.2f}" for z in levels),
+            )
+
+    def ensure_floor_publishers(self, count):
+        while len(self.floor_pubs) < count:
+            index = len(self.floor_pubs)
+            self.floor_pubs.append(rospy.Publisher(
+                f"/pre_map_vln/floor_{index + 1}", PointCloud2, queue_size=1, latch=True
+            ))
+
+    def publish_floor_layers(self):
+        if not self.multi_floor or not self.floor_levels or self.last_visible_cloud is None:
+            return
+        message, x_values, y_values, visible_z = self.last_visible_cloud
+        self.ensure_floor_publishers(len(self.floor_levels))
+        boundaries = [
+            (self.floor_levels[index] + self.floor_levels[index + 1]) * 0.5
+            for index in range(len(self.floor_levels) - 1)
+        ]
+        floor_indices = np.searchsorted(boundaries, visible_z, side="right")
+        counts = []
+        for index, publisher in enumerate(self.floor_pubs):
+            mask = floor_indices == index
+            counts.append(int(np.count_nonzero(mask)))
+            if np.any(mask):
+                publisher.publish(self.colored_cloud(
+                    message, x_values[mask], y_values[mask], visible_z[mask],
+                    self.multi_floor_z_min, self.multi_floor_z_max,
+                ))
+        rospy.loginfo(
+            "Published %d floor layers: %s points",
+            len(self.floor_levels), ", ".join(str(count) for count in counts),
+        )
+
+    @staticmethod
+    def colored_cloud(message, x_values, y_values, z_values, z_min, z_max):
+        """Create an RViz RGB8 cloud without changing the source XYZ values."""
+        height_ratio = np.clip((z_values - z_min) / max(0.1, z_max - z_min), 0.0, 1.0)
+        red = np.interp(height_ratio, (0.0, 0.55, 1.0), (0, 35, 235)).astype(np.uint32)
+        green = np.interp(height_ratio, (0.0, 0.55, 1.0), (210, 70, 0)).astype(np.uint32)
+        blue = np.interp(height_ratio, (0.0, 0.55, 1.0), (230, 210, 210)).astype(np.uint32)
+        rgba = (np.uint32(255) << np.uint32(24)) | (red << 16) | (green << 8) | blue
+        endian = ">" if message.is_bigendian else "<"
+        colored = np.empty(
+            len(z_values),
+            dtype=[("x", endian + "f4"), ("y", endian + "f4"),
+                   ("z", endian + "f4"), ("rgba", endian + "u4")],
+        )
+        colored["x"], colored["y"], colored["z"], colored["rgba"] = (
+            x_values, y_values, z_values, rgba
+        )
+        output = PointCloud2()
+        output.header = message.header
+        output.height, output.width = 1, len(colored)
+        output.fields = [
+            PointField("x", 0, PointField.FLOAT32, 1),
+            PointField("y", 4, PointField.FLOAT32, 1),
+            PointField("z", 8, PointField.FLOAT32, 1),
+            PointField("rgba", 12, PointField.UINT32, 1),
+        ]
+        output.is_bigendian = message.is_bigendian
+        output.point_step, output.row_step = 16, 16 * output.width
+        output.data, output.is_dense = colored.tobytes(), True
+        return output
 
     @staticmethod
     def rotate_vector(vector, quaternion):
@@ -187,69 +365,67 @@ class RooflessVisualization:
         y_values = coordinates["y"][valid_indices]
         z_values = coordinates["z"][valid_indices]
 
-        # Each XY voxel column has its own upper envelope. Removing an upper
-        # layer below that envelope follows horizontal or sloped ceilings while
-        # retaining vertical walls and obstacle sides below it.
-        x_cells = np.rint(x_values / self.voxel_resolution).astype(np.int64)
-        y_cells = np.rint(y_values / self.voxel_resolution).astype(np.int64)
-        y_min = int(y_cells.min())
-        y_span = int(y_cells.max()) - y_min + 1
-        column_keys = (x_cells - int(x_cells.min())) * y_span + (y_cells - y_min)
-        _, inverse = np.unique(column_keys, return_inverse=True)
-        column_top = np.full(int(inverse.max()) + 1, -np.inf, dtype=np.float32)
-        np.maximum.at(column_top, inverse, z_values)
-
-        floor_mask = z_values <= self.floor_z + self.floor_clearance
-        ceiling_columns = column_top[inverse] >= self.floor_z + self.ceiling_min_height
-        ceiling_mask = ceiling_columns & (
-            z_values >= column_top[inverse] - self.ceiling_thickness
-        )
-        visible = ~(floor_mask | ceiling_mask)
+        if self.multi_floor:
+            # Multi-floor mode deliberately preserves every finite XYZ point.
+            # The old floor/ceiling envelope is only appropriate for a single
+            # active floor and would hide other levels after a Z transition.
+            visible = np.ones(len(z_values), dtype=bool)
+            # Computing a per-column minimum is relatively expensive for the
+            # growing map. Defer it until the terminal status has arrived; the
+            # trajectory remains available as a lightweight fallback, and the
+            # final cloud callback refines the levels from actual floor points.
+            if self.map_complete:
+                x_cells = np.rint(x_values / self.voxel_resolution).astype(np.int64)
+                y_cells = np.rint(y_values / self.voxel_resolution).astype(np.int64)
+                y_min, y_span = int(y_cells.min()), int(y_cells.max() - y_cells.min() + 1)
+                column_keys = (x_cells - int(x_cells.min())) * y_span + (y_cells - y_min)
+                _, inverse = np.unique(column_keys, return_inverse=True)
+                minima = np.full(int(inverse.max()) + 1, np.inf, dtype=np.float32)
+                np.minimum.at(minima, inverse, z_values)
+                self.floor_surface_samples = minima[np.isfinite(minima)].astype(np.float64)
+                self.update_floor_levels(self.floor_surface_samples)
+        else:
+            # Each XY voxel column has its own upper envelope. Removing an upper
+            # layer below that envelope follows horizontal or sloped ceilings while
+            # retaining vertical walls and obstacle sides below it.
+            x_cells = np.rint(x_values / self.voxel_resolution).astype(np.int64)
+            y_cells = np.rint(y_values / self.voxel_resolution).astype(np.int64)
+            y_min = int(y_cells.min())
+            y_span = int(y_cells.max()) - y_min + 1
+            column_keys = (x_cells - int(x_cells.min())) * y_span + (y_cells - y_min)
+            _, inverse = np.unique(column_keys, return_inverse=True)
+            column_top = np.full(int(inverse.max()) + 1, -np.inf, dtype=np.float32)
+            np.maximum.at(column_top, inverse, z_values)
+            floor_mask = z_values <= self.floor_z + self.floor_clearance
+            ceiling_columns = column_top[inverse] >= self.floor_z + self.ceiling_min_height
+            ceiling_mask = ceiling_columns & (
+                z_values >= column_top[inverse] - self.ceiling_thickness
+            )
+            visible = ~(floor_mask | ceiling_mask)
         visible_z = z_values[visible]
-        height_span = max(0.1, self.ceiling_min_height - self.floor_clearance)
-        height_ratio = np.clip(
-            (visible_z - self.floor_z - self.floor_clearance) / height_span,
-            0.0,
-            1.0,
-        )
-
-        # FUEL's office demo is dominated by cyan explored surfaces and magenta
-        # upper boundaries. Use the same restrained palette instead of RViz's
-        # full rainbow, which makes a roofless wall-only view visually noisy.
-        red = np.interp(height_ratio, (0.0, 0.55, 1.0), (0, 35, 235)).astype(np.uint32)
-        green = np.interp(height_ratio, (0.0, 0.55, 1.0), (210, 70, 0)).astype(np.uint32)
-        blue = np.interp(height_ratio, (0.0, 0.55, 1.0), (230, 210, 210)).astype(np.uint32)
-        rgba = (np.uint32(255) << np.uint32(24)) | (red << 16) | (green << 8) | blue
-        endian = ">" if message.is_bigendian else "<"
-        colored = np.empty(
-            int(visible.sum()),
-            dtype=[("x", endian + "f4"), ("y", endian + "f4"),
-                   ("z", endian + "f4"), ("rgba", endian + "u4")],
-        )
-        colored["x"] = x_values[visible]
-        colored["y"] = y_values[visible]
-        colored["z"] = visible_z
-        colored["rgba"] = rgba
-
-        output = PointCloud2()
-        output.header = message.header
-        output.height = 1
-        output.width = len(colored)
-        output.fields = [
-            PointField("x", 0, PointField.FLOAT32, 1),
-            PointField("y", 4, PointField.FLOAT32, 1),
-            PointField("z", 8, PointField.FLOAT32, 1),
-            PointField("rgba", 12, PointField.UINT32, 1),
-        ]
-        output.is_bigendian = message.is_bigendian
-        output.point_step = 16
-        output.row_step = output.point_step * output.width
-        output.data = colored.tobytes()
-        output.is_dense = True
+        if self.multi_floor:
+            output = self.colored_cloud(
+                message, x_values[visible], y_values[visible], visible_z,
+                self.multi_floor_z_min, self.multi_floor_z_max,
+            )
+        else:
+            height_span = max(0.1, self.ceiling_min_height - self.floor_clearance)
+            output = self.colored_cloud(
+                message, x_values[visible], y_values[visible], visible_z,
+                self.floor_z + self.floor_clearance,
+                self.floor_z + self.floor_clearance + height_span,
+            )
         self.cloud_pub.publish(output)
+        if self.multi_floor:
+            self.last_visible_cloud = (
+                message, x_values[visible], y_values[visible], visible_z
+            )
+        if self.multi_floor:
+            self.publish_floor_layers()
         rospy.loginfo_throttle(
             5.0,
-            "Roofless cloud: %d -> %d points (floor %.2f m)",
+            "%s cloud: %d -> %d points (floor %.2f m)",
+            "Multi-floor" if self.multi_floor else "Roofless",
             point_count,
             output.width,
             self.floor_z,

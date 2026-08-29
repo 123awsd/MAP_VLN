@@ -205,6 +205,25 @@ def dilate(mask: np.ndarray, radius: int = 1) -> np.ndarray:
     return result
 
 
+def horizontal_endpoint_mask(
+    endpoints: np.ndarray,
+    camera: np.ndarray,
+    max_vertical_delta: float | None,
+) -> np.ndarray:
+    """Keep depth returns that can represent vertical obstacles on a 2-D floor.
+
+    A depth ray ending on a floor or ceiling has a large vertical displacement
+    from the camera, while a wall/column return is comparatively horizontal.
+    Rejecting the former prevents those horizontal surfaces from becoming large
+    occupied patches when several storeys are collapsed into one XY grid.
+    """
+    if max_vertical_delta is None:
+        return np.ones(len(endpoints), dtype=bool)
+    if max_vertical_delta < 0:
+        raise ValueError("max_vertical_delta must be non-negative")
+    return np.abs(endpoints[:, 2] - float(camera[2])) <= max_vertical_delta
+
+
 def convex_hull(points: np.ndarray) -> np.ndarray:
     """Return a 2-D monotonic-chain hull without adding a geometry dependency."""
     unique = sorted({(int(point[0]), int(point[1])) for point in points})
@@ -296,7 +315,26 @@ def main():
     parser.add_argument("--resolution", type=float, default=0.05)
     parser.add_argument("--stride", type=int, default=8)
     parser.add_argument("--max-depth", type=float, default=8.0)
+    parser.add_argument(
+        "--camera-height-min", type=float, default=None,
+        help="optional lower Falcon-Z bound for frames used in a per-floor grid",
+    )
+    parser.add_argument(
+        "--camera-height-max", type=float, default=None,
+        help="optional upper Falcon-Z bound for frames used in a per-floor grid",
+    )
+    parser.add_argument(
+        "--max-endpoint-vertical-delta", type=float, default=None,
+        help=(
+            "reject depth endpoints whose world-Z differs from the camera by "
+            "more than this many metres (useful for floor/ceiling returns)"
+        ),
+    )
     parser.add_argument("--padding", type=float, default=1.0)
+    parser.add_argument(
+        "--min-occupied-observations", type=int, default=1,
+        help="minimum endpoint observations required to mark an occupied seed",
+    )
     parser.add_argument("--obstacle-min-z", type=float, default=0.15)
     parser.add_argument("--obstacle-max-z", type=float, default=1.8)
     parser.add_argument(
@@ -320,6 +358,16 @@ def main():
         help="shared uncertainty margin for removable 3-D boxes",
     )
     args = parser.parse_args()
+    if args.min_occupied_observations < 1:
+        parser.error("--min-occupied-observations must be positive")
+    if (args.camera_height_min is None) != (args.camera_height_max is None):
+        parser.error("--camera-height-min and --camera-height-max must be provided together")
+    if (args.camera_height_min is not None
+            and args.camera_height_min >= args.camera_height_max):
+        parser.error("camera height minimum must be below maximum")
+    if (args.max_endpoint_vertical_delta is not None
+            and args.max_endpoint_vertical_delta < 0):
+        parser.error("--max-endpoint-vertical-delta cannot be negative")
 
     manifest = json.loads((args.episode / "manifest.json").read_text(encoding="utf-8"))
     all_policy_boxes = policy_boxes(args.object_boxes, args.structure_policy)
@@ -343,6 +391,7 @@ def main():
         raise FileNotFoundError(f"no recorded frames in {args.episode}")
 
     ray_sets = []
+    rejected_vertical_endpoint_count = 0
     excluded_navigation_xy: dict[int, list[np.ndarray]] = {
         semantic_id: [] for semantic_id in excluded_navigation_ids
     }
@@ -355,6 +404,10 @@ def main():
             semantic = frame["semantic"] if "semantic" in frame.files else np.full(depth.shape, -1, dtype=np.int32)
             position = frame["position"].astype(np.float64)
             rotation = quaternion_matrix_xyzw(frame["orientation_xyzw"])
+        if args.camera_height_min is not None and position[2] < args.camera_height_min:
+            continue
+        if args.camera_height_max is not None and position[2] > args.camera_height_max:
+            continue
         # Navigation exclusions need a denser semantic projection than the
         # ordinary occupancy-ray stride, otherwise a thin stair edge can be
         # missed and leave a false room beside the stairwell.
@@ -396,10 +449,15 @@ def main():
         # This project intentionally plans on one 2-D floor. Rays terminating on
         # floors, ceilings, or another stair level must not be flattened into free
         # space on the active level.
+        horizontal = horizontal_endpoint_mask(
+            endpoints, position, args.max_endpoint_vertical_delta
+        )
+        rejected_vertical_endpoint_count += int(np.count_nonzero(~horizontal))
         floor_band = (
             (endpoints[:, 2] >= args.obstacle_min_z)
             & (endpoints[:, 2] <= args.obstacle_max_z)
             & ~excluded
+            & horizontal
         )
         endpoints = endpoints[floor_band]
         endpoint_semantic_ids = endpoint_semantic_ids[floor_band]
@@ -446,7 +504,7 @@ def main():
                         65535, int(structural_boundary_votes[y, x]) + 1
                     )
 
-    structural_seeds = occupied_votes > 0
+    structural_seeds = occupied_votes >= args.min_occupied_observations
     occupied = dilate(structural_seeds, radius=1)
     navigation_exclusion = np.zeros((height, width), dtype=bool)
     exclusion_image = Image.new("1", (width, height), 0)
@@ -522,6 +580,7 @@ def main():
         "occupied_cells": int(np.count_nonzero(grid == 100)),
         "unknown_cells": int(np.count_nonzero(grid == -1)),
         "map_role": "room_structure" if args.structure_policy is not None else "navigation_occupancy",
+        "min_occupied_observations": args.min_occupied_observations,
         "object_filter": {
             "source_boxes": None if args.object_boxes is None else str(args.object_boxes),
             "structure_policy": None if args.structure_policy is None else str(args.structure_policy),
@@ -544,6 +603,8 @@ def main():
         },
         "single_floor_policy": {
             "endpoint_height_band_m": [args.obstacle_min_z, args.obstacle_max_z],
+            "max_endpoint_vertical_delta_m": args.max_endpoint_vertical_delta,
+            "rejected_vertical_endpoint_count": rejected_vertical_endpoint_count,
             "semantic_labels": None if args.semantic_labels is None else str(args.semantic_labels),
             "excluded_navigation_labels": sorted(DEFAULT_EXCLUDED_NAVIGATION_LABELS),
             "excluded_navigation_semantic_ids": sorted(excluded_navigation_ids),

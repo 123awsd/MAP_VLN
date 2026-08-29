@@ -2,24 +2,29 @@
   <arg name="bag_path" default="/workspace/shared/outputs/bags/hm3d_stage1_complete_v3_final.bag"/>
   <arg name="loop" default="false"/>
   <arg name="rate" default="1.0"/>
+  <arg name="start" default="0.0"/>
   <arg name="topdown" default="false"/>
   <arg name="delay" default="2.0"/>
   <arg name="roofless_floor_clearance" default="0.25"/>
   <arg name="roofless_ceiling_min_height" default="1.65"/>
   <arg name="roofless_ceiling_thickness" default="0.60"/>
+  <arg name="multi_floor" default="false"/>
+  <arg name="floor_layer_count" default="0"/>
   <param name="/use_sim_time" value="true"/>
   <node pkg="pre_map_bridge" type="roofless_visualization_node.py"
         name="roofless_visualization" output="screen">
     <param name="floor_clearance" value="$(arg roofless_floor_clearance)"/>
     <param name="ceiling_min_height" value="$(arg roofless_ceiling_min_height)"/>
     <param name="ceiling_thickness" value="$(arg roofless_ceiling_thickness)"/>
+    <param name="multi_floor" value="$(arg multi_floor)"/>
+    <param name="floor_layer_count" value="$(arg floor_layer_count)"/>
   </node>
   <node pkg="rviz" type="rviz" name="pre_map_vln_rviz" output="screen"
         args="-d $(find pre_map_bridge)/config/stage1.rviz"/>
   <node if="$(arg topdown)" pkg="rviz" type="rviz" name="pre_map_vln_rviz_topdown" output="screen"
         args="-d $(find pre_map_bridge)/config/stage1_topdown.rviz"/>
   <node unless="$(arg loop)" pkg="rosbag" type="play" name="stage1_bag_player" output="screen"
-        args="--quiet --clock --delay=$(arg delay) -r $(arg rate) $(arg bag_path)"/>
+        args="--quiet --clock --delay=$(arg delay) -r $(arg rate) --start=$(arg start) $(arg bag_path)"/>
   <node if="$(arg loop)" pkg="rosbag" type="play" name="stage1_bag_player_loop" output="screen"
-        args="--quiet --clock --loop --delay=$(arg delay) -r $(arg rate) $(arg bag_path)"/>
+        args="--quiet --clock --loop --delay=$(arg delay) -r $(arg rate) --start=$(arg start) $(arg bag_path)"/>
 </launch>

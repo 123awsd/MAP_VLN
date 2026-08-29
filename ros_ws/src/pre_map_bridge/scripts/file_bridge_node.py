@@ -60,22 +60,27 @@ class FileBridge:
         })
 
     def replan_callback(self, msg):
-        # FALCON publishes replan=2 continuously only after its FSM enters FINISH.
-        # Persist that state outside the ROS container so the Habitat driver and
-        # recorder can stop on planner completion instead of a fixed wall-clock cut.
-        if msg.data != 2 or self.completion_written:
+        # Upstream FALCON publishes 2 after normal frontier exhaustion.  The
+        # collision-stall guard publishes 3 once before entering FINISH, whose
+        # later 2 messages must not overwrite the more specific failure reason.
+        terminal_status = {2: "complete", 3: "collision_stall"}.get(msg.data)
+        if terminal_status is None or self.completion_written:
             return
         self.completion_written = True
         payload = {
-            "status": "complete",
+            "status": terminal_status,
             "source": "/planning/replan",
             "value": int(msg.data),
             "ros_stamp": rospy.get_time(),
             "last_habitat_sequence": self.last_sequence,
         }
         self.atomic_json(self.completion_path, payload)
-        self.status_pub.publish(String(data="complete"))
-        rospy.logwarn("FALCON entered FINISH; wrote %s", self.completion_path)
+        self.status_pub.publish(String(data=terminal_status))
+        rospy.logwarn(
+            "FALCON terminal status %s; wrote %s",
+            terminal_status,
+            self.completion_path,
+        )
 
     def load_frame(self):
         state_path = self.root / "state.json"

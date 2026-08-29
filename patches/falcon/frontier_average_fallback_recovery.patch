@@ -1,0 +1,46 @@
+diff --git a/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp b/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
+--- a/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
++++ b/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
+@@ -738,6 +738,7 @@ bool FrontierFinder::rejectViewpointNear(const Vector3d &failed_pos, const doubl
+   auto best_frontier = frontiers_.end();
+   size_t best_viewpoint = 0;
+   double best_distance = radius;
++  bool matched_via_average = false;
+   for (auto frontier = frontiers_.begin(); frontier != frontiers_.end(); ++frontier) {
+     for (size_t i = 0; i < frontier->viewpoints_.size(); ++i) {
+       const double distance = (frontier->viewpoints_[i].pos_ - failed_pos).norm();
+@@ -748,11 +749,31 @@ bool FrontierFinder::rejectViewpointNear(const Vector3d &failed_pos, const doubl
+       }
+     }
+   }
+-  if (best_frontier == frontiers_.end())
+-    return false;
++  if (best_frontier == frontiers_.end()) {
++    // The hierarchical-grid fallback may command a frontier average rather
++    // than one of its sampled viewpoints. Match that endpoint back to the
++    // frontier and retire its current best viewpoint instead of retrying the
++    // same collision forever.
++    double best_average_distance = candidate_rmax_ + radius;
++    for (auto frontier = frontiers_.begin(); frontier != frontiers_.end(); ++frontier) {
++      if (frontier->viewpoints_.empty())
++        continue;
++      const double distance = (frontier->average_ - failed_pos).norm();
++      if (distance <= best_average_distance) {
++        best_average_distance = distance;
++        best_frontier = frontier;
++        best_viewpoint = 0;
++        matched_via_average = true;
++      }
++    }
++    if (best_frontier == frontiers_.end())
++      return false;
++    best_distance = (best_frontier->viewpoints_[best_viewpoint].pos_ - failed_pos).norm();
++  }
+ 
+   ROS_WARN("[FrontierFinder] Reject collision-stalled viewpoint at (%.2f, %.2f, %.2f), "
+-           "distance %.2f m", failed_pos.x(), failed_pos.y(), failed_pos.z(), best_distance);
++           "candidate distance %.2f m%s", failed_pos.x(), failed_pos.y(), failed_pos.z(),
++           best_distance, matched_via_average ? " via frontier-average fallback" : "");
+   rejected_viewpoint_positions_.push_back(best_frontier->viewpoints_[best_viewpoint].pos_);
+   best_frontier->viewpoints_.erase(best_frontier->viewpoints_.begin() + best_viewpoint);
+   if (best_frontier->viewpoints_.empty()) {

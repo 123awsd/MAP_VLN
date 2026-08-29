@@ -8,6 +8,7 @@ from scripts.build_occusg_grid import (
     convex_hull,
     clear_non_boundary_components,
     group_nearby_instances,
+    horizontal_endpoint_mask,
     minimum_area_rectangle,
     points_in_removable_boxes,
     semantic_ids_for_labels,
@@ -15,6 +16,23 @@ from scripts.build_occusg_grid import (
 
 
 class Stage1FloorFilterTests(unittest.TestCase):
+    def test_horizontal_endpoint_mask_rejects_floor_and_ceiling_returns(self):
+        camera = np.asarray([0.0, 0.0, 6.5])
+        endpoints = np.asarray([
+            [2.0, 0.0, 6.7],   # wall
+            [0.0, 2.0, 5.2],   # floor
+            [0.0, 2.0, 7.8],   # ceiling
+        ])
+        self.assertEqual(
+            horizontal_endpoint_mask(endpoints, camera, 0.75).tolist(),
+            [True, False, False],
+        )
+
+    def test_horizontal_endpoint_mask_can_be_disabled(self):
+        endpoints = np.asarray([[0.0, 0.0, 0.0]])
+        camera = np.asarray([0.0, 0.0, 10.0])
+        self.assertEqual(horizontal_endpoint_mask(endpoints, camera, None).tolist(), [True])
+
     def test_hm3d_stair_labels_are_selected_exactly(self):
         with tempfile.TemporaryDirectory() as directory:
             labels = Path(directory) / "scene.semantic.txt"

@@ -56,9 +56,17 @@ COPY ros_ws/src/pre_map_bridge /workspace/falcon_ws/src/pre_map_bridge
 COPY patches/falcon/habitat_ground_viewpoint.patch /tmp/habitat_ground_viewpoint.patch
 COPY patches/falcon/zero_cost_guard.patch /tmp/zero_cost_guard.patch
 COPY patches/falcon/collision_stall_finish.patch /tmp/collision_stall_finish.patch
+COPY patches/falcon/frontier_collision_recovery.patch /tmp/frontier_collision_recovery.patch
+COPY patches/falcon/alternative_viewpoint_resampling.patch /tmp/alternative_viewpoint_resampling.patch
+COPY patches/falcon/frontier_average_fallback_recovery.patch /tmp/frontier_average_fallback_recovery.patch
+COPY patches/falcon/floor_priority.patch /tmp/floor_priority.patch
 RUN patch -d FALCON -p1 < /tmp/habitat_ground_viewpoint.patch
 RUN patch -d FALCON -p1 < /tmp/zero_cost_guard.patch
 RUN patch -d FALCON -p1 < /tmp/collision_stall_finish.patch
+RUN patch -d FALCON -p1 < /tmp/frontier_collision_recovery.patch
+RUN patch -d FALCON -p1 < /tmp/alternative_viewpoint_resampling.patch
+RUN patch -d FALCON -p1 < /tmp/frontier_average_fallback_recovery.patch
+RUN patch -d FALCON -p1 < /tmp/floor_priority.patch
 
 # Habitat replaces FALCON's built-in CUDA/Open3D sensor renderers.
 RUN touch FALCON/uav_simulator/camera_sensing/pointcloud_render/CATKIN_IGNORE \

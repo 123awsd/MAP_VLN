@@ -1,0 +1,220 @@
+diff --git a/falcon_planner/exploration_manager/src/exploration_fsm.cpp b/falcon_planner/exploration_manager/src/exploration_fsm.cpp
+--- a/falcon_planner/exploration_manager/src/exploration_fsm.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_fsm.cpp
+@@ -649,7 +649,7 @@ void ExplorationFSM::visualize() {
+                              "frontier_id", i, PlanningVisualization::PUBLISHER::FRONTIER);
+   }
+   last_frontier_ids.clear();
+-  for (int i = 0; i < ed_ptr->frontiers_.size(); ++i) {
++  for (int i = 0; i < ed_ptr->averages_.size(); ++i) {
+     visualization_->drawText(ed_ptr->averages_[i], to_string(i), 0.5,
+                              PlanningVisualization::Color::Red(), "frontier_id", i,
+                              PlanningVisualization::PUBLISHER::FRONTIER);
+@@ -815,7 +815,7 @@ void ExplorationFSM::frontierCallback(const ros::TimerEvent &e) {
+       visualization_->drawTinyFrontierPointcloud(ed->tiny_frontiers_);
+     }
+ 
+-    for (int i = 0; i < ed->frontiers_.size(); ++i) {
++    for (int i = 0; i < ed->averages_.size(); ++i) {
+       visualization_->drawText(ed->averages_[i], to_string(i), 0.5,
+                                PlanningVisualization::Color::Red(), "frontier_id", i,
+                                PlanningVisualization::PUBLISHER::FRONTIER);
+@@ -826,3 +826,3 @@ void ExplorationFSM::frontierCallback(const ros::TimerEvent &e) {
+-    if (ed->frontiers_.size() > 0) {
++    if (ed->points_.size() > 0) {
+       frontier_ready_ = true;
+     }
+diff --git a/falcon_planner/exploration_manager/src/exploration_manager.cpp b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+@@ -1372,6 +1372,10 @@ int ExplorationManager::updateFrontierStruct(const Eigen::Vector3d &pos) {
+     ROS_WARN("[ExplorationManager] No frontier");
+     return 0;
+   }
++  if (ed_->points_.empty()) {
++    ROS_WARN("[ExplorationManager] No frontier viewpoint on the active floor");
++    return 0;
++  }
+ 
+   double view_time = (ros::Time::now() - t1).toSec();
+   // t1 = ros::Time::now();
+@@ -1392,7 +1396,9 @@ int ExplorationManager::updateFrontierStruct(const Eigen::Vector3d &pos) {
+ 
+   ee_->frontier_times_.push_back(total_time);
+ 
+-  return ed_->frontiers_.size();
++  // points_ is intentionally a compact list when floor-priority mode is
++  // enabled; the full frontier clusters remain available for visualization.
++  return ed_->points_.size();
+ }
+ 
+ vector<int> ExplorationManager::dijkstra(vector<vector<double>> &graph, int start, int end) {
+ vector<int> ExplorationManager::dijkstra(vector<vector<double>> &graph, int start, int end) {
+diff --git a/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h b/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h
+--- a/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h
++++ b/falcon_planner/exploration_preprocessing/include/exploration_preprocessing/frontier_finder.h
+@@ -138,6 +138,12 @@ private:
+   double ground_height_, ground_offset_;
+   double viewpoint_z_score_cutoff_;
+   double cell_height_clearance_;
++  bool floor_priority_enabled_, floor_priority_initialized_;
++  double floor_priority_band_, floor_priority_min_separation_, active_floor_height_;
++  int active_floor_index_;
++  // Mapping from the compact, current-floor viewpoint list returned to the
++  // exploration manager back to FrontierFinder's stable frontier IDs.
++  vector<int> active_frontier_ids_;
+   vector<double> cell_heights_;
+ 
+   // Utils
+diff --git a/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp b/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
+--- a/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
++++ b/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
+@@ -1,4 +1,7 @@
+ #include <Eigen/Eigenvalues>
++#include <cmath>
++#include <limits>
++#include <numeric>
+ #include <pcl/filters/voxel_grid.h>
+ 
+ #include "exploration_preprocessing/frontier_finder.h"
+@@ -29,6 +32,13 @@ FrontierFinder::FrontierFinder(ros::NodeHandle &nh, const shared_ptr<MapServer>
+   nh.param("/frontier_finder/ground_offset", ground_offset_, 0.0);
+   nh.param("/frontier_finder/viewpoint_z_score_cutoff", viewpoint_z_score_cutoff_, 0.0);
+   nh.param("/frontier_finder/cell_height_clearance", cell_height_clearance_, 0.1);
++  nh.param("/frontier_finder/floor_priority_enabled", floor_priority_enabled_, false);
++  nh.param("/frontier_finder/floor_priority_band", floor_priority_band_, 0.85);
++  nh.param("/frontier_finder/floor_priority_min_separation",
++           floor_priority_min_separation_, 1.2);
++  floor_priority_initialized_ = false;
++  active_floor_height_ = 0.0;
++  active_floor_index_ = 1;
+ 
+   raycaster_.reset(new RayCaster);
+   resolution_ = map_server_->getResolution();
+@@ -614,6 +624,15 @@ void FrontierFinder::getTopViewpointsInfo(const Vector3d &cur_pos, vector<Eigen::Vector3d> &points,
+   points.clear();
+   yaws.clear();
+   averages.clear();
++  active_frontier_ids_.clear();
++
++  struct Candidate {
++    Vector3d point;
++    double yaw;
++    Vector3d average;
++    int frontier_id;
++  };
++  vector<Candidate> candidates;
+   for (auto frontier : frontiers_) {
+     bool no_view = true;
+     for (auto view : frontier.viewpoints_) {
+@@ -622,9 +641,7 @@ void FrontierFinder::getTopViewpointsInfo(const Vector3d &cur_pos, vector<Eigen::Vector3d> &points,
+       // min_candidate_dist_ is 1.0 in config file
+       if ((view.pos_ - cur_pos).norm() < min_candidate_dist_)
+         continue;
+-      points.push_back(view.pos_);
+-      yaws.push_back(view.yaw_);
+-      averages.push_back(frontier.average_);
++      candidates.push_back({view.pos_, view.yaw_, frontier.average_, frontier.id_});
+       no_view = false;
+ 
+       // only the first view is pushed back
+@@ -634,11 +651,79 @@ void FrontierFinder::getTopViewpointsInfo(const Vector3d &cur_pos, vector<Eigen::Vector3d> &points,
+       // All viewpoints are very close, just use the first one (with highest
+       // coverage).
+       auto view = frontier.viewpoints_.front();
+-      points.push_back(view.pos_);
+-      yaws.push_back(view.yaw_);
+-      averages.push_back(frontier.average_);
++      candidates.push_back({view.pos_, view.yaw_, frontier.average_, frontier.id_});
++    }
++  }
++
++  vector<int> selected;
++  if (!floor_priority_enabled_ || candidates.empty()) {
++    selected.resize(candidates.size());
++    std::iota(selected.begin(), selected.end(), 0);
++  } else {
++    if (!floor_priority_initialized_) {
++      // The initial odometry height defines floor 1. Subsequent floors are
++      // entered monotonically only after no current-floor viewpoint remains.
++      active_floor_height_ = cur_pos.z();
++      active_floor_index_ = 1;
++      floor_priority_initialized_ = true;
++      ROS_INFO("[FrontierFinder] Floor-priority exploration starts on floor %d at Z=%.2f",
++               active_floor_index_, active_floor_height_);
++    }
++
++    auto collect_current_floor = [&]() {
++      selected.clear();
++      for (int i = 0; i < candidates.size(); ++i) {
++        if (std::fabs(candidates[i].average.z() - active_floor_height_) <= floor_priority_band_)
++          selected.push_back(i);
++      }
++    };
++    collect_current_floor();
++
++    if (selected.empty()) {
++      // Advance to the nearest higher floor represented by a remaining
++      // frontier. Lower floors are normally not reconsidered here, but if a
++      // delayed map update exposes one after the upper floors are exhausted,
++      // fall back to it rather than declaring exploration complete.
++      double next_floor_height = std::numeric_limits<double>::infinity();
++      double nearest_higher_height = std::numeric_limits<double>::infinity();
++      double fallback_floor_height = -std::numeric_limits<double>::infinity();
++      for (const auto &candidate : candidates) {
++        const double height = candidate.average.z();
++        if (height > active_floor_height_ + floor_priority_min_separation_ &&
++            height < next_floor_height)
++          next_floor_height = height;
++        // If the next floor is closer than the configured separation, still
++        // advance rather than returning an empty candidate list.
++        if (height > active_floor_height_ + floor_priority_band_ &&
++            height < nearest_higher_height)
++          nearest_higher_height = height;
++        if (height < active_floor_height_ - floor_priority_band_ &&
++            height > fallback_floor_height)
++          fallback_floor_height = height;
++      }
++      if (!std::isfinite(next_floor_height))
++        next_floor_height = nearest_higher_height;
++      if (std::isfinite(next_floor_height)) {
++        active_floor_height_ = next_floor_height;
++        ++active_floor_index_;
++        ROS_INFO("[FrontierFinder] Current floor exhausted; switching to floor %d at Z=%.2f",
++                 active_floor_index_, active_floor_height_);
++        collect_current_floor();
++      } else if (std::isfinite(fallback_floor_height)) {
++        active_floor_height_ = fallback_floor_height;
++        ROS_WARN("[FrontierFinder] Delayed lower-floor frontier detected; revisiting Z=%.2f",
++                 active_floor_height_);
++        collect_current_floor();
++      }
+     }
+   }
++
++  for (const int index : selected) {
++    points.push_back(candidates[index].point);
++    yaws.push_back(candidates[index].yaw);
++    averages.push_back(candidates[index].average);
++    active_frontier_ids_.push_back(candidates[index].frontier_id);
++  }
+ }
+ 
+ void FrontierFinder::getViewpointsInfo(const Vector3d &cur_pos, const vector<int> &ids,
+@@ -648,9 +725,15 @@ void FrontierFinder::getViewpointsInfo(const Vector3d &cur_pos, const vector<int> &ids,
+   yaws.clear();
+   for (auto id : ids) {
++    // The exploration manager receives a compact current-floor list from
++    // getTopViewpointsInfo, so translate its index back to FrontierFinder's
++    // stable ID before looking up the full viewpoint set.
++    int frontier_id = id;
++    if (floor_priority_enabled_ && id >= 0 && id < active_frontier_ids_.size())
++      frontier_id = active_frontier_ids_[id];
+     // Scan all frontiers to find one with the same id
+     for (auto frontier : frontiers_) {
+-      if (frontier.id_ == id) {
++      if (frontier.id_ == frontier_id) {
+         // Get several top viewpoints that are far enough
+         vector<Eigen::Vector3d> pts;
+         vector<double> ys;
+         int visib_thresh = frontier.viewpoints_.front().visib_num_ * max_decay;
