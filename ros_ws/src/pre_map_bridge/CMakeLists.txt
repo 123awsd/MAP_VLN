@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(pre_map_bridge)
-find_package(catkin REQUIRED COMPONENTS geometry_msgs nav_msgs quadrotor_msgs rospy sensor_msgs trajectory visualization_msgs)
+find_package(catkin REQUIRED COMPONENTS geometry_msgs interactive_markers nav_msgs quadrotor_msgs rospy sensor_msgs trajectory visualization_msgs)
 catkin_package()
-catkin_install_python(PROGRAMS scripts/build_stage2_bag.py scripts/file_bridge_node.py scripts/inject_progressive_boxes.py scripts/roofless_visualization_node.py
+catkin_install_python(PROGRAMS scripts/build_stage2_bag.py scripts/file_bridge_node.py scripts/floor_layer_visualization_node.py scripts/inject_progressive_boxes.py scripts/roofless_visualization_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})

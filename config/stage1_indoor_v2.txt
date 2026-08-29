@@ -1,0 +1,146 @@
+# PRE_MAP_VLN stage-one offline indoor vocabulary, version indoor_v2.
+# One canonical OWLv2 prompt per line. This extends indoor_v1 for offline
+# semantic pre-mapping while avoiding most direct synonyms that would create
+# duplicate cross-class boxes for the same physical object.
+
+# Architectural elements and stable room cues
+door
+window
+mirror
+railing
+stairs
+column
+fireplace
+curtain
+blinds
+rug
+picture
+clock
+whiteboard
+projector screen
+
+# Seating and beds
+chair
+armchair
+stool
+bench
+ottoman
+sofa
+bed
+crib
+mattress
+pillow
+blanket
+
+# Tables, storage and work surfaces
+table
+coffee table
+dining table
+desk
+side table
+console table
+cabinet
+wardrobe
+dresser
+nightstand
+shelf
+bookshelf
+television stand
+shoe rack
+clothes rack
+coat rack
+kitchen island
+countertop
+vanity
+
+# Electronics, lighting and climate
+television
+monitor
+speaker
+lamp
+chandelier
+ceiling fan
+fan
+air conditioner
+heater
+radiator
+projector
+printer
+router
+laptop
+keyboard
+computer mouse
+
+# Kitchen and household appliances
+refrigerator
+oven
+stove
+microwave
+dishwasher
+washing machine
+dryer
+range hood
+toaster
+coffee maker
+electric kettle
+blender
+rice cooker
+water dispenser
+vacuum cleaner
+iron
+ironing board
+
+# Bathroom fixtures and accessories
+sink
+toilet
+bathtub
+shower
+faucet
+bidet
+towel
+towel rack
+soap dispenser
+toilet paper
+bath mat
+
+# Kitchenware and tabletop objects
+pot
+pan
+bowl
+plate
+cup
+bottle
+cutting board
+
+# Common movable objects
+book
+magazine
+remote control
+mobile phone
+backpack
+handbag
+suitcase
+box
+package
+laundry basket
+trash can
+basket
+
+# Decoration, cleaning, safety and recreation
+plant
+vase
+sculpture
+candle
+piano
+broom
+mop
+bucket
+fire extinguisher
+smoke detector
+baby stroller
+wheelchair
+exercise bike
+treadmill
+dumbbell
+pool table
+pet bed

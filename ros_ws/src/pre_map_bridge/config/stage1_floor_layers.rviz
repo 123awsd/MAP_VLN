@@ -1,0 +1,99 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Selection
+    Name: Selection
+  - Class: rviz/Tool Properties
+    Name: Tool Properties
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.4
+      Cell Size: 1
+      Class: rviz/Grid
+      Color: 170; 170; 170
+      Enabled: true
+      Name: Metric Grid
+      Plane: XY
+      Reference Frame: world
+    - Alpha: 0.95
+      Class: rviz/PointCloud2
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Name: Selected Floor (Color)
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.035
+      Style: Points
+      Topic: /pre_map_vln/floor_active_map
+      Unreliable: false
+      Use Fixed Frame: true
+    - Alpha: 0.04
+      Class: rviz/PointCloud2
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Name: Other Floors (Gray Context)
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 2
+      Size (m): 0.025
+      Style: Points
+      Topic: /pre_map_vln/floor_context_map
+      Unreliable: false
+      Use Fixed Frame: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /pre_map_vln/floor_box_markers
+      Name: Indoor V2 3D Boxes
+      Namespaces: {}
+      Queue Size: 5
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /pre_map_vln/floor_trajectory
+      Name: Executed 3D Trajectory
+      Namespaces: {}
+      Queue Size: 5
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /pre_map_vln/floor_view_status
+      Name: Selected Floor Status
+      Namespaces: {}
+      Queue Size: 2
+    - Class: rviz/InteractiveMarkers
+      Enable Transparency: true
+      Enabled: true
+      Name: Floor Selector Buttons
+      Show Axes: false
+      Show Descriptions: true
+      Show Visual Aids: false
+      Update Topic: /stage1_floor_selector/update
+  Enabled: true
+  Global Options:
+    Background Color: 245; 245; 245
+    Default Light: true
+    Fixed Frame: world
+    Frame Rate: 20
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 24
+      Focal Point: {X: 0, Y: 7, Z: 5}
+      Pitch: 0.65
+      Yaw: 4.0
+Window Geometry:
+  Height: 950
+  Width: 1500
+  X: 80
+  Y: 40

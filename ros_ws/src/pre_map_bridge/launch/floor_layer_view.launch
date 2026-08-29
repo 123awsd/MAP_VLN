@@ -1,0 +1,27 @@
+<launch>
+  <arg name="cloud_path"/>
+  <arg name="boxes_path"/>
+  <arg name="trajectory_path"/>
+  <arg name="floor_json_path" default=""/>
+  <arg name="floor_detection_mode" default="falcon"/>
+  <arg name="selected_floor" default="0"/>
+  <arg name="max_floor" default="0"/>
+  <arg name="voxel_resolution" default="0.10"/>
+  <arg name="minimum_slab_area" default="2.0"/>
+
+  <param name="/use_sim_time" value="false"/>
+  <node pkg="pre_map_bridge" type="floor_layer_visualization_node.py"
+        name="floor_layer_visualization" output="screen">
+    <param name="cloud_path" value="$(arg cloud_path)"/>
+    <param name="boxes_path" value="$(arg boxes_path)"/>
+    <param name="trajectory_path" value="$(arg trajectory_path)"/>
+    <param name="floor_json_path" value="$(arg floor_json_path)"/>
+    <param name="floor_detection_mode" value="$(arg floor_detection_mode)"/>
+    <param name="selected_floor" value="$(arg selected_floor)"/>
+    <param name="max_floor" value="$(arg max_floor)"/>
+    <param name="voxel_resolution" value="$(arg voxel_resolution)"/>
+    <param name="minimum_slab_area" value="$(arg minimum_slab_area)"/>
+  </node>
+  <node pkg="rviz" type="rviz" name="pre_map_vln_floor_rviz" output="screen"
+        args="-d $(find pre_map_bridge)/config/stage1_floor_layers.rviz"/>
+</launch>
