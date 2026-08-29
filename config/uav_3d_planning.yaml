@@ -1,0 +1,23 @@
+# Shared stage-two UAV planning semantics.  Coarse A* and the authoritative
+# FALCON trajectory planner must use the same profile hash.
+format: pre_map_vln.uav_3d_planning.v1
+occupancy:
+  unknown_value: -1
+  free_value: 0
+  occupied_value: 100
+  unknown_is_blocked: true
+vehicle:
+  radius_xy_m: 0.25
+  radius_z_m: 0.15
+  safety_margin_m: 0.10
+planning:
+  # Hard execution validity: horizontal body radius + safety margin.
+  minimum_esdf_distance_m: 0.35
+  # Soft B-spline objective; matches FALCON fast_planner.yaml safe_distance.
+  preferred_esdf_distance_m: 0.70
+  clearance_cost_weight: 0.20
+  coarse_resolution_m: 0.20
+  connectivity: 26
+  nearest_free_radius_m: 0.40
+  esdf_version_bands_m: [0.35, 0.50, 0.70, 0.80]
+  maximum_expansions: 2000000

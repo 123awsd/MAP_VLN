@@ -5,7 +5,7 @@ import unittest
 
 import numpy as np
 
-from stage2.candidate_poses import generate_candidates
+from stage2.candidate_poses import generate_all_candidates, generate_candidates
 from stage2.grid_map import OccupancyGrid
 
 
@@ -17,6 +17,7 @@ class CandidatePoseTest(unittest.TestCase):
         self.scene = {
             "rooms": [{
                 "id": 1,
+                "floor_id": 1,
                 "semantic_type": "living_room",
                 "objects": [
                     {
@@ -44,6 +45,17 @@ class CandidatePoseTest(unittest.TestCase):
                         "probability": 1.0,
                     },
                 ],
+            }, {
+                "id": 2,
+                "floor_id": 2,
+                "semantic_type": "living_room",
+                "objects": [{
+                    "id": "wrong_floor_ref", "label": "sofa",
+                    "center_xyz_m": [10.0, 10.0, 4.0],
+                    "size_xyz_m": [1.0, 1.0, 1.0],
+                    "orientation_wxyz": [1.0, 0.0, 0.0, 0.0],
+                    "probability": 2.0,
+                }],
             }]
         }
 
@@ -98,6 +110,16 @@ class CandidatePoseTest(unittest.TestCase):
         self.assertTrue(all(item["region_type"] == "support_surface" for item in candidates))
         self.assertTrue(all(item["pose"]["z"] > 0.5 for item in candidates))
         self.assertTrue(all(item["view_quality"] > 0.0 for item in candidates))
+
+    def test_target_reference_relation_keeps_view_around_target_and_scopes_reference(self):
+        candidates = generate_candidates(
+            self.grid, self.scene,
+            self.task(relation="near", reference="sofa"),
+            max_candidates=8,
+        )
+        self.assertTrue(candidates)
+        self.assertTrue(all(item["region_type"] == "instance_region" for item in candidates))
+        self.assertTrue(all(item["reference_object_ids"] == ["ref_a"] for item in candidates))
 
     def test_between_relation_requires_two_references_in_geometry(self):
         candidates = generate_candidates(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import math
 from typing import Any
 
@@ -66,7 +67,7 @@ def _region_type(constraints: dict[str, Any]) -> str:
 
 
 def _reference_objects(
-    scene_graph: dict[str, Any], task: dict[str, Any]
+    scene_graph: dict[str, Any], task: dict[str, Any], target_room: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     target = task.get("target", {})
     raw_references = target.get("references") or []
@@ -84,14 +85,25 @@ def _reference_objects(
     result = []
     for label in labels:
         accepted = ALIASES.get(label, {label})
-        matches = [
-            obj
-            for room in scene_graph.get("rooms", [])
-            for obj in room.get("objects", [])
-            if str(obj.get("label", "")).strip().lower() in accepted
-        ]
+        matches = []
+        for room in scene_graph.get("rooms", []):
+            if target_room is not None:
+                same_room = room.get("id") == target_room.get("id")
+                same_floor = room.get("floor_id") == target_room.get("floor_id")
+                if not same_room and not same_floor:
+                    continue
+            for obj in room.get("objects", []):
+                if str(obj.get("label", "")).strip().lower() in accepted:
+                    matches.append((
+                        0 if target_room is not None and room.get("id") == target_room.get("id") else 1,
+                        obj,
+                    ))
         if matches:
-            result.append(max(matches, key=lambda item: float(item.get("probability", 0.0))))
+            _, selected = min(
+                matches,
+                key=lambda item: (item[0], -float(item[1].get("probability", 0.0))),
+            )
+            result.append(selected)
     return result
 
 
@@ -181,7 +193,7 @@ def _preferred_observation_distance(
 
 def _height_candidates(
     center: list[float], size: list[float], constraints: dict[str, Any],
-    region_type: str,
+    region_type: str, height_bounds: list[float] | None = None,
 ) -> list[float]:
     explicit = constraints.get("height_m")
     if explicit is not None:
@@ -198,11 +210,15 @@ def _height_candidates(
         nominal = center[2] - 0.25 * max(0.0, size[2])
     else:
         nominal = center[2]
-    nominal = min(DEFAULT_MAX_SENSOR_Z, max(DEFAULT_MIN_SENSOR_Z, nominal))
+    lower, upper = (
+        (DEFAULT_MIN_SENSOR_Z, DEFAULT_MAX_SENSOR_Z)
+        if height_bounds is None else (float(height_bounds[0]), float(height_bounds[1]))
+    )
+    nominal = min(upper, max(lower, nominal))
     result = [nominal]
     if str(constraints.get("observation_detail", "normal")) == "fine":
         result.extend((nominal - 0.25, nominal + 0.25))
-    return sorted(set(round(min(DEFAULT_MAX_SENSOR_Z, max(DEFAULT_MIN_SENSOR_Z, value)), 6) for value in result))
+    return sorted(set(round(min(upper, max(lower, value)), 6) for value in result))
 
 
 def _height_relation_ok(
@@ -230,9 +246,31 @@ def _visible_region_samples(
             continue
         if abs(vertical_angle) > vertical_half:
             continue
-        if grid.line_is_free(xy, sample[:2], allow_endpoint_cells=2):
+        if hasattr(grid, "line_of_sight"):
+            line_free = grid.line_of_sight([xy[0], xy[1], z], sample)
+        else:
+            line_free = grid.line_is_free(xy, sample[:2], allow_endpoint_cells=2)
+        if line_free:
             visible.append(index)
     return visible
+
+
+def _point_visible_from_pose(
+    grid, xyz: list[float], yaw: float, point: list[float],
+    horizontal_fov_deg: float, vertical_fov_deg: float,
+) -> bool:
+    delta = [float(point[i]) - float(xyz[i]) for i in range(3)]
+    horizontal_distance = math.hypot(delta[0], delta[1])
+    if horizontal_distance <= 1e-6:
+        return False
+    bearing = math.atan2(delta[1], delta[0])
+    if abs(_angle_difference(bearing, yaw)) > math.radians(horizontal_fov_deg) * 0.5:
+        return False
+    if abs(math.atan2(delta[2], horizontal_distance)) > math.radians(vertical_fov_deg) * 0.5:
+        return False
+    if hasattr(grid, "line_of_sight"):
+        return bool(grid.line_of_sight(xyz, point))
+    return bool(grid.line_is_free(xyz[:2], point[:2], allow_endpoint_cells=2))
 
 
 def matching_objects(
@@ -240,10 +278,13 @@ def matching_objects(
 ) -> list[tuple[dict[str, Any], dict[str, Any]]]:
     label = task["target"]["label"].lower()
     room_name = task["target"].get("room")
+    floor_id = task["target"].get("floor_id")
     accepted = ALIASES.get(label, {label})
     all_matches = []
     room_matches = []
     for room in scene_graph.get("rooms", []):
+        if floor_id is not None and int(room.get("floor_id", -1)) != int(floor_id):
+            continue
         for obj in room.get("objects", []):
             if str(obj.get("label", "")).lower() not in accepted:
                 continue
@@ -276,15 +317,20 @@ def generate_candidates(
     constraints = task["spatial_constraints"]
     minimum, maximum = constraints["distance_m"]
     candidates = []
-    references = _reference_objects(scene_graph, task)
-    reference_centers = [other["center_xyz_m"] for other in references]
-    constraints_region = _region_type(constraints)
     vertical_fov = float(constraints.get("vertical_fov_deg", DEFAULT_VERTICAL_FOV_DEG))
     horizontal_fov = float(constraints.get("horizontal_fov_deg", DEFAULT_HORIZONTAL_FOV_DEG))
     yaw_tolerance = float(constraints.get("yaw_tolerance_deg", 55.0))
     for room, obj in matching_objects(scene_graph, task, prefer_room=prefer_room):
         if allowed_object_ids is not None and obj["id"] not in allowed_object_ids:
             continue
+        references = _reference_objects(scene_graph, task, room)
+        reference_centers = [other["center_xyz_m"] for other in references]
+        target_reference_relation = bool(
+            references and constraints.get("relation") in {"on", "near"}
+        )
+        constraints_region = (
+            "instance_region" if target_reference_relation else _region_type(constraints)
+        )
         center = [float(value) for value in obj["center_xyz_m"]]
         size = [float(value) for value in obj["size_xyz_m"]]
         object_yaw = _yaw_from_wxyz([float(value) for value in obj["orientation_wxyz"]])
@@ -295,7 +341,10 @@ def generate_candidates(
         )
         radii = sorted(set([minimum, preferred_distance, maximum]))
         region_samples = _region_samples(center, size, object_yaw, constraints_region)
-        height_values = _height_candidates(center, size, constraints, constraints_region)
+        height_values = _height_candidates(
+            center, size, constraints, constraints_region,
+            room.get("camera_height_band_m") if hasattr(grid, "is_state_valid") else None,
+        )
         for radius in radii:
             radius_from_center = object_radius + radius
             for sample in range(24):
@@ -303,7 +352,7 @@ def generate_candidates(
                 if not _relation_ok(constraints.get("relation"), angle, object_yaw, yaw_tolerance):
                     continue
                 xy = [center[0] + radius_from_center * math.cos(angle), center[1] + radius_from_center * math.sin(angle)]
-                if not grid.is_free(xy):
+                if not hasattr(grid, "is_state_valid") and not grid.is_free(xy):
                     continue
                 between_ok, between_distance = _between_geometry(
                     xy, references, tolerance_m=max(0.75, 0.5 * maximum)
@@ -312,6 +361,9 @@ def generate_candidates(
                     continue
                 yaw = math.atan2(center[1] - xy[1], center[0] - xy[0])
                 for z in height_values:
+                    xyz = [xy[0], xy[1], float(z)]
+                    if hasattr(grid, "is_state_valid") and not grid.is_state_valid(xyz):
+                        continue
                     if not _height_relation_ok(z, center[2], constraints.get("relation")):
                         continue
                     visible_ids = _visible_region_samples(
@@ -319,6 +371,15 @@ def generate_candidates(
                     )
                     visible = bool(visible_ids)
                     if constraints.get("visibility_required", True) and not visible:
+                        continue
+                    reference_visible = [
+                        _point_visible_from_pose(
+                            grid, xyz, yaw, [float(value) for value in other["center_xyz_m"]],
+                            horizontal_fov, vertical_fov,
+                        )
+                        for other in references
+                    ]
+                    if references and constraints.get("relation") in {"on", "near"} and not all(reference_visible):
                         continue
                     view_quality = len(visible_ids) / max(1, len(region_samples))
                     reference_distance = min(
@@ -339,6 +400,7 @@ def generate_candidates(
                         "object_label": obj["label"],
                         "room_id": room["id"],
                         "room_type": room.get("semantic_type", "unknown"),
+                        "floor_id": room.get("floor_id"),
                         "pose": {"x": xy[0], "y": xy[1], "z": float(z), "yaw": yaw},
                         "target_xyz_m": center,
                         "distance_to_box_surface_m": radius,
@@ -352,9 +414,17 @@ def generate_candidates(
                         "vertical_fov_deg": vertical_fov,
                         "horizontal_fov_deg": horizontal_fov,
                         "height_fov_validated": True,
-                        "height_collision_validated": False,
-                        "collision_validation": "2d_occupancy_only",
+                        "height_collision_validated": bool(hasattr(grid, "is_state_valid")),
+                        "collision_validation": (
+                            "falcon_raw_free_3d" if hasattr(grid, "is_state_valid")
+                            else "2d_occupancy_only"
+                        ),
                         "reference_distance_m": reference_distance if reference_centers else None,
+                        "reference_object_ids": [item["id"] for item in references],
+                        "reference_visible": reference_visible,
+                        "target_reference_relation": (
+                            constraints.get("relation") if references else None
+                        ),
                         "between_distance_m": between_distance if constraints.get("relation") == "between" else None,
                         "terminal_cost": terminal_score,
                     })
@@ -415,12 +485,12 @@ def select_spread_target_objects(scene_graph: dict[str, Any], task_graph: dict[s
     computes the geometrically shortest feasible tour between those anchors.
     """
     selected: dict[str, str] = {}
-    used_rooms: set[int] = set()
+    used_rooms: set[Any] = set()
     centers: list[list[float]] = []
     def selection_order(task):
         choices = matching_objects(scene_graph, task)
         destination_groups = {
-            int(room.get("parent_room_id", room["id"]))
+            room.get("parent_room_id", room["id"])
             for room, _ in choices if room.get("space_role") == "room"
         }
         # Allocate scarce labels first (for example, chairs), leaving flexible
@@ -440,14 +510,14 @@ def select_spread_target_objects(scene_graph: dict[str, Any], task_graph: dict[s
             choices = destination_choices
 
         def room_group(room):
-            return int(room.get("parent_room_id", room["id"]))
+            return room.get("parent_room_id", room["id"])
 
         if not centers or not task.get("active_initially", True):
             room, obj = choices[0]
         else:
             def spread_key(item):
                 room, obj = item
-                center = [float(value) for value in obj["center_xyz_m"][:2]]
+                center = [float(value) for value in obj["center_xyz_m"]]
                 separation = min(math.dist(center, old) for old in centers)
                 distinct_room = int(room_group(room) not in used_rooms)
                 return distinct_room, separation, float(obj.get("probability", 0.0))
@@ -455,7 +525,7 @@ def select_spread_target_objects(scene_graph: dict[str, Any], task_graph: dict[s
         selected[task["id"]] = obj["id"]
         if task.get("active_initially", True):
             used_rooms.add(room_group(room))
-            centers.append([float(value) for value in obj["center_xyz_m"][:2]])
+            centers.append([float(value) for value in obj["center_xyz_m"]])
     return selected
 
 
@@ -477,5 +547,26 @@ def generate_all_candidates(
             values = generate_candidates(
                 grid, scene_graph, task, max_candidates=max_candidates, prefer_room=False,
             )
+        # Language models identify task semantics, not scene-specific camera
+        # tuning. If the requested semantic target is grounded but the nominal
+        # viewing profile has no valid 3-D pose, try a small deterministic set
+        # of observation profiles. Every result still passes the same FREE,
+        # line-of-sight, FoV, A* and later B-spline checks.
+        if not values and hasattr(grid, "is_state_valid"):
+            for distance, vertical_fov in (([0.7, 1.7], 80.0), ([0.6, 1.5], 90.0)):
+                relaxed = copy.deepcopy(task)
+                relaxed["spatial_constraints"]["distance_m"] = distance
+                relaxed["spatial_constraints"]["vertical_fov_deg"] = vertical_fov
+                values = generate_candidates(
+                    grid, scene_graph, relaxed, max_candidates=max_candidates,
+                    allowed_object_ids=None if object_id is None else {object_id},
+                )
+                for candidate in values:
+                    candidate["observation_profile_fallback"] = {
+                        "reason": "nominal_profile_has_no_valid_3d_candidate",
+                        "distance_m": distance, "vertical_fov_deg": vertical_fov,
+                    }
+                if values:
+                    break
         result[task["id"]] = values
     return result

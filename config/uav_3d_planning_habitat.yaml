@@ -1,0 +1,29 @@
+# Explicit Habitat/FALCON simulation profile for the existing 00337 map.
+# This is intentionally separate from the conservative future real-UAV profile.
+format: pre_map_vln.uav_3d_planning.v1
+occupancy:
+  unknown_value: -1
+  free_value: 0
+  occupied_value: 100
+  unknown_is_blocked: true
+vehicle:
+  # Habitat currently executes FALCON as a point-model sensor pose.
+  radius_xy_m: 0.0
+  radius_z_m: 0.0
+  safety_margin_m: 0.0
+planning:
+  # One 10 cm voxel of hard clearance is the largest value that preserves all
+  # tested 00337 floor-to-floor task paths.  UNKNOWN remains blocked.
+  minimum_esdf_distance_m: 0.10
+  # Prefer a little more room without turning narrow stairs into obstacles.
+  preferred_esdf_distance_m: 0.20
+  clearance_cost_weight: 0.20
+  coarse_resolution_m: 0.20
+  connectivity: 26
+  nearest_free_radius_m: 0.40
+  esdf_version_bands_m: [0.10, 0.20, 0.30, 0.50]
+  maximum_expansions: 2000000
+bspline:
+  sample_step_m: 0.05
+  smoothing_candidates: [0.03, 0.01, 0.0]
+  conditional_prefix_length_m: 0.70

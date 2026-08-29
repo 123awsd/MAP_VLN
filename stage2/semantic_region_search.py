@@ -82,11 +82,17 @@ def _visible_samples(
     grid, pose: dict[str, float], samples: list[list[float]], endpoint_clearance_m: float = 0.10,
 ) -> list[int]:
     visible = []
-    endpoint_cells = max(2, int(math.ceil(endpoint_clearance_m / grid.resolution)))
     for index, sample in enumerate(samples):
-        if grid.line_is_free(
-            [pose["x"], pose["y"]], sample[:2], allow_endpoint_cells=endpoint_cells
-        ):
+        if hasattr(grid, "line_of_sight"):
+            line_free = grid.line_of_sight(
+                [pose["x"], pose["y"], pose["z"]], sample
+            )
+        else:
+            endpoint_cells = max(2, int(math.ceil(endpoint_clearance_m / grid.resolution)))
+            line_free = grid.line_is_free(
+                [pose["x"], pose["y"]], sample[:2], allow_endpoint_cells=endpoint_cells
+            )
+        if line_free:
             visible.append(index)
     return visible
 
@@ -106,10 +112,16 @@ def _coverage_route_cost(grid, candidates: list[dict[str, Any]], sample_count: i
         remaining.remove(best)
     cost = 0.0
     for first, second in zip(selected, selected[1:]):
-        path = grid.astar(
-            [first["pose"]["x"], first["pose"]["y"]],
-            [second["pose"]["x"], second["pose"]["y"]],
-        )
+        if hasattr(grid, "path"):
+            path = grid.path(
+                [first["pose"][axis] for axis in ("x", "y", "z")],
+                [second["pose"][axis] for axis in ("x", "y", "z")],
+            )
+        else:
+            path = grid.astar(
+                [first["pose"]["x"], first["pose"]["y"]],
+                [second["pose"]["x"], second["pose"]["y"]],
+            )
         cost += math.inf if path is None else path.length_m
     if not math.isfinite(cost):
         return 1e3
@@ -144,7 +156,10 @@ def materialize_semantic_regions(
             else 0.10
         )
         branch_task = copy.deepcopy(task)
-        branch_task["target"] = {"label": obj["label"], "room": None, "reference": None}
+        branch_task["target"] = {
+            "label": obj["label"], "room": None, "floor_id": room.get("floor_id"),
+            "reference": None, "reference_secondary": None, "references": [],
+        }
         branch_task["spatial_constraints"]["relation"] = None
         branch_task["spatial_constraints"]["region_type"] = {
             "support_surface": "support_surface",
@@ -229,10 +244,10 @@ def materialize_room_frontier_fallback(
     """
     room_ids = []
     for hypothesis in search_plan.get("hypotheses", []):
-        room_id = int(hypothesis["room_id"])
+        room_id = hypothesis["room_id"]
         if room_id not in room_ids:
             room_ids.append(room_id)
-    rooms = {int(room["id"]): room for room in scene_graph.get("rooms", [])}
+    rooms = {room["id"]: room for room in scene_graph.get("rooms", [])}
     result = []
     for room_id in room_ids:
         room = rooms.get(room_id)
@@ -255,18 +270,32 @@ def materialize_room_frontier_fallback(
                     center[1] + 0.55 * (point[1] - center[1]),
                 ])
         candidates = []
+        height_band = room.get("camera_height_band_m", [0.65, 1.8])
+        nominal_z = 0.5 * (float(height_band[0]) + float(height_band[1]))
         for seed in pose_seeds:
-            free = grid.nearest_free(seed, max_radius_m=1.0)
+            if hasattr(grid, "voxel_map"):
+                free_xyz = grid.voxel_map.nearest_valid([seed[0], seed[1], nominal_z], radius_m=1.0)
+                free = None if free_xyz is None else free_xyz[:2]
+                free_z = None if free_xyz is None else free_xyz[2]
+            else:
+                free = grid.nearest_free(seed, max_radius_m=1.0)
+                free_z = nominal_z
             if free is None or any(math.dist(free, old["pose_xy"]) < 0.5 for old in candidates):
                 continue
-            visible = [
-                index for index, sample in enumerate(samples_xy)
-                if grid.line_is_free(free, sample, allow_endpoint_cells=2)
-            ]
+            if hasattr(grid, "line_of_sight"):
+                visible = [
+                    index for index, sample in enumerate(samples_xy)
+                    if grid.line_of_sight([free[0], free[1], free_z], [sample[0], sample[1], free_z])
+                ]
+            else:
+                visible = [
+                    index for index, sample in enumerate(samples_xy)
+                    if grid.line_is_free(free, sample, allow_endpoint_cells=2)
+                ]
             if not visible:
                 continue
             yaw = math.atan2(center[1] - free[1], center[0] - free[0])
-            candidates.append({"pose_xy": free, "visible": visible, "yaw": yaw})
+            candidates.append({"pose_xy": free, "z": free_z, "visible": visible, "yaw": yaw})
         candidates.sort(key=lambda value: (-len(value["visible"]), value["pose_xy"]))
         for index, value in enumerate(candidates[:max_candidates]):
             quality = len(value["visible"]) / max(1, len(samples_xy))
@@ -276,11 +305,12 @@ def materialize_room_frontier_fallback(
                 "task_id": task["id"], "object_id": f"room_{room_id}_fallback",
                 "object_label": "task_frontier", "room_id": room_id,
                 "room_type": room.get("semantic_type", "unknown"),
-                "pose": {"x": value["pose_xy"][0], "y": value["pose_xy"][1], "z": 1.0, "yaw": value["yaw"]},
+                "floor_id": room.get("floor_id"),
+                "pose": {"x": value["pose_xy"][0], "y": value["pose_xy"][1], "z": value["z"], "yaw": value["yaw"]},
                 "candidate_angle_rad": math.atan2(
                     value["pose_xy"][1] - center[1], value["pose_xy"][0] - center[0]
                 ) % (2.0 * math.pi),
-                "target_xyz_m": [center[0], center[1], 1.0],
+                "target_xyz_m": [center[0], center[1], value["z"]],
                 "line_of_sight": True,
                 "terminal_cost": base_geometry + SEMANTIC_BELIEF_PENALTY_WEIGHT * 0.85,
                 "candidate_source": "room_frontier_fallback",

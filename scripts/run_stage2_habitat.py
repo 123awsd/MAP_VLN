@@ -22,9 +22,17 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from stage2.grid_map import OccupancyGrid  # noqa: E402
+from stage2.astar_3d import CoarseAstar3D  # noqa: E402
+from stage2.bspline_3d import BsplineSettings, anchor_astar_path, plan_collision_checked_bspline  # noqa: E402
+from stage2.candidate_poses import generate_all_candidates  # noqa: E402
 from stage2.io_utils import atomic_json, load_json  # noqa: E402
 from stage2.joint_planner import plan_joint_mission  # noqa: E402
 from stage2.mission_executor import MissionState  # noqa: E402
+from stage2.motion_cost_oracle import MotionCostOracle  # noqa: E402
+from stage2.planning_contract import PlannerProfile  # noqa: E402
+from stage2.spatial_verification import scoped_reference_objects, verify_target_reference_relation  # noqa: E402
+from stage2.task_graph import normalize_and_validate_task_graph  # noqa: E402
+from stage2.voxel_map_3d import VoxelMap3D  # noqa: E402
 from stage2.open_vocab_detector import (  # noqa: E402
     AsyncOpenVocabularyDetector,
     LocalOpenVocabularyDetector,
@@ -42,6 +50,7 @@ from stage2.semantic_region_search import (  # noqa: E402
 from stage2.semantic_recovery import (  # noqa: E402
     QwenSemanticRecoveryPlanner,
     materialize_recovery_candidates,
+    validate_hypotheses,
 )
 from stage2.viewpoint_recovery import ViewpointRecovery  # noqa: E402
 from stage2.vlm_verifier import QwenImageVerifier  # noqa: E402
@@ -116,16 +125,38 @@ def interpolate_polyline(points: list[list[float]], step_m: float) -> list[list[
     return result
 
 
+def interpolate_xyz(points: list[list[float]], step_m: float) -> list[list[float]]:
+    if not points:
+        return []
+    result = [list(points[0])]
+    for start, end in zip(points, points[1:]):
+        distance = math.dist(start, end)
+        steps = max(1, int(math.ceil(distance / step_m)))
+        for index in range(1, steps + 1):
+            ratio = index / steps
+            result.append([
+                float(start[axis] + ratio * (end[axis] - start[axis])) for axis in range(3)
+            ])
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--task-graph", type=Path, required=True)
-    parser.add_argument("--candidates", type=Path, required=True)
+    parser.add_argument("--candidates", type=Path, default=None)
     parser.add_argument("--scene-graph", type=Path, required=True)
-    parser.add_argument("--grid-prefix", type=Path, required=True)
+    parser.add_argument("--grid-prefix", type=Path, default=None)
+    parser.add_argument("--voxel-snapshot", type=Path, default=None)
+    parser.add_argument("--generated-stage1-config", type=Path, default=None)
+    parser.add_argument(
+        "--planning-config", type=Path,
+        default=ROOT / "config/uav_3d_planning_habitat.yaml",
+    )
     parser.add_argument("--scene", type=Path, default=ROOT / "data/scene_datasets/hm3d/example/00861-GLAQ4DNUx5U/GLAQ4DNUx5U.basis.glb")
     parser.add_argument("--scene-config", type=Path, default=ROOT / "data/scene_datasets/hm3d/example/hm3d_annotated_example_basis.scene_dataset_config.json")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--step-m", type=float, default=0.12)
+    parser.add_argument("--max-candidates", type=int, default=4)
     parser.add_argument("--minimum-pixels", type=int, default=40)
     parser.add_argument(
         "--minimum-pixels-by-task",
@@ -136,7 +167,7 @@ def main() -> None:
     parser.add_argument("--save-every", type=int, default=3)
     parser.add_argument(
         "--verification-mode",
-        choices=("semantic", "owlv2", "qwen_vl", "hybrid", "owlv2_qwen_fallback"),
+        choices=("semantic", "owlv2", "qwen_vl", "hybrid", "owlv2_qwen_fallback", "controlled"),
         default="owlv2",
         help="Decision source; owlv2 is the fast local-GPU default and Qwen is optional fallback",
     )
@@ -153,11 +184,19 @@ def main() -> None:
     parser.add_argument("--vlm-confidence-threshold", type=float, default=0.65)
     parser.add_argument("--vlm-no-cache", action="store_true")
     parser.add_argument("--max-viewpoint-attempts", type=int, default=3)
+    parser.add_argument(
+        "--planning-horizon-tasks", type=int, default=3,
+        help="maximum currently executable tasks in each rolling joint optimization",
+    )
     parser.add_argument("--semantic-recovery", action="store_true")
     parser.add_argument("--max-recovery-hypotheses", type=int, default=3)
     parser.add_argument("--max-recovery-visits", type=int, default=8)
     parser.add_argument("--max-viewpoints-per-location", type=int, default=2)
     parser.add_argument("--recovery-budget-cny", type=float, default=20.0)
+    parser.add_argument(
+        "--recovery-plan", type=Path, default=None,
+        help="optional offline recovery hypotheses; skips the external Qwen call",
+    )
     parser.add_argument(
         "--controlled-stale-object-ids",
         default="[]",
@@ -169,6 +208,9 @@ def main() -> None:
     )
     parser.add_argument("--novel-object-min-support", type=int, default=2)
     args = parser.parse_args()
+    if (args.grid_prefix is None) == (args.voxel_snapshot is None):
+        parser.error("provide exactly one of --grid-prefix or --voxel-snapshot")
+    use_3d = args.voxel_snapshot is not None
     minimum_pixels_by_task = {
         str(key): int(value) for key, value in json.loads(args.minimum_pixels_by_task).items()
     }
@@ -179,20 +221,44 @@ def main() -> None:
     controlled_stale_object_ids = {str(value) for value in json.loads(args.controlled_stale_object_ids)}
     controlled_found_object_ids = {str(value) for value in json.loads(args.controlled_found_object_ids)}
 
-    task_graph = load_json(args.task_graph)
+    task_graph = normalize_and_validate_task_graph(load_json(args.task_graph))
     tasks = {task["id"]: task for task in task_graph["tasks"]}
-    candidates = load_json(args.candidates)["by_task"]
     updated_scene_graph = copy.deepcopy(load_json(args.scene_graph))
     objects_by_id = {
         obj["id"]: obj
         for room in updated_scene_graph.get("rooms", []) for obj in room.get("objects", [])
     }
     mapped_objects = list(objects_by_id.values())
-    grid = OccupancyGrid.load(args.grid_prefix, inflation_m=args.inflation)
+    if use_3d:
+        profile = PlannerProfile.load(args.planning_config)
+        voxel_map = VoxelMap3D.load(args.voxel_snapshot, profile)
+        grid = MotionCostOracle(
+            CoarseAstar3D(voxel_map), args.output_dir / "motion_cost_cache.json",
+            save_interval=32,
+        )
+        bspline_settings = BsplineSettings.load(args.planning_config)
+    else:
+        voxel_map = None
+        bspline_settings = None
+        grid = OccupancyGrid.load(args.grid_prefix, inflation_m=args.inflation)
+    if args.candidates is not None:
+        candidates = load_json(args.candidates)["by_task"]
+    else:
+        candidates = generate_all_candidates(
+            grid, updated_scene_graph, task_graph, max_candidates=args.max_candidates,
+        )
     state = MissionState(task_graph)
     vlm_verifier = QwenImageVerifier() if args.verification_mode in {"qwen_vl", "hybrid", "owlv2_qwen_fallback"} else None
     open_vocab_modes = {"owlv2", "owlv2_qwen_fallback"}
-    detector_prompts = sorted({task["verification_label"].strip().lower() for task in tasks.values()})
+    detector_prompts = sorted({
+        label
+        for task in tasks.values()
+        for label in (
+            [task["verification_label"].strip().lower()]
+            + [str(value).strip().lower() for value in task["target"].get("references", [])]
+        )
+        if label
+    })
     open_vocab_detector = None
     async_detector = None
     if args.verification_mode in open_vocab_modes:
@@ -210,16 +276,20 @@ def main() -> None:
     for stale in list(frames_dir.glob("frame_*.jpg")) + list(frames_dir.glob("terminal_*.jpg")):
         stale.unlink()
 
+    generated = load_json(args.generated_stage1_config) if args.generated_stage1_config else None
     sim_cfg = habitat_sim.SimulatorConfiguration()
-    sim_cfg.scene_id = str(args.scene)
-    sim_cfg.scene_dataset_config_file = str(args.scene_config)
+    sim_cfg.scene_id = str(Path(generated["scene"]).resolve()) if generated else str(args.scene)
+    sim_cfg.scene_dataset_config_file = (
+        str(Path(generated["scene_config"]).resolve()) if generated else str(args.scene_config)
+    )
     sim_cfg.enable_physics = True
     agent_cfg = habitat_sim.agent.AgentConfiguration()
     agent_cfg.sensor_specifications = [
         sensor("rgb", habitat_sim.SensorType.COLOR),
         sensor("depth", habitat_sim.SensorType.DEPTH),
-        sensor("semantic", habitat_sim.SensorType.SEMANTIC),
     ]
+    if args.verification_mode in {"semantic", "hybrid"}:
+        agent_cfg.sensor_specifications.append(sensor("semantic", habitat_sim.SensorType.SEMANTIC))
 
     current_f = [0.0, 0.0, 1.0, 0.0]
     trajectory = [list(current_f)]
@@ -235,14 +305,16 @@ def main() -> None:
     )
     semantic_recovery_planner = (
         QwenSemanticRecoveryPlanner(budget_cny=args.recovery_budget_cny)
-        if args.semantic_recovery else None
+        if args.semantic_recovery and args.recovery_plan is None else None
     )
+    offline_recovery_plan = load_json(args.recovery_plan) if args.recovery_plan else None
     semantic_recovery_events = []
     semantic_region_belief = SemanticRegionBelief()
     recovery_plans: dict[str, dict] = {}
     room_fallback_candidates: dict[str, list[dict]] = {}
     failed_location_object_ids: dict[str, set[str]] = {}
     replans = []
+    executed_segments = []
     frame_index = 0
     started = time.monotonic()
 
@@ -268,10 +340,13 @@ def main() -> None:
         })
 
     with habitat_sim.Simulator(habitat_sim.Configuration(sim_cfg, [agent_cfg])) as sim:
-        if not sim.pathfinder.is_loaded:
-            raise RuntimeError("HM3D navmesh did not load")
-        sim.pathfinder.seed(7)
-        initial_agent_h = np.asarray(sim.pathfinder.get_random_navigable_point(), dtype=np.float64)
+        if generated:
+            initial_agent_h = np.asarray(generated["initial_agent_habitat_xyz"], dtype=np.float64)
+        else:
+            if not sim.pathfinder.is_loaded:
+                raise RuntimeError("HM3D navmesh did not load")
+            sim.pathfinder.seed(7)
+            initial_agent_h = np.asarray(sim.pathfinder.get_random_navigable_point(), dtype=np.float64)
         initial_state = habitat_sim.AgentState()
         initial_state.position = initial_agent_h
         initial_state.rotation = quat_from_angle_axis(0.0, np.asarray([0.0, 1.0, 0.0]))
@@ -282,7 +357,22 @@ def main() -> None:
                 break
             planning_candidates = recovery.filtered_candidates(candidates)
             focused_tasks = recovery.focused_task_ids(state.active, planning_candidates)
-            planning_task_ids = focused_tasks or state.active
+            available = state.available()
+            if focused_tasks:
+                planning_task_ids = focused_tasks
+            else:
+                def task_lower_bound(task_id: str) -> float:
+                    values = planning_candidates.get(task_id, [])
+                    return min((
+                        math.dist(
+                            current_f[:3],
+                            [item["pose"][axis] for axis in ("x", "y", "z")],
+                        ) + float(item.get("terminal_cost", 0.0))
+                        for item in values
+                    ), default=math.inf)
+                planning_task_ids = set(sorted(
+                    available, key=lambda task_id: (task_lower_bound(task_id), task_id)
+                )[:max(1, args.planning_horizon_tasks)])
             plan = plan_joint_mission(
                 grid,
                 task_graph,
@@ -304,16 +394,41 @@ def main() -> None:
             )
             segment = plan["segments"][0]
             terminal = visit["pose"]
-            points = interpolate_polyline(segment["points_xy_m"], args.step_m)
-            previous = np.asarray(current_f[:2], dtype=np.float64)
-            start_z = current_f[2]
-            for local_index, point in enumerate(points[1:], start=1):
-                point_xy = np.asarray(point, dtype=np.float64)
-                movement = point_xy - previous
-                yaw = current_f[3] if np.linalg.norm(movement) < 1e-6 else float(math.atan2(movement[1], movement[0]))
-                ratio = local_index / max(1, len(points) - 1)
-                z = start_z + ratio * (float(terminal["z"]) - start_z)
-                pose_f = [float(point_xy[0]), float(point_xy[1]), float(z), yaw]
+            if use_3d:
+                actual_goal = [float(terminal[key]) for key in ("x", "y", "z")]
+                anchored = anchor_astar_path(
+                    segment["points_xyz_m"], current_f[:3], actual_goal, voxel_map,
+                )
+                bspline = plan_collision_checked_bspline(anchored, voxel_map, bspline_settings)
+                points_xyz = interpolate_xyz(bspline.points_xyz_m, args.step_m)
+            else:
+                points_xy = interpolate_polyline(segment["points_xy_m"], args.step_m)
+                points_xyz = [
+                    [point[0], point[1], current_f[2] + index / max(1, len(points_xy) - 1) * (float(terminal["z"]) - current_f[2])]
+                    for index, point in enumerate(points_xy)
+                ]
+                bspline = None
+            executed_segments.append({
+                "sequence": len(executed_segments),
+                "task_id": visit["task_id"],
+                "candidate_id": visit["candidate_id"],
+                "astar_length_m": float(segment["length_m"]),
+                "astar_points_xyz_m": segment.get("points_xyz_m"),
+                "bspline_mode": None if bspline is None else bspline.mode,
+                "bspline_degree": None if bspline is None else bspline.degree,
+                "bspline_piece_count": None if bspline is None else bspline.piece_count,
+                "bspline_minimum_clearance_m": None if bspline is None else bspline.minimum_clearance_m,
+                "bspline_points_xyz_m": None if bspline is None else bspline.points_xyz_m,
+                "collision_checked_3d": bool(use_3d),
+            })
+            previous = np.asarray(current_f[:3], dtype=np.float64)
+            for local_index, point in enumerate(points_xyz[1:], start=1):
+                point_xyz = np.asarray(point, dtype=np.float64)
+                if use_3d and not voxel_map.is_state_valid(point_xyz):
+                    raise RuntimeError(f"B-spline entered non-FREE voxel at {point_xyz.tolist()}")
+                movement = point_xyz - previous
+                yaw = current_f[3] if np.linalg.norm(movement[:2]) < 1e-6 else float(math.atan2(movement[1], movement[0]))
+                pose_f = [float(point_xyz[0]), float(point_xyz[1]), float(point_xyz[2]), yaw]
                 agent_state = agent.get_state()
                 agent_state.position = falcon_to_agent_h(initial_agent_h, pose_f)
                 agent_state.rotation = quat_from_angle_axis(yaw, np.asarray([0.0, 1.0, 0.0]))
@@ -337,7 +452,7 @@ def main() -> None:
                         "depth": np.asarray(observations["depth"], dtype=np.float32).copy(),
                     })
                 frame_index += 1
-                previous = point_xy
+                previous = point_xyz
 
             current_f = [float(terminal[key]) for key in ("x", "y", "z", "yaw")]
             terminal_state = agent.get_state()
@@ -346,11 +461,17 @@ def main() -> None:
             agent.set_state(terminal_state)
             observations = sim.get_sensor_observations()
             task_threshold = minimum_pixels_by_task.get(visit["task_id"], args.minimum_pixels)
-            semantic_verification = verify_target(
-                sim,
-                observations,
-                tasks[visit["task_id"]]["verification_label"],
-                task_threshold,
+            semantic_verification = (
+                verify_target(
+                    sim, observations, tasks[visit["task_id"]]["verification_label"],
+                    task_threshold,
+                )
+                if "semantic" in observations else {
+                    "target_label": tasks[visit["task_id"]]["verification_label"],
+                    "found": False, "matching_pixels": 0,
+                    "matching_categories": {}, "visible_categories": {},
+                    "semantic_id_labels": {}, "unavailable": True,
+                }
             )
             semantic_verification["minimum_pixels"] = task_threshold
             terminal_rgb = frames_dir / f"terminal_{len(observations_log):02d}_{visit['task_id']}.jpg"
@@ -422,7 +543,9 @@ def main() -> None:
                 and vlm_verification["found"]
                 and float(vlm_verification["confidence"]) >= args.vlm_confidence_threshold
             )
-            if args.verification_mode == "semantic":
+            if args.verification_mode == "controlled":
+                selected_found = False
+            elif args.verification_mode == "semantic":
                 selected_found = bool(semantic_verification["found"])
             elif args.verification_mode == "owlv2":
                 selected_found = bool(open_vocab_verification and open_vocab_verification["found"])
@@ -432,6 +555,21 @@ def main() -> None:
                 selected_found = bool(semantic_verification["found"]) or vlm_found
             else:
                 selected_found = bool(open_vocab_verification and open_vocab_verification["found"]) or vlm_found
+            target_object = objects_by_id.get(visit["object_id"])
+            reference_labels = list(tasks[visit["task_id"]]["target"].get("references") or [])
+            reference_objects = (
+                scoped_reference_objects(updated_scene_graph, visit["object_id"], reference_labels)
+                if target_object is not None else []
+            )
+            relation_verification = verify_target_reference_relation(
+                tasks[visit["task_id"]]["spatial_constraints"].get("relation"),
+                target_object or {
+                    "id": visit["object_id"], "center_xyz_m": executed_candidate["target_xyz_m"],
+                    "size_xyz_m": [0.1, 0.1, 0.1],
+                },
+                reference_objects,
+            )
+            selected_found = bool(selected_found and relation_verification["valid"])
             controlled_stale = visit["object_id"] in controlled_stale_object_ids
             controlled_found = visit["object_id"] in controlled_found_object_ids
             if controlled_found:
@@ -450,6 +588,7 @@ def main() -> None:
                 "vlm": vlm_verification,
                 "controlled_stale_map": controlled_stale,
                 "controlled_found": controlled_found,
+                "target_reference_relation": relation_verification,
             })
             action = tasks[visit["task_id"]]["action"]
             if action in {"inspect", "find", "observe"}:
@@ -468,7 +607,7 @@ def main() -> None:
             }
             search_activated = False
             if (
-                semantic_recovery_planner is not None
+                (semantic_recovery_planner is not None or offline_recovery_plan is not None)
                 and action in {"inspect", "find", "observe"}
                 and tasks[visit["task_id"]].get("search_policy", {}).get("mode") == "semantic_recovery"
                 and not selected_found
@@ -477,13 +616,20 @@ def main() -> None:
                 failed = failed_location_object_ids.setdefault(visit["task_id"], set())
                 failed.add(visit["object_id"])
                 if visit["task_id"] not in recovery_plans:
-                    search_plan = semantic_recovery_planner.plan(
-                        tasks[visit["task_id"]]["verification_label"],
-                        task_graph.get("instruction", ""),
-                        updated_scene_graph,
-                        failed,
-                        maximum_hypotheses=args.max_recovery_hypotheses,
-                    )
+                    if offline_recovery_plan is not None:
+                        search_plan = validate_hypotheses(
+                            offline_recovery_plan, updated_scene_graph, failed,
+                            args.max_recovery_hypotheses,
+                        )
+                        search_plan["provenance"] = {"planner": "offline_fixture", "external_call": False}
+                    else:
+                        search_plan = semantic_recovery_planner.plan(
+                            tasks[visit["task_id"]]["verification_label"],
+                            task_graph.get("instruction", ""),
+                            updated_scene_graph,
+                            failed,
+                            maximum_hypotheses=args.max_recovery_hypotheses,
+                        )
                     new_candidates = materialize_recovery_candidates(
                         grid, updated_scene_graph, tasks[visit["task_id"]], search_plan,
                     )
@@ -512,7 +658,7 @@ def main() -> None:
                             "semantic_search_plan": search_plan,
                         })
             if (
-                semantic_recovery_planner is not None
+                (semantic_recovery_planner is not None or offline_recovery_plan is not None)
                 and action in {"inspect", "find", "observe"}
                 and not selected_found
                 and not recovery_decision["retry"]
@@ -611,11 +757,29 @@ def main() -> None:
         open_vocab_detector.close()
 
     updated_scene_graph, added_novel_objects = fusion.materialize_scene_graph(updated_scene_graph)
+    if hasattr(grid, "flush"):
+        grid.flush()
+    clearance_audit = None
+    if voxel_map is not None:
+        clearances = [voxel_map.clearance(item[:3]) for item in trajectory]
+        clearance_audit = {
+            "minimum_esdf_m": min(clearances),
+            "occupied_or_unknown_pose_count": sum(
+                not voxel_map.is_state_valid(item[:3]) for item in trajectory
+            ),
+            "poses_below_soft_preference": sum(
+                value < voxel_map.profile.preferred_esdf_distance_m for value in clearances
+            ),
+            "hard_distance_m": voxel_map.profile.minimum_esdf_distance_m,
+            "soft_preference_m": voxel_map.profile.preferred_esdf_distance_m,
+        }
 
     trace = {
         "format": "pre_map_vln.habitat_execution.v1",
-        "status": "completed" if state.is_finished() else "incomplete",
-        "scene": str(args.scene),
+        "status": state.result_status(),
+        "unresolved_task_ids": state.unresolved_task_ids(),
+        "scene": sim_cfg.scene_id,
+        "planning_dimension": "3d" if use_3d else "2d",
         "verification_mode": args.verification_mode,
         "task_status": state.status,
         "events": state.events,
@@ -637,9 +801,14 @@ def main() -> None:
             "async": None if async_detector is None else async_detector.stats,
         },
         "replans": replans,
+        "executed_segments": executed_segments,
+        "clearance_audit": clearance_audit,
         "semantic_recovery": {
             "enabled": args.semantic_recovery,
-            "planner": "qwen3.7-plus" if args.semantic_recovery else None,
+            "planner": (
+                "offline_fixture" if offline_recovery_plan is not None
+                else "qwen3.7-plus" if args.semantic_recovery else None
+            ),
             "events": semantic_recovery_events,
             "plans_by_task": recovery_plans,
             "failed_location_object_ids": {

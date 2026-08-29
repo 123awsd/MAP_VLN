@@ -3,9 +3,16 @@
   <arg name="loop" default="false"/>
   <arg name="rate" default="1.0"/>
   <arg name="delay" default="2.0"/>
+  <arg name="scene_graph" default=""/>
   <param name="/use_sim_time" value="true"/>
   <node pkg="pre_map_bridge" type="roofless_visualization_node.py"
         name="roofless_visualization" output="screen"/>
+  <node if="$(eval arg('scene_graph') != '')" pkg="pre_map_bridge" type="stage2_floor_highlight_node.py"
+        name="stage2_floor_highlight" output="screen">
+    <param name="scene_graph" value="$(arg scene_graph)"/>
+    <param name="cloud_topic" value="/pre_map_vln/roofless_map"/>
+    <param name="max_floor" value="3"/>
+  </node>
   <node pkg="rviz" type="rviz" name="pre_map_vln_stage2_rviz" output="screen"
         args="-d $(find pre_map_bridge)/config/stage2.rviz"/>
   <node unless="$(arg loop)" pkg="rosbag" type="play" name="stage2_bag_player" output="screen"

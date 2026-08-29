@@ -7,6 +7,7 @@ import argparse
 import copy
 import json
 import math
+import re
 from pathlib import Path
 
 import cv2
@@ -83,11 +84,23 @@ def box_marker(obj, marker_id: int, stamp, status: str = "base"):
     marker.pose.orientation.w = 1.0
     is_context = status == "context"
     marker.scale.x = 0.022 if is_context else 0.100
-    color = (0.08, 0.32, 0.48, 0.72) if is_context else (0.95, 0.02, 0.45, 1.00)
+    colors = {
+        "context": (0.08, 0.32, 0.48, 0.32),
+        "pending": (0.48, 0.52, 0.58, 0.48),
+        "current": (0.02, 0.48, 0.92, 1.00),
+        "found": (0.02, 0.72, 0.18, 1.00),
+        "not_found": (0.88, 0.08, 0.05, 1.00),
+        "skipped": (0.42, 0.42, 0.42, 0.25),
+    }
+    color = colors.get(status, (0.95, 0.02, 0.45, 1.00))
     marker.color.r, marker.color.g, marker.color.b, marker.color.a = color
     marker.lifetime = rospy.Duration(0)
     center = np.asarray(obj["center_xyz_m"], dtype=np.float64)
     size = np.asarray(obj["size_xyz_m"], dtype=np.float64)
+    # RViz depth-tests marker lines against the occupied cloud. Expand only the
+    # display wireframe so all edges remain visible; planning geometry is unchanged.
+    display_margin = 0.035 if is_context else 0.075
+    size = size + 2.0 * display_margin
     w, x, y, z = [float(value) for value in obj["orientation_wxyz"]]
     rotation = np.asarray([
         [1 - 2 * (y*y + z*z), 2 * (x*y - z*w), 2 * (x*z + y*w)],
@@ -139,8 +152,14 @@ def target_label_marker(obj, marker_id: int, stamp, label: str, status: str):
     marker.pose.orientation.w = 1.0
     marker.scale.z = 0.15
     marker.color.r, marker.color.g, marker.color.b, marker.color.a = 0.72, 0.00, 0.32, 1.00
-    symbols = {"pending": "WAIT", "current": "TARGET", "found": "FOUND", "not_found": "NOT FOUND", "skipped": "SKIPPED"}
+    symbols = {"pending": "WAIT", "current": "SEARCHING", "found": "✓ FOUND", "not_found": "✗ NOT FOUND", "skipped": "SKIPPED"}
     marker.text = f"{label.upper()}  [{symbols.get(status, status.upper())}]"
+    colors = {
+        "pending": (0.35, 0.38, 0.42), "current": (0.02, 0.35, 0.90),
+        "found": (0.00, 0.58, 0.12), "not_found": (0.82, 0.04, 0.04),
+        "skipped": (0.38, 0.38, 0.38),
+    }
+    marker.color.r, marker.color.g, marker.color.b = colors.get(status, colors["pending"])
     return marker
 
 
@@ -166,9 +185,21 @@ def context_label_marker(obj, marker_id: int, stamp):
     return marker
 
 
-def task_box_markers(task_order, task_objects, objects, statuses, current_task, stamp):
+def task_box_markers(task_order, task_objects, task_references, objects, statuses, current_task, stamp):
     result = MarkerArray()
-    for object_id, (marker_id, obj) in sorted(objects.items(), key=lambda item: item[1][0]):
+    clear = Marker()
+    clear.action = Marker.DELETEALL
+    result.markers.append(clear)
+    visible_tasks = {task_id for task_id in task_order if statuses.get(task_id) == "found"}
+    if current_task:
+        visible_tasks.add(current_task)
+    anchor_ids = set()
+    for task_id in visible_tasks:
+        anchor_ids.update(task_references.get(task_id, []))
+    for object_id in sorted(anchor_ids):
+        if object_id not in objects:
+            continue
+        marker_id, obj = objects[object_id]
         result.markers.append(box_marker(obj, marker_id, stamp, "context"))
         result.markers.append(context_label_marker(obj, marker_id, stamp))
     for marker_id, task_id in enumerate(task_order):
@@ -180,7 +211,7 @@ def task_box_markers(task_order, task_objects, objects, statuses, current_task, 
         if task_id == current_task and status == "pending":
             status = "current"
         label = obj.get("label", task_id)
-        result.markers.append(box_marker(obj, marker_id, stamp, "task"))
+        result.markers.append(box_marker(obj, marker_id, stamp, status))
         result.markers.append(target_label_marker(obj, marker_id, stamp, label, status))
     return result
 
@@ -189,27 +220,38 @@ def reached_goal_markers(reached_goals, task_order, stamp):
     result = MarkerArray()
     task_indices = {task_id: index for index, task_id in enumerate(task_order)}
     for task_id, reached in reached_goals.items():
-        x, y, z, _ = [float(value) for value in reached["pose"]]
+        x, y, z, yaw = [float(value) for value in reached["pose"]]
         outcome = reached["outcome"]
         color = (0.00, 0.55, 0.12, 1.00) if outcome == "found" else (0.78, 0.04, 0.04, 1.00)
         marker_id = task_indices[task_id]
 
-        star = Marker()
-        star.header.frame_id = "world"
-        star.header.stamp = stamp
-        star.ns = "stage2_reached_goal_stars"
-        star.id = marker_id
-        star.type = Marker.LINE_STRIP
-        star.action = Marker.ADD
-        star.pose.orientation.w = 1.0
-        star.scale.x = 0.070
-        star.color.r, star.color.g, star.color.b, star.color.a = color
-        for point_index in range(11):
-            vertex = point_index % 10
-            radius = 0.28 if vertex % 2 == 0 else 0.12
-            angle = math.pi / 2.0 + vertex * math.pi / 5.0
-            star.points.append(Point(x + radius * math.cos(angle), y + radius * math.sin(angle), z + 0.08))
-        result.markers.append(star)
+        frustum = Marker()
+        frustum.header.frame_id = "world"
+        frustum.header.stamp = stamp
+        frustum.ns = "stage2_reached_goal_frustums"
+        frustum.id = marker_id
+        frustum.type = Marker.LINE_LIST
+        frustum.action = Marker.ADD
+        frustum.pose.orientation.w = 1.0
+        frustum.scale.x = 0.045
+        frustum.color.r, frustum.color.g, frustum.color.b, frustum.color.a = color
+        origin = np.asarray([x, y, z], dtype=np.float64)
+        forward = np.asarray([math.cos(yaw), math.sin(yaw), 0.0])
+        right = np.asarray([-math.sin(yaw), math.cos(yaw), 0.0])
+        up = np.asarray([0.0, 0.0, 1.0])
+        depth, half_width, half_height = 0.72, 0.40, 0.30
+        center = origin + depth * forward
+        corners = [
+            center - half_width * right - half_height * up,
+            center + half_width * right - half_height * up,
+            center + half_width * right + half_height * up,
+            center - half_width * right + half_height * up,
+        ]
+        for corner in corners:
+            frustum.points.extend([Point(*origin.tolist()), Point(*corner.tolist())])
+        for index in range(4):
+            frustum.points.extend([Point(*corners[index].tolist()), Point(*corners[(index + 1) % 4].tolist())])
+        result.markers.append(frustum)
 
     return result
 
@@ -266,11 +308,13 @@ def room_markers(scene_graph, stamp):
     return result
 
 
-def candidate_markers(candidates, stamp):
+def candidate_markers(candidates, stamp, current_task=None, selected_id=None, limit=5):
     result = MarkerArray()
     marker_id = 0
-    for task_id, values in candidates.items():
-        for candidate in values:
+    task_items = [(current_task, candidates.get(current_task, []))] if current_task else candidates.items()
+    for task_id, values in task_items:
+        ranked = sorted(values, key=lambda item: float(item.get("terminal_cost", 1e9)))[:limit]
+        for rank, candidate in enumerate(ranked, start=1):
             pose = candidate["pose"]
             marker = Marker()
             marker.header.frame_id = "world"
@@ -283,8 +327,19 @@ def candidate_markers(candidates, stamp):
             marker.pose.orientation.z = math.sin(pose["yaw"] / 2.0)
             marker.pose.orientation.w = math.cos(pose["yaw"] / 2.0)
             marker.scale.x, marker.scale.y, marker.scale.z = 0.28, 0.055, 0.09
-            marker.color.r, marker.color.g, marker.color.b, marker.color.a = 0.12, 0.48, 0.82, 0.38
+            selected = candidate.get("id") == selected_id
+            marker.color.r, marker.color.g, marker.color.b, marker.color.a = ((0.02, 0.78, 0.18, 0.98) if selected else (0.10, 0.48, 0.90, 0.58))
             result.markers.append(marker)
+            label = Marker()
+            label.header.frame_id, label.header.stamp = "world", stamp
+            label.ns, label.id = "stage2_candidate_labels", marker_id
+            label.type, label.action = Marker.TEXT_VIEW_FACING, Marker.ADD
+            label.pose.position.x, label.pose.position.y, label.pose.position.z = pose["x"], pose["y"], pose["z"] + 0.22
+            label.pose.orientation.w = 1.0
+            label.scale.z = 0.12
+            label.color.r, label.color.g, label.color.b, label.color.a = marker.color.r, marker.color.g, marker.color.b, 0.96
+            label.text = f"V{rank} {'SELECTED' if selected else 'feasible'}\n{candidate.get('object_label', task_id)}  L{candidate.get('floor_id', '?')}\ncost={float(candidate.get('terminal_cost', 0.0)):.2f}"
+            result.markers.append(label)
             marker_id += 1
     return result
 
@@ -351,8 +406,8 @@ def plan_markers(plan, stamp):
     tour.scale.x = 0.045
     tour.color.r, tour.color.g, tour.color.b, tour.color.a = 0.50, 0.08, 0.72, 0.92
     if plan.get("segments"):
-        first = plan["segments"][0]["from_xy_m"]
-        tour.points.append(Point(float(first[0]), float(first[1]), 1.05))
+        first = plan["segments"][0].get("from_xyz_m", plan["segments"][0].get("from_xy_m"))
+        tour.points.append(Point(float(first[0]), float(first[1]), float(first[2]) if len(first) > 2 else 1.05))
     for visit in plan.get("visits", []):
         pose = visit["pose"]
         tour.points.append(Point(float(pose["x"]), float(pose["y"]), float(pose["z"])))
@@ -369,10 +424,11 @@ def plan_markers(plan, stamp):
     local.color.r, local.color.g, local.color.b, local.color.a = 0.96, 0.42, 0.02, 0.96
     if plan.get("segments"):
         destination = plan["visits"][0]["pose"]
-        points = plan["segments"][0]["points_xy_m"]
-        for index, xy in enumerate(points):
+        points = plan["segments"][0].get("points_xyz_m", plan["segments"][0].get("points_xy_m", []))
+        for index, point in enumerate(points):
             ratio = index / max(1, len(points) - 1)
-            local.points.append(Point(float(xy[0]), float(xy[1]), 1.0 + ratio * (float(destination["z"]) - 1.0)))
+            z = float(point[2]) if len(point) > 2 else 1.0 + ratio * (float(destination["z"]) - 1.0)
+            local.points.append(Point(float(point[0]), float(point[1]), z))
 
     selected = MarkerArray()
     clear = Marker()
@@ -411,20 +467,24 @@ def task_text_marker(text: str, pose, stamp):
     return marker
 
 
-def task_summary_text(task_order, task_labels, statuses, current_task):
+def task_summary_text(task_order, task_labels, statuses, current_task, instruction=""):
     symbols = {
         "pending": "[ ]",
-        "found": "[FOUND]",
-        "not_found": "[NOT FOUND]",
+        "found": "[✓ FOUND]",
+        "not_found": "[✗ NOT FOUND]",
         "skipped": "[SKIPPED]",
     }
     lines = []
     for task_id in task_order:
         status = statuses.get(task_id, "pending")
         prefix = ">" if task_id == current_task and status == "pending" else " "
-        state = "[TARGET]" if prefix == ">" else symbols.get(status, f"[{status.upper()}]")
+        state = "[▶ SEARCHING]" if prefix == ">" else symbols.get(status, f"[{status.upper()}]")
         lines.append(f"{prefix} {task_labels[task_id].upper():<10} {state}")
-    return "MISSION STATUS\n" + "\n".join(lines)
+    instruction_line = " ".join(str(instruction).split())
+    if len(instruction_line) > 88:
+        instruction_line = instruction_line[:85] + "..."
+    heading = f"QWEN INPUT: {instruction_line}\nMISSION STATUS" if instruction_line else "MISSION STATUS"
+    return heading + "\n" + "\n".join(lines)
 
 
 def image_message(path: Path, stamp):
@@ -441,6 +501,53 @@ def image_message(path: Path, stamp):
     message.step = message.width * 3
     message.data = rgb.tobytes()
     return message
+
+
+def array_image_message(rgb, stamp):
+    message = Image()
+    message.header.frame_id = "camera_optical"
+    message.header.stamp = stamp
+    message.height, message.width = rgb.shape[:2]
+    message.encoding = "rgb8"
+    message.is_bigendian = False
+    message.step = message.width * 3
+    message.data = np.ascontiguousarray(rgb).tobytes()
+    return message
+
+
+def annotated_evidence(path, observation):
+    bgr = cv2.imread(str(path), cv2.IMREAD_COLOR)
+    if bgr is None:
+        raise FileNotFoundError(path)
+    verification = observation.get("verification", {})
+    detections = verification.get("owlv2", {}).get("detections", [])
+    for detection in detections:
+        x1, y1, x2, y2 = [int(round(value)) for value in detection["bbox_xyxy"]]
+        cv2.rectangle(bgr, (x1, y1), (x2, y2), (0, 255, 40), 5)
+        text = f"FOUND {detection.get('label', '')}  {float(detection.get('score', 0)):.2f}"
+        cv2.rectangle(bgr, (x1, max(0, y1 - 32)), (min(bgr.shape[1] - 1, x1 + 280), y1), (0, 160, 20), -1)
+        cv2.putText(bgr, text, (x1 + 5, max(22, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (255, 255, 255), 2, cv2.LINE_AA)
+    cv2.putText(bgr, "TASK EVIDENCE  ✓", (18, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (0, 255, 40), 2, cv2.LINE_AA)
+    return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+
+
+def task_panel_image(task_order, task_labels, statuses, current_task, instruction):
+    height, width = 92 + 44 * len(task_order), 720
+    canvas = np.full((height, width, 3), (247, 249, 252), dtype=np.uint8)
+    cv2.putText(canvas, "QWEN TASK EXECUTION", (18, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.72, (32, 42, 58), 2, cv2.LINE_AA)
+    short = " ".join(str(instruction).split())[:72]
+    cv2.putText(canvas, short, (18, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (80, 86, 96), 1, cv2.LINE_AA)
+    for index, task_id in enumerate(task_order):
+        status = statuses.get(task_id, "pending")
+        current = task_id == current_task and status == "pending"
+        y = 94 + index * 44
+        if current:
+            cv2.rectangle(canvas, (8, y - 28), (width - 8, y + 10), (226, 241, 255), -1)
+        symbol = "DONE" if status == "found" else "SKIP" if status == "skipped" else "NOW" if current else "WAIT"
+        color = (25, 150, 45) if status == "found" else (230, 110, 20) if current else (125, 130, 138)
+        cv2.putText(canvas, symbol, (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.52, color, 2, cv2.LINE_AA)
+        cv2.putText(canvas, f"T{index + 1}  {task_labels[task_id]}", (102, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (32, 42, 58), 1, cv2.LINE_AA)
+    return cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
 
 
 def main():
@@ -467,6 +574,10 @@ def main():
         for task_id, values in candidates.items()
         if values
     }
+    task_references = {
+        task_id: list(dict.fromkeys(object_id for value in values for object_id in value.get("reference_object_ids", [])))
+        for task_id, values in candidates.items()
+    }
     task_states = {task_id: "pending" for task_id in task_order}
     reached_goals = {}
     current_task = execution["replans"][0]["plan"]["visits"][0]["task_id"]
@@ -479,6 +590,18 @@ def main():
         3.35,
     ]
     occupied = final_topic_message(args.source_bag, "/voxel_mapping/occupancy_grid_occupied")
+    saved_frames = {}
+    for path in args.frames_dir.glob("frame_*.jpg"):
+        match = re.fullmatch(r"frame_(\d+)\.jpg", path.name)
+        if match:
+            saved_frames[int(match.group(1))] = path
+    if not saved_frames:
+        raise RuntimeError(f"no frame_*.jpg images found in {args.frames_dir}")
+    saved_indices = sorted(saved_frames)
+
+    def nearest_saved_frame(index):
+        # Habitat output may intentionally retain only every Nth keyframe.
+        return saved_frames[min(saved_indices, key=lambda value: abs(value - index))]
     start = rospy.Time.from_sec(1000.0)
     period = 1.0 / args.hz
     args.output_bag.parent.mkdir(parents=True, exist_ok=True)
@@ -488,13 +611,17 @@ def main():
         cloud = copy.deepcopy(occupied)
         stamp_message(cloud, initial_stamp)
         bag.write("/voxel_mapping/occupancy_grid_occupied", cloud, initial_stamp)
-        boxes = task_box_markers(task_order, task_objects, objects, task_states, current_task, initial_stamp)
+        boxes = task_box_markers(task_order, task_objects, task_references, objects, task_states, current_task, initial_stamp)
         bag.write("/stage2/semantic_boxes", boxes, initial_stamp)
-        bag.write("/stage2/rooms", room_markers(scene_graph, initial_stamp), initial_stamp)
-        bag.write("/stage2/candidate_poses", candidate_markers(candidates, initial_stamp), initial_stamp)
+        first_visit = execution["replans"][0]["plan"]["visits"][0]
+        bag.write("/stage2/candidate_poses", candidate_markers(candidates, initial_stamp, current_task, first_visit["candidate_id"]), initial_stamp)
         bag.write("/stage2/reached_goals", MarkerArray(), initial_stamp)
         active_recovery_events = []
         bag.write("/stage2/recovery_search", MarkerArray(), initial_stamp)
+        blank_evidence = np.full((480, 640, 3), 245, dtype=np.uint8)
+        cv2.putText(blank_evidence, "Waiting for verified target...", (95, 240), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (90, 90, 90), 2, cv2.LINE_AA)
+        blank_evidence = cv2.cvtColor(blank_evidence, cv2.COLOR_BGR2RGB)
+        active_evidence = None
 
         event_by_frame = {int(item["frame_index"]): item for item in execution["observations"]}
         open_vocab_by_frame = {
@@ -543,7 +670,20 @@ def main():
             bag.write("/uav_simulator/sensor_pose", sensor_pose, stamp)
 
             rgb_index = min(max(0, frame_index - 1), int(execution["frame_count"]) - 1)
-            bag.write("/stage2/rgb", image_message(args.frames_dir / f"frame_{rgb_index:06d}.jpg", stamp), stamp)
+            image_path = nearest_saved_frame(rgb_index)
+            if frame_index in event_by_frame:
+                event = event_by_frame[frame_index]
+                terminal = args.frames_dir / f"terminal_{int(event['sequence']):02d}_{event['task_id']}.jpg"
+                if terminal.exists():
+                    image_path = terminal
+            live_rgb = cv2.cvtColor(cv2.imread(str(image_path), cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+            if frame_index in event_by_frame and event_by_frame[frame_index].get("outcome") == "found":
+                active_evidence = annotated_evidence(image_path, event_by_frame[frame_index])
+                live_rgb = active_evidence
+            bag.write("/stage2/rgb", array_image_message(live_rgb, stamp), stamp)
+            # Keep the latest verified observation until the next target replaces it.
+            evidence_rgb = active_evidence if active_evidence is not None else blank_evidence
+            bag.write("/stage2/evidence", array_image_message(evidence_rgb, stamp), stamp)
 
             if frame_index in replan_by_frame:
                 replan = replan_by_frame[frame_index]
@@ -552,14 +692,16 @@ def main():
                 bag.write("/stage2/local_path", local, stamp)
                 bag.write("/stage2/selected_goals", selected, stamp)
                 next_task = replan["plan"]["visits"][0]["task_id"]
+                selected_id = replan["plan"]["visits"][0]["candidate_id"]
                 current_task = next_task
                 task_objects[next_task] = replan["plan"]["visits"][0]["object_id"]
                 bag.write(
                     "/stage2/semantic_boxes",
-                    task_box_markers(task_order, task_objects, objects, task_states, current_task, stamp),
+                    task_box_markers(task_order, task_objects, task_references, objects, task_states, current_task, stamp),
                     stamp,
                 )
                 bag.write("/stage2/task_status", String(data=json.dumps({"next_task": next_task, "active_task_ids": replan["active_task_ids"]})), stamp)
+                bag.write("/stage2/candidate_poses", candidate_markers(candidates, stamp, next_task, selected_id), stamp)
 
             if frame_index in open_vocab_by_frame:
                 fused_values = open_vocab_by_frame[frame_index].get(
@@ -593,7 +735,7 @@ def main():
                 next_plan_index = min(event["sequence"] + 1, len(execution["replans"]) - 1)
                 next_visits = execution["replans"][next_plan_index].get("plan", {}).get("visits", [])
                 current_task = next_visits[0]["task_id"] if next_visits else None
-                update = task_box_markers(task_order, task_objects, objects, task_states, current_task, stamp)
+                update = task_box_markers(task_order, task_objects, task_references, objects, task_states, current_task, stamp)
                 bag.write("/stage2/semantic_boxes", update, stamp)
                 bag.write("/stage2/reached_goals", reached_goal_markers(reached_goals, task_order, stamp), stamp)
                 bag.write("/stage2/task_status", String(data=json.dumps({"task_id": event["task_id"], "outcome": event["outcome"]})), stamp)
@@ -601,18 +743,24 @@ def main():
                     if int(recovery_event.get("sequence", -1)) == int(event["sequence"]):
                         active_recovery_events.append(recovery_event)
                 bag.write("/stage2/recovery_search", recovery_search_markers(active_recovery_events, objects, stamp), stamp)
-            summary = task_summary_text(task_order, task_labels, task_states, current_task)
+            summary = task_summary_text(task_order, task_labels, task_states, current_task, task_graph.get("instruction", ""))
             bag.write("/stage2/task_text", task_text_marker(summary, status_anchor, stamp), stamp)
+            panel = task_panel_image(task_order, task_labels, task_states, current_task, task_graph.get("instruction", ""))
+            bag.write("/stage2/task_panel", array_image_message(panel, stamp), stamp)
+            mission_state = "complete" if all(value in {"found", "not_found", "skipped", "done"} for value in task_states.values()) else "running"
+            bag.write("/stage2/mission_state", String(data=mission_state), stamp)
     topic_counts = {
         "/voxel_mapping/occupancy_grid_occupied": 1,
         "/stage2/semantic_boxes": 1 + len(execution["observations"]) + len(execution["replans"]),
         "/stage2/open_vocab_boxes": len(execution.get("open_vocab_observations", [])),
-        "/stage2/rooms": 1,
-        "/stage2/candidate_poses": 1,
+        "/stage2/candidate_poses": 1 + len(execution["replans"]),
         "/stage2/reached_goals": 1 + len(execution["observations"]),
         "/stage2/recovery_search": 1 + len(execution["observations"]),
         "/stage2/executed_path": len(execution["trajectory_xyz_yaw"]),
         "/stage2/rgb": len(execution["trajectory_xyz_yaw"]),
+        "/stage2/evidence": len(execution["trajectory_xyz_yaw"]),
+        "/stage2/task_panel": len(execution["trajectory_xyz_yaw"]),
+        "/stage2/mission_state": len(execution["trajectory_xyz_yaw"]),
         "/stage2/uav_pose": len(execution["trajectory_xyz_yaw"]),
         "/uav_simulator/sensor_pose": len(execution["trajectory_xyz_yaw"]),
         "/stage2/task_text": len(execution["trajectory_xyz_yaw"]),

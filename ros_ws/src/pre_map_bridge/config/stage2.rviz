@@ -17,7 +17,7 @@ Visualization Manager:
       Color: 0; 210; 230
       Color Transformer: RGB8
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Name: Explored Roofless 3D Map
       Position Transformer: XYZ
       Queue Size: 3
@@ -28,10 +28,32 @@ Visualization Manager:
       Topic: /pre_map_vln/roofless_map
       Unreliable: false
       Use Fixed Frame: true
-    - Class: rviz/MarkerArray
+    - Alpha: 1.0
+      Class: rviz/PointCloud2
+      Color Transformer: RGB8
+      Enabled: false
+      Name: Current Floor Highlight (Disabled)
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 2
+      Style: Points
+      Topic: /stage2/floor_active
+    - Alpha: 0.22
+      Class: rviz/PointCloud2
+      Color Transformer: RGB8
       Enabled: true
+      Name: Floors 1-3 (Colored Translucent Context)
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 1
+      Style: Points
+      Topic: /stage2/floor_context
+    - Class: rviz/MarkerArray
+      Enabled: false
       Marker Topic: /stage2/rooms
-      Name: Room Boundaries + Labels
+      Name: Room Boundaries + Labels (Hidden)
       Namespaces: {}
       Queue Size: 3
     - Class: rviz/MarkerArray
@@ -47,9 +69,9 @@ Visualization Manager:
       Namespaces: {}
       Queue Size: 10
     - Class: rviz/MarkerArray
-      Enabled: false
+      Enabled: true
       Marker Topic: /stage2/candidate_poses
-      Name: Candidate Viewpoints
+      Name: Current Top-5 Candidate Viewpoints
       Namespaces: {}
       Queue Size: 3
     - Class: rviz/MarkerArray
@@ -61,7 +83,7 @@ Visualization Manager:
     - Class: rviz/MarkerArray
       Enabled: true
       Marker Topic: /stage2/reached_goals
-      Name: Reached Goal Stars (Green/Red)
+      Name: Completed Observation Frustums (Green/Red)
       Namespaces: {}
       Queue Size: 10
     - Class: rviz/MarkerArray
@@ -136,9 +158,31 @@ Visualization Manager:
       Max Value: 1
       Median window: 5
       Min Value: 0
-      Name: Habitat First Person RGB
+      Name: Live RGB (Detection Highlight)
       Normalize Range: true
       Queue Size: 3
+      Transport Hint: raw
+      Unreliable: false
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /stage2/evidence
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Last Verified Evidence (Until Replaced)
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Unreliable: false
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /stage2/task_panel
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Qwen Task Checklist
+      Normalize Range: true
+      Queue Size: 2
       Transport Hint: raw
       Unreliable: false
   Enabled: true

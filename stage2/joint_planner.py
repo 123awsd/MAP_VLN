@@ -20,6 +20,36 @@ def _xy(candidate: dict[str, Any]) -> list[float]:
     return [candidate["pose"]["x"], candidate["pose"]["y"]]
 
 
+def _xyz(candidate: dict[str, Any]) -> list[float]:
+    return [candidate["pose"]["x"], candidate["pose"]["y"], candidate["pose"]["z"]]
+
+
+def _motion_path(planner, start_xyz_yaw, candidate):
+    if hasattr(planner, "path"):
+        return planner.path(start_xyz_yaw[:3], _xyz(candidate))
+    return planner.astar(start_xyz_yaw[:2], _xy(candidate))
+
+
+def _segment_payload(path, start_xyz_yaw, task_id):
+    result = {"to_task_id": task_id, "length_m": path.length_m}
+    if hasattr(path, "points_xyz_m"):
+        result.update({
+            "from_xyz_m": list(start_xyz_yaw[:3]),
+            "points_xyz_m": path.points_xyz_m,
+            "vertical_distance_m": path.vertical_distance_m,
+            "minimum_clearance_m": path.minimum_clearance_m,
+            "geometry_map_version": path.map_identity.geometry_map_version,
+            "map_epoch_uuid": path.map_identity.map_epoch_uuid,
+            "planner_profile_hash": path.map_identity.planner_profile_hash,
+        })
+    else:
+        result.update({
+            "from_xy_m": list(start_xyz_yaw[:2]),
+            "points_xy_m": path.points_xy_m,
+        })
+    return result
+
+
 def _motion_time(
     start_pose: list[float], end_pose: dict[str, float], horizontal_length_m: float,
     speed_mps: float, climb_speed_mps: float, yaw_rate_rps: float,
@@ -35,7 +65,7 @@ def _motion_time(
 
 
 def plan_joint_mission(
-    grid: OccupancyGrid,
+    grid: Any,
     task_graph: dict[str, Any],
     candidates_by_task: dict[str, list[dict[str, Any]]],
     start_xyz_yaw: list[float],
@@ -73,13 +103,12 @@ def plan_joint_mission(
                 mask |= 1 << index[predecessor]
         prerequisite_masks.append(mask)
 
-    start_xy = start_xyz_yaw[:2]
     states: dict[tuple[int, int, int], tuple[float, float, float, tuple[int, int, int] | None, Any]] = {}
     for task_index, task in enumerate(tasks):
         if prerequisite_masks[task_index]:
             continue
         for candidate_index, candidate in enumerate(candidates_by_task[task["id"]]):
-            path = grid.astar(start_xy, _xy(candidate))
+            path = _motion_path(grid, start_xyz_yaw, candidate)
             if path is None:
                 continue
             terminal = float(candidate["terminal_cost"])
@@ -104,12 +133,12 @@ def plan_joint_mission(
                 if mask & bit or prerequisite_masks[next_task_index] & ~mask:
                     continue
                 for next_candidate_index, candidate in enumerate(candidates_by_task[next_task["id"]]):
-                    path = grid.astar(_xy(last_candidate), _xy(candidate))
+                    last_pose = last_candidate["pose"]
+                    start_pose = [last_pose["x"], last_pose["y"], last_pose["z"], last_pose["yaw"]]
+                    path = _motion_path(grid, start_pose, candidate)
                     if path is None:
                         continue
                     terminal = float(candidate["terminal_cost"])
-                    last_pose = last_candidate["pose"]
-                    start_pose = [last_pose["x"], last_pose["y"], last_pose["z"], last_pose["yaw"]]
                     motion_time = _motion_time(start_pose, candidate["pose"], path.length_m, speed_mps, climb_speed_mps, yaw_rate_rps)
                     next_state = (mask | bit, next_task_index, next_candidate_index)
                     next_cost = cost + path.length_m + time_weight * motion_time + terminal_weight * terminal
@@ -129,7 +158,7 @@ def plan_joint_mission(
         state = value[3]
     chain.reverse()
     visits, segments = [], []
-    previous_xy = start_xy
+    previous_pose = list(start_xyz_yaw)
     path_length = 0.0
     for sequence, (state, value) in enumerate(chain):
         _, task_index, candidate_index = state
@@ -145,16 +174,12 @@ def plan_joint_mission(
             "pose": candidate["pose"],
             "terminal_cost": candidate["terminal_cost"],
         })
-        segments.append({
-            "from_xy_m": list(previous_xy),
-            "to_task_id": task["id"],
-            "length_m": path.length_m,
-            "points_xy_m": path.points_xy_m,
-        })
-        previous_xy = _xy(candidate)
-    return {
+        segments.append(_segment_payload(path, previous_pose, task["id"]))
+        pose = candidate["pose"]
+        previous_pose = [pose["x"], pose["y"], pose["z"], pose["yaw"]]
+    result = {
         "format": "pre_map_vln.mission_plan.v1",
-        "planner": "subset_dp_astar",
+        "planner": "subset_dp_astar_3d" if hasattr(grid, "path") else "subset_dp_astar",
         "visits": visits,
         "segments": segments,
         "total_path_length_m": path_length,
@@ -171,15 +196,23 @@ def plan_joint_mission(
             "yaw_rate_rps": yaw_rate_rps,
         },
     }
+    if segments and "map_epoch_uuid" in segments[0]:
+        result.update({
+            "start_xyz_yaw": list(start_xyz_yaw),
+            "map_epoch_uuid": segments[0]["map_epoch_uuid"],
+            "geometry_map_version": segments[0]["geometry_map_version"],
+            "planner_profile_hash": segments[0]["planner_profile_hash"],
+        })
+    return result
 
 
 def plan_fixed_order_baseline(
-    grid: OccupancyGrid,
+    grid: Any,
     task_graph: dict[str, Any],
     candidates_by_task: dict[str, list[dict[str, Any]]],
     start_xyz_yaw: list[float],
 ) -> dict[str, Any]:
-    current = start_xyz_yaw[:2]
+    current = list(start_xyz_yaw)
     visits, segments, total = [], [], 0.0
     completed: set[str] = set()
     pending = [task for task in task_graph["tasks"] if task["active_initially"]]
@@ -189,16 +222,17 @@ def plan_fixed_order_baseline(
             raise PlanningError("fixed-order baseline cannot satisfy prerequisites")
         options = []
         for candidate in candidates_by_task.get(eligible["id"], []):
-            path = grid.astar(current, _xy(candidate))
+            path = _motion_path(grid, current, candidate)
             if path is not None:
                 options.append((path.length_m, candidate, path))
         if not options:
             raise PlanningError(f"baseline cannot reach task {eligible['id']}")
         _, candidate, path = min(options, key=lambda item: item[0])
         visits.append({"sequence": len(visits), "task_id": eligible["id"], "candidate_id": candidate["id"], "object_id": candidate["object_id"], "pose": candidate["pose"]})
-        segments.append({"from_xy_m": list(current), "to_task_id": eligible["id"], "length_m": path.length_m, "points_xy_m": path.points_xy_m})
+        segments.append(_segment_payload(path, current, eligible["id"]))
         total += path.length_m
-        current = _xy(candidate)
+        pose = candidate["pose"]
+        current = [pose["x"], pose["y"], pose["z"], pose["yaw"]]
         completed.add(eligible["id"])
         pending.remove(eligible)
     return {"format": "pre_map_vln.mission_plan.v1", "planner": "fixed_instruction_order", "visits": visits, "segments": segments, "total_path_length_m": total, "objective_cost": total, "estimated_time_s": total}

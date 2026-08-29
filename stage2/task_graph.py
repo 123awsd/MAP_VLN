@@ -101,13 +101,25 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
                 f"task {task_id} target references supports at most two reference objects",
             )
         references = [value for value in (reference, reference_secondary) if value is not None]
+        floor_id = target.get("floor_id")
+        if floor_id is not None:
+            _require(
+                isinstance(floor_id, int) and not isinstance(floor_id, bool),
+                f"task {task_id} target floor_id must be an integer or null",
+            )
         normalized_target = {
             "label": label,
             "room": _optional_text(target.get("room")),
+            "floor_id": floor_id,
             "reference": reference,
             "reference_secondary": reference_secondary,
             "references": references,
         }
+        if normalized_target["floor_id"] is not None:
+            _require(
+                normalized_target["floor_id"] >= 1,
+                f"task {task_id} target floor_id must be a positive integer",
+            )
         constraints = task.get("spatial_constraints") or {}
         _require(isinstance(constraints, dict), f"task {task_id} spatial_constraints must be an object")
         relation = constraints.get("relation")

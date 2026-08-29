@@ -344,7 +344,32 @@ Qwen 不生成房间坐标，也不创建、合并或拆分几何房间。房间
 ./scripts/replay_stage2_rviz.sh hm3d_stage2_complete false 1.0
 ~~~
 
-默认使用本地 OWLv2 做开放词表感知；Qwen 只在 task graph、结构策略或显式 VLM 复核/语义恢复路径中调用。第二阶段当前的底层规划仍是二维自由栅格 A*，不能写成完整三维 ESDF 或真实动力学飞行验证。
+默认使用本地 OWLv2 做开放词表感知；Qwen 只在 task graph、结构策略或显式 VLM 复核/语义恢复路径中调用。原有单层演示仍使用二维自由栅格 A*；新增的多楼层仿真入口使用 FALCON 三维 occupancy 快照、真实 XYZ 候选位姿、粗三维 A* 和仿真 B-spline。Habitat 配置只允许 raw FREE，UNKNOWN/OCCUPIED 不可穿越；实测选择 0.10 m 硬 ESDF 距离和 0.20 m 软间距偏好。完整 B-spline 发布前必须通过逐点、逐段三维碰撞检查；失败时只沿锁定目标的同一条 A* 路径生成 0.70 m 分段 B-spline。该入口不等价于真实动力学或 C++ FALCON B-spline 验证。
+
+00337 已完成的多楼层三维仿真验收为 1→2→3 层：A* 41.50 m、B-spline 41.35 m、847 个连续位姿，z 范围 0.25–6.53 m。三段均使用完整三次 B-spline，没有触发分段保底；所有执行位姿都满足 0.10 m 硬距离，且没有进入 UNKNOWN/OCCUPIED。仍有部分位姿低于 0.20 m 软偏好，因此结果保留 `near_surface_clipping_risk`，不能表述为具有真实机体尺寸约束的无碰撞飞行。可复用入口接受任意 task graph、扁平多层 scene graph、FALCON voxel snapshot 和对应 Stage 1 配置：
+
+~~~bash
+./scripts/run_stage2_multifloor_sim.sh \
+  <task-graph.json> \
+  <multifloor-stage2-scene-graph.json> \
+  <voxel-snapshot-dir> \
+  <generated-stage1-config.json> \
+  <run-name>
+~~~
+
+为新地图准备三维输入时，先从 Stage 1 导出的三类互斥 PCD 构建不可变快照，再将逐层房间图转换为全局唯一 room/object ID：
+
+~~~bash
+.envs/habitat/bin/python scripts/build_falcon_voxel_snapshot.py \
+  <stage1-run>/bag_export <stage1-run>/generated_3d_config.yaml \
+  outputs/stage2_3d/maps/<map-name> \
+  --planning-config config/uav_3d_planning_habitat.yaml
+
+.envs/habitat/bin/python scripts/prepare_multifloor_stage2_scene.py \
+  <multifloor-scene-graph.json> <wall-grid-dir> \
+  outputs/stage2_3d/<map-name>_scene_graph.json \
+  --transitions <stage1-run>/transition_reconstruction/transitions.json
+~~~
 
 完整演示：
 

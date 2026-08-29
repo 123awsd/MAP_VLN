@@ -1,0 +1,13 @@
+{
+  "format": "pre_map_vln.task_graph.v1",
+  "instruction": "帮我找一下卫生纸，找到后拍张照片确认一下。",
+  "tasks": [{
+    "id": "find_toilet_paper", "action": "find",
+    "target": {"label": "toilet paper", "room": null, "floor_id": null, "reference": null, "reference_secondary": null, "references": []},
+    "verification_label": "toilet paper",
+    "spatial_constraints": {"relation": null, "distance_m": [0.6, 1.5], "region_type": "auto", "observation_detail": "fine", "vertical_fov_deg": 80, "horizontal_fov_deg": 90, "yaw_tolerance_deg": 55, "face_target": true, "visibility_required": true},
+    "prerequisites": [], "active_initially": true, "success_outcome": "found",
+    "search_policy": {"mode": "semantic_recovery", "maximum_location_hypotheses": 3}
+  }],
+  "conditional_rules": []
+}

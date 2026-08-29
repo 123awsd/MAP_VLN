@@ -18,13 +18,17 @@ from .task_graph import normalize_and_validate_task_graph
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 MODEL = "qwen3.7-plus"
-PROMPT_VERSION = "stage2-task-graph-v4"
+PROMPT_VERSION = "stage2-task-graph-v7-discourse-selfcheck"
 INPUT_CNY_PER_MILLION = 2.0
 OUTPUT_CNY_PER_MILLION = 8.0
 
 
 SYSTEM_PROMPT = """你是室内无人机长时程任务规划器。把中文长指令转换为严格 JSON，不要输出解释或 Markdown。
-只保留语义上真正必要的先后关系，不要把原句出现顺序当作约束。条件任务必须单独建 task，并通过 conditional_rules 激活。
+只保留语义上真正必要的先后关系，不要把原句出现顺序当作约束。严格解释连接词：
+- “先A，再B”只建立 A→B；
+- “顺便C”“还有D”“同时E”默认是独立任务，不得依赖前一句，也不得互相串联；
+- “最后F”表示 F 依赖此前所有需要执行的非条件任务；
+- 条件备用任务必须单独建 task，并只通过 conditional_rules 激活，不要为它添加会阻止激活的 prerequisite。
 每个任务必须有可观测的目标物体。空间关系 relation 只能是 front/behind/left/right/above/below/on/between/near/facing 或 null。
 输出结构：
 {
@@ -33,7 +37,7 @@ SYSTEM_PROMPT = """你是室内无人机长时程任务规划器。把中文长�
   "tasks":[{
     "id":"英文snake_case唯一ID",
     "action":"inspect|find|observe|deliver|approach",
-    "target":{"label":"与场景物体标签尽量一致","room":"房间或null","reference":"参照物或null","reference_secondary":"第二参照物或null","references":[]},
+    "target":{"label":"与场景物体标签尽量一致","room":"房间或null","floor_id":"楼层整数或null","reference":"参照物或null","reference_secondary":"第二参照物或null","references":[]},
     "verification_label":"最终需要在RGB中确认的物体类别",
     "spatial_constraints":{"relation":null,"distance_m":[1.0,2.2],"height_m":null,"height_range_m":null,"region_type":"auto","observation_detail":"normal","vertical_fov_deg":70.0,"horizontal_fov_deg":90.0,"yaw_tolerance_deg":55.0,"face_target":true,"visibility_required":true},
     "prerequisites":[],"active_initially":true,"success_outcome":"found|done",
@@ -41,7 +45,8 @@ SYSTEM_PROMPT = """你是室内无人机长时程任务规划器。把中文长�
   }],
   "conditional_rules":[{"source_task_id":"...","if_outcome":"not_found","activate_task_ids":["..."],"skip_task_ids":[]}]
 }
-deliver 任务的 target 是交付终点物体，reference 可写被运送物体。检查“台面上有没有水杯”时 target.label 是用于导航的 counter，verification_label 是 cup；检查“床边的灯”时 target.label 和 verification_label 都是 lamp，reference 是 bed。relation 表示无人机相对观察目标的空间关系：front/behind/left/right/facing 使用目标朝向，above/below 使用目标三维框高度，on 使用支撑面，near 使用周边区域，between 必须在 references 或 reference+reference_secondary 中提供两个参照物。region_type 可显式指定 support_surface、below_region、surrounding_region、instance_region 或 between_region；不确定时使用 auto。observation_detail 为 normal 或 fine，height_range_m 只有在有可靠的高度范围时填写。检查“有没有”使用 inspect，找到目标后的 outcome 为 found。只有指令明确要求“旧位置没有就继续在全局地图搜索”等恢复语义时，才将 search_policy.mode 设为 semantic_recovery，否则为 fixed。"""
+deliver 任务的 target 是交付终点物体，reference 可写被运送物体。只要待确认物体已在场景清单中，target.label 必须是待确认物体本身；例如“台面上的微波炉”应写 target.label=microwave、verification_label=microwave、reference=countertop、relation=on。reference 描述目标与参照物的语义关系，不是让无人机站到参照物上。只有目标尚未建图时，才允许用已知支撑物作为 target 并把真实类别写入 verification_label。检查“床边的灯”时 target.label 和 verification_label 都是 lamp，reference 是 bed。指令明确指定楼层时填写 floor_id；未指定时必须为 null，不能猜楼层。relation 表示目标与 reference 的关系；没有 reference 时，front/behind/left/right/above/below/facing 才约束观察位姿。between 必须提供两个参照物。region_type 不确定时使用 auto。普通的开放式“找一下某物”且没有指定楼层、房间、参照物或固定位置时，使用 semantic_recovery；一旦指定了楼层、房间或“某物旁/上/下”等明确位置，就使用 fixed。
+输出前必须自检：若原句含“最后”，该任务的 prerequisites 是否包含它之前所有 active_initially=true 的任务；若任务指定了 floor_id、room 或 reference，search_policy.mode 是否为 fixed；若原句含“顺便/还有”，这些任务之间是否没有被错误串联。"""
 
 
 def compact_inventory(scene_graph: dict[str, Any]) -> dict[str, Any]:
@@ -56,6 +61,7 @@ def compact_inventory(scene_graph: dict[str, Any]) -> dict[str, Any]:
                 room_labels.append(label)
         rooms.append({
             "id": room.get("id"),
+            "floor_id": room.get("floor_id"),
             "semantic_type": room.get("semantic_type", "unknown"),
             "object_labels": sorted(set(room_labels)),
         })
@@ -158,5 +164,65 @@ class QwenTaskParser:
             "usage": usage,
             "estimated_cny": round(estimated_cost, 8),
         }
+        graph["parser_raw_response"] = content
         atomic_json(cache_path, graph)
         return graph
+
+    def repair(
+        self, instruction: str, scene_graph: dict[str, Any], graph: dict[str, Any],
+        validation_error: str,
+    ) -> dict[str, Any]:
+        """Ask Qwen to repair only a rejected task graph, preserving valid semantics."""
+        ledger = self._ledger()
+        previous = float(ledger.get("total_estimated_cny", 0.0))
+        if previous >= self.budget_cny:
+            raise RuntimeError("Qwen budget reached before task-graph repair")
+        payload = {
+            "model": MODEL,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps({
+                    "instruction": instruction,
+                    "scene_inventory": compact_inventory(scene_graph),
+                    "rejected_task_graph": graph,
+                    "deterministic_validation_error": validation_error,
+                    "request": "只修复审计指出的问题，保留其他正确任务、关系、前置约束和条件分支；输出完整严格JSON。",
+                }, ensure_ascii=False)},
+            ],
+            "response_format": {"type": "json_object"},
+            "enable_thinking": False, "temperature": 0.0, "max_tokens": 3000,
+        }
+        request = urllib.request.Request(
+            ENDPOINT, data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.api_key_path.read_text(encoding='utf-8').strip()}",
+                "Content-Type": "application/json",
+            }, method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=120) as response:
+            body = json.load(response)
+        usage = body.get("usage") or {}
+        estimated_cost = (
+            int(usage.get("prompt_tokens", 0)) * INPUT_CNY_PER_MILLION
+            + int(usage.get("completion_tokens", 0)) * OUTPUT_CNY_PER_MILLION
+        ) / 1_000_000.0
+        if previous + estimated_cost > self.budget_cny:
+            raise RuntimeError("Qwen repair response would exceed the authorized cost ceiling")
+        ledger.setdefault("calls", []).append({
+            "model": MODEL, "purpose": "task_graph_repair",
+            "prompt_tokens": int(usage.get("prompt_tokens", 0)),
+            "completion_tokens": int(usage.get("completion_tokens", 0)),
+            "estimated_cny": round(estimated_cost, 8),
+        })
+        ledger["total_estimated_cny"] = round(previous + estimated_cost, 8)
+        atomic_json(self.ledger_path, ledger)
+        content = body["choices"][0]["message"]["content"]
+        repaired = normalize_and_validate_task_graph(_extract_json(content), instruction=instruction)
+        repaired["provenance"] = {
+            "parser": "qwen_vlm", "model": body.get("model", MODEL),
+            "prompt_version": PROMPT_VERSION, "cache_hit": False,
+            "repair_round": 1, "validation_error": validation_error,
+            "usage": usage, "estimated_cny": round(estimated_cost, 8),
+        }
+        repaired["parser_raw_response"] = content
+        return repaired

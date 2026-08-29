@@ -55,7 +55,7 @@ def validate_hypotheses(
     value: dict[str, Any], scene_graph: dict[str, Any], failed_object_ids: set[str], maximum: int,
 ) -> dict[str, Any]:
     objects = {
-        obj["id"]: (int(room["id"]), obj)
+        obj["id"]: (room["id"], obj)
         for room in scene_graph.get("rooms", []) for obj in room.get("objects", [])
     }
     result = []
@@ -65,7 +65,7 @@ def validate_hypotheses(
         if object_id in seen or object_id in failed_object_ids or object_id not in objects:
             continue
         actual_room, obj = objects[object_id]
-        if int(source.get("room_id", actual_room)) != actual_room:
+        if str(source.get("room_id", actual_room)) != str(actual_room):
             continue
         relevance = str(source.get("relevance", "medium")).lower()
         if relevance not in RANK_PENALTY:

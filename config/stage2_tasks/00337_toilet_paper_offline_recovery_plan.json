@@ -1,0 +1,7 @@
+{
+  "target_label": "toilet paper",
+  "hypotheses": [
+    {"room_id": "L2_R3", "anchor_object_id": "L2_boxer_42", "semantic_region": "furniture_neighborhood", "relation": "near", "relevance": "high", "reason": "卫生纸通常位于马桶附近"},
+    {"room_id": "L1_R6", "anchor_object_id": "L1_boxer_11", "semantic_region": "support_surface", "relation": "on", "relevance": "medium", "reason": "可检查其他卫生间的洗手台区域"}
+  ]
+}

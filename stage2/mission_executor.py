@@ -65,6 +65,38 @@ class MissionState:
     def is_finished(self) -> bool:
         return all(value in TERMINAL_STATES for value in self.status.values())
 
+    def unresolved_task_ids(self) -> list[str]:
+        """Return terminal tasks whose requested success was never established."""
+        tasks = {task["id"]: task for task in self.task_graph["tasks"]}
+        resolved_negative_sources = set()
+        for rule in self.task_graph.get("conditional_rules", []):
+            source = rule["source_task_id"]
+            if self.outcomes.get(source) != rule["if_outcome"]:
+                continue
+            if all(
+                self.outcomes.get(target) == tasks[target]["success_outcome"]
+                for target in rule["activate_task_ids"]
+            ):
+                resolved_negative_sources.add(source)
+        unresolved = []
+        for task_id, status in self.status.items():
+            if status == "skipped":
+                continue
+            if status != "completed":
+                unresolved.append(task_id)
+                continue
+            if (
+                self.outcomes.get(task_id) != tasks[task_id]["success_outcome"]
+                and task_id not in resolved_negative_sources
+            ):
+                unresolved.append(task_id)
+        return sorted(unresolved)
+
+    def result_status(self) -> str:
+        if not self.is_finished():
+            return "incomplete"
+        return "complete" if not self.unresolved_task_ids() else "completed_with_unresolved_tasks"
+
 
 def simulate_dynamic_execution(
     grid: OccupancyGrid,
@@ -108,7 +140,8 @@ def simulate_dynamic_execution(
         state.finish_task(task_id, outcome)
     return {
         "format": "pre_map_vln.execution_trace.v1",
-        "status": "completed" if state.is_finished() else "incomplete",
+        "status": state.result_status(),
+        "unresolved_task_ids": state.unresolved_task_ids(),
         "task_status": state.status,
         "outcomes": state.outcomes,
         "events": state.events,

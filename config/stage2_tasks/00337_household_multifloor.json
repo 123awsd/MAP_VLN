@@ -1,0 +1,43 @@
+{
+  "format": "pre_map_vln.task_graph.v1",
+  "instruction": "先去一楼浴室看一下洗手池，再去二楼厨房确认微波炉。顺便看看二楼客厅沙发旁的茶几，还有三楼卧室床边的灯。最后确认三楼客厅壁炉旁的电视；如果没看到电视，就去二楼客厅找找。",
+  "tasks": [
+    {
+      "id": "inspect_floor1_sink", "action": "inspect",
+      "target": {"label": "sink", "room": "bathroom", "floor_id": 1, "reference": null, "reference_secondary": null, "references": []},
+      "verification_label": "sink", "spatial_constraints": {"relation": null, "distance_m": [0.8, 1.8], "region_type": "auto", "observation_detail": "normal", "vertical_fov_deg": 70, "horizontal_fov_deg": 90, "yaw_tolerance_deg": 55, "face_target": true, "visibility_required": true},
+      "prerequisites": [], "active_initially": true, "success_outcome": "found", "search_policy": {"mode": "fixed", "maximum_location_hypotheses": 3}
+    },
+    {
+      "id": "inspect_floor2_microwave", "action": "inspect",
+      "target": {"label": "microwave", "room": "kitchen", "floor_id": 2, "reference": null, "reference_secondary": null, "references": []},
+      "verification_label": "microwave", "spatial_constraints": {"relation": null, "distance_m": [0.8, 1.8], "region_type": "auto", "observation_detail": "normal", "vertical_fov_deg": 75, "horizontal_fov_deg": 90, "yaw_tolerance_deg": 55, "face_target": true, "visibility_required": true},
+      "prerequisites": ["inspect_floor1_sink"], "active_initially": true, "success_outcome": "found", "search_policy": {"mode": "fixed", "maximum_location_hypotheses": 3}
+    },
+    {
+      "id": "inspect_floor2_coffee_table", "action": "inspect",
+      "target": {"label": "coffee table", "room": "living_room", "floor_id": 2, "reference": "sofa", "reference_secondary": null, "references": ["sofa"]},
+      "verification_label": "coffee table", "spatial_constraints": {"relation": "near", "distance_m": [0.8, 1.8], "region_type": "auto", "observation_detail": "normal", "vertical_fov_deg": 80, "horizontal_fov_deg": 100, "yaw_tolerance_deg": 55, "face_target": true, "visibility_required": true},
+      "prerequisites": [], "active_initially": true, "success_outcome": "found", "search_policy": {"mode": "fixed", "maximum_location_hypotheses": 3}
+    },
+    {
+      "id": "inspect_floor3_bedside_lamp", "action": "inspect",
+      "target": {"label": "lamp", "room": "bedroom", "floor_id": 3, "reference": "bed", "reference_secondary": null, "references": ["bed"]},
+      "verification_label": "lamp", "spatial_constraints": {"relation": "near", "distance_m": [0.7, 1.7], "region_type": "auto", "observation_detail": "normal", "vertical_fov_deg": 80, "horizontal_fov_deg": 100, "yaw_tolerance_deg": 55, "face_target": true, "visibility_required": true},
+      "prerequisites": [], "active_initially": true, "success_outcome": "found", "search_policy": {"mode": "fixed", "maximum_location_hypotheses": 3}
+    },
+    {
+      "id": "inspect_floor3_fireplace_tv", "action": "inspect",
+      "target": {"label": "television", "room": "living_room", "floor_id": 3, "reference": "fireplace", "reference_secondary": null, "references": ["fireplace"]},
+      "verification_label": "television", "spatial_constraints": {"relation": "near", "distance_m": [0.9, 2.0], "region_type": "auto", "observation_detail": "normal", "vertical_fov_deg": 75, "horizontal_fov_deg": 100, "yaw_tolerance_deg": 55, "face_target": true, "visibility_required": true},
+      "prerequisites": ["inspect_floor1_sink", "inspect_floor2_microwave", "inspect_floor2_coffee_table", "inspect_floor3_bedside_lamp"], "active_initially": true, "success_outcome": "found", "search_policy": {"mode": "fixed", "maximum_location_hypotheses": 3}
+    },
+    {
+      "id": "fallback_floor2_tv", "action": "find",
+      "target": {"label": "television", "room": "living_room", "floor_id": 2, "reference": null, "reference_secondary": null, "references": []},
+      "verification_label": "television", "spatial_constraints": {"relation": null, "distance_m": [0.9, 2.0], "region_type": "auto", "observation_detail": "normal", "vertical_fov_deg": 75, "horizontal_fov_deg": 90, "yaw_tolerance_deg": 55, "face_target": true, "visibility_required": true},
+      "prerequisites": ["inspect_floor3_fireplace_tv"], "active_initially": false, "success_outcome": "found", "search_policy": {"mode": "fixed", "maximum_location_hypotheses": 3}
+    }
+  ],
+  "conditional_rules": [{"source_task_id": "inspect_floor3_fireplace_tv", "if_outcome": "not_found", "activate_task_ids": ["fallback_floor2_tv"], "skip_task_ids": []}]
+}

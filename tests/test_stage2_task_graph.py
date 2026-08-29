@@ -63,6 +63,18 @@ class TaskGraphTest(unittest.TestCase):
         self.assertIsNone(graph["tasks"][0]["target"]["room"])
         self.assertIsNone(graph["tasks"][0]["target"]["reference"])
 
+    def test_preserves_multifloor_target(self):
+        value = self.base_graph()
+        value["tasks"][0]["target"]["floor_id"] = 3
+        graph = normalize_and_validate_task_graph(value)
+        self.assertEqual(graph["tasks"][0]["target"]["floor_id"], 3)
+
+    def test_rejects_invalid_multifloor_target(self):
+        value = self.base_graph()
+        value["tasks"][0]["target"]["floor_id"] = 0
+        with self.assertRaisesRegex(TaskGraphError, "positive integer"):
+            normalize_and_validate_task_graph(value)
+
     def test_accepts_on_surface_relation(self):
         value = self.base_graph()
         value["tasks"][0]["spatial_constraints"] = {"relation": "on"}

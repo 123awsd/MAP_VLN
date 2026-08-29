@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 
 from stage2.io_utils import atomic_json, load_json  # noqa: E402
 from stage2.vlm_task_parser import QwenTaskParser  # noqa: E402
+from stage2.task_graph_scene_validation import TaskSceneValidationError, validate_task_graph_against_scene  # noqa: E402
 
 
 def main() -> None:
@@ -23,11 +24,18 @@ def main() -> None:
     parser.add_argument("--budget-cny", type=float, default=20.0)
     parser.add_argument("--no-cache", action="store_true")
     args = parser.parse_args()
-    graph = QwenTaskParser(budget_cny=args.budget_cny).parse(
+    scene_graph = load_json(args.scene_graph)
+    qwen = QwenTaskParser(budget_cny=args.budget_cny)
+    graph = qwen.parse(
         args.instruction,
-        load_json(args.scene_graph),
+        scene_graph,
         use_cache=not args.no_cache,
     )
+    try:
+        graph["scene_grounding"] = validate_task_graph_against_scene(graph, scene_graph)
+    except TaskSceneValidationError as error:
+        graph = qwen.repair(args.instruction, scene_graph, graph, str(error))
+        graph["scene_grounding"] = validate_task_graph_against_scene(graph, scene_graph)
     atomic_json(args.output, graph)
     print(f"tasks={graph['summary']['task_count']} rules={graph['summary']['conditional_rule_count']} output={args.output}")
 
