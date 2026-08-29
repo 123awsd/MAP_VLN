@@ -27,3 +27,16 @@ __pycache__/
 .ruff_cache/
 .idea/
 .vscode/
+
+# Keep large simulator artifacts out of Git even if they are created outside
+# the standard ignored data/ and outputs/ directories.
+*.bag
+*.bag.active
+*.glb
+*.navmesh
+*.ckpt
+*.pth
+*.pt
+*.safetensors
+*.zip
+*.tar

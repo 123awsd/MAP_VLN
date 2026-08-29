@@ -6,6 +6,67 @@ Habitat 中的无人机预探索、全局 3D 语义地图与长时程多任务 V
 
 项目状态和对话迁移入口见 [`记忆/README.md`](记忆/README.md)。
 
+## 新机器复现（推荐顺序）
+
+Git 只保存代码、配置、测试和可审计补丁；HM3D 场景、第三方源码、模型权重、Docker 镜像、rosbag 和运行结果均不进入仓库。主机需要 Ubuntu 20.04/22.04、Git、Conda/Miniforge、Docker Compose v2；运行 Habitat 的真实 RGB-D 渲染建议使用可用的 NVIDIA 驱动。
+
+```bash
+git clone --branch 0828 https://github.com/123awsd/MAP_VLN.git
+cd MAP_VLN
+git submodule update --init --recursive
+
+# 获取锁定版本的第三方源码，并创建宿主机 Habitat/Boxer 环境
+./scripts/fetch_dependencies.sh
+./scripts/setup_host_envs.sh
+
+# 构建 ROS/FALCON 与 OccuSG 镜像（首次构建较慢）
+docker compose build falcon occusg
+./scripts/check_setup.sh
+```
+
+也可以在已安装 Conda 和 Docker 的主机上执行一键初始化：
+
+```bash
+./scripts/bootstrap_new_machine.sh
+```
+
+若要运行 Boxer 后处理，再加 `--download-boxer-weights`；下载的权重仍保存在 Git 忽略目录。不同 GPU 可通过 `PRE_MAP_VLN_TORCH_INDEX_URL` 和 `PRE_MAP_VLN_TORCH_VERSION` 覆盖默认 PyTorch wheel。
+
+### HM3D 数据
+
+HM3D 需按其许可证从官方渠道单独获取。至少准备下面的目录和文件（场景 ID 可替换）：
+
+```text
+data/scene_datasets/hm3d/example/
+├── hm3d_annotated_example_basis.scene_dataset_config.json
+└── 00337-CFVBbU9Rsyb/
+    ├── CFVBbU9Rsyb.basis.glb
+    └── CFVBbU9Rsyb.basis.navmesh
+```
+
+若数据位于其他位置，可将 `data/scene_datasets/hm3d` 链接到数据根目录；运行脚本时也可以直接传入 `.basis.glb` 和 dataset config 路径。
+
+完成环境和数据准备后，先做不启动 ROS 的 Habitat 检查：
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+.envs/habitat/bin/python scripts/smoke_habitat.py
+.envs/habitat/bin/python -m unittest discover -s tests -v
+```
+
+### 第一阶段录制示例
+
+下面命令使用一层起始点、三维 PositionCommand、规划 yaw，并将 raw bag 写入 `outputs/bags/`。脚本拒绝覆盖同名结果；另一台机器复现实验时只需更换 `episode_name`：
+
+```bash
+STAGE1_POSTPROCESS=false \
+./scripts/record_progressive_stage1.sh hm3d_00337_repro 600 10 25 \
+  data/scene_datasets/hm3d/example/00337-CFVBbU9Rsyb/CFVBbU9Rsyb.basis.glb \
+  data/scene_datasets/hm3d/example/hm3d_annotated_example_basis.scene_dataset_config.json
+```
+
+FALCON 的多楼层 frontier 优先、垂直运动和 yaw 参数写在 `ros_ws/src/pre_map_bridge/config/hm3d_example.yaml`；如修改 `patches/falcon/` 或 Dockerfile，需重新执行 `docker compose build falcon`。完成回合才会生成 complete 包；超时或碰撞停滞只保留 raw bag，并在 `runtime/bridge/run_result.json` 写明终止原因。
+
 ## 当前状态
 
 语义区域恢复闭环已实现：支持支撑面、地面邻域、家具周围、低视角遮挡区和固定实例；负观测按新增覆盖和观察质量更新 belief，语义区域耗尽后才启用房间任务 Frontier。成功恢复与预算耗尽两类 Habitat 回归、66 项全仓库测试通过。恢复候选只允许引用真实场景图 ID，Qwen 不生成坐标、不做逐帧检测，同一目标一次恢复最多调用一次。完整说明见 [`docs/第六阶段语义恢复搜索.md`](docs/第六阶段语义恢复搜索.md)。跨任务物品位置规律学习已冻结，不属于当前课题。
@@ -27,7 +88,7 @@ navmesh/map 对比图默认显示两栏（官方 Habitat navmesh 与记录探索
 第二阶段一键运行、三地图几何回归和 RViz 回放：
 
 ```bash
-cd /home/uav/map_VLN/PRE_MAP_VLN
+cd "$(git rev-parse --show-toplevel)"
 ./scripts/run_stage2_demo.sh
 ./scripts/run_stage2_open_vocab_demo.sh
 ./scripts/run_stage2_multiscene.sh
@@ -42,7 +103,7 @@ cd /home/uav/map_VLN/PRE_MAP_VLN
 最终 6 demo 可完整重建并验收：
 
 ```bash
-cd /home/uav/map_VLN/PRE_MAP_VLN
+cd "$(git rev-parse --show-toplevel)"
 ./scripts/run_final_demos.sh
 .envs/habitat/bin/python scripts/validate_final_demos.py
 
@@ -56,7 +117,7 @@ Qwen 和 Matterport 凭据通过 `scripts/configure_secrets.py` 写入 Git 忽�
 已有探索 episode 的后处理命令：
 
 ```bash
-cd /home/uav/map_VLN/PRE_MAP_VLN
+cd "$(git rev-parse --show-toplevel)"
 ./scripts/run_stage1_postprocess.sh hm3d_stage1
 .envs/habitat/bin/python scripts/validate_stage1.py
 ```
@@ -68,7 +129,7 @@ cd /home/uav/map_VLN/PRE_MAP_VLN
 默认同步包：`outputs/bags/hm3d_stage1_complete_v3_indoor_v1_final.bag`。它复用 FALCON 明确进入 `FINISH` 的完整探索回合：248.303 秒、2,479 帧 Habitat RGB、43,332 条消息。第一阶段在探索后对 497 个 RGB-D/Pose 关键帧用 54 类稳定室内词表离线检测；OWLv2 阈值 0.20、融合阈值 0.45、至少 4 帧支持，得到 89 个多视角 3D boxes，并按 71 个首次观测事件渐进注入。旧 10 类包 `hm3d_stage1_complete_v3_final.bag` 保留作对照。
 
 ```bash
-cd /home/uav/map_VLN/PRE_MAP_VLN
+cd "$(git rev-parse --show-toplevel)"
 ./scripts/replay_bag_rviz.sh
 ```
 
