@@ -53,4 +53,3 @@ def load_recording_origin(
     if len(values) != 3:
         raise ValueError(f"initial_start.habitat_xyz must contain three values: {manifest_path}")
     return values, "recording_manifest", manifest_path
-
