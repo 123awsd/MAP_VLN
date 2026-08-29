@@ -2,6 +2,7 @@
 set -euo pipefail
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$root_dir/scripts/lib/docker.sh"
 scene_id="${1:?usage: $0 SCENE_ID [RUN_NAME] [DURATION] [HZ] [RECORD_EVERY] [RVIZ] [RECORDER]}"
 run_name="${2:-full3d_v1}"
 max_duration="${3:-600}"
@@ -53,7 +54,7 @@ generated_json="$output_dir/generated_3d_config.json"
 map_name="hm3d_${scene_number}_3d_generated"
 container_name="pre-map-vln-3d-${scene_number}-${run_name}"
 bridge_dir="$root_dir/runtime/bridge"
-docker_cmd=(sudo -n docker)
+pre_map_vln_resolve_docker
 
 for target in "$output_dir" "$bag_path"; do
   if [[ -e "$target" ]]; then

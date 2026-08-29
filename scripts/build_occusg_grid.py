@@ -205,6 +205,35 @@ def dilate(mask: np.ndarray, radius: int = 1) -> np.ndarray:
     return result
 
 
+def complete_removed_object_footprint(
+    grid: np.ndarray,
+    footprint_mask: np.ndarray,
+    structural_seeds: np.ndarray,
+    navigation_exclusion: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Complete only the unknown shadow inside a removed object footprint.
+
+    Unknown cells outside the fitted footprint are still protected because
+    they may be exterior or an unobserved boundary.  The previous code
+    dilated *all* unknown cells, which also protected every unknown cell in
+    the footprint and made ``filled_unknown`` permanently empty.
+    """
+    unknown_outside_footprint = (grid == -1) & ~footprint_mask
+    protected_boundary = dilate(unknown_outside_footprint, radius=2)
+    protected_structure = dilate(structural_seeds, radius=1)
+    filled_footprint = (
+        footprint_mask
+        & ~protected_boundary
+        & ~protected_structure
+        & ~navigation_exclusion
+    )
+    filled_unknown = filled_footprint & (grid == -1)
+    cleared_occupied = filled_footprint & (grid == 100)
+    grid = grid.copy()
+    grid[filled_footprint] = 0
+    return grid, filled_unknown, cleared_occupied
+
+
 def convex_hull(points: np.ndarray) -> np.ndarray:
     """Return a 2-D monotonic-chain hull without adding a geometry dependency."""
     unique = sorted({(int(point[0]), int(point[1])) for point in points})
@@ -300,6 +329,18 @@ def main():
     parser.add_argument("--obstacle-min-z", type=float, default=0.15)
     parser.add_argument("--obstacle-max-z", type=float, default=1.8)
     parser.add_argument(
+        "--floor-z", type=float, default=None,
+        help="FALCON-world floor height; overrides the default single-floor band",
+    )
+    parser.add_argument(
+        "--camera-z-min", type=float, default=None,
+        help="only use frames whose camera/FALCON z is inside this range",
+    )
+    parser.add_argument(
+        "--camera-z-max", type=float, default=None,
+        help="only use frames whose camera/FALCON z is inside this range",
+    )
+    parser.add_argument(
         "--semantic-labels", type=Path, default=None,
         help="HM3D semantic.txt used to mask stairs from the single-floor map",
     )
@@ -355,6 +396,10 @@ def main():
             semantic = frame["semantic"] if "semantic" in frame.files else np.full(depth.shape, -1, dtype=np.int32)
             position = frame["position"].astype(np.float64)
             rotation = quaternion_matrix_xyzw(frame["orientation_xyzw"])
+        if args.camera_z_min is not None and position[2] < args.camera_z_min:
+            continue
+        if args.camera_z_max is not None and position[2] > args.camera_z_max:
+            continue
         # Navigation exclusions need a denser semantic projection than the
         # ordinary occupancy-ray stride, otherwise a thin stair edge can be
         # missed and leave a false room beside the stairwell.
@@ -396,9 +441,11 @@ def main():
         # This project intentionally plans on one 2-D floor. Rays terminating on
         # floors, ceilings, or another stair level must not be flattened into free
         # space on the active level.
+        floor_min_z = args.obstacle_min_z if args.floor_z is None else args.floor_z + 0.15
+        floor_max_z = args.obstacle_max_z if args.floor_z is None else args.floor_z + 1.80
         floor_band = (
-            (endpoints[:, 2] >= args.obstacle_min_z)
-            & (endpoints[:, 2] <= args.obstacle_max_z)
+            (endpoints[:, 2] >= floor_min_z)
+            & (endpoints[:, 2] <= floor_max_z)
             & ~excluded
         )
         endpoints = endpoints[floor_band]
@@ -438,7 +485,7 @@ def main():
             x, y = cells[-1]
             if removable:
                 ignored_obstacle_endpoints += 1
-            elif (args.obstacle_min_z <= endpoint[2] <= args.obstacle_max_z
+            elif (floor_min_z <= endpoint[2] <= floor_max_z
                     and 0 <= x < width and 0 <= y < height):
                 occupied_votes[y, x] = min(65535, int(occupied_votes[y, x]) + 1)
                 if int(semantic_id) in structural_boundary_ids:
@@ -483,16 +530,20 @@ def main():
     footprint_mask = object_footprint_mask(
         removable_boxes, origin, args.resolution, width, height, args.object_box_expansion
     )
-    # Infer the floor beneath a removed object only inside its fitted footprint.
-    # Retained depth endpoints, stairs, and unknown exterior boundaries always win.
-    protected_boundary = dilate(grid == -1, radius=2)
+    unknown_outside_footprint = (grid == -1) & ~footprint_mask
+    protected_boundary = dilate(unknown_outside_footprint, radius=2)
     protected_structure = dilate(structural_seeds, radius=1)
     filled_footprint = (
-        footprint_mask & ~protected_boundary & ~protected_structure & ~navigation_exclusion
+        footprint_mask
+        & ~protected_boundary
+        & ~protected_structure
+        & ~navigation_exclusion
     )
-    filled_unknown = filled_footprint & (grid == -1)
-    cleared_occupied = filled_footprint & (grid == 100)
-    grid[filled_footprint] = 0
+    # Infer the floor beneath a removed object only inside its fitted footprint.
+    # Retained depth endpoints, stairs, and unknown exterior boundaries always win.
+    grid, filled_unknown, cleared_occupied = complete_removed_object_footprint(
+        grid, footprint_mask, structural_seeds, navigation_exclusion
+    )
     removed_component_count = 0
     removed_component_cell_count = 0
     if args.structure_policy is not None:
@@ -543,7 +594,9 @@ def main():
             "protected_structural_endpoint_cell_count": int(np.count_nonzero(structural_boundary_votes)),
         },
         "single_floor_policy": {
-            "endpoint_height_band_m": [args.obstacle_min_z, args.obstacle_max_z],
+            "endpoint_height_band_m": [floor_min_z, floor_max_z],
+            "floor_z_m": args.floor_z,
+            "camera_height_band_m": [args.camera_z_min, args.camera_z_max],
             "semantic_labels": None if args.semantic_labels is None else str(args.semantic_labels),
             "excluded_navigation_labels": sorted(DEFAULT_EXCLUDED_NAVIGATION_LABELS),
             "excluded_navigation_semantic_ids": sorted(excluded_navigation_ids),

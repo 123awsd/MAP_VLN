@@ -6,6 +6,7 @@ set -u -o pipefail
 # this entry point must not become a generic all-dataset launcher.
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$root_dir/scripts/lib/docker.sh"
 scene_root="${PRE_MAP_VLN_HM3D_TRAIN_ROOT:-/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/train}"
 scene_config="${PRE_MAP_VLN_HM3D_SCENE_CONFIG:-/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/hm3d_annotated_basis.scene_dataset_config.json}"
 batch_tag="${4:-stage1_seven_v2}"
@@ -73,10 +74,7 @@ else
 fi
 
 mkdir -p "$run_root" "$bag_root"
-# The host's Docker socket is root-owned in the execution environment, as in
-# the existing single-scene runner.  Keep the command explicit so a failed
-# privilege check is reported before any scene is started.
-docker_cmd=(sudo -n docker)
+pre_map_vln_resolve_docker
 
 clear_bridge() {
   rm -f \

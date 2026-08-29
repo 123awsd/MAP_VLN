@@ -1,5 +1,5 @@
 project: PRE_MAP_VLN
-updated: 2026-08-23
+updated: 2026-08-29
 
 habitat:
   prefix: .envs/habitat
@@ -24,3 +24,13 @@ host_gpu:
   model: NVIDIA GeForce RTX 5060 Ti
   driver: 580.126.09
 
+boxer_checkpoints:
+  boxernet_hw960in2x6d768-c88128f8.ckpt:
+    bytes: 539422562
+    sha256: e195aac4badb543e8652c11b6fa1681607544c3a20d78bd16bdbfb4164b3c437
+  dinov3_vits16plus_pretrain_lvd1689m-4057cbaa.pth:
+    bytes: 140589180
+    sha256: 1edbaf93ae4798b6d64f1d860fe472be15c49f9d53a5f4406f4971208add28c0
+  owlv2-base-patch16-ensemble.pt:
+    bytes: 742984963
+    sha256: 14aa78ffe7b13e5b3ebf55845bc9a07e339a095cfd88f4c4e8f726b38ce1ebbf

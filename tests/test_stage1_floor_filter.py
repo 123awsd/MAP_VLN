@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from scripts.build_occusg_grid import (
+    complete_removed_object_footprint,
     convex_hull,
     clear_non_boundary_components,
     group_nearby_instances,
@@ -12,6 +13,49 @@ from scripts.build_occusg_grid import (
     points_in_removable_boxes,
     semantic_ids_for_labels,
 )
+from scripts.extract_multifloor_wall_grid import low_connected_top
+
+
+class RemovedObjectFootprintTests(unittest.TestCase):
+    def test_unknown_inside_footprint_is_completed(self):
+        grid = np.full((11, 11), -1, dtype=np.int8)
+        grid[5, 5] = 100
+        footprint = np.zeros((11, 11), dtype=bool)
+        footprint[2:9, 2:9] = True
+        seeds = np.zeros_like(footprint)
+        exclusion = np.zeros_like(footprint)
+
+        completed, filled_unknown, cleared_occupied = complete_removed_object_footprint(
+            grid, footprint, seeds, exclusion
+        )
+
+        self.assertGreater(int(filled_unknown.sum()), 0)
+        self.assertEqual(int(cleared_occupied.sum()), 1)
+        self.assertEqual(int(completed[5, 5]), 0)
+        self.assertEqual(int(completed[0, 0]), -1)
+
+    def test_unknown_boundary_outside_footprint_remains_unknown(self):
+        grid = np.full((9, 9), -1, dtype=np.int8)
+        footprint = np.zeros((9, 9), dtype=bool)
+        footprint[3:6, 3:6] = True
+        seeds = np.zeros_like(footprint)
+        exclusion = np.zeros_like(footprint)
+
+        completed, _, _ = complete_removed_object_footprint(
+            grid, footprint, seeds, exclusion
+        )
+
+        self.assertEqual(int(np.count_nonzero(completed == -1)), 81)
+
+
+class GeometryWallEvidenceTests(unittest.TestCase):
+    def test_small_voxel_gaps_still_form_wall_chain(self):
+        heights = np.asarray([2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26])
+        self.assertAlmostEqual(low_connected_top(heights, 0.1), 2.6, places=5)
+
+    def test_furniture_to_ceiling_gap_stops_vertical_chain(self):
+        heights = np.asarray([2, 4, 6, 8, 10, 12, 14, 24, 26])
+        self.assertAlmostEqual(low_connected_top(heights, 0.1), 1.4, places=5)
 
 
 class Stage1FloorFilterTests(unittest.TestCase):

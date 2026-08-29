@@ -7,7 +7,7 @@ PRE_MAP_VLN 是一个 Habitat-Sim + FALCON 的室内预探索项目，配合 Box
 ## 先了解三个事实
 
 1. git clone 只得到主仓库代码，不会得到 HM3D 场景、Boxer 权重、.envs、Bag 或 Docker 镜像。
-2. 第一阶段当前是 map_dimension: 2 的单层/单楼层探索，不是完整三维无人机建图；第二阶段底层仍是二维自由栅格 A*，3D 主要用于物体框、区域高度和观察约束。
+2. 通用第一阶段入口 `run_hm3d_stage1_3d.sh` 是三维无人机探索：保留三维 viewpoint、三维 A*、可变 z、规划 yaw 和三维碰撞检查。旧的 `run_00166_stage1.sh` 与七场景批处理仍是兼容性单层入口；第二阶段底层目前仍是二维自由栅格 A*。
 3. Docker 只承载 ROS1 FALCON 和 ROS2 OccuSG。Habitat-Sim 在宿主机 Python 环境中运行，Boxer 也在宿主机独立 Python 环境中运行。
 
 ## 项目结构
@@ -90,7 +90,7 @@ Boxer 代码和权重均不进入 Git。获取 Boxer 源码后，按其上游说
 third_party/boxer/ckpts/
 ~~~
 
-当前已验证的权重 SHA-256、第三方 commit 和环境版本见 记忆/环境与版本.md。
+上游提供 `third_party/boxer/scripts/download_ckpts.sh`。当前三份必需权重及 SHA-256 已写入 `environment.lock.yml`，可用复现检查脚本逐字节验证。
 
 ### DashScope/Qwen 凭据（可选）
 
@@ -111,7 +111,20 @@ Qwen 调用默认使用 qwen3.7-plus，结果和估算费用写入 API ledger；
 | .envs/habitat | Habitat-Sim、Habitat-Lab、第一/二阶段 Python、评估 | Python 3.9.23，Habitat-Sim/Lab 0.3.3 |
 | .envs/boxer | Boxer 离线 2D/3D 检测和融合 | Python 3.12.14，PyTorch 2.13.0，CUDA 由本机驱动决定 |
 
-当前仓库保存的是兼容性记录 environment.lock.yml，不是可以直接无条件执行的完整 conda env create 文件。不同 GPU、驱动和 CUDA 版本需要选择对应的 PyTorch 构建。
+新机器可以按当前已验证版本创建两个环境：
+
+~~~bash
+./scripts/fetch_dependencies.sh
+./scripts/setup_host_envs.sh
+~~~
+
+`setup_host_envs.sh` 默认安装 PyTorch CUDA 13.0 构建。不同 GPU/驱动可显式指定 PyTorch wheel 源和版本：
+
+~~~bash
+PRE_MAP_VLN_TORCH_INDEX_URL=https://download.pytorch.org/whl/cu130 \
+PRE_MAP_VLN_TORCH_VERSION=2.13.0 \
+./scripts/setup_host_envs.sh
+~~~
 
 宿主机准备完成后，先验证：
 
@@ -165,7 +178,23 @@ newgrp docker
 docker info
 ~~~
 
-本开发机的 Docker socket 需要 sudo -n docker，所以部分第一阶段脚本已经显式使用它；通用回放和第二阶段脚本使用普通 docker compose。新机器最好先配置好 Docker 用户组。
+第一阶段脚本会自动优先使用普通 `docker`，不可用时再尝试 `sudo -n docker`。特殊环境也可设置 `PRE_MAP_VLN_DOCKER='sudo docker'`。新机器仍推荐配置 Docker 用户组。
+
+### 新机器一键初始化
+
+安装好 Git、Conda、Docker Compose 和 NVIDIA 驱动后，可执行：
+
+~~~bash
+./scripts/bootstrap_new_machine.sh --download-boxer-weights
+~~~
+
+该命令会获取锁定的第三方源码、创建两个宿主机环境、下载 Boxer 权重并构建 FALCON/OccuSG 镜像。HM3D 受许可证和体积限制，仍需单独复制或下载，然后设置前述两个 `PRE_MAP_VLN_HM3D_*` 环境变量。
+
+最终检查（可替换成任意已有场景）：
+
+~~~bash
+./scripts/check_reproducibility.py --scene-id 00166-RaYrxWt5pR1
+~~~
 
 ## 5. 最小可运行验证
 
@@ -233,7 +262,7 @@ FINISH 只表示 FALCON 状态机完成；真实覆盖率、规划失败、预�
 ./scripts/run_hm3d_stage1_seven.sh 300 10 5 stage1_seven_v6 all 0
 ~~~
 
-该批次仍是单层结果。不要用 Bag 正常关闭、无人机还在移动或 frontier 数量变少单独宣称探索完成，应查看 truth_metrics.json、run_result.json 和 REPORT.md。
+该旧批处理入口仍是单层结果。不要用 Bag 正常关闭、无人机还在移动或 frontier 数量变少单独宣称探索完成，应查看 truth_metrics.json、run_result.json 和 REPORT.md。新的三维实验应使用上一节的通用入口逐场运行。
 
 ## 7. 第一阶段后处理：Boxer、OccuSG 和房间语义
 
@@ -258,6 +287,26 @@ OccuSG 结构网格和几何房间区域
 物体按多边形/有限边界距离归属
        ↓
 Qwen 根据每个房间的物体清单推断 bedroom/kitchen 等语义
+~~~
+
+多层结果可使用通用离线入口自动从 FALCON 轨迹/点云推断楼层（不读取真值楼层），为每层生成导航网格、结构网格、OccuSG 区域和场景图：
+
+~~~bash
+.envs/habitat/bin/python scripts/run_multifloor_room_pipeline.py \
+  outputs/stage1_3d/<scene-id>/<run-name> \
+  outputs/boxer/<box-run>/episode/<vocab>_3dbbs_fused.csv \
+  outputs/room_pipeline/<output-name> \
+  --max-floor 3 --auto-policy
+~~~
+
+实验性的纯几何墙提取（不用真值、语义或物体框）可在上述逐层导航网格基础上运行：
+
+~~~bash
+.envs/habitat/bin/python scripts/extract_multifloor_wall_grid.py \
+  <run-dir>/bag_export/map_occupied.pcd \
+  <run-dir>/bag_export/map_free.pcd \
+  outputs/room_pipeline/<output-name> \
+  outputs/wall_extraction/<output-name> --max-floor 3
 ~~~
 
 Qwen 不生成房间坐标，也不创建、合并或拆分几何房间。房间几何来自 Occupancy/OccuSG；房间语义是物体证据驱动的提示，不是 HM3D 人工房间真值。
@@ -339,7 +388,7 @@ git diff --check
 git -C third_party/FALCON status --short
 ~~~
 
-确认代码、Dockerfile、patch 和脚本都已进入暂存区后，再由项目维护者执行 commit/push；本项目不会自动提交或推送。
+确认代码、Dockerfile、patch 和脚本都已进入暂存区后，再由项目维护者执行 commit/push。自动初始化脚本只安装依赖和构建镜像，不会提交或推送。
 
 ## 11. 常见问题
 
@@ -372,9 +421,9 @@ echo "$DISPLAY"
 
 项目脚本默认拒绝覆盖实验目录和 Bag。使用新的实验名或批次名；不要删除旧结果来“修复”运行。
 
-### 结果被称为完整三维了吗？
+### 哪一部分是完整三维？
 
-没有。第一阶段当前是单层/单楼层二维占据探索，第二阶段使用二维 A* 加 3D 物体和观察约束。高处 unknown 必须结合 Habitat floor、传感器高度、位姿、深度、occupancy 和 GLB/navmesh 真值分析，不能直接当成可飞行空间。
+通用第一阶段入口执行三维 FALCON 探索，不固定 z，也不把 A* 压成二维；旧单层入口和第二阶段二维自由栅格 A* 不应被写成完整三维。无论入口如何，`FINISH` 都必须结合覆盖率、轨迹、预测碰撞和日志判定，不能把超时、振荡或 Bag 正常关闭冒充探索完成。
 
 ## 12. 设计文档
 
@@ -384,4 +433,5 @@ echo "$DISPLAY"
 - docs/第六阶段语义恢复搜索.md：目标缺失后的语义恢复搜索；
 - third_party.lock.yaml：第三方源码锁定版本；
 - environment.lock.yml：已验证宿主机环境版本记录；
+- docs/新机器完整复现.md：从 clone、外部资产到三维运行的换机清单；
 - 记忆/环境与版本.md：数据、权重、镜像和系统版本记录。
