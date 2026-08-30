@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from stage2.yaw_motion import blend_yaw, rotation_steps, step_yaw, yaw_delta
+from stage2.yaw_motion import blend_yaw, facing_yaw, rotation_steps, step_yaw, yaw_delta
 
 
 class YawMotionTest(unittest.TestCase):
@@ -25,6 +25,13 @@ class YawMotionTest(unittest.TestCase):
     def test_blend_uses_shortest_direction(self):
         middle = blend_yaw(math.radians(170), math.radians(-170), 0.5)
         self.assertAlmostEqual(abs(middle), math.pi)
+
+    def test_facing_yaw_points_from_position_to_target(self):
+        self.assertAlmostEqual(facing_yaw([1.0, 1.0, 2.0], [1.0, 3.0, 9.0], 0.0), math.pi / 2)
+
+    def test_facing_yaw_keeps_fallback_at_coincident_xy(self):
+        fallback = math.radians(35)
+        self.assertAlmostEqual(facing_yaw([1.0, 1.0, 2.0], [1.0, 1.0, 9.0], fallback), fallback)
 
 
 if __name__ == "__main__":

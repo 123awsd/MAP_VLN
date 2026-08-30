@@ -25,6 +25,19 @@ def blend_yaw(start: float, target: float, fraction: float) -> float:
     return wrap_yaw(float(start) + ratio * yaw_delta(start, target))
 
 
+def facing_yaw(
+    position_xyz: list[float] | tuple[float, ...],
+    target_xyz: list[float] | tuple[float, ...],
+    fallback_yaw: float,
+) -> float:
+    """Yaw from position toward a target, retaining yaw at coincident XY."""
+    dx = float(target_xyz[0]) - float(position_xyz[0])
+    dy = float(target_xyz[1]) - float(position_xyz[1])
+    if math.hypot(dx, dy) < 1e-6:
+        return wrap_yaw(fallback_yaw)
+    return math.atan2(dy, dx)
+
+
 def rotation_steps(start: float, target: float, maximum_step_rad: float) -> list[float]:
     """Return rate-limited yaw samples excluding start and including target."""
     maximum = max(1e-6, float(maximum_step_rad))
@@ -33,4 +46,3 @@ def rotation_steps(start: float, target: float, maximum_step_rad: float) -> list
     if count == 0:
         return []
     return [wrap_yaw(float(start) + delta * index / count) for index in range(1, count + 1)]
-

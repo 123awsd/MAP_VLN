@@ -59,7 +59,7 @@ from stage2.semantic_recovery import (  # noqa: E402
 from stage2.viewpoint_recovery import ViewpointRecovery  # noqa: E402
 from stage2.vlm_verifier import QwenImageVerifier  # noqa: E402
 from stage2.vocabulary import load_semantic_aliases  # noqa: E402
-from stage2.yaw_motion import blend_yaw, rotation_steps, step_yaw  # noqa: E402
+from stage2.yaw_motion import blend_yaw, facing_yaw, rotation_steps, step_yaw  # noqa: E402
 from stage2.representative_viewpoints import select_location_representatives  # noqa: E402
 
 
@@ -346,6 +346,7 @@ def main() -> None:
     failed_location_object_ids: dict[str, set[str]] = {}
     replans = []
     executed_segments = []
+    previous_executed_candidate = None
     frame_index = 0
     started = time.monotonic()
 
@@ -491,6 +492,20 @@ def main() -> None:
             )
             segment = plan["segments"][0]
             terminal = visit["pose"]
+            same_location_transition = bool(
+                previous_executed_candidate is not None
+                and previous_executed_candidate.get("task_id") == executed_candidate.get("task_id")
+                and previous_executed_candidate.get("location_hypothesis_id")
+                == executed_candidate.get("location_hypothesis_id")
+            )
+            search_region_center = executed_candidate.get(
+                "search_region_center_xyz_m", executed_candidate["target_xyz_m"]
+            )
+            yaw_mode = (
+                "anchor_facing_local"
+                if same_location_transition
+                else "path_tangent_terminal_blend"
+            )
             if use_3d:
                 actual_goal = [float(terminal[key]) for key in ("x", "y", "z")]
                 anchored = anchor_astar_path(
@@ -520,6 +535,11 @@ def main() -> None:
                 "yaw_rate_rps": float(args.yaw_rate_rps),
                 "execution_hz": float(args.execution_hz),
                 "terminal_yaw_blend_distance_m": float(args.terminal_yaw_blend_distance_m),
+                "yaw_mode": yaw_mode,
+                "yaw_target_xyz_m": (
+                    [float(value) for value in search_region_center]
+                    if same_location_transition else None
+                ),
             }
             executed_segments.append(executed_segment)
             previous = np.asarray(current_f[:3], dtype=np.float64)
@@ -544,12 +564,20 @@ def main() -> None:
                     if np.linalg.norm(movement[:2]) < 1e-6
                     else float(math.atan2(movement[1], movement[0]))
                 )
-                blend_distance = max(0.0, float(args.terminal_yaw_blend_distance_m))
-                blend_fraction = (
-                    0.0 if blend_distance <= 1e-6
-                    else 1.0 - min(1.0, remaining_distances[local_index] / blend_distance)
-                )
-                desired_yaw = blend_yaw(path_yaw, terminal_yaw, blend_fraction)
+                if same_location_transition:
+                    # While circling one physical search region, keep the fixed
+                    # camera looking at that region instead of repeatedly
+                    # turning toward each short segment's travel tangent.
+                    desired_yaw = facing_yaw(
+                        point_xyz, search_region_center, executed_yaw
+                    )
+                else:
+                    blend_distance = max(0.0, float(args.terminal_yaw_blend_distance_m))
+                    blend_fraction = (
+                        0.0 if blend_distance <= 1e-6
+                        else 1.0 - min(1.0, remaining_distances[local_index] / blend_distance)
+                    )
+                    desired_yaw = blend_yaw(path_yaw, terminal_yaw, blend_fraction)
                 yaw = step_yaw(executed_yaw, desired_yaw, maximum_yaw_step)
                 pose_f = [float(point_xyz[0]), float(point_xyz[1]), float(point_xyz[2]), yaw]
                 agent_state = agent.get_state()
@@ -837,6 +865,7 @@ def main() -> None:
                 "rgb": str(terminal_rgb.relative_to(args.output_dir)),
             }
             observations_log.append(observation_record)
+            previous_executed_candidate = executed_candidate
             mapped_object = objects_by_id.get(visit["object_id"])
             target_labels = ALIASES.get(
                 tasks[visit["task_id"]]["verification_label"],
