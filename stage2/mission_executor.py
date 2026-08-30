@@ -85,10 +85,10 @@ class MissionState:
             if status != "completed":
                 unresolved.append(task_id)
                 continue
-            if (
-                self.outcomes.get(task_id) != tasks[task_id]["success_outcome"]
-                and task_id not in resolved_negative_sources
-            ):
+            acceptable = set(tasks[task_id].get(
+                "acceptable_outcomes", [tasks[task_id]["success_outcome"]]
+            ))
+            if self.outcomes.get(task_id) not in acceptable and task_id not in resolved_negative_sources:
                 unresolved.append(task_id)
         return sorted(unresolved)
 

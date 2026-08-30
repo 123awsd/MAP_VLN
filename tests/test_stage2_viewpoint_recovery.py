@@ -93,6 +93,36 @@ class ViewpointRecoveryTest(unittest.TestCase):
         self.assertFalse(second["retry"])
         self.assertEqual(second["location_attempt_index"], 2)
 
+    def test_unbounded_mode_exhausts_location_then_releases_global_focus(self):
+        candidates = [
+            {"id": f"a{index}", "location_hypothesis_id": "bed_a",
+             "candidate_angle_rad": index * 0.5}
+            for index in range(4)
+        ] + [{
+            "id": "b1", "location_hypothesis_id": "bed_b",
+            "candidate_angle_rad": 0.0,
+        }]
+        recovery = ViewpointRecovery()
+        active = {"task"}
+
+        for candidate_id in ("a0", "a1", "a2"):
+            decision = recovery.decide("task", candidate_id, False, candidates)
+            self.assertTrue(decision["retry"])
+            self.assertEqual(recovery.focused_task_ids(active, {"task": candidates}), {"task"})
+
+        decision = recovery.decide("task", "a3", False, candidates)
+        self.assertTrue(decision["retry"])
+        self.assertTrue(decision["location_exhausted"])
+        self.assertEqual(recovery.focused_task_ids(active, {"task": candidates}), set())
+        self.assertEqual(
+            [item["id"] for item in recovery.filtered_candidates({"task": candidates})["task"]],
+            ["b1"],
+        )
+
+        final = recovery.decide("task", "b1", False, candidates)
+        self.assertFalse(final["retry"])
+        self.assertEqual(final["reason"], "candidate_pool_exhausted")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,6 +5,9 @@ root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 result_dir="$(realpath "${1:?usage: build_stage2_rviz_replay.sh RESULT_DIR SOURCE_STAGE1_BAG [BAG_NAME] [TASK_GRAPH]}")"
 source_bag="$(realpath "${2:?usage: build_stage2_rviz_replay.sh RESULT_DIR SOURCE_STAGE1_BAG [BAG_NAME] [TASK_GRAPH]}")"
 bag_name="${3:-$(basename "$result_dir")_rviz}"
+bag_dir_host="$root_dir/outputs/bags/$bag_name"
+bag_host="$bag_dir_host/$bag_name.bag"
+bag_shared="/workspace/shared/outputs/bags/$bag_name/$bag_name.bag"
 
 to_shared() {
   case "$1" in
@@ -32,6 +35,11 @@ esac
 for path in "$execution" "$candidates" "$scene_graph" "$task_graph" "$source_bag"; do
   [[ -e "$path" ]] || { echo "missing replay input: $path" >&2; exit 1; }
 done
+if [[ -e "$bag_dir_host" ]]; then
+  echo "bag target already exists; refusing to overwrite: $bag_dir_host" >&2
+  exit 2
+fi
+mkdir -p "$bag_dir_host"
 
 cd "$root_dir"
 docker compose run --rm falcon python3 /workspace/falcon_ws/src/pre_map_bridge/scripts/build_stage2_bag.py \
@@ -41,6 +49,9 @@ docker compose run --rm falcon python3 /workspace/falcon_ws/src/pre_map_bridge/s
   --candidates "$(to_shared "$candidates")" \
   --scene-graph "$(to_shared "$scene_graph")" \
   --frames-dir "$(to_shared "$frames")" \
-  --output-bag "/workspace/shared/outputs/bags/${bag_name}.bag" \
+  --output-bag "$bag_shared" \
   --hz 5
-echo "built=$root_dir/outputs/bags/${bag_name}.bag"
+.envs/habitat/bin/python scripts/write_stage2_bag_instruction.py \
+  "$task_graph" "$bag_host" "$bag_dir_host/instruction.json"
+echo "built=$bag_host"
+echo "instruction=$bag_dir_host/instruction.json"

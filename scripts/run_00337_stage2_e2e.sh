@@ -28,7 +28,7 @@ exec .envs/habitat/bin/python -u scripts/run_stage2_habitat.py \
   --planning-config config/uav_3d_planning_habitat.yaml \
   --output-dir "$run_dir/execution" \
   --verification-mode "$verification_mode" \
-  --max-candidates 3 \
+  --max-candidates 8 \
   --planning-horizon-tasks 2 \
   --owlv2-every 10 \
   --save-every 1

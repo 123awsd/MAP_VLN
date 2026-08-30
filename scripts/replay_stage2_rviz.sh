@@ -10,6 +10,14 @@ rviz_container="pre-map-vln-stage2-rviz-${BASHPID}"
 
 cd "$root_dir"
 "$root_dir/scripts/prepare_rviz_xauth.sh"
+if [[ -f "$root_dir/outputs/bags/$bag_name/$bag_name.bag" ]]; then
+  bag_path="/workspace/shared/outputs/bags/$bag_name/$bag_name.bag"
+elif [[ -f "$root_dir/outputs/bags/${bag_name}.bag" ]]; then
+  bag_path="/workspace/shared/outputs/bags/${bag_name}.bag"
+else
+  echo "bag not found in grouped or legacy layout: $bag_name" >&2
+  exit 1
+fi
 scene_graph_arg=""
 if [[ -n "$scene_graph_host" ]]; then
   scene_graph_host="$(realpath "$scene_graph_host")"
@@ -20,7 +28,7 @@ if [[ -n "$scene_graph_host" ]]; then
 fi
 exec docker compose run --rm --name "$rviz_container" falcon \
   roslaunch pre_map_bridge stage2_replay.launch \
-  bag_path:="/workspace/shared/outputs/bags/${bag_name}.bag" \
+  bag_path:="$bag_path" \
   scene_graph:="$scene_graph_arg" \
   loop:="$loop" \
   rate:="$rate"

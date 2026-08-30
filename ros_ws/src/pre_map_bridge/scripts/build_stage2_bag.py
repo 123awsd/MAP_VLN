@@ -136,6 +136,30 @@ def open_vocab_box_marker(obj, marker_id: int, stamp):
     return marker
 
 
+def open_vocab_label_marker(obj, marker_id: int, stamp):
+    """Readable category/confidence label for an online OWLv2 box."""
+    marker = Marker()
+    marker.header.frame_id = "world"
+    marker.header.stamp = stamp
+    marker.ns = "stage2_open_vocab_labels"
+    marker.id = marker_id
+    marker.type = Marker.TEXT_VIEW_FACING
+    marker.action = Marker.ADD
+    center = np.asarray(obj["center"], dtype=np.float64)
+    size = np.asarray(obj["size"], dtype=np.float64)
+    marker.pose.position.x = float(center[0])
+    marker.pose.position.y = float(center[1])
+    marker.pose.position.z = float(center[2] + size[2] * 0.5 + 0.24)
+    marker.pose.orientation.w = 1.0
+    marker.scale.z = 0.18
+    marker.color.r, marker.color.g, marker.color.b, marker.color.a = 0.00, 0.16, 0.72, 1.00
+    label = str(obj.get("label") or "object").upper()
+    score = obj.get("score")
+    marker.text = label if score is None else f"{label}  {float(score):.2f}"
+    marker.lifetime = rospy.Duration(0)
+    return marker
+
+
 def target_label_marker(obj, marker_id: int, stamp, label: str, status: str):
     marker = Marker()
     marker.header.frame_id = "world"
@@ -148,9 +172,9 @@ def target_label_marker(obj, marker_id: int, stamp, label: str, status: str):
     size = np.asarray(obj["size_xyz_m"], dtype=np.float64)
     marker.pose.position.x = float(center[0])
     marker.pose.position.y = float(center[1])
-    marker.pose.position.z = float(center[2] + size[2] * 0.5 + 0.18)
+    marker.pose.position.z = float(center[2] + size[2] * 0.5 + 0.25)
     marker.pose.orientation.w = 1.0
-    marker.scale.z = 0.15
+    marker.scale.z = 0.18
     marker.color.r, marker.color.g, marker.color.b, marker.color.a = 0.72, 0.00, 0.32, 1.00
     symbols = {"pending": "WAIT", "current": "SEARCHING", "found": "✓ FOUND", "not_found": "✗ NOT FOUND", "skipped": "SKIPPED"}
     marker.text = f"{label.upper()}  [{symbols.get(status, status.upper())}]"
@@ -176,16 +200,19 @@ def context_label_marker(obj, marker_id: int, stamp):
     size = np.asarray(obj["size_xyz_m"], dtype=np.float64)
     marker.pose.position.x = float(center[0])
     marker.pose.position.y = float(center[1])
-    marker.pose.position.z = float(center[2] + size[2] * 0.5 + 0.12)
+    marker.pose.position.z = float(center[2] + size[2] * 0.5 + 0.22)
     marker.pose.orientation.w = 1.0
-    marker.scale.z = 0.13
+    marker.scale.z = 0.16
     marker.color.r, marker.color.g, marker.color.b, marker.color.a = 0.03, 0.18, 0.30, 0.96
     marker.text = f"{obj.get('label', 'object')}  [{obj.get('id', marker_id)}]"
     marker.lifetime = rospy.Duration(0)
     return marker
 
 
-def task_box_markers(task_order, task_objects, task_references, objects, statuses, current_task, stamp):
+def task_box_markers(
+    task_order, task_objects, task_candidate_objects, task_references,
+    objects, statuses, current_task, stamp,
+):
     result = MarkerArray()
     clear = Marker()
     clear.action = Marker.DELETEALL
@@ -202,28 +229,62 @@ def task_box_markers(task_order, task_objects, task_references, objects, statuse
         marker_id, obj = objects[object_id]
         result.markers.append(box_marker(obj, marker_id, stamp, "context"))
         result.markers.append(context_label_marker(obj, marker_id, stamp))
-    for marker_id, task_id in enumerate(task_order):
-        object_id = task_objects.get(task_id)
-        if object_id not in objects:
-            continue
-        _, obj = objects[object_id]
-        status = statuses.get(task_id, "pending")
-        if task_id == current_task and status == "pending":
-            status = "current"
+    # Keep every physical location hypothesis visible for the lifetime of its
+    # task. Previously ``task_objects`` held only the current instance, so an
+    # already checked bed disappeared as soon as the planner selected another
+    # bed. Aggregate first in case two tasks happen to share one anchor.
+    visible_object_states = {}
+    state_priority = {
+        "skipped": 0, "pending": 1, "not_found": 2, "current": 3, "found": 4,
+    }
+    for task_id in task_order:
+        object_ids = list(task_candidate_objects.get(task_id, []))
+        selected_object_id = task_objects.get(task_id)
+        if selected_object_id and selected_object_id not in object_ids:
+            object_ids.append(selected_object_id)
+        task_status = statuses.get(task_id, "pending")
+        for object_id in object_ids:
+            if object_id not in objects:
+                continue
+            if task_status == "not_found":
+                object_status = "not_found"
+            elif task_status == "found":
+                object_status = "found" if object_id == selected_object_id else "pending"
+            elif task_status == "skipped":
+                object_status = "skipped"
+            elif task_id == current_task and object_id == selected_object_id:
+                object_status = "current"
+            else:
+                object_status = "pending"
+            previous = visible_object_states.get(object_id)
+            if (
+                previous is None
+                or state_priority[object_status] > state_priority[previous[0]]
+            ):
+                visible_object_states[object_id] = (object_status, task_id)
+
+    for object_id, (status, task_id) in sorted(
+        visible_object_states.items(), key=lambda item: objects[item[0]][0]
+    ):
+        marker_id, obj = objects[object_id]
         label = obj.get("label", task_id)
         result.markers.append(box_marker(obj, marker_id, stamp, status))
         result.markers.append(target_label_marker(obj, marker_id, stamp, label, status))
     return result
 
 
-def reached_goal_markers(reached_goals, task_order, stamp):
+def reached_goal_markers(executed_views, task_order, stamp):
     result = MarkerArray()
-    task_indices = {task_id: index for index, task_id in enumerate(task_order)}
-    for task_id, reached in reached_goals.items():
+    for marker_id, reached in enumerate(executed_views):
+        task_id = reached["task_id"]
         x, y, z, yaw = [float(value) for value in reached["pose"]]
         outcome = reached["outcome"]
-        color = (0.00, 0.55, 0.12, 1.00) if outcome == "found" else (0.78, 0.04, 0.04, 1.00)
-        marker_id = task_indices[task_id]
+        color = {
+            "retry": (0.18, 0.48, 0.78, 0.28),
+            "found": (0.00, 0.55, 0.12, 0.78),
+            "not_found": (0.78, 0.16, 0.10, 0.45),
+            "done": (0.00, 0.55, 0.12, 0.65),
+        }.get(outcome, (0.35, 0.40, 0.48, 0.25))
 
         frustum = Marker()
         frustum.header.frame_id = "world"
@@ -233,7 +294,7 @@ def reached_goal_markers(reached_goals, task_order, stamp):
         frustum.type = Marker.LINE_LIST
         frustum.action = Marker.ADD
         frustum.pose.orientation.w = 1.0
-        frustum.scale.x = 0.045
+        frustum.scale.x = 0.025 if outcome == "retry" else 0.040
         frustum.color.r, frustum.color.g, frustum.color.b, frustum.color.a = color
         origin = np.asarray([x, y, z], dtype=np.float64)
         forward = np.asarray([math.cos(yaw), math.sin(yaw), 0.0])
@@ -574,12 +635,18 @@ def main():
         for task_id, values in candidates.items()
         if values
     }
+    task_candidate_objects = {
+        task_id: list(dict.fromkeys(
+            value["object_id"] for value in values if value.get("object_id") in objects
+        ))
+        for task_id, values in candidates.items()
+    }
     task_references = {
         task_id: list(dict.fromkeys(object_id for value in values for object_id in value.get("reference_object_ids", [])))
         for task_id, values in candidates.items()
     }
     task_states = {task_id: "pending" for task_id in task_order}
-    reached_goals = {}
+    executed_views = []
     current_task = execution["replans"][0]["plan"]["visits"][0]["task_id"]
     room_points = [xy for room in scene_graph["rooms"] for xy in room.get("polygon_xy_m", [])]
     room_x = [float(xy[0]) for xy in room_points]
@@ -611,7 +678,10 @@ def main():
         cloud = copy.deepcopy(occupied)
         stamp_message(cloud, initial_stamp)
         bag.write("/voxel_mapping/occupancy_grid_occupied", cloud, initial_stamp)
-        boxes = task_box_markers(task_order, task_objects, task_references, objects, task_states, current_task, initial_stamp)
+        boxes = task_box_markers(
+            task_order, task_objects, task_candidate_objects, task_references,
+            objects, task_states, current_task, initial_stamp,
+        )
         bag.write("/stage2/semantic_boxes", boxes, initial_stamp)
         first_visit = execution["replans"][0]["plan"]["visits"][0]
         bag.write("/stage2/candidate_poses", candidate_markers(candidates, initial_stamp, current_task, first_visit["candidate_id"]), initial_stamp)
@@ -697,7 +767,10 @@ def main():
                 task_objects[next_task] = replan["plan"]["visits"][0]["object_id"]
                 bag.write(
                     "/stage2/semantic_boxes",
-                    task_box_markers(task_order, task_objects, task_references, objects, task_states, current_task, stamp),
+                    task_box_markers(
+                        task_order, task_objects, task_candidate_objects, task_references,
+                        objects, task_states, current_task, stamp,
+                    ),
                     stamp,
                 )
                 bag.write("/stage2/task_status", String(data=json.dumps({"next_task": next_task, "active_task_ids": replan["active_task_ids"]})), stamp)
@@ -715,17 +788,22 @@ def main():
                         detected_objects[object_id] = detected
                 markers = MarkerArray()
                 for object_id in sorted(detected_objects):
-                    markers.markers.append(open_vocab_box_marker(
-                        detected_objects[object_id], online_marker_ids[object_id], stamp
-                    ))
+                    detected = detected_objects[object_id]
+                    marker_id = online_marker_ids[object_id]
+                    markers.markers.append(open_vocab_box_marker(detected, marker_id, stamp))
+                    markers.markers.append(open_vocab_label_marker(detected, marker_id, stamp))
                 bag.write("/stage2/open_vocab_boxes", markers, stamp)
 
             if frame_index in event_by_frame:
                 event = event_by_frame[frame_index]
+                executed_views.append({
+                    "task_id": event["task_id"],
+                    "pose": event["pose"],
+                    "outcome": event["outcome"],
+                })
                 terminal_outcomes = {"found", "not_found", "done", "skipped"}
                 if event["outcome"] in terminal_outcomes:
                     task_states[event["task_id"]] = event["outcome"]
-                    reached_goals[event["task_id"]] = {"pose": event["pose"], "outcome": event["outcome"]}
                 elif event["outcome"] == "recovery_activated":
                     task_states[event["task_id"]] = "searching"
                 for rule in task_graph.get("conditional_rules", []):
@@ -735,9 +813,12 @@ def main():
                 next_plan_index = min(event["sequence"] + 1, len(execution["replans"]) - 1)
                 next_visits = execution["replans"][next_plan_index].get("plan", {}).get("visits", [])
                 current_task = next_visits[0]["task_id"] if next_visits else None
-                update = task_box_markers(task_order, task_objects, task_references, objects, task_states, current_task, stamp)
+                update = task_box_markers(
+                    task_order, task_objects, task_candidate_objects, task_references,
+                    objects, task_states, current_task, stamp,
+                )
                 bag.write("/stage2/semantic_boxes", update, stamp)
-                bag.write("/stage2/reached_goals", reached_goal_markers(reached_goals, task_order, stamp), stamp)
+                bag.write("/stage2/reached_goals", reached_goal_markers(executed_views, task_order, stamp), stamp)
                 bag.write("/stage2/task_status", String(data=json.dumps({"task_id": event["task_id"], "outcome": event["outcome"]})), stamp)
                 for recovery_event in execution.get("semantic_recovery", {}).get("events", []):
                     if int(recovery_event.get("sequence", -1)) == int(event["sequence"]):

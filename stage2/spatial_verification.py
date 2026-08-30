@@ -65,6 +65,27 @@ def verify_target_reference_relation(
         vertical_gap = target_bottom - reference_top
         metrics.update({"horizontal_distance_m": horizontal_distance, "vertical_gap_m": vertical_gap})
         valid = horizontal_distance <= horizontal_tolerance and abs(vertical_gap) <= support_vertical_tolerance_m
+    elif relation in {"above", "below"}:
+        ref = references[0]
+        rc = [float(v) for v in ref["center_xyz_m"]]
+        rs = [float(v) for v in ref["size_xyz_m"]]
+        horizontal_tolerance = 0.5 * math.hypot(rs[0] + ts[0], rs[1] + ts[1])
+        horizontal_distance = math.dist(tc[:2], rc[:2])
+        if relation == "above":
+            signed_clearance = (tc[2] - 0.5 * ts[2]) - (rc[2] + 0.5 * rs[2])
+            vertically_ordered = tc[2] > rc[2]
+        else:
+            signed_clearance = (rc[2] - 0.5 * rs[2]) - (tc[2] + 0.5 * ts[2])
+            vertically_ordered = tc[2] < rc[2]
+        metrics.update({
+            "horizontal_distance_m": horizontal_distance,
+            "signed_clearance_m": signed_clearance,
+        })
+        valid = (
+            vertically_ordered
+            and horizontal_distance <= horizontal_tolerance
+            and signed_clearance >= -support_vertical_tolerance_m
+        )
     elif relation == "between":
         valid = len(references) >= 2
     return {
@@ -99,9 +120,19 @@ def effective_relation_context(
 
     task_target_label = str(task.get("target", {}).get("label", "")).strip().lower()
     verification_label = str(task.get("verification_label", task_target_label)).strip().lower()
-    anchor_search = bool(recovery) or task_target_label != verification_label
+    candidate_anchor_id = candidate.get("anchor_object_id")
+    anchor_search = (
+        bool(recovery)
+        or task_target_label != verification_label
+        or candidate_anchor_id is not None
+    )
     if anchor_search:
-        anchor_id = str(recovery.get("anchor_object_id") or candidate.get("object_id") or "")
+        anchor_id = str(
+            recovery.get("anchor_object_id")
+            or candidate_anchor_id
+            or candidate.get("object_id")
+            or ""
+        )
         anchor = mapped_objects.get(anchor_id)
         relation = recovery.get("relation") if recovery else task.get("spatial_constraints", {}).get("relation")
         confirmed = [item for item in projected_targets if item.get("confirmed")]

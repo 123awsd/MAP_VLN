@@ -41,7 +41,15 @@ class SemanticRecoveryTest(unittest.TestCase):
             "relevance": "high", "semantic_region": "magic_corner",
         }]}
         result = validate_hypotheses(raw, self.scene, set(), 3)
-        self.assertEqual(result["hypotheses"][0]["semantic_region"], "fixed_instance")
+        self.assertEqual(result["hypotheses"][0]["semantic_region"], "instance_region")
+
+    def test_legacy_cached_region_name_is_canonicalized(self):
+        raw = {"target_label": "ball", "hypotheses": [{
+            "room_id": 1, "anchor_object_id": "shelf1", "relation": "under",
+            "relevance": "high", "semantic_region": "under_furniture",
+        }]}
+        result = validate_hypotheses(raw, self.scene, set(), 3)
+        self.assertEqual(result["hypotheses"][0]["semantic_region"], "below_region")
 
     def test_historical_target_box_is_annotated_for_joint_ranking(self):
         raw = {"target_label": "television", "hypotheses": [{

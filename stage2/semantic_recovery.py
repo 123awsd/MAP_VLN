@@ -11,25 +11,24 @@ from pathlib import Path
 from typing import Any
 
 from .io_utils import atomic_json, load_json
-from .semantic_region_search import infer_region_type, materialize_semantic_regions
+from .semantic_region_search import canonical_region_type, infer_region_type, materialize_semantic_regions
 
 
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 MODEL = "qwen3.7-plus"
-PROMPT_VERSION = "semantic-recovery-v4-history-joint-ranking"
+PROMPT_VERSION = "semantic-recovery-v5-canonical-observation-regions"
 INPUT_CNY_PER_MILLION = 2.0
 OUTPUT_CNY_PER_MILLION = 8.0
 RANK_PENALTY = {"high": 0.0, "medium": 0.6, "low": 1.2}
 SEMANTIC_REGION_TYPES = {
-    "support_surface", "floor_near_anchor", "furniture_neighborhood",
-    "under_furniture", "fixed_instance",
+    "support_surface", "below_region", "surrounding_region", "instance_region",
 }
 
 SYSTEM_PROMPT = """你是家庭机器人目标恢复搜索规划器。目标在用户指定位置经过多个观察角度充分搜索后未找到。
 根据给定的全局房间和物体清单，提出最多3个尚未失败的搜索位置；只要清单中还有可用锚点，就应尽量给满3个。同类房间不足时，可按目标常见支撑物、收纳物和相邻功能空间扩展。只输出严格JSON，不要Markdown。
 历史 Box 和生活常识不是两个串行阶段：请联合排序。若清单中存在 missing_target 的历史实例，可把该历史 Box 本身作为候选，但它只是可能过时的先验；同时考虑其他合理房间和大型锚点。每个假设必须引用清单中真实存在的 room_id 和 anchor_object_id。优先选择与目标类别、历史置信度、房间用途、支撑物和日常放置习惯相关的位置；不要生成坐标，不要虚构房间或物体，不要再次推荐 failed_object_ids。
-semantic_region描述目标相对锚点的功能区域，只能使用support_surface、floor_near_anchor、furniture_neighborhood、under_furniture或fixed_instance。relevance只能是high/medium/low，它是粗粒度语义优先级而非校准概率。输出：
+semantic_region描述目标相对锚点的功能区域，只能使用support_surface、below_region、surrounding_region或instance_region。relevance只能是high/medium/low，它是粗粒度语义优先级而非校准概率。输出：
 {"target_label":"...","hypotheses":[{"room_id":1,"anchor_object_id":"boxer_1","semantic_region":"support_surface","relation":"near|on|inside|around|under","relevance":"high|medium|low","reason":"简短中文理由"}]}"""
 
 
@@ -77,13 +76,13 @@ def validate_hypotheses(
         inferred_region = infer_region_type(
             str(value.get("target_label", "")), obj["label"], relation
         )
-        semantic_region = str(source.get("semantic_region") or inferred_region).lower()
+        semantic_region = canonical_region_type(source.get("semantic_region") or inferred_region)
         if semantic_region not in SEMANTIC_REGION_TYPES:
             semantic_region = inferred_region
         # Fixed targets, explicit under-object searches, and floor-affordance
         # targets have unambiguous geometry; do not let free-form VLM wording
         # turn them back into generic room neighborhoods.
-        if inferred_region in {"fixed_instance", "under_furniture", "floor_near_anchor"}:
+        if inferred_region in {"instance_region", "below_region"}:
             semantic_region = inferred_region
         result.append({
             "id": f"recovery_{len(result) + 1}",

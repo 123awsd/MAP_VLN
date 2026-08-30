@@ -59,6 +59,7 @@ from stage2.semantic_recovery import (  # noqa: E402
 from stage2.viewpoint_recovery import ViewpointRecovery  # noqa: E402
 from stage2.vlm_verifier import QwenImageVerifier  # noqa: E402
 from stage2.vocabulary import load_semantic_aliases  # noqa: E402
+from stage2.yaw_motion import blend_yaw, rotation_steps, step_yaw  # noqa: E402
 
 
 S_HABITAT_TO_FALCON = np.asarray(
@@ -160,7 +161,16 @@ def main() -> None:
     parser.add_argument("--scene-config", type=Path, default=ROOT / "data/scene_datasets/hm3d/example/hm3d_annotated_example_basis.scene_dataset_config.json")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--step-m", type=float, default=0.12)
-    parser.add_argument("--max-candidates", type=int, default=4)
+    parser.add_argument(
+        "--execution-hz", type=float, default=5.0,
+        help="nominal trajectory sample rate used to enforce the simulated yaw rate",
+    )
+    parser.add_argument("--yaw-rate-rps", type=float, default=1.0)
+    parser.add_argument("--terminal-yaw-blend-distance-m", type=float, default=0.8)
+    parser.add_argument(
+        "--max-candidates", type=int, default=8,
+        help="maximum complementary viewpoints per physical location hypothesis",
+    )
     parser.add_argument("--minimum-pixels", type=int, default=40)
     parser.add_argument(
         "--minimum-pixels-by-task",
@@ -187,7 +197,10 @@ def main() -> None:
     )
     parser.add_argument("--vlm-confidence-threshold", type=float, default=0.65)
     parser.add_argument("--vlm-no-cache", action="store_true")
-    parser.add_argument("--max-viewpoint-attempts", type=int, default=3)
+    parser.add_argument(
+        "--max-viewpoint-attempts", type=int, default=0,
+        help="optional global viewpoint cap; 0 exhausts the finite per-location candidate pools",
+    )
     parser.add_argument(
         "--planning-horizon-tasks", type=int, default=3,
         help="maximum currently executable tasks in each rolling joint optimization",
@@ -236,11 +249,7 @@ def main() -> None:
     tasks = {task["id"]: task for task in task_graph["tasks"]}
 
     def allows_semantic_recovery(task: dict) -> bool:
-        policy = task.get("search_policy", {})
-        return (
-            policy.get("mode") == "semantic_recovery"
-            or policy.get("on_exhaustion") == "qwen_semantic_recovery"
-        )
+        return task.get("intent", {}).get("not_found_policy") == "semantic_recovery"
     updated_scene_graph = copy.deepcopy(load_json(args.scene_graph))
     objects_by_id = {
         obj["id"]: obj
@@ -316,7 +325,9 @@ def main() -> None:
     open_vocab_observations = []
     fusion = OnlineSemanticFusion(minimum_novel_support=args.novel_object_min_support)
     recovery = ViewpointRecovery(
-        maximum_attempts=args.max_viewpoint_attempts,
+        maximum_attempts=(
+            args.max_viewpoint_attempts if args.max_viewpoint_attempts > 0 else None
+        ),
         maximum_attempts_per_location=(
             args.max_viewpoints_per_location if args.semantic_recovery else None
         ),
@@ -371,6 +382,30 @@ def main() -> None:
         initial_state.rotation = quat_from_angle_axis(0.0, np.asarray([0.0, 1.0, 0.0]))
         agent = sim.initialize_agent(0, initial_state)
 
+        def record_motion_frame(pose_f, observations) -> None:
+            nonlocal frame_index
+            if async_detector is not None:
+                consume_async(async_detector.poll())
+            trajectory.append(list(pose_f))
+            save_frame = frame_index % max(1, args.save_every) == 0
+            detect_frame = bool(
+                open_vocab_detector is not None
+                and args.owlv2_every > 0
+                and frame_index % args.owlv2_every == 0
+            )
+            frame_path = frames_dir / f"frame_{frame_index:06d}.jpg"
+            if save_frame or detect_frame:
+                Image.fromarray(
+                    np.asarray(observations["rgb"])[..., :3].astype(np.uint8)
+                ).save(frame_path, quality=90)
+            if detect_frame and async_detector is not None:
+                async_detector.submit(frame_path, {
+                    "frame_index": frame_index,
+                    "pose": list(pose_f),
+                    "depth": np.asarray(observations["depth"], dtype=np.float32).copy(),
+                })
+            frame_index += 1
+
         while not state.is_finished():
             if not state.active:
                 break
@@ -399,6 +434,7 @@ def main() -> None:
                 current_f,
                 active_task_ids=planning_task_ids,
                 completed_task_ids=state.completed,
+                yaw_rate_rps=args.yaw_rate_rps,
             )
             replans.append({
                 "index": len(replans),
@@ -427,7 +463,7 @@ def main() -> None:
                     for index, point in enumerate(points_xy)
                 ]
                 bspline = None
-            executed_segments.append({
+            executed_segment = {
                 "sequence": len(executed_segments),
                 "task_id": visit["task_id"],
                 "candidate_id": visit["candidate_id"],
@@ -439,39 +475,71 @@ def main() -> None:
                 "bspline_minimum_clearance_m": None if bspline is None else bspline.minimum_clearance_m,
                 "bspline_points_xyz_m": None if bspline is None else bspline.points_xyz_m,
                 "collision_checked_3d": bool(use_3d),
-            })
+                "yaw_rate_rps": float(args.yaw_rate_rps),
+                "execution_hz": float(args.execution_hz),
+                "terminal_yaw_blend_distance_m": float(args.terminal_yaw_blend_distance_m),
+            }
+            executed_segments.append(executed_segment)
             previous = np.asarray(current_f[:3], dtype=np.float64)
+            executed_yaw = float(current_f[3])
+            terminal_yaw = float(terminal["yaw"])
+            maximum_yaw_step = max(1e-6, float(args.yaw_rate_rps)) / max(
+                0.1, float(args.execution_hz)
+            )
+            remaining_distances = [0.0] * len(points_xyz)
+            for index in range(len(points_xyz) - 2, -1, -1):
+                remaining_distances[index] = (
+                    remaining_distances[index + 1]
+                    + math.dist(points_xyz[index], points_xyz[index + 1])
+                )
             for local_index, point in enumerate(points_xyz[1:], start=1):
                 point_xyz = np.asarray(point, dtype=np.float64)
                 if use_3d and not voxel_map.is_state_valid(point_xyz):
                     raise RuntimeError(f"B-spline entered non-FREE voxel at {point_xyz.tolist()}")
                 movement = point_xyz - previous
-                yaw = current_f[3] if np.linalg.norm(movement[:2]) < 1e-6 else float(math.atan2(movement[1], movement[0]))
+                path_yaw = (
+                    executed_yaw
+                    if np.linalg.norm(movement[:2]) < 1e-6
+                    else float(math.atan2(movement[1], movement[0]))
+                )
+                blend_distance = max(0.0, float(args.terminal_yaw_blend_distance_m))
+                blend_fraction = (
+                    0.0 if blend_distance <= 1e-6
+                    else 1.0 - min(1.0, remaining_distances[local_index] / blend_distance)
+                )
+                desired_yaw = blend_yaw(path_yaw, terminal_yaw, blend_fraction)
+                yaw = step_yaw(executed_yaw, desired_yaw, maximum_yaw_step)
                 pose_f = [float(point_xyz[0]), float(point_xyz[1]), float(point_xyz[2]), yaw]
                 agent_state = agent.get_state()
                 agent_state.position = falcon_to_agent_h(initial_agent_h, pose_f)
                 agent_state.rotation = quat_from_angle_axis(yaw, np.asarray([0.0, 1.0, 0.0]))
                 agent.set_state(agent_state)
                 observations = sim.get_sensor_observations()
-                if async_detector is not None:
-                    consume_async(async_detector.poll())
-                trajectory.append(pose_f)
-                save_frame = frame_index % max(1, args.save_every) == 0
-                detect_frame = bool(
-                    open_vocab_detector is not None
-                    and args.owlv2_every > 0
-                    and frame_index % args.owlv2_every == 0
-                )
-                frame_path = frames_dir / f"frame_{frame_index:06d}.jpg"
-                if save_frame or detect_frame:
-                    Image.fromarray(np.asarray(observations["rgb"])[..., :3].astype(np.uint8)).save(frame_path, quality=90)
-                if detect_frame and async_detector is not None:
-                    async_detector.submit(frame_path, {
-                        "frame_index": frame_index, "pose": list(pose_f),
-                        "depth": np.asarray(observations["depth"], dtype=np.float32).copy(),
-                    })
-                frame_index += 1
+                record_motion_frame(pose_f, observations)
                 previous = point_xyz
+                executed_yaw = yaw
+
+            terminal_xyz = [float(terminal[key]) for key in ("x", "y", "z")]
+            terminal_rotation = rotation_steps(
+                executed_yaw, terminal_yaw, maximum_yaw_step
+            )
+            for yaw in terminal_rotation:
+                pose_f = terminal_xyz + [yaw]
+                terminal_state = agent.get_state()
+                terminal_state.position = falcon_to_agent_h(initial_agent_h, pose_f)
+                terminal_state.rotation = quat_from_angle_axis(
+                    yaw, np.asarray([0.0, 1.0, 0.0])
+                )
+                agent.set_state(terminal_state)
+                observations = sim.get_sensor_observations()
+                record_motion_frame(pose_f, observations)
+            executed_segment["terminal_rotation_frame_count"] = len(terminal_rotation)
+            executed_segment["terminal_yaw_error_before_rotation_rad"] = abs(
+                math.atan2(
+                    math.sin(terminal_yaw - executed_yaw),
+                    math.cos(terminal_yaw - executed_yaw),
+                )
+            )
 
             current_f = [float(terminal[key]) for key in ("x", "y", "z", "yaw")]
             terminal_state = agent.get_state()
@@ -596,7 +664,10 @@ def main() -> None:
                 reference_objects,
             )
             relation_verification["scope"] = relation_context["scope"]
-            selected_found = bool(selected_found and relation_verification["valid"])
+            # Spatial language grounds the search region and observation poses.
+            # Keep the post-detection geometry check for audit only: a genuine
+            # visual detection is sufficient for ordinary inspect/find tasks.
+            relation_verification["enforced_for_success"] = False
             controlled_stale = visit["object_id"] in controlled_stale_object_ids
             controlled_found = visit["object_id"] in controlled_found_object_ids
             if controlled_found:

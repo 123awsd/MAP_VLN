@@ -47,6 +47,6 @@ echo "[3/3] Build the RViz replay bag"
 
 echo
 echo "run_dir=$root_dir/$run_dir"
-echo "bag=$root_dir/outputs/bags/${bag_name}.bag"
+echo "bag=$root_dir/outputs/bags/$bag_name/${bag_name}.bag"
 echo "Replay with:"
 echo "./scripts/replay_stage2_rviz.sh $bag_name false 1.0 $run_dir/execution/updated_scene_graph.json"

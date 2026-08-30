@@ -9,7 +9,7 @@ from typing import Any
 
 @dataclass
 class ViewpointRecovery:
-    maximum_attempts: int = 3
+    maximum_attempts: int | None = None
     maximum_attempts_per_location: int | None = None
     maximum_locations: int | None = None
     attempted: dict[str, set[str]] = field(default_factory=dict)
@@ -78,7 +78,7 @@ class ViewpointRecovery:
             item["id"] for item in candidates if item["id"] not in tried
             and self._location(item) == location_id
         ]
-        location_budget = self.maximum_attempts_per_location or self.maximum_attempts
+        location_budget = self.maximum_attempts_per_location
         already_exhausted = self.exhausted_locations.get(task_id, set())
         visited_locations = {
             self._location(item) for item in candidates if item["id"] in tried
@@ -94,7 +94,9 @@ class ViewpointRecovery:
                 or len(visited_locations) < self.maximum_locations
             )
         ]
-        retry_same = len(attempted_at_location) < location_budget and bool(same_location)
+        retry_same = bool(same_location) and (
+            location_budget is None or len(attempted_at_location) < location_budget
+        )
         if not found and retry_same:
             self.active_locations[task_id] = location_id
             if current_angle is not None:
@@ -107,12 +109,14 @@ class ViewpointRecovery:
                     direction = self._choose_direction(current_angle, remaining_candidates)
                     if direction is not None:
                         self.directions[task_id] = direction
-        # Legacy callers without a location budget retain the old global
-        # viewpoint cap. Semantic recovery callers budget locations separately:
-        # V1/V2/V3 around one anchor consume one location, not three visits.
+        # The ordinary path exhausts the finite candidate pool.  An explicit
+        # positive global cap remains available for compatibility experiments;
+        # location-budgeted semantic recovery is governed independently.
         within_budget = (
-            len(tried) < self.maximum_attempts
-            if self.maximum_locations is None else True
+            self.maximum_attempts is None
+            or self.maximum_attempts <= 0
+            or len(tried) < self.maximum_attempts
+            or self.maximum_locations is not None
         )
         retry = not found and within_budget and (retry_same or bool(alternative_locations))
         location_exhausted = not found and not retry_same
@@ -135,7 +139,10 @@ class ViewpointRecovery:
             "direction": self.directions.get(task_id),
             "location_exhausted": location_exhausted,
             "reason": ("alternative_viewpoint_available" if retry_same else "alternative_location_available") if retry else (
-                "target_found" if found else "viewpoint_budget_exhausted"
+                "target_found" if found else (
+                    "viewpoint_budget_exhausted"
+                    if not within_budget else "candidate_pool_exhausted"
+                )
             ),
         }
 

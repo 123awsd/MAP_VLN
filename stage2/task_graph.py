@@ -15,6 +15,8 @@ ALLOWED_RELATIONS = {
 }
 ALLOWED_SEARCH_MODES = {"fixed", "semantic_recovery"}
 ALLOWED_EXHAUSTION_POLICIES = {"finish", "qwen_semantic_recovery"}
+ALLOWED_GOAL_TYPES = {"verify_presence", "locate_target", "execute_action"}
+ALLOWED_NOT_FOUND_POLICIES = {"report_absent", "semantic_recovery", "explicit_branch"}
 ALLOWED_REGION_TYPES = {
     "auto", "support_surface", "below_region", "surrounding_region",
     "instance_region", "between_region",
@@ -67,6 +69,8 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
     _require(isinstance(tasks, list) and tasks, "task graph must contain non-empty tasks")
 
     seen: set[str] = set()
+    explicit_intent_tasks: set[str] = set()
+    explicit_not_found_policy_tasks: set[str] = set()
     normalized_tasks = []
     for index, source in enumerate(tasks):
         _require(isinstance(source, dict), f"task {index} must be an object")
@@ -132,10 +136,17 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
                 len(references) >= 2,
                 f"task {task_id} relation 'between' requires two reference objects",
             )
-        distance = constraints.get("distance_m", [1.0, 2.2])
-        _require(isinstance(distance, list) and len(distance) == 2, f"task {task_id} distance_m must have two values")
-        distance = [float(distance[0]), float(distance[1])]
-        _require(0.2 <= distance[0] <= distance[1] <= 8.0, f"task {task_id} has invalid distance_m")
+        distance = constraints.get("distance_m")
+        if distance is not None:
+            _require(
+                isinstance(distance, list) and len(distance) == 2,
+                f"task {task_id} distance_m must be null or have two values",
+            )
+            distance = [float(distance[0]), float(distance[1])]
+            _require(
+                0.2 <= distance[0] <= distance[1] <= 8.0,
+                f"task {task_id} has invalid distance_m",
+            )
         region_type = str(constraints.get("region_type", "auto")).strip().lower()
         _require(
             region_type in ALLOWED_REGION_TYPES,
@@ -200,6 +211,51 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
             on_exhaustion in ALLOWED_EXHAUSTION_POLICIES,
             f"unsupported exhaustion policy {on_exhaustion!r} in {task_id}",
         )
+        intent = task.get("intent") or {}
+        _require(isinstance(intent, dict), f"task {task_id} intent must be an object")
+        if task.get("intent") is not None:
+            explicit_intent_tasks.add(task_id)
+        if (
+            "not_found_policy" in intent
+            or "on_exhaustion" in search_policy
+            or search_mode == "semantic_recovery"
+        ):
+            explicit_not_found_policy_tasks.add(task_id)
+        goal_type = str(intent.get(
+            "goal_type",
+            "locate_target" if (
+                action == "find"
+                or search_mode == "semantic_recovery"
+                or on_exhaustion == "qwen_semantic_recovery"
+            ) else "verify_presence" if action in {"inspect", "observe"} else "execute_action",
+        )).strip().lower()
+        _require(goal_type in ALLOWED_GOAL_TYPES, f"unsupported goal type {goal_type!r} in {task_id}")
+        not_found_policy = str(intent.get(
+            "not_found_policy",
+            "semantic_recovery" if on_exhaustion == "qwen_semantic_recovery" else "report_absent",
+        )).strip().lower()
+        _require(
+            not_found_policy in ALLOWED_NOT_FOUND_POLICIES,
+            f"unsupported not-found policy {not_found_policy!r} in {task_id}",
+        )
+        expected_exhaustion = (
+            "qwen_semantic_recovery" if not_found_policy == "semantic_recovery" else "finish"
+        )
+        if "on_exhaustion" in search_policy:
+            _require(
+                on_exhaustion == expected_exhaustion,
+                f"task {task_id} intent.not_found_policy conflicts with search_policy.on_exhaustion",
+            )
+        else:
+            on_exhaustion = expected_exhaustion
+        _require(
+            not (goal_type == "verify_presence" and not_found_policy == "semantic_recovery"),
+            f"task {task_id} presence verification cannot start autonomous semantic recovery",
+        )
+        task["intent"] = {
+            "goal_type": goal_type,
+            "not_found_policy": not_found_policy,
+        }
         task["search_policy"] = {
             "mode": search_mode,
             "completion_policy": "first_success" if search_mode == "semantic_recovery" else "fixed_target",
@@ -239,6 +295,39 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
         })
     for task in normalized_tasks:
         task["active_initially"] = task["id"] not in activated_by_rule
+
+    negative_branch_sources = {
+        rule["source_task_id"] for rule in normalized_rules
+        if rule["if_outcome"] == "not_found"
+    }
+    tasks_by_id = {task["id"]: task for task in normalized_tasks}
+    for task_id in negative_branch_sources:
+        task = tasks_by_id[task_id]
+        if task_id in explicit_not_found_policy_tasks:
+            _require(
+                task["intent"]["not_found_policy"] == "explicit_branch",
+                f"task {task_id} has a not_found conditional branch but intent does not select explicit_branch",
+            )
+        else:
+            # Legacy task graphs expressed this intent only through the rule.
+            if task_id not in explicit_intent_tasks:
+                task["intent"]["goal_type"] = "locate_target"
+            task["intent"]["not_found_policy"] = "explicit_branch"
+            task["search_policy"]["on_exhaustion"] = "finish"
+        _require(
+            task["intent"]["goal_type"] == "locate_target",
+            f"task {task_id} with a not_found branch must use locate_target",
+        )
+    for task in normalized_tasks:
+        if task["intent"]["not_found_policy"] == "explicit_branch":
+            _require(
+                task["id"] in negative_branch_sources,
+                f"task {task['id']} selects explicit_branch but has no not_found conditional rule",
+            )
+        if task["intent"]["goal_type"] == "verify_presence":
+            task["acceptable_outcomes"] = ["found", "not_found"]
+        else:
+            task["acceptable_outcomes"] = [task["success_outcome"]]
 
     graph["tasks"] = normalized_tasks
     graph["conditional_rules"] = normalized_rules

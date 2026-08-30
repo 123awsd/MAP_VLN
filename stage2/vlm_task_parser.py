@@ -18,7 +18,7 @@ from .task_graph import normalize_and_validate_task_graph
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 MODEL = "qwen3.7-plus"
-PROMPT_VERSION = "stage2-task-graph-v8-explicit-location-recovery"
+PROMPT_VERSION = "stage2-task-graph-v10-semantic-observation-region"
 INPUT_CNY_PER_MILLION = 2.0
 OUTPUT_CNY_PER_MILLION = 8.0
 
@@ -39,16 +39,18 @@ SYSTEM_PROMPT = """你是室内无人机长时程任务规划器。把中文长�
     "action":"inspect|find|observe|deliver|approach",
     "target":{"label":"与场景物体标签尽量一致","room":"房间或null","floor_id":"楼层整数或null","reference":"参照物或null","reference_secondary":"第二参照物或null","references":[]},
     "verification_label":"最终需要在RGB中确认的物体类别",
-    "spatial_constraints":{"relation":null,"distance_m":[1.0,2.2],"height_m":null,"height_range_m":null,"region_type":"auto","observation_detail":"normal","vertical_fov_deg":70.0,"horizontal_fov_deg":90.0,"yaw_tolerance_deg":55.0,"face_target":true,"visibility_required":true},
+    "intent":{"goal_type":"verify_presence|locate_target|execute_action","not_found_policy":"report_absent|semantic_recovery|explicit_branch"},
+    "spatial_constraints":{"relation":null,"distance_m":null,"height_m":null,"height_range_m":null,"region_type":"auto","observation_detail":"normal","vertical_fov_deg":70.0,"horizontal_fov_deg":90.0,"yaw_tolerance_deg":55.0,"face_target":true,"visibility_required":true},
     "prerequisites":[],"active_initially":true,"success_outcome":"found|done",
     "search_policy":{"mode":"fixed|semantic_recovery","on_exhaustion":"finish|qwen_semantic_recovery","maximum_location_hypotheses":3}
   }],
   "conditional_rules":[{"source_task_id":"...","if_outcome":"not_found","activate_task_ids":["..."],"skip_task_ids":[]}]
 }
 deliver 任务的 target 是交付终点物体，reference 可写被运送物体。只要待确认物体在用户指定的位置范围内已有历史实例，target.label 必须是待确认物体本身；例如“台面上的微波炉”应写 target.label=microwave、verification_label=microwave、reference=countertop、relation=on。reference 描述目标与参照物的语义关系，不是让无人机站到参照物上。若待确认物体虽在全局历史清单里出现、但不在用户明确指定的楼层/房间/锚点范围内，则初始 target 必须使用用户指定位置中真实存在的大型锚点，verification_label 写真正要找的类别；例如“一楼洗手台旁找卫生纸”而一楼没有卫生纸历史实例时，target.label=vanity、floor_id=1、verification_label=toilet paper。检查“床边的灯”且该处已有灯时，target.label 和 verification_label 都是 lamp，reference 是 bed。
-指令明确指定楼层时填写 floor_id；未指定时必须为 null，不能猜楼层。relation 表示已知目标与 reference 的关系；使用大型锚点代替未知目标时，不要再把锚点写成自己的 reference。between 必须提供两个参照物。region_type 不确定时使用 auto。
+指令明确指定楼层时填写 floor_id；未指定时必须为 null，不能猜楼层。relation 表示目标相对 reference 的搜索区域语义，用于生成观察位姿，不作为检测目标后的硬成功条件；使用大型锚点代替未知目标时，不要再把锚点写成自己的 reference。between 必须提供两个参照物。region_type 不确定时使用 auto。distance_m 默认必须为 null，只有用户明确给出观察距离或距离范围时才填写；不要自行输出通用默认距离。observation_detail 只表达普通或精细观察，不直接决定坐标。
 普通开放式“找一下某物”且没有指定位置时，使用 mode=semantic_recovery、on_exhaustion=qwen_semantic_recovery。明确指定位置时必须 mode=fixed：如果语义是必须找到的可移动/可消耗物体，且指定位置没有该目标的历史实例，则 on_exhaustion=qwen_semantic_recovery；普通检查或确认任务使用 on_exhaustion=finish。用户显式 if/如果 分支只能写 conditional_rules，不能改写成自主恢复。
-输出前必须自检：若原句含“最后”，该任务的 prerequisites 是否包含它之前所有 active_initially=true 的任务；若任务指定了 floor_id、room 或 reference，search_policy.mode 是否为 fixed；是否把自主恢复和用户显式条件分支严格分开；若原句含“顺便/还有”，这些任务之间是否没有被错误串联。"""
+必须显式判断用户意图：“看看/确认某处有没有”是 verify_presence + report_absent，没看到本身就是有效答案；“帮我找/一定要找到，应该在某处，没有就继续找”是 locate_target + semantic_recovery；用户明确说“如果没有就去某处”是 locate_target + explicit_branch，并建立 conditional_rules。execute_action 只用于 deliver/approach 等非视觉动作。intent.not_found_policy 必须与 search_policy.on_exhaustion 一致：semantic_recovery 对应 qwen_semantic_recovery，其余对应 finish。
+输出前必须自检：若原句含“最后”，该任务的 prerequisites 是否包含它之前所有 active_initially=true 的任务；若任务指定了 floor_id、room 或 reference，search_policy.mode 是否为 fixed；任务目的和未找到处理是否符合用户原意；是否把自主恢复和用户显式条件分支严格分开；若原句含“顺便/还有”，这些任务之间是否没有被错误串联。"""
 
 
 def compact_inventory(scene_graph: dict[str, Any]) -> dict[str, Any]:

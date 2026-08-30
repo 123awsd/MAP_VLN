@@ -191,10 +191,38 @@ def _preferred_observation_distance(
     return min(maximum, max(minimum, preferred))
 
 
-def _height_candidates(
-    center: list[float], size: list[float], constraints: dict[str, Any],
-    region_type: str, height_bounds: list[float] | None = None,
+def _automatic_observation_profile(
+    size: list[float], region_type: str, observation_detail: str,
+    horizontal_fov_deg: float,
+) -> tuple[float, float, float]:
+    """Derive a soft surface-distance profile from geometry, not language defaults."""
+    box_radius = max(0.08, 0.5 * math.hypot(size[0], size[1]))
+    half_fov = max(math.radians(10.0), math.radians(horizontal_fov_deg) * 0.5)
+    # A circumscribed horizontal circle fits in the image when the camera
+    # center is at least r/sin(FoV/2) from the region center.
+    fit_surface_distance = box_radius * (1.0 / max(0.15, math.sin(half_fov)) - 1.0)
+    preferred_floor = {
+        "support_surface": 0.75,
+        "below_region": 0.60,
+        "surrounding_region": 1.05,
+        "instance_region": 0.70,
+        "between_region": 0.85,
+    }.get(region_type, 0.80)
+    minimum = max(0.35, fit_surface_distance)
+    preferred = max(minimum, preferred_floor)
+    if observation_detail == "fine":
+        # Fine inspection prefers a larger image footprint, but this remains a
+        # soft preference. Farther collision-free/FoV-valid views are retained.
+        preferred = max(minimum, 0.70 * preferred)
+    maximum = min(3.5, max(preferred + 0.8, minimum + 1.0))
+    return minimum, maximum, preferred
+
+
+def _height_candidates_for_view(
+    xy: list[float], region_samples: list[list[float]], constraints: dict[str, Any],
+    vertical_fov_deg: float, height_bounds: list[float] | None = None,
 ) -> list[float]:
+    """Intersect fixed-camera FoV and flight bands for one horizontal view."""
     explicit = constraints.get("height_m")
     if explicit is not None:
         return [float(explicit)]
@@ -203,32 +231,42 @@ def _height_candidates(
         lower, upper = [float(value) for value in height_range]
         return sorted(set(round(value, 6) for value in (lower, (lower + upper) * 0.5, upper)))
 
-    relation = constraints.get("relation")
-    if region_type == "support_surface" or relation == "above":
-        nominal = center[2] + 0.5 * max(0.0, size[2]) + 0.20
-    elif region_type == "below_region" or relation == "below":
-        nominal = center[2] - 0.25 * max(0.0, size[2])
-    else:
-        nominal = center[2]
     lower, upper = (
         (DEFAULT_MIN_SENSOR_Z, DEFAULT_MAX_SENSOR_Z)
         if height_bounds is None else (float(height_bounds[0]), float(height_bounds[1]))
     )
-    nominal = min(upper, max(lower, nominal))
-    result = [nominal]
-    if str(constraints.get("observation_detail", "normal")) == "fine":
-        result.extend((nominal - 0.25, nominal + 0.25))
-    return sorted(set(round(min(upper, max(lower, value)), 6) for value in result))
+    tangent = math.tan(math.radians(vertical_fov_deg) * 0.5)
+    for sample in region_samples:
+        horizontal_distance = max(1e-6, math.dist(xy, sample[:2]))
+        reach = horizontal_distance * tangent
+        lower = max(lower, float(sample[2]) - reach)
+        upper = min(upper, float(sample[2]) + reach)
+    if lower > upper + 1e-9:
+        return []
+    region_center_z = sum(float(sample[2]) for sample in region_samples) / max(1, len(region_samples))
+    nominal = min(upper, max(lower, region_center_z))
+    values = [nominal]
+    if str(constraints.get("observation_detail", "normal")) == "fine" and upper - lower >= 0.08:
+        values.extend((lower + 0.25 * (upper - lower), lower + 0.75 * (upper - lower)))
+    return sorted(set(round(value, 6) for value in values))
 
 
-def _height_relation_ok(
-    z: float, center_z: float, relation: str | None, tolerance_m: float = 0.05,
-) -> bool:
-    if relation == "above":
-        return z >= center_z + tolerance_m
-    if relation == "below":
-        return z <= center_z - tolerance_m
-    return True
+def _observation_region(
+    target: dict[str, Any], references: list[dict[str, Any]], constraints: dict[str, Any],
+) -> tuple[dict[str, Any], str]:
+    """Resolve target, anchor and search region without changing target identity."""
+    region_type = _region_type(constraints)
+    relation = constraints.get("relation")
+    explicit = str(constraints.get("region_type", "auto") or "auto").strip().lower()
+    if references and relation in {"on", "above", "below", "near"} and explicit != "instance_region":
+        region_type = {
+            "on": "support_surface",
+            "above": "support_surface",
+            "below": "below_region",
+            "near": "surrounding_region",
+        }[relation] if explicit == "auto" else explicit
+        return references[0], region_type
+    return target, region_type
 
 
 def _visible_region_samples(
@@ -315,7 +353,6 @@ def generate_candidates(
     prefer_room: bool = True,
 ) -> list[dict[str, Any]]:
     constraints = task["spatial_constraints"]
-    minimum, maximum = constraints["distance_m"]
     candidates = []
     vertical_fov = float(constraints.get("vertical_fov_deg", DEFAULT_VERTICAL_FOV_DEG))
     horizontal_fov = float(constraints.get("horizontal_fov_deg", DEFAULT_HORIZONTAL_FOV_DEG))
@@ -325,25 +362,35 @@ def generate_candidates(
             continue
         references = _reference_objects(scene_graph, task, room)
         reference_centers = [other["center_xyz_m"] for other in references]
-        target_reference_relation = bool(
-            references and constraints.get("relation") in {"on", "near"}
-        )
-        constraints_region = (
-            "instance_region" if target_reference_relation else _region_type(constraints)
-        )
         center = [float(value) for value in obj["center_xyz_m"]]
         size = [float(value) for value in obj["size_xyz_m"]]
-        object_yaw = _yaw_from_wxyz([float(value) for value in obj["orientation_wxyz"]])
-        object_radius = 0.5 * math.hypot(size[0], size[1])
-        preferred_distance = _preferred_observation_distance(
-            minimum, maximum, size, constraints_region,
-            str(constraints.get("observation_detail", "normal")),
-        )
+        region_object, constraints_region = _observation_region(obj, references, constraints)
+        region_center = [float(value) for value in region_object["center_xyz_m"]]
+        region_size = [float(value) for value in region_object["size_xyz_m"]]
+        region_yaw = _yaw_from_wxyz([
+            float(value) for value in region_object.get("orientation_wxyz", [1.0, 0.0, 0.0, 0.0])
+        ])
+        object_yaw = _yaw_from_wxyz([
+            float(value) for value in obj.get("orientation_wxyz", [1.0, 0.0, 0.0, 0.0])
+        ])
+        object_radius = 0.5 * math.hypot(region_size[0], region_size[1])
+        explicit_distance = constraints.get("distance_m")
+        if explicit_distance is None:
+            minimum, maximum, preferred_distance = _automatic_observation_profile(
+                region_size, constraints_region,
+                str(constraints.get("observation_detail", "normal")), horizontal_fov,
+            )
+            distance_source = "geometry_fov_auto"
+        else:
+            minimum, maximum = [float(value) for value in explicit_distance]
+            preferred_distance = _preferred_observation_distance(
+                minimum, maximum, region_size, constraints_region,
+                str(constraints.get("observation_detail", "normal")),
+            )
+            distance_source = "user_constraint"
         radii = sorted(set([minimum, preferred_distance, maximum]))
-        region_samples = _region_samples(center, size, object_yaw, constraints_region)
-        height_values = _height_candidates(
-            center, size, constraints, constraints_region,
-            room.get("camera_height_band_m") if hasattr(grid, "is_state_valid") else None,
+        region_samples = _region_samples(
+            region_center, region_size, region_yaw, constraints_region
         )
         for radius in radii:
             radius_from_center = object_radius + radius
@@ -351,7 +398,10 @@ def generate_candidates(
                 angle = 2.0 * math.pi * sample / 24.0
                 if not _relation_ok(constraints.get("relation"), angle, object_yaw, yaw_tolerance):
                     continue
-                xy = [center[0] + radius_from_center * math.cos(angle), center[1] + radius_from_center * math.sin(angle)]
+                xy = [
+                    region_center[0] + radius_from_center * math.cos(angle),
+                    region_center[1] + radius_from_center * math.sin(angle),
+                ]
                 if not hasattr(grid, "is_state_valid") and not grid.is_free(xy):
                     continue
                 between_ok, between_distance = _between_geometry(
@@ -359,12 +409,14 @@ def generate_candidates(
                 ) if constraints.get("relation") == "between" else (True, 0.0)
                 if not between_ok:
                     continue
-                yaw = math.atan2(center[1] - xy[1], center[0] - xy[0])
+                yaw = math.atan2(region_center[1] - xy[1], region_center[0] - xy[0])
+                height_values = _height_candidates_for_view(
+                    xy, region_samples, constraints, vertical_fov,
+                    room.get("camera_height_band_m") if hasattr(grid, "is_state_valid") else None,
+                )
                 for z in height_values:
                     xyz = [xy[0], xy[1], float(z)]
                     if hasattr(grid, "is_state_valid") and not grid.is_state_valid(xyz):
-                        continue
-                    if not _height_relation_ok(z, center[2], constraints.get("relation")):
                         continue
                     visible_ids = _visible_region_samples(
                         grid, xy, z, yaw, region_samples, horizontal_fov, vertical_fov
@@ -379,8 +431,10 @@ def generate_candidates(
                         )
                         for other in references
                     ]
-                    if references and constraints.get("relation") in {"on", "near"} and not all(reference_visible):
-                        continue
+                    # The anchor defines the region to inspect; its occupied
+                    # center need not be visible from the same frame.  Region
+                    # samples already enforce FoV/LOS, while the detected
+                    # target-to-anchor relation is verified after observation.
                     view_quality = len(visible_ids) / max(1, len(region_samples))
                     reference_distance = min(
                         (math.dist(center[:2], other[:2]) for other in reference_centers),
@@ -389,7 +443,7 @@ def generate_candidates(
                     terminal_score = (
                         abs(radius - preferred_distance)
                         + (1.0 - view_quality)
-                        + 0.1 * abs(float(z) - center[2])
+                        + 0.1 * abs(float(z) - sum(point[2] for point in region_samples) / len(region_samples))
                         + 0.15 * reference_distance
                         + 0.15 * between_distance
                     )
@@ -403,8 +457,15 @@ def generate_candidates(
                         "floor_id": room.get("floor_id"),
                         "pose": {"x": xy[0], "y": xy[1], "z": float(z), "yaw": yaw},
                         "target_xyz_m": center,
+                        "search_region_center_xyz_m": region_center,
+                        "search_region_size_xyz_m": region_size,
+                        "anchor_object_id": (
+                            region_object["id"] if region_object["id"] != obj["id"] else None
+                        ),
+                        "location_hypothesis_id": region_object["id"],
                         "distance_to_box_surface_m": radius,
                         "preferred_observation_distance_m": preferred_distance,
+                        "observation_distance_source": distance_source,
                         "line_of_sight": visible,
                         "candidate_angle_rad": angle % (2.0 * math.pi),
                         "region_type": constraints_region,
@@ -414,6 +475,7 @@ def generate_candidates(
                         "vertical_fov_deg": vertical_fov,
                         "horizontal_fov_deg": horizontal_fov,
                         "height_fov_validated": True,
+                        "height_generation": "region_fov_interval",
                         "height_collision_validated": bool(hasattr(grid, "is_state_valid")),
                         "collision_validation": (
                             "falcon_raw_free_3d" if hasattr(grid, "is_state_valid")
@@ -429,53 +491,184 @@ def generate_candidates(
                         "terminal_cost": terminal_score,
                     })
     candidates.sort(key=lambda item: (item["terminal_cost"], -float(item["line_of_sight"]), item["id"]))
-    # Preserve at least one candidate per feasible height before filling the
-    # remaining budget.  Otherwise the cheaper middle height would hide the
-    # documented multi-height observation option.
-    selected = []
-    selected_ids = set()
-
     if max_candidates <= 0:
-        return selected
+        return []
 
-    def spatially_distinct(candidate: dict[str, Any]) -> bool:
-        position = candidate["pose"]
-        return not any(
-            math.hypot(position["x"] - old["pose"]["x"], position["y"] - old["pose"]["y"]) < 0.35
-            and abs(position["z"] - old["pose"]["z"]) < 0.20
-            for old in selected
+    # A task may match several physical instances (for example, four beds on
+    # the requested floor).  Each instance is an independent location
+    # hypothesis and therefore owns an independent viewpoint budget.  A global
+    # truncation made the cheapest bed consume nearly every candidate and left
+    # the other beds with zero or one observation pose.
+    by_location: dict[str, list[dict[str, Any]]] = {}
+    for candidate in candidates:
+        location_id = str(
+            candidate.get("location_hypothesis_id")
+            or candidate.get("object_id")
+            or "default"
+        )
+        by_location.setdefault(location_id, []).append(candidate)
+
+    def select_location(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        selected: list[dict[str, Any]] = []
+        selected_ids: set[str] = set()
+        occlusion_sensitive = any(
+            item.get("region_type") == "below_region" for item in values
         )
 
-    best_by_height = []
-    for height in sorted({item["pose"]["z"] for item in candidates}):
-        candidate = next(
-            (item for item in candidates
-             if item["pose"]["z"] == height and spatially_distinct(item)),
-            None,
-        )
-        if candidate is not None:
-            best_by_height.append(candidate)
+        if occlusion_sensitive:
+            # Under-furniture searches are dominated by bed/table edges and
+            # legs. Two azimuths can expose very different RGB evidence even
+            # when the coarse geometric region samples visible from them are
+            # identical. Keep the best pose at every actually feasible sampled
+            # azimuth, and only apply the per-location cap after that.
+            best_by_angle: dict[float, dict[str, Any]] = {}
+            for candidate in values:
+                angle_key = round(float(candidate.get("candidate_angle_rad", 0.0)), 6)
+                previous = best_by_angle.get(angle_key)
+                candidate_key = (
+                    -len(candidate.get("visible_region_sample_ids", [])),
+                    float(candidate["terminal_cost"]),
+                    candidate["id"],
+                )
+                if previous is None:
+                    best_by_angle[angle_key] = candidate
+                    continue
+                previous_key = (
+                    -len(previous.get("visible_region_sample_ids", [])),
+                    float(previous["terminal_cost"]),
+                    previous["id"],
+                )
+                if candidate_key < previous_key:
+                    best_by_angle[angle_key] = candidate
 
-    # Keep the documented height diversity when the budget permits it.  For a
-    # smaller caller-provided budget, retain globally better candidates instead
-    # of systematically preferring the lowest height.
-    if len(best_by_height) <= max_candidates:
+            angular_candidates = list(best_by_angle.values())
+            if len(angular_candidates) <= max_candidates:
+                return sorted(
+                    angular_candidates,
+                    key=lambda item: (float(item["terminal_cost"]), item["id"]),
+                )
+
+            # More than eight valid azimuths are possible in an open room. Keep
+            # the best first view, then maximize angular separation so the cap
+            # covers the whole reachable perimeter rather than one side.
+            first = min(
+                angular_candidates,
+                key=lambda item: (float(item["terminal_cost"]), item["id"]),
+            )
+            selected = [first]
+            remaining = [item for item in angular_candidates if item["id"] != first["id"]]
+            while remaining and len(selected) < max_candidates:
+                candidate = max(
+                    remaining,
+                    key=lambda item: (
+                        min(
+                            abs(_angle_difference(
+                                float(item.get("candidate_angle_rad", 0.0)),
+                                float(old.get("candidate_angle_rad", 0.0)),
+                            ))
+                            for old in selected
+                        ),
+                        len(item.get("visible_region_sample_ids", [])),
+                        -float(item["terminal_cost"]),
+                    ),
+                )
+                selected.append(candidate)
+                remaining.remove(candidate)
+            return sorted(
+                selected,
+                key=lambda item: (float(item["terminal_cost"]), item["id"]),
+            )
+
+        def spatially_distinct(candidate: dict[str, Any]) -> bool:
+            position = candidate["pose"]
+            return not any(
+                math.hypot(
+                    position["x"] - old["pose"]["x"],
+                    position["y"] - old["pose"]["y"],
+                ) < 0.35
+                and abs(position["z"] - old["pose"]["z"]) < 0.20
+                for old in selected
+            )
+
+        # Preserve feasible height diversity first.  This matters for support
+        # surfaces and under-furniture searches with a fixed-pitch camera.
+        best_by_height = []
+        for height in sorted({item["pose"]["z"] for item in values}):
+            candidate = next(
+                (item for item in values
+                 if item["pose"]["z"] == height and spatially_distinct(item)),
+                None,
+            )
+            if candidate is not None:
+                best_by_height.append(candidate)
+        if len(best_by_height) > max_candidates:
+            best_by_height = sorted(
+                best_by_height, key=lambda item: (item["terminal_cost"], item["id"])
+            )[:max_candidates]
         for candidate in best_by_height:
             selected.append(candidate)
             selected_ids.add(candidate["id"])
-    else:
-        for candidate in sorted(best_by_height, key=lambda item: (item["terminal_cost"], item["id"]))[:max_candidates]:
+
+        # Fill the remaining slots with complementary views.  Prefer a view
+        # that exposes previously unseen search-region samples, then one with a
+        # different azimuth.  This avoids spending all visits on nearly
+        # identical poses merely because their path cost is a little cheaper.
+        covered = {
+            sample_id
+            for candidate in selected
+            for sample_id in candidate.get("visible_region_sample_ids", [])
+        }
+        while len(selected) < max_candidates:
+            options = []
+            for candidate in values:
+                if candidate["id"] in selected_ids or not spatially_distinct(candidate):
+                    continue
+                visible_ids = set(candidate.get("visible_region_sample_ids", []))
+                new_coverage = len(visible_ids - covered)
+                if selected:
+                    angle = float(candidate.get("candidate_angle_rad", 0.0))
+                    angular_separation = min(
+                        abs(_angle_difference(
+                            angle, float(old.get("candidate_angle_rad", 0.0))
+                        ))
+                        for old in selected
+                    )
+                else:
+                    angular_separation = math.pi
+                options.append((
+                    new_coverage,
+                    angular_separation,
+                    -float(candidate["terminal_cost"]),
+                    candidate["id"],
+                    candidate,
+                ))
+            if not options:
+                break
+            _, angular_separation, _, _, candidate = max(options, key=lambda item: item[:4])
+            # Once no new region is exposed, retain only genuinely different
+            # azimuths (30 degrees or more) instead of redundant jitter views.
+            visible_ids = set(candidate.get("visible_region_sample_ids", []))
+            if selected and not (visible_ids - covered) and angular_separation < math.radians(30.0):
+                break
             selected.append(candidate)
             selected_ids.add(candidate["id"])
+            covered.update(visible_ids)
+        return selected
 
-    for candidate in candidates:
-        if candidate["id"] in selected_ids or not spatially_distinct(candidate):
-            continue
-        selected.append(candidate)
-        selected_ids.add(candidate["id"])
-        if len(selected) >= max_candidates:
-            break
-    return selected
+    selected = []
+    ordered_locations = sorted(
+        by_location.items(),
+        key=lambda item: (
+            min(float(value["terminal_cost"]) for value in item[1]),
+            item[0],
+        ),
+    )
+    for _, values in ordered_locations:
+        selected.extend(select_location(values))
+    return sorted(
+        selected,
+        key=lambda item: (float(item["terminal_cost"]), str(item["location_hypothesis_id"]), item["id"]),
+    )
 
 
 def select_spread_target_objects(scene_graph: dict[str, Any], task_graph: dict[str, Any]) -> dict[str, str]:
@@ -553,9 +746,8 @@ def generate_all_candidates(
         # of observation profiles. Every result still passes the same FREE,
         # line-of-sight, FoV, A* and later B-spline checks.
         if not values and hasattr(grid, "is_state_valid"):
-            for distance, vertical_fov in (([0.7, 1.7], 80.0), ([0.6, 1.5], 90.0)):
+            for vertical_fov in (80.0, 90.0):
                 relaxed = copy.deepcopy(task)
-                relaxed["spatial_constraints"]["distance_m"] = distance
                 relaxed["spatial_constraints"]["vertical_fov_deg"] = vertical_fov
                 values = generate_candidates(
                     grid, scene_graph, relaxed, max_candidates=max_candidates,
@@ -564,7 +756,8 @@ def generate_all_candidates(
                 for candidate in values:
                     candidate["observation_profile_fallback"] = {
                         "reason": "nominal_profile_has_no_valid_3d_candidate",
-                        "distance_m": distance, "vertical_fov_deg": vertical_fov,
+                        "distance_m": relaxed["spatial_constraints"].get("distance_m"),
+                        "vertical_fov_deg": vertical_fov,
                     }
                 if values:
                     break

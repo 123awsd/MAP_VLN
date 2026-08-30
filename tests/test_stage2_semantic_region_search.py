@@ -37,14 +37,19 @@ class SemanticRegionSearchTest(unittest.TestCase):
 
     def test_region_type_uses_target_affordance(self):
         self.assertEqual(infer_region_type("cup", "table", "on"), "support_surface")
-        self.assertEqual(infer_region_type("ball", "bed", "under"), "under_furniture")
-        self.assertEqual(infer_region_type("bucket", "cabinet", "near"), "floor_near_anchor")
-        self.assertEqual(infer_region_type("toilet paper", "toilet paper", "near"), "fixed_instance")
+        self.assertEqual(infer_region_type("ball", "bed", "under"), "below_region")
+        self.assertEqual(infer_region_type("bucket", "cabinet", "near"), "surrounding_region")
+        self.assertEqual(infer_region_type("toilet paper", "toilet paper", "near"), "instance_region")
 
     def test_support_surface_samples_only_target_top(self):
         points = sample_region_points(self.table, "support_surface")
         self.assertEqual(len(points), 9)
         self.assertTrue(all(abs(point[2] - 1.0) < 1e-6 for point in points))
+
+    def test_instance_region_samples_full_box_height(self):
+        points = sample_region_points(self.table, "instance_region")
+        self.assertLess(min(point[2] for point in points), self.table["center_xyz_m"][2])
+        self.assertGreater(max(point[2] for point in points), self.table["center_xyz_m"][2])
 
     def test_materialization_adds_region_geometry_scores(self):
         plan = {"hypotheses": [{

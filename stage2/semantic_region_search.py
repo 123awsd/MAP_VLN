@@ -20,6 +20,17 @@ FIXED_TARGETS = {"television", "tv", "refrigerator", "fridge", "lamp", "oven", "
 SEMANTIC_BELIEF_PENALTY_WEIGHT = 1.5
 COVER_COST_WEIGHT = 0.6
 VIEW_QUALITY_PENALTY_WEIGHT = 0.8
+REGION_TYPE_ALIASES = {
+    "under_furniture": "below_region",
+    "floor_near_anchor": "surrounding_region",
+    "furniture_neighborhood": "surrounding_region",
+    "fixed_instance": "instance_region",
+}
+
+
+def canonical_region_type(value: str) -> str:
+    normalized = str(value).strip().lower()
+    return REGION_TYPE_ALIASES.get(normalized, normalized)
 
 
 def infer_region_type(target_label: str, anchor_label: str, relation: str = "near") -> str:
@@ -28,14 +39,14 @@ def infer_region_type(target_label: str, anchor_label: str, relation: str = "nea
     anchor = anchor_label.strip().lower()
     relation = relation.strip().lower()
     if relation in {"under", "below"}:
-        return "under_furniture"
+        return "below_region"
     if target == anchor or (target in FIXED_TARGETS and target in anchor):
-        return "fixed_instance"
+        return "instance_region"
     if target in LOW_SEARCH_TARGETS and relation not in {"on", "above", "inside"}:
-        return "floor_near_anchor"
+        return "surrounding_region"
     if relation in {"on", "above", "inside"} or anchor in SUPPORT_LABELS:
         return "support_surface"
-    return "furniture_neighborhood"
+    return "surrounding_region"
 
 
 def _yaw_from_wxyz(value: list[float]) -> float:
@@ -43,8 +54,11 @@ def _yaw_from_wxyz(value: list[float]) -> float:
     return math.atan2(2.0 * w * z, 1.0 - 2.0 * z * z)
 
 
-def sample_region_points(obj: dict[str, Any], region_type: str) -> list[list[float]]:
+def sample_region_points(
+    obj: dict[str, Any], region_type: str, target_label: str | None = None,
+) -> list[list[float]]:
     """Discretize the task-relevant part of an oriented object region."""
+    region_type = canonical_region_type(region_type)
     center = [float(value) for value in obj["center_xyz_m"]]
     size = [max(0.12, float(value)) for value in obj["size_xyz_m"]]
     yaw = _yaw_from_wxyz([float(value) for value in obj.get("orientation_wxyz", [1, 0, 0, 0])])
@@ -57,13 +71,22 @@ def sample_region_points(obj: dict[str, Any], region_type: str) -> list[list[flo
             z,
         ]
 
-    if region_type in {"support_surface", "fixed_instance"}:
+    if region_type == "support_surface":
         z = center[2] + 0.5 * size[2]
         return [
             world(ix * 0.4 * size[0], iy * 0.4 * size[1], z)
             for ix in (-1, 0, 1) for iy in (-1, 0, 1)
         ]
-    if region_type == "under_furniture":
+    if region_type == "instance_region":
+        return [
+            world(ix * 0.4 * size[0], iy * 0.4 * size[1], center[2] + iz * 0.4 * size[2])
+            for ix, iy, iz in (
+                (-1, -1, -1), (-1, 0, 0), (-1, 1, 1),
+                (0, -1, -1), (0, 0, 0), (0, 1, 1),
+                (1, -1, -1), (1, 0, 0), (1, 1, 1),
+            )
+        ]
+    if region_type == "below_region":
         z = max(0.08, center[2] - 0.45 * size[2])
         return [
             world(ix * 0.35 * size[0], iy * 0.35 * size[1], z)
@@ -71,7 +94,11 @@ def sample_region_points(obj: dict[str, Any], region_type: str) -> list[list[flo
         ]
 
     radius_x, radius_y = 0.5 * size[0] + 0.45, 0.5 * size[1] + 0.45
-    z = 0.12 if region_type == "floor_near_anchor" else max(0.25, center[2])
+    z = (
+        0.12 if region_type == "surrounding_region"
+        and str(target_label or "").strip().lower() in LOW_SEARCH_TARGETS
+        else max(0.25, center[2])
+    )
     return [
         world(radius_x * math.cos(angle), radius_y * math.sin(angle), z)
         for angle in (index * math.pi / 4.0 for index in range(8))
@@ -145,14 +172,14 @@ def materialize_semantic_regions(
         if pair is None:
             continue
         room, obj = pair
-        region_type = str(hypothesis.get("semantic_region") or infer_region_type(
+        region_type = canonical_region_type(hypothesis.get("semantic_region") or infer_region_type(
             target_label, obj["label"], hypothesis.get("relation", "near")
-        )).lower()
+        ))
         region_id = f"region_{room['id']}__{obj['id']}__{region_type}"
-        samples = sample_region_points(obj, region_type)
+        samples = sample_region_points(obj, region_type, target_label)
         endpoint_clearance = (
             0.6 * math.hypot(float(obj["size_xyz_m"][0]), float(obj["size_xyz_m"][1]))
-            if region_type in {"support_surface", "under_furniture", "fixed_instance"}
+            if region_type in {"support_surface", "below_region", "instance_region"}
             else 0.10
         )
         branch_task = copy.deepcopy(task)
@@ -161,15 +188,7 @@ def materialize_semantic_regions(
             "reference": None, "reference_secondary": None, "references": [],
         }
         branch_task["spatial_constraints"]["relation"] = None
-        branch_task["spatial_constraints"]["region_type"] = {
-            "support_surface": "support_surface",
-            "under_furniture": "below_region",
-            "floor_near_anchor": "surrounding_region",
-            "furniture_neighborhood": "surrounding_region",
-            "fixed_instance": "instance_region",
-        }.get(region_type, "surrounding_region")
-        if region_type == "under_furniture":
-            branch_task["spatial_constraints"]["height_m"] = 0.55
+        branch_task["spatial_constraints"]["region_type"] = region_type
         generated = generate_candidates(
             grid, scene_graph, branch_task, max_candidates=max_candidates_per_region * 3,
             allowed_object_ids={obj["id"]}, prefer_room=False,

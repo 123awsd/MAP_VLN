@@ -111,15 +111,60 @@ class CandidatePoseTest(unittest.TestCase):
         self.assertTrue(all(item["pose"]["z"] > 0.5 for item in candidates))
         self.assertTrue(all(item["view_quality"] > 0.0 for item in candidates))
 
-    def test_target_reference_relation_keeps_view_around_target_and_scopes_reference(self):
+    def test_target_reference_relation_uses_anchor_search_region_but_keeps_target_identity(self):
         candidates = generate_candidates(
             self.grid, self.scene,
             self.task(relation="near", reference="sofa"),
             max_candidates=8,
         )
         self.assertTrue(candidates)
-        self.assertTrue(all(item["region_type"] == "instance_region" for item in candidates))
+        self.assertTrue(all(item["region_type"] == "surrounding_region" for item in candidates))
+        self.assertTrue(all(item["object_id"] == "target" for item in candidates))
+        self.assertTrue(all(item["anchor_object_id"] == "ref_a" for item in candidates))
+        self.assertTrue(all(item["location_hypothesis_id"] == "ref_a" for item in candidates))
         self.assertTrue(all(item["reference_object_ids"] == ["ref_a"] for item in candidates))
+
+    def test_known_target_on_reference_uses_reference_support_surface(self):
+        candidates = generate_candidates(
+            self.grid, self.scene,
+            self.task(relation="on", reference="table"),
+            max_candidates=8,
+        )
+        self.assertTrue(candidates)
+        self.assertTrue(all(item["region_type"] == "support_surface" for item in candidates))
+        self.assertTrue(all(item["anchor_object_id"] == "ref_b" for item in candidates))
+        self.assertTrue(all(item["object_id"] == "target" for item in candidates))
+
+    def test_occupied_anchor_center_does_not_reject_visible_support_region(self):
+        class RegionVisibleGrid:
+            def is_state_valid(self, xyz):
+                return True
+
+            def line_of_sight(self, start, end):
+                # Simulate an occupied anchor center while its top surface is visible.
+                return not all(abs(float(a) - float(b)) < 1e-6 for a, b in zip(end, [12.0, 10.0, 0.5]))
+
+        candidates = generate_candidates(
+            RegionVisibleGrid(), self.scene,
+            self.task(relation="on", reference="table"),
+            max_candidates=8,
+        )
+        self.assertTrue(candidates)
+        self.assertTrue(all(item["region_type"] == "support_surface" for item in candidates))
+        self.assertTrue(all(item["reference_visible"] == [False] for item in candidates))
+
+    def test_below_relation_constrains_region_not_uav_height(self):
+        candidates = generate_candidates(
+            self.grid, self.scene,
+            self.task(relation="below", reference="table", constraints={"vertical_fov_deg": 120.0}),
+            max_candidates=16,
+        )
+        self.assertTrue(candidates)
+        self.assertTrue(all(item["region_type"] == "below_region" for item in candidates))
+        self.assertTrue(any(item["pose"]["z"] >= 0.5 for item in candidates))
+        angles = [round(item["candidate_angle_rad"], 6) for item in candidates]
+        self.assertEqual(len(angles), len(set(angles)))
+        self.assertGreaterEqual(len(angles), 8)
 
     def test_between_relation_requires_two_references_in_geometry(self):
         candidates = generate_candidates(
@@ -155,6 +200,47 @@ class CandidatePoseTest(unittest.TestCase):
         self.assertGreater(normal["preferred_observation_distance_m"], fine["preferred_observation_distance_m"])
         self.assertEqual(normal["distance_to_box_surface_m"], normal["preferred_observation_distance_m"])
         self.assertEqual(fine["distance_to_box_surface_m"], fine["preferred_observation_distance_m"])
+
+    def test_unspecified_distance_uses_geometry_fov_profile(self):
+        task = self.task(constraints={"distance_m": None, "region_type": "instance_region"})
+        candidates = generate_candidates(self.grid, self.scene, task, max_candidates=4)
+        self.assertTrue(candidates)
+        self.assertTrue(all(item["observation_distance_source"] == "geometry_fov_auto" for item in candidates))
+        self.assertTrue(all(item["distance_to_box_surface_m"] >= 0.35 for item in candidates))
+
+    def test_each_matching_instance_has_independent_candidate_pool_on_requested_floor(self):
+        for index, center in enumerate(([6.0, 6.0, 0.5], [18.0, 18.0, 0.5])):
+            self.scene["rooms"][0]["objects"].append({
+                "id": f"floor_one_bed_{index}",
+                "label": "bed",
+                "center_xyz_m": center,
+                "size_xyz_m": [2.0, 1.4, 0.8],
+                "orientation_wxyz": [1.0, 0.0, 0.0, 0.0],
+                "probability": 1.0,
+            })
+        self.scene["rooms"][1]["objects"].append({
+            "id": "floor_two_bed",
+            "label": "bed",
+            "center_xyz_m": [15.0, 15.0, 4.0],
+            "size_xyz_m": [2.0, 1.4, 0.8],
+            "orientation_wxyz": [1.0, 0.0, 0.0, 0.0],
+            "probability": 2.0,
+        })
+        task = self.task(
+            label="bed", floor_id=1,
+            constraints={"vertical_fov_deg": 120.0},
+        )
+        candidates = generate_candidates(self.grid, self.scene, task, max_candidates=4)
+        by_location = {}
+        for candidate in candidates:
+            by_location.setdefault(candidate["location_hypothesis_id"], []).append(candidate)
+
+        self.assertEqual(set(by_location), {"floor_one_bed_0", "floor_one_bed_1"})
+        self.assertTrue(all(1 < len(values) <= 4 for values in by_location.values()))
+        self.assertTrue(all(
+            len({round(value["candidate_angle_rad"], 2) for value in values}) > 1
+            for values in by_location.values()
+        ))
 
 
 if __name__ == "__main__":

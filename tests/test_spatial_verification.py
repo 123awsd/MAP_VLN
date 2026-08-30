@@ -21,6 +21,23 @@ class SpatialVerificationTest(unittest.TestCase):
         bed = self.obj("bed", [4, 0, 0.5], [2, 1, 0.5])
         self.assertFalse(verify_target_reference_relation("near", target, [bed])["valid"])
 
+    def test_below_accepts_target_under_reference(self):
+        target = self.obj("ball", [0.1, 0.0, 0.15], [0.2, 0.2, 0.2])
+        table = self.obj("table", [0.0, 0.0, 0.8], [1.5, 0.8, 0.8])
+        result = verify_target_reference_relation("below", target, [table])
+        self.assertTrue(result["valid"])
+        self.assertGreaterEqual(result["metrics"]["signed_clearance_m"], 0.0)
+
+    def test_below_rejects_object_beside_reference(self):
+        target = self.obj("ball", [3.0, 0.0, 0.15], [0.2, 0.2, 0.2])
+        table = self.obj("table", [0.0, 0.0, 0.8], [1.5, 0.8, 0.8])
+        self.assertFalse(verify_target_reference_relation("below", target, [table])["valid"])
+
+    def test_above_rejects_target_below_reference(self):
+        target = self.obj("clock", [0.0, 0.0, 0.2], [0.2, 0.2, 0.2])
+        cabinet = self.obj("cabinet", [0.0, 0.0, 1.0], [1.0, 0.5, 1.0])
+        self.assertFalse(verify_target_reference_relation("above", target, [cabinet])["valid"])
+
     def test_historical_recovery_does_not_inherit_original_anchor_relation(self):
         task = {
             "target": {"label": "vanity", "references": []},
@@ -53,6 +70,29 @@ class SpatialVerificationTest(unittest.TestCase):
         context = effective_relation_context(task, candidate, {"sink": anchor}, detected)
         self.assertEqual(context["references"][0]["id"], "sink")
         self.assertTrue(verify_target_reference_relation(context["relation"], context["target"], context["references"])["valid"])
+
+    def test_initial_reference_region_verifies_live_detection_not_historical_target(self):
+        task = {
+            "target": {"label": "microwave", "references": ["countertop"]},
+            "verification_label": "microwave",
+            "spatial_constraints": {"relation": "on"},
+        }
+        historical = self.obj("microwave", [4, 4, 2], [.4, .4, .4])
+        counter = self.obj("counter", [1, 1, .6], [1.5, .8, .6])
+        candidate = {
+            "object_id": "microwave", "anchor_object_id": "counter",
+        }
+        detected = [{
+            "confirmed": True, "score": .9, "center": [1, 1, 1.05], "size": [.3, .3, .3],
+        }]
+        context = effective_relation_context(
+            task, candidate, {"microwave": historical, "counter": counter}, detected,
+        )
+        self.assertEqual(context["target"]["center_xyz_m"], detected[0]["center"])
+        self.assertEqual(context["references"][0]["id"], "counter")
+        self.assertTrue(verify_target_reference_relation(
+            context["relation"], context["target"], context["references"],
+        )["valid"])
 
 
 if __name__ == "__main__":

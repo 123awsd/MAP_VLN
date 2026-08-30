@@ -53,6 +53,16 @@ class ExecutorTest(unittest.TestCase):
         self.assertEqual(state.result_status(), "completed_with_unresolved_tasks")
         self.assertEqual(state.unresolved_task_ids(), ["inspect_a"])
 
+    def test_presence_check_not_found_is_a_resolved_answer(self):
+        value = graph()
+        value["conditional_rules"] = []
+        value["tasks"] = [value["tasks"][0]]
+        value["tasks"][0]["acceptable_outcomes"] = ["found", "not_found"]
+        state = MissionState(value)
+        state.finish_task("inspect_a", "not_found")
+        self.assertEqual(state.result_status(), "complete")
+        self.assertEqual(state.unresolved_task_ids(), [])
+
     def test_execution_replans_for_new_branch(self):
         grid = OccupancyGrid(np.zeros((10, 15), dtype=np.int8), [0, 0], 1.0, inflation_m=0)
         trace = simulate_dynamic_execution(grid, graph(), candidates(), [1.5, 2.5, 1, 0], {"inspect_a": "not_found"})
