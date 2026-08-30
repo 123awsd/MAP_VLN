@@ -26,7 +26,7 @@ from stage2.astar_3d import CoarseAstar3D  # noqa: E402
 from stage2.bspline_3d import BsplineSettings, anchor_astar_path, plan_collision_checked_bspline  # noqa: E402
 from stage2.candidate_poses import generate_all_candidates  # noqa: E402
 from stage2.io_utils import atomic_json, load_json  # noqa: E402
-from stage2.joint_planner import plan_joint_mission  # noqa: E402
+from stage2.joint_planner import PlanningError, plan_joint_mission  # noqa: E402
 from stage2.mission_executor import MissionState  # noqa: E402
 from stage2.motion_cost_oracle import MotionCostOracle  # noqa: E402
 from stage2.planning_contract import PlannerProfile  # noqa: E402
@@ -60,6 +60,7 @@ from stage2.viewpoint_recovery import ViewpointRecovery  # noqa: E402
 from stage2.vlm_verifier import QwenImageVerifier  # noqa: E402
 from stage2.vocabulary import load_semantic_aliases  # noqa: E402
 from stage2.yaw_motion import blend_yaw, rotation_steps, step_yaw  # noqa: E402
+from stage2.representative_viewpoints import select_location_representatives  # noqa: E402
 
 
 S_HABITAT_TO_FALCON = np.asarray(
@@ -427,19 +428,60 @@ def main() -> None:
                 planning_task_ids = set(sorted(
                     available, key=lambda task_id: (task_lower_bound(task_id), task_id)
                 )[:max(1, args.planning_horizon_tasks)])
-            plan = plan_joint_mission(
-                grid,
-                task_graph,
-                planning_candidates,
-                current_f,
-                active_task_ids=planning_task_ids,
-                completed_task_ids=state.completed,
-                yaw_rate_rps=args.yaw_rate_rps,
-            )
+            representative_limit = None
+            representative_errors = []
+            planning_input = planning_candidates
+            if not focused_tasks:
+                # Global ordering needs one entry pose per physical location,
+                # not every local camera angle around that location. If an
+                # entry pose proves unreachable, lazily admit the second-ranked
+                # pose and finally the full pool as a correctness fallback.
+                plan = None
+                for representative_limit in (1, 2, None):
+                    planning_input = (
+                        planning_candidates
+                        if representative_limit is None
+                        else select_location_representatives(
+                            planning_candidates, current_f, planning_task_ids,
+                            maximum_per_location=representative_limit,
+                            yaw_rate_rps=args.yaw_rate_rps,
+                        )
+                    )
+                    try:
+                        plan = plan_joint_mission(
+                            grid, task_graph, planning_input, current_f,
+                            active_task_ids=planning_task_ids,
+                            completed_task_ids=state.completed,
+                            yaw_rate_rps=args.yaw_rate_rps,
+                        )
+                        break
+                    except PlanningError as error:
+                        representative_errors.append({
+                            "maximum_per_location": representative_limit,
+                            "error": str(error),
+                        })
+                if plan is None:
+                    raise PlanningError("representative and full candidate planning both failed")
+            else:
+                plan = plan_joint_mission(
+                    grid, task_graph, planning_input, current_f,
+                    active_task_ids=planning_task_ids,
+                    completed_task_ids=state.completed,
+                    yaw_rate_rps=args.yaw_rate_rps,
+                )
             replans.append({
                 "index": len(replans),
                 "active_task_ids": sorted(state.active),
                 "focused_task_ids": sorted(focused_tasks),
+                "candidate_scope": (
+                    "focused_local" if focused_tasks else "location_representatives"
+                ),
+                "representative_limit_per_location": representative_limit,
+                "planning_candidate_counts": {
+                    task_id: len(planning_input.get(task_id, []))
+                    for task_id in sorted(planning_task_ids)
+                },
+                "representative_fallback_errors": representative_errors,
                 "plan": plan,
             })
             visit = plan["visits"][0]
