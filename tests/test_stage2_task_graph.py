@@ -66,6 +66,14 @@ class TaskGraphTest(unittest.TestCase):
         self.assertIsNone(graph["tasks"][0]["target"]["room"])
         self.assertIsNone(graph["tasks"][0]["target"]["reference"])
 
+    def test_preserves_concrete_room_id_separately_from_room_type(self):
+        value = self.base_graph()
+        value["tasks"][0]["target"].update({"room": "kitchen", "room_id": "L3_R1"})
+        graph = normalize_and_validate_task_graph(value)
+        target = graph["tasks"][0]["target"]
+        self.assertEqual(target["room"], "kitchen")
+        self.assertEqual(target["room_id"], "L3_R1")
+
     def test_preserves_multifloor_target(self):
         value = self.base_graph()
         value["tasks"][0]["target"]["floor_id"] = 3

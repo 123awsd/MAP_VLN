@@ -27,16 +27,20 @@ def validate_task_graph_against_scene(
     for task in graph.get("tasks", []):
         target = task["target"]
         floor_id = target.get("floor_id")
+        requested_room_id = target.get("room_id")
         accepted = _accepted(target["label"])
         matches = []
         for room in scene_graph.get("rooms", []):
+            if requested_room_id is not None and str(room.get("id")) != str(requested_room_id):
+                continue
             if floor_id is not None and int(room.get("floor_id", -1)) != int(floor_id):
                 continue
             for obj in room.get("objects", []):
                 if str(obj.get("label", "")).lower() in accepted:
                     matches.append((room, obj))
         if not matches:
-            errors.append(f"{task['id']}: target {target['label']} is absent on requested floor")
+            scope = f"room {requested_room_id}" if requested_room_id is not None else "requested floor"
+            errors.append(f"{task['id']}: target {target['label']} is absent in {scope}")
             continue
         reference_ids = []
         for reference in target.get("references", []):
@@ -53,13 +57,33 @@ def validate_task_graph_against_scene(
                 )
             else:
                 reference_ids.extend(ref["id"] for ref in scoped)
+        references = target.get("references", [])
+        if requested_room_id is None and references:
+            uniquely_compatible_rooms = []
+            for room, _ in matches:
+                room_labels = {
+                    str(obj.get("label", "")).strip().lower()
+                    for obj in room.get("objects", [])
+                }
+                if all(bool(room_labels & _accepted(reference)) for reference in references):
+                    uniquely_compatible_rooms.append(str(room["id"]))
+            compatible_ids = sorted(set(uniquely_compatible_rooms))
+            if len(compatible_ids) == 1:
+                errors.append(
+                    f"{task['id']}: target and references uniquely identify room "
+                    f"{compatible_ids[0]}; Qwen must set target.room_id explicitly"
+                )
         grounding[task["id"]] = {
+            "room_ids": sorted(set(str(room["id"]) for room, _ in matches)),
             "target_object_ids": [obj["id"] for _, obj in matches],
             "reference_object_ids": sorted(set(reference_ids)),
         }
         if (
             task.get("search_policy", {}).get("mode") == "semantic_recovery"
-            and (target.get("floor_id") is not None or target.get("room") or target.get("references"))
+            and (
+                target.get("floor_id") is not None or target.get("room")
+                or target.get("room_id") is not None or target.get("references")
+            )
         ):
             errors.append(f"{task['id']}: explicit location must use fixed search policy")
     instruction = str(graph.get("instruction", ""))

@@ -13,10 +13,18 @@ class TaskGraphSceneValidationTest(unittest.TestCase):
 
     def test_accepts_scoped_target_and_reference(self):
         graph = {"tasks": [{"id": "t", "target": {
-            "label": "television", "floor_id": 2, "references": ["fireplace"],
+            "label": "television", "floor_id": 2, "room_id": "L2_R1",
+            "references": ["fireplace"],
         }}]}
         result = validate_task_graph_against_scene(graph, self.scene)
         self.assertEqual(result["tasks"]["t"]["reference_object_ids"], ["fire"])
+
+    def test_requires_qwen_room_id_when_target_and_reference_are_unique(self):
+        graph = {"tasks": [{"id": "t", "target": {
+            "label": "television", "floor_id": 2, "references": ["fireplace"],
+        }}]}
+        with self.assertRaisesRegex(TaskSceneValidationError, "must set target.room_id"):
+            validate_task_graph_against_scene(graph, self.scene)
 
     def test_rejects_reference_on_wrong_floor(self):
         graph = {"tasks": [{"id": "t", "target": {

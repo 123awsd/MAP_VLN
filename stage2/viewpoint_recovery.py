@@ -12,6 +12,8 @@ class ViewpointRecovery:
     maximum_attempts: int | None = None
     maximum_attempts_per_location: int | None = None
     maximum_locations: int | None = None
+    maximum_attempts_per_location_by_task: dict[str, int] = field(default_factory=dict)
+    maximum_locations_by_task: dict[str, int] = field(default_factory=dict)
     attempted: dict[str, set[str]] = field(default_factory=dict)
     exhausted_locations: dict[str, set[str]] = field(default_factory=dict)
     active_locations: dict[str, str] = field(default_factory=dict)
@@ -78,7 +80,12 @@ class ViewpointRecovery:
             item["id"] for item in candidates if item["id"] not in tried
             and self._location(item) == location_id
         ]
-        location_budget = self.maximum_attempts_per_location
+        location_budget = self.maximum_attempts_per_location_by_task.get(
+            task_id, self.maximum_attempts_per_location
+        )
+        maximum_locations = self.maximum_locations_by_task.get(
+            task_id, self.maximum_locations
+        )
         already_exhausted = self.exhausted_locations.get(task_id, set())
         visited_locations = {
             self._location(item) for item in candidates if item["id"] in tried
@@ -89,9 +96,9 @@ class ViewpointRecovery:
             and item["id"] not in same_location
             and self._location(item) not in already_exhausted
             and (
-                self.maximum_locations is None
+                maximum_locations is None
                 or self._location(item) in visited_locations
-                or len(visited_locations) < self.maximum_locations
+                or len(visited_locations) < maximum_locations
             )
         ]
         retry_same = bool(same_location) and (
@@ -116,7 +123,7 @@ class ViewpointRecovery:
             self.maximum_attempts is None
             or self.maximum_attempts <= 0
             or len(tried) < self.maximum_attempts
-            or self.maximum_locations is not None
+            or maximum_locations is not None
         )
         retry = not found and within_budget and (retry_same or bool(alternative_locations))
         location_exhausted = not found and not retry_same
@@ -132,7 +139,7 @@ class ViewpointRecovery:
             "maximum_attempts": self.maximum_attempts,
             "viewpoint_attempt_index": len(tried),
             "location_attempt_index": len(visited_locations),
-            "maximum_locations": self.maximum_locations,
+            "maximum_locations": maximum_locations,
             "attempted_candidate_ids": sorted(tried),
             "remaining_candidate_ids": remaining,
             "location_hypothesis_id": location_id,

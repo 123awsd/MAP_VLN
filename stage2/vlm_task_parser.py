@@ -12,13 +12,13 @@ from pathlib import Path
 from typing import Any
 
 from .io_utils import atomic_json, load_json
-from .task_graph import normalize_and_validate_task_graph
+from .task_graph import TaskGraphError, normalize_and_validate_task_graph
 
 
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 MODEL = "qwen3.7-plus"
-PROMPT_VERSION = "stage2-task-graph-v10-semantic-observation-region"
+PROMPT_VERSION = "stage2-task-graph-v13-preserve-explicit-scope-on-repair"
 INPUT_CNY_PER_MILLION = 2.0
 OUTPUT_CNY_PER_MILLION = 8.0
 
@@ -37,7 +37,7 @@ SYSTEM_PROMPT = """你是室内无人机长时程任务规划器。把中文长�
   "tasks":[{
     "id":"英文snake_case唯一ID",
     "action":"inspect|find|observe|deliver|approach",
-    "target":{"label":"与场景物体标签尽量一致","room":"房间或null","floor_id":"楼层整数或null","reference":"参照物或null","reference_secondary":"第二参照物或null","references":[]},
+    "target":{"label":"与场景物体标签尽量一致","room":"房间类型或null","room_id":"场景清单中的具体房间ID或null","floor_id":"楼层整数或null","reference":"参照物或null","reference_secondary":"第二参照物或null","references":[]},
     "verification_label":"最终需要在RGB中确认的物体类别",
     "intent":{"goal_type":"verify_presence|locate_target|execute_action","not_found_policy":"report_absent|semantic_recovery|explicit_branch"},
     "spatial_constraints":{"relation":null,"distance_m":null,"height_m":null,"height_range_m":null,"region_type":"auto","observation_detail":"normal","vertical_fov_deg":70.0,"horizontal_fov_deg":90.0,"yaw_tolerance_deg":55.0,"face_target":true,"visibility_required":true},
@@ -46,10 +46,10 @@ SYSTEM_PROMPT = """你是室内无人机长时程任务规划器。把中文长�
   }],
   "conditional_rules":[{"source_task_id":"...","if_outcome":"not_found","activate_task_ids":["..."],"skip_task_ids":[]}]
 }
-deliver 任务的 target 是交付终点物体，reference 可写被运送物体。只要待确认物体在用户指定的位置范围内已有历史实例，target.label 必须是待确认物体本身；例如“台面上的微波炉”应写 target.label=microwave、verification_label=microwave、reference=countertop、relation=on。reference 描述目标与参照物的语义关系，不是让无人机站到参照物上。若待确认物体虽在全局历史清单里出现、但不在用户明确指定的楼层/房间/锚点范围内，则初始 target 必须使用用户指定位置中真实存在的大型锚点，verification_label 写真正要找的类别；例如“一楼洗手台旁找卫生纸”而一楼没有卫生纸历史实例时，target.label=vanity、floor_id=1、verification_label=toilet paper。检查“床边的灯”且该处已有灯时，target.label 和 verification_label 都是 lamp，reference 是 bed。
-指令明确指定楼层时填写 floor_id；未指定时必须为 null，不能猜楼层。relation 表示目标相对 reference 的搜索区域语义，用于生成观察位姿，不作为检测目标后的硬成功条件；使用大型锚点代替未知目标时，不要再把锚点写成自己的 reference。between 必须提供两个参照物。region_type 不确定时使用 auto。distance_m 默认必须为 null，只有用户明确给出观察距离或距离范围时才填写；不要自行输出通用默认距离。observation_detail 只表达普通或精细观察，不直接决定坐标。
-普通开放式“找一下某物”且没有指定位置时，使用 mode=semantic_recovery、on_exhaustion=qwen_semantic_recovery。明确指定位置时必须 mode=fixed：如果语义是必须找到的可移动/可消耗物体，且指定位置没有该目标的历史实例，则 on_exhaustion=qwen_semantic_recovery；普通检查或确认任务使用 on_exhaustion=finish。用户显式 if/如果 分支只能写 conditional_rules，不能改写成自主恢复。
-必须显式判断用户意图：“看看/确认某处有没有”是 verify_presence + report_absent，没看到本身就是有效答案；“帮我找/一定要找到，应该在某处，没有就继续找”是 locate_target + semantic_recovery；用户明确说“如果没有就去某处”是 locate_target + explicit_branch，并建立 conditional_rules。execute_action 只用于 deliver/approach 等非视觉动作。intent.not_found_policy 必须与 search_policy.on_exhaustion 一致：semantic_recovery 对应 qwen_semantic_recovery，其余对应 finish。
+deliver 任务的 target 是交付终点物体，reference 可写被运送物体。只要待确认物体在用户指定的位置范围内已有历史实例，target.label 必须是待确认物体本身；例如“台面上的微波炉”应写 target.label=microwave、verification_label=microwave、reference=countertop、relation=on。reference 描述目标与参照物的语义关系，不是让无人机站到参照物上。若待确认物体虽在全局历史清单里出现、但不在用户明确指定的楼层/房间/锚点范围内，则初始 target 必须使用用户指定位置中真实存在的大型锚点，verification_label 写真正要找的类别；例如“一楼洗手台旁找卫生纸”而一楼没有卫生纸历史实例时，target.label=vanity、floor_id=1、verification_label=toilet paper；“二楼扶手椅旁的床头找台灯”而该房间没有台灯时，target.label=bed、reference=armchair、verification_label=lamp。检查“床边的灯”且该处已有灯时，target.label 和 verification_label 都是 lamp，reference 是 bed。场景校验指出目标在用户指定范围内缺失时，禁止通过删除 room_id、floor_id、room 或 reference 来扩大范围；必须保留用户明确范围并改用该范围内真实存在的锚点，后续范围扩展只能由 semantic_recovery 完成。
+指令明确指定楼层时填写 floor_id；未指定时必须为 null，不能猜楼层。若用户给出的楼层、房间类型、目标和参照物组合能在场景清单中唯一确定一个房间，必须从清单中选择该具体 room_id；若仍有多个房间同样符合，则 room_id=null，留给几何模块排序，禁止编造ID。room 表示 bedroom/kitchen 等房间类型，room_id 表示 L3_R1 等具体房间，两者不能混用。Qwen负责选择语义房间，几何模块仍负责房间内具体Box、可达性和任务访问顺序。relation 表示目标相对 reference 的搜索区域语义，用于生成观察位姿，不作为检测目标后的硬成功条件；使用大型锚点代替未知目标时，不要再把锚点写成自己的 reference。between 必须提供两个参照物。region_type 不确定时使用 auto。distance_m 默认必须为 null，只有用户明确给出观察距离或距离范围时才填写；不要自行输出通用默认距离。observation_detail 只表达普通或精细观察，不直接决定坐标。
+普通开放式“找一下某物”且没有指定位置时，使用 mode=semantic_recovery、on_exhaustion=qwen_semantic_recovery。明确指定位置时必须 mode=fixed：如果语义是必须找到的可移动/可消耗物体，且指定位置没有该目标的历史实例，则 on_exhaustion=qwen_semantic_recovery；普通检查或确认任务使用 on_exhaustion=finish。
+必须显式判断用户意图：“看看/确认某处有没有”是 verify_presence + report_absent，没看到本身就是有效答案；“帮我找/一定要找到，应该在某处，没有就继续找/那里没有的话就继续帮我找”是单个 locate_target + semantic_recovery 任务。仅当用户明确指定具体备用地点、备用目标或不同的后续动作（例如“如果没有就去二楼卫生间找”）时，才使用 locate_target + explicit_branch、建立独立备用 task 和 conditional_rules。单独出现“如果/没有的话”不等于条件分支，必须根据后续是否包含具体备用地点、目标或动作判断。execute_action 只用于 deliver/approach 等非视觉动作。intent.not_found_policy 必须与 search_policy.on_exhaustion 一致：semantic_recovery 对应 qwen_semantic_recovery，其余对应 finish。
 输出前必须自检：若原句含“最后”，该任务的 prerequisites 是否包含它之前所有 active_initially=true 的任务；若任务指定了 floor_id、room 或 reference，search_policy.mode 是否为 fixed；任务目的和未找到处理是否符合用户原意；是否把自主恢复和用户显式条件分支严格分开；若原句含“顺便/还有”，这些任务之间是否没有被错误串联。"""
 
 
@@ -159,16 +159,24 @@ class QwenTaskParser:
         })
         ledger["total_estimated_cny"] = round(previous + estimated_cost, 8)
         atomic_json(self.ledger_path, ledger)
-        graph = normalize_and_validate_task_graph(_extract_json(content), instruction=instruction)
-        graph["provenance"] = {
-            "parser": "qwen_vlm",
-            "model": body.get("model", MODEL),
-            "prompt_version": PROMPT_VERSION,
-            "cache_hit": False,
-            "usage": usage,
-            "estimated_cny": round(estimated_cost, 8),
-        }
-        graph["parser_raw_response"] = content
+        raw_graph = _extract_json(content)
+        try:
+            graph = normalize_and_validate_task_graph(raw_graph, instruction=instruction)
+        except TaskGraphError as error:
+            # A model response may be structurally valid JSON while containing
+            # contradictory intent/search-policy fields. Keep the deterministic
+            # validator authoritative and give Qwen one explicit repair round.
+            graph = self.repair(instruction, scene_graph, raw_graph, str(error))
+        else:
+            graph["provenance"] = {
+                "parser": "qwen_vlm",
+                "model": body.get("model", MODEL),
+                "prompt_version": PROMPT_VERSION,
+                "cache_hit": False,
+                "usage": usage,
+                "estimated_cny": round(estimated_cost, 8),
+            }
+            graph["parser_raw_response"] = content
         atomic_json(cache_path, graph)
         return graph
 
@@ -190,7 +198,7 @@ class QwenTaskParser:
                     "scene_inventory": compact_inventory(scene_graph),
                     "rejected_task_graph": graph,
                     "deterministic_validation_error": validation_error,
-                    "request": "只修复审计指出的问题，保留其他正确任务、关系、前置约束和条件分支；输出完整严格JSON。",
+                    "request": "只修复审计指出的问题，保留其他正确任务、关系、前置约束和条件分支。若目标类别在用户指定范围内不存在，不得删除或放宽room_id、floor_id、room、reference；应改用该范围内真实存在的锚点作为target.label，并保持verification_label为真正寻找类别。输出完整严格JSON。",
                 }, ensure_ascii=False)},
             ],
             "response_format": {"type": "json_object"},

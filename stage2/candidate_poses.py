@@ -70,6 +70,8 @@ def _reference_objects(
     scene_graph: dict[str, Any], task: dict[str, Any], target_room: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     target = task.get("target", {})
+    requested_floor = target.get("floor_id")
+    requested_room_id = target.get("room_id")
     raw_references = target.get("references") or []
     labels = [
         str(value).strip().lower()
@@ -87,6 +89,18 @@ def _reference_objects(
         accepted = ALIASES.get(label, {label})
         matches = []
         for room in scene_graph.get("rooms", []):
+            if (
+                target_room is None
+                and requested_room_id is not None
+                and str(room.get("id")) != str(requested_room_id)
+            ):
+                continue
+            if (
+                target_room is None
+                and requested_floor is not None
+                and int(room.get("floor_id", -1)) != int(requested_floor)
+            ):
+                continue
             if target_room is not None:
                 same_room = room.get("id") == target_room.get("id")
                 same_floor = room.get("floor_id") == target_room.get("floor_id")
@@ -253,11 +267,18 @@ def _height_candidates_for_view(
 
 def _observation_region(
     target: dict[str, Any], references: list[dict[str, Any]], constraints: dict[str, Any],
+    target_is_search_anchor: bool = False,
 ) -> tuple[dict[str, Any], str]:
     """Resolve target, anchor and search region without changing target identity."""
     region_type = _region_type(constraints)
     relation = constraints.get("relation")
     explicit = str(constraints.get("region_type", "auto") or "auto").strip().lower()
+    if target_is_search_anchor:
+        # The mapped target is a surrogate anchor for an unmapped verification
+        # object (for example: search for a pillow on the bed near a curtain).
+        # References only disambiguate which anchor instance to use; they must
+        # not replace the bed itself as the observed region.
+        return target, region_type
     if references and relation in {"on", "above", "below", "near"} and explicit != "instance_region":
         region_type = {
             "on": "support_surface",
@@ -315,12 +336,17 @@ def matching_objects(
     scene_graph: dict[str, Any], task: dict[str, Any], prefer_room: bool = True,
 ) -> list[tuple[dict[str, Any], dict[str, Any]]]:
     label = task["target"]["label"].lower()
+    verification_label = str(task.get("verification_label", label)).strip().lower()
+    target_is_search_anchor = verification_label not in ALIASES.get(label, {label})
     room_name = task["target"].get("room")
+    requested_room_id = task["target"].get("room_id")
     floor_id = task["target"].get("floor_id")
     accepted = ALIASES.get(label, {label})
     all_matches = []
     room_matches = []
     for room in scene_graph.get("rooms", []):
+        if requested_room_id is not None and str(room.get("id")) != str(requested_room_id):
+            continue
         if floor_id is not None and int(room.get("floor_id", -1)) != int(floor_id):
             continue
         for obj in room.get("objects", []):
@@ -339,7 +365,12 @@ def matching_objects(
                 distance = min(math.dist(center[:2], other[:2]) for other in reference_centers)
                 return distance, -float(item[1].get("probability", 0.0))
             preferred = room_matches if prefer_room and room_matches else all_matches
-            return sorted(preferred, key=reference_key)[:12]
+            ranked = sorted(preferred, key=reference_key)
+            # When the mapped target is a surrogate search anchor, references
+            # identify which physical anchor the user meant (e.g. the bed near
+            # the curtain while looking for an unmapped pillow). Do not admit
+            # every same-label instance into the initial location pool.
+            return ranked[:1] if target_is_search_anchor else ranked[:12]
     matches = room_matches if prefer_room and room_matches else all_matches
     return sorted(matches, key=lambda item: float(item[1].get("probability", 0.0)), reverse=True)[:12]
 
@@ -364,7 +395,15 @@ def generate_candidates(
         reference_centers = [other["center_xyz_m"] for other in references]
         center = [float(value) for value in obj["center_xyz_m"]]
         size = [float(value) for value in obj["size_xyz_m"]]
-        region_object, constraints_region = _observation_region(obj, references, constraints)
+        target_label = str(task.get("target", {}).get("label", "")).strip().lower()
+        verification_label = str(task.get("verification_label", target_label)).strip().lower()
+        target_is_search_anchor = verification_label not in ALIASES.get(
+            target_label, {target_label}
+        )
+        region_object, constraints_region = _observation_region(
+            obj, references, constraints,
+            target_is_search_anchor=target_is_search_anchor,
+        )
         region_center = [float(value) for value in region_object["center_xyz_m"]]
         region_size = [float(value) for value in region_object["size_xyz_m"]]
         region_yaw = _yaw_from_wxyz([

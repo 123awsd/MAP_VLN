@@ -206,7 +206,10 @@ def main() -> None:
         "--planning-horizon-tasks", type=int, default=3,
         help="maximum currently executable tasks in each rolling joint optimization",
     )
-    parser.add_argument("--semantic-recovery", action="store_true")
+    parser.add_argument(
+        "--semantic-recovery", action="store_true",
+        help="deprecated force-enable switch; task intent now enables recovery automatically",
+    )
     parser.add_argument("--max-recovery-hypotheses", type=int, default=3)
     parser.add_argument(
         "--max-recovery-visits", type=int, default=8,
@@ -216,7 +219,7 @@ def main() -> None:
         "--max-recovery-locations", type=int, default=4,
         help="maximum distinct anchor/region hypotheses; viewpoints within one location do not consume this budget",
     )
-    parser.add_argument("--max-viewpoints-per-location", type=int, default=2)
+    parser.add_argument("--max-viewpoints-per-location", type=int, default=3)
     parser.add_argument("--recovery-budget-cny", type=float, default=20.0)
     parser.add_argument(
         "--recovery-plan", type=Path, default=None,
@@ -251,6 +254,12 @@ def main() -> None:
 
     def allows_semantic_recovery(task: dict) -> bool:
         return task.get("intent", {}).get("not_found_policy") == "semantic_recovery"
+    semantic_recovery_task_ids = {
+        task_id for task_id, task in tasks.items() if allows_semantic_recovery(task)
+    }
+    semantic_recovery_enabled = bool(
+        semantic_recovery_task_ids or args.semantic_recovery or args.recovery_plan
+    )
     updated_scene_graph = copy.deepcopy(load_json(args.scene_graph))
     objects_by_id = {
         obj["id"]: obj
@@ -329,14 +338,18 @@ def main() -> None:
         maximum_attempts=(
             args.max_viewpoint_attempts if args.max_viewpoint_attempts > 0 else None
         ),
-        maximum_attempts_per_location=(
-            args.max_viewpoints_per_location if args.semantic_recovery else None
-        ),
-        maximum_locations=args.max_recovery_locations if args.semantic_recovery else None,
+        maximum_attempts_per_location_by_task={
+            task_id: args.max_viewpoints_per_location
+            for task_id in semantic_recovery_task_ids
+        },
+        maximum_locations_by_task={
+            task_id: args.max_recovery_locations
+            for task_id in semantic_recovery_task_ids
+        },
     )
     semantic_recovery_planner = (
         QwenSemanticRecoveryPlanner(budget_cny=args.recovery_budget_cny)
-        if args.semantic_recovery and args.recovery_plan is None else None
+        if semantic_recovery_enabled and args.recovery_plan is None else None
     )
     offline_recovery_plan = load_json(args.recovery_plan) if args.recovery_plan else None
     semantic_recovery_events = []
@@ -920,7 +933,8 @@ def main() -> None:
             print(
                 f"task={visit['task_id']} outcome={mission_outcome} "
                 f"view={recovery_decision.get('viewpoint_attempt_index', recovery_decision['attempt_index'])} "
-                f"location={recovery_decision.get('location_attempt_index', 1)}/{args.max_recovery_locations if args.semantic_recovery else 1} "
+                f"location={recovery_decision.get('location_attempt_index', 1)}/"
+                f"{recovery_decision.get('maximum_locations') or 1} "
                 f"pixels={verification['matching_pixels']} active={sorted(state.active)}",
                 flush=True,
             )
@@ -979,10 +993,12 @@ def main() -> None:
         "executed_segments": executed_segments,
         "clearance_audit": clearance_audit,
         "semantic_recovery": {
-            "enabled": args.semantic_recovery,
+            "enabled": semantic_recovery_enabled,
+            "enabled_by_task_intent": bool(semantic_recovery_task_ids),
+            "task_ids": sorted(semantic_recovery_task_ids),
             "planner": (
                 "offline_fixture" if offline_recovery_plan is not None
-                else "qwen3.7-plus" if args.semantic_recovery else None
+                else "qwen3.7-plus" if semantic_recovery_enabled else None
             ),
             "events": semantic_recovery_events,
             "plans_by_task": recovery_plans,

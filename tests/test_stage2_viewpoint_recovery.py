@@ -93,6 +93,26 @@ class ViewpointRecoveryTest(unittest.TestCase):
         self.assertFalse(second["retry"])
         self.assertEqual(second["location_attempt_index"], 2)
 
+    def test_location_budgets_can_be_enabled_per_qwen_task(self):
+        candidates = [
+            {"id": "a1", "location_hypothesis_id": "a"},
+            {"id": "a2", "location_hypothesis_id": "a"},
+            {"id": "a3", "location_hypothesis_id": "a"},
+        ]
+        recovery = ViewpointRecovery(
+            maximum_attempts_per_location_by_task={"semantic": 2},
+            maximum_locations_by_task={"semantic": 3},
+        )
+        self.assertTrue(recovery.decide("semantic", "a1", False, candidates)["retry"])
+        semantic = recovery.decide("semantic", "a2", False, candidates)
+        self.assertTrue(semantic["location_exhausted"])
+
+        ordinary = ViewpointRecovery(
+            maximum_attempts_per_location_by_task={"semantic": 2},
+        )
+        self.assertTrue(ordinary.decide("ordinary", "a1", False, candidates)["retry"])
+        self.assertTrue(ordinary.decide("ordinary", "a2", False, candidates)["retry"])
+
     def test_unbounded_mode_exhausts_location_then_releases_global_focus(self):
         candidates = [
             {"id": f"a{index}", "location_hypothesis_id": "bed_a",

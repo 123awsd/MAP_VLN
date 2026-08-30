@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from stage2.open_vocab_detector import AsyncOpenVocabularyDetector, LocalOpenVocabularyDetector, apply_class_thresholds, associate_projection, project_detection_to_world, target_found
+from stage2.open_vocab_detector import AsyncOpenVocabularyDetector, LocalOpenVocabularyDetector, PILOT_CLASS_THRESHOLDS, apply_class_thresholds, associate_projection, project_detection_to_world, target_found
 
 
 class OpenVocabularyDetectorTest(unittest.TestCase):
@@ -63,6 +63,9 @@ class OpenVocabularyDetectorTest(unittest.TestCase):
         ]}
         filtered = apply_class_thresholds(result, 0.2, {"television": 0.45})
         self.assertEqual([item["label"] for item in filtered["detections"]], ["chair"])
+
+    def test_toilet_paper_uses_validated_pilot_threshold(self):
+        self.assertEqual(PILOT_CLASS_THRESHOLDS["toilet paper"], 0.40)
 
     def test_async_detector_drops_request_while_busy(self):
         class FakeBackend:

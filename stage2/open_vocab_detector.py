@@ -25,6 +25,7 @@ PILOT_CLASS_THRESHOLDS = {
     "lamp": 0.25,
     "television": 0.45,
     "shelf": 0.425,
+    "toilet paper": 0.40,
 }
 
 

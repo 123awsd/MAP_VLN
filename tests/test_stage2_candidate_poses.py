@@ -135,6 +135,39 @@ class CandidatePoseTest(unittest.TestCase):
         self.assertTrue(all(item["anchor_object_id"] == "ref_b" for item in candidates))
         self.assertTrue(all(item["object_id"] == "target" for item in candidates))
 
+    def test_surrogate_target_anchor_keeps_reference_for_disambiguation_only(self):
+        self.scene["rooms"][0]["objects"].append({
+            "id": "far_target",
+            "label": "television",
+            "center_xyz_m": [22.0, 22.0, 1.0],
+            "size_xyz_m": [0.6, 0.4, 0.8],
+            "orientation_wxyz": [1.0, 0.0, 0.0, 0.0],
+            "probability": 2.0,
+        })
+        task = self.task(relation="on", reference="sofa")
+        task["verification_label"] = "pillow"
+        candidates = generate_candidates(self.grid, self.scene, task, max_candidates=8)
+        self.assertTrue(candidates)
+        self.assertTrue(all(item["region_type"] == "support_surface" for item in candidates))
+        self.assertTrue(all(item["object_id"] == "target" for item in candidates))
+        self.assertTrue(all(item["anchor_object_id"] is None for item in candidates))
+        self.assertTrue(all(item["location_hypothesis_id"] == "target" for item in candidates))
+        self.assertTrue(all(item["reference_object_ids"] == ["ref_a"] for item in candidates))
+
+    def test_surrogate_reference_disambiguation_respects_requested_floor(self):
+        task = self.task(relation="near", reference="sofa", floor_id=1)
+        task["verification_label"] = "pillow"
+        candidates = generate_candidates(self.grid, self.scene, task, max_candidates=8)
+        self.assertTrue(candidates)
+        self.assertTrue(all(item["object_id"] == "target" for item in candidates))
+        self.assertTrue(all(item["reference_object_ids"] == ["ref_a"] for item in candidates))
+
+    def test_qwen_selected_room_id_hard_scopes_initial_candidates(self):
+        task = self.task(floor_id=1, room_id="1")
+        candidates = generate_candidates(self.grid, self.scene, task, max_candidates=8)
+        self.assertTrue(candidates)
+        self.assertTrue(all(str(item["room_id"]) == "1" for item in candidates))
+
     def test_occupied_anchor_center_does_not_reject_visible_support_region(self):
         class RegionVisibleGrid:
             def is_state_valid(self, xyz):

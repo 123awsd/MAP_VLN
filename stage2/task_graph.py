@@ -115,6 +115,12 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
         normalized_target = {
             "label": label,
             "room": _optional_text(target.get("room")),
+            "room_id": (
+                str(target.get("room_id")).strip()
+                if str(target.get("room_id") or "").strip().lower()
+                not in {"", "none", "null", "无", "没有", "不指定"}
+                else None
+            ),
             "floor_id": floor_id,
             "reference": reference,
             "reference_secondary": reference_secondary,
