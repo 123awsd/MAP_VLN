@@ -39,6 +39,7 @@ class SemanticRegionSearchTest(unittest.TestCase):
         self.assertEqual(infer_region_type("cup", "table", "on"), "support_surface")
         self.assertEqual(infer_region_type("ball", "bed", "under"), "under_furniture")
         self.assertEqual(infer_region_type("bucket", "cabinet", "near"), "floor_near_anchor")
+        self.assertEqual(infer_region_type("toilet paper", "toilet paper", "near"), "fixed_instance")
 
     def test_support_surface_samples_only_target_top(self):
         points = sample_region_points(self.table, "support_surface")

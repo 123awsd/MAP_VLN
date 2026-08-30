@@ -29,7 +29,7 @@ def infer_region_type(target_label: str, anchor_label: str, relation: str = "nea
     relation = relation.strip().lower()
     if relation in {"under", "below"}:
         return "under_furniture"
-    if target in FIXED_TARGETS and target in anchor:
+    if target == anchor or (target in FIXED_TARGETS and target in anchor):
         return "fixed_instance"
     if target in LOW_SEARCH_TARGETS and relation not in {"on", "above", "inside"}:
         return "floor_near_anchor"
@@ -182,6 +182,9 @@ def materialize_semantic_regions(
             if not visible:
                 continue
             fraction = len(visible) / max(1, len(samples))
+            historical_confidence = float(hypothesis.get("historical_confidence", 0.0))
+            semantic_prior = SEMANTIC_PRIOR[hypothesis.get("relevance", "medium")]
+            belief_score = max(semantic_prior, historical_confidence)
             candidate.update({
                 "id": f"{task['id']}__{region_id}__v{len(enriched):02d}",
                 "candidate_source": "vlm_semantic_region",
@@ -189,8 +192,9 @@ def materialize_semantic_regions(
                 "semantic_region_id": region_id,
                 "semantic_region_type": region_type,
                 "semantic_prior_level": hypothesis.get("relevance", "medium"),
-                "semantic_prior_score": SEMANTIC_PRIOR[hypothesis.get("relevance", "medium")],
-                "belief_score": SEMANTIC_PRIOR[hypothesis.get("relevance", "medium")],
+                "semantic_prior_score": semantic_prior,
+                "historical_confidence": historical_confidence,
+                "belief_score": belief_score,
                 "region_sample_count": len(samples),
                 "visible_region_sample_ids": visible,
                 "view_quality": fraction,

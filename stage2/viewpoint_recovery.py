@@ -11,6 +11,7 @@ from typing import Any
 class ViewpointRecovery:
     maximum_attempts: int = 3
     maximum_attempts_per_location: int | None = None
+    maximum_locations: int | None = None
     attempted: dict[str, set[str]] = field(default_factory=dict)
     exhausted_locations: dict[str, set[str]] = field(default_factory=dict)
     active_locations: dict[str, str] = field(default_factory=dict)
@@ -79,11 +80,19 @@ class ViewpointRecovery:
         ]
         location_budget = self.maximum_attempts_per_location or self.maximum_attempts
         already_exhausted = self.exhausted_locations.get(task_id, set())
+        visited_locations = {
+            self._location(item) for item in candidates if item["id"] in tried
+        }
         alternative_locations = [
             item["id"] for item in candidates
             if item["id"] in remaining
             and item["id"] not in same_location
             and self._location(item) not in already_exhausted
+            and (
+                self.maximum_locations is None
+                or self._location(item) in visited_locations
+                or len(visited_locations) < self.maximum_locations
+            )
         ]
         retry_same = len(attempted_at_location) < location_budget and bool(same_location)
         if not found and retry_same:
@@ -98,7 +107,14 @@ class ViewpointRecovery:
                     direction = self._choose_direction(current_angle, remaining_candidates)
                     if direction is not None:
                         self.directions[task_id] = direction
-        retry = not found and len(tried) < self.maximum_attempts and (retry_same or bool(alternative_locations))
+        # Legacy callers without a location budget retain the old global
+        # viewpoint cap. Semantic recovery callers budget locations separately:
+        # V1/V2/V3 around one anchor consume one location, not three visits.
+        within_budget = (
+            len(tried) < self.maximum_attempts
+            if self.maximum_locations is None else True
+        )
+        retry = not found and within_budget and (retry_same or bool(alternative_locations))
         location_exhausted = not found and not retry_same
         if location_exhausted:
             self.exhausted_locations.setdefault(task_id, set()).add(str(location_id))
@@ -110,6 +126,9 @@ class ViewpointRecovery:
             "retry": retry,
             "attempt_index": len(tried),
             "maximum_attempts": self.maximum_attempts,
+            "viewpoint_attempt_index": len(tried),
+            "location_attempt_index": len(visited_locations),
+            "maximum_locations": self.maximum_locations,
             "attempted_candidate_ids": sorted(tried),
             "remaining_candidate_ids": remaining,
             "location_hypothesis_id": location_id,

@@ -59,6 +59,10 @@ def main():
     ap.add_argument("--auto-policy", action="store_true",
                     help="use a conservative generic label policy when no Qwen policy is available")
     ap.add_argument("--resolution", type=float, default=.05)
+    ap.add_argument(
+        "--occusg-output-group", default="",
+        help="optional path below outputs/occusg used to group one pipeline run",
+    )
     args = ap.parse_args()
     root = Path(__file__).resolve().parents[1]
     episode = args.run_dir / "episode"
@@ -117,8 +121,14 @@ def main():
                 run_name = f"{args.output.name}_L{floor}_{role}"
                 for suffix in (".npy", ".json"):
                     shutil.copy2(prefix.with_suffix(suffix), root / "runtime/occusg" / f"{run_name}_grid{suffix}")
-                subprocess.run([str(root / "scripts/run_occusg.sh"), run_name, "1.8"], check=True)
-                regions = root / "outputs/occusg" / run_name / "regions.json"
+                output_rel = (
+                    f"{args.occusg_output_group}/L{floor}_{role}"
+                    if args.occusg_output_group else run_name
+                )
+                subprocess.run([
+                    str(root / "scripts/run_occusg.sh"), run_name, "1.8", output_rel,
+                ], check=True)
+                regions = root / "outputs/occusg" / output_rel / "regions.json"
                 if role == "structure":
                     subprocess.run([str(root / ".envs/habitat/bin/python"), str(root / "scripts/fuse_rooms_boxes.py"), str(regions), str(floor_boxes), str(args.output / f"L{floor}_scene_graph.json"), "--grid-meta", str(prefix.with_suffix('.json'))], check=True)
     print(json.dumps({"levels": levels, "output": str(args.output)}, indent=2))

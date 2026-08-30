@@ -56,6 +56,43 @@ class ViewpointRecoveryTest(unittest.TestCase):
         self.assertEqual(len(filtered_again), 1)
         self.assertEqual(filtered_again[0]["id"], "far")
 
+    def test_location_budget_does_not_count_each_viewpoint(self):
+        candidates = [
+            {"id": "a1", "location_hypothesis_id": "a"},
+            {"id": "a2", "location_hypothesis_id": "a"},
+            {"id": "a3", "location_hypothesis_id": "a"},
+            {"id": "b1", "location_hypothesis_id": "b"},
+            {"id": "b2", "location_hypothesis_id": "b"},
+            {"id": "b3", "location_hypothesis_id": "b"},
+        ]
+        recovery = ViewpointRecovery(
+            maximum_attempts=3,
+            maximum_attempts_per_location=3,
+            maximum_locations=2,
+        )
+        self.assertTrue(recovery.decide("task", "a1", False, candidates)["retry"])
+        self.assertTrue(recovery.decide("task", "a2", False, candidates)["retry"])
+        third = recovery.decide("task", "a3", False, candidates)
+        self.assertTrue(third["retry"])
+        self.assertEqual(third["location_attempt_index"], 1)
+        self.assertIn("b1", third["remaining_candidate_ids"])
+
+    def test_location_budget_stops_new_location_after_limit(self):
+        candidates = [
+            {"id": "a", "location_hypothesis_id": "a"},
+            {"id": "b", "location_hypothesis_id": "b"},
+            {"id": "c", "location_hypothesis_id": "c"},
+        ]
+        recovery = ViewpointRecovery(
+            maximum_attempts=1,
+            maximum_attempts_per_location=1,
+            maximum_locations=2,
+        )
+        self.assertTrue(recovery.decide("task", "a", False, candidates)["retry"])
+        second = recovery.decide("task", "b", False, candidates)
+        self.assertFalse(second["retry"])
+        self.assertEqual(second["location_attempt_index"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

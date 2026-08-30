@@ -14,6 +14,7 @@ ALLOWED_RELATIONS = {
     "front", "behind", "left", "right", "above", "below", "on", "between", "near", "facing"
 }
 ALLOWED_SEARCH_MODES = {"fixed", "semantic_recovery"}
+ALLOWED_EXHAUSTION_POLICIES = {"finish", "qwen_semantic_recovery"}
 ALLOWED_REGION_TYPES = {
     "auto", "support_surface", "below_region", "surrounding_region",
     "instance_region", "between_region",
@@ -191,9 +192,18 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
         _require(isinstance(search_policy, dict), f"task {task_id} search_policy must be an object")
         search_mode = str(search_policy.get("mode", "fixed")).strip().lower()
         _require(search_mode in ALLOWED_SEARCH_MODES, f"unsupported search mode {search_mode!r}")
+        on_exhaustion = str(search_policy.get(
+            "on_exhaustion",
+            "qwen_semantic_recovery" if search_mode == "semantic_recovery" else "finish",
+        )).strip().lower()
+        _require(
+            on_exhaustion in ALLOWED_EXHAUSTION_POLICIES,
+            f"unsupported exhaustion policy {on_exhaustion!r} in {task_id}",
+        )
         task["search_policy"] = {
             "mode": search_mode,
             "completion_policy": "first_success" if search_mode == "semantic_recovery" else "fixed_target",
+            "on_exhaustion": on_exhaustion,
             "maximum_location_hypotheses": max(1, min(5, int(search_policy.get("maximum_location_hypotheses", 3)))),
         }
         normalized_tasks.append(task)

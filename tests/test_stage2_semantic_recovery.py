@@ -1,13 +1,17 @@
 import unittest
 
-from stage2.semantic_recovery import recovery_inventory, validate_hypotheses
+from stage2.semantic_recovery import (
+    merge_historical_target_boxes,
+    recovery_inventory,
+    validate_hypotheses,
+)
 
 
 class SemanticRecoveryTest(unittest.TestCase):
     def setUp(self):
         self.scene = {"rooms": [
             {"id": 1, "semantic_type": "living_room", "space_role": "room", "objects": [
-                {"id": "tv1", "label": "television"}, {"id": "shelf1", "label": "shelf"},
+                {"id": "tv1", "label": "television", "probability": 0.82}, {"id": "shelf1", "label": "shelf"},
             ]},
             {"id": 2, "semantic_type": "corridor", "space_role": "transition_space", "objects": [
                 {"id": "door1", "label": "door"},
@@ -38,6 +42,25 @@ class SemanticRecoveryTest(unittest.TestCase):
         }]}
         result = validate_hypotheses(raw, self.scene, set(), 3)
         self.assertEqual(result["hypotheses"][0]["semantic_region"], "fixed_instance")
+
+    def test_historical_target_box_is_annotated_for_joint_ranking(self):
+        raw = {"target_label": "television", "hypotheses": [{
+            "room_id": 1, "anchor_object_id": "tv1", "relevance": "high",
+        }]}
+        item = validate_hypotheses(raw, self.scene, set(), 3)["hypotheses"][0]
+        self.assertEqual(item["source"], "historical_target_box")
+        self.assertEqual(item["historical_confidence"], 0.82)
+
+    def test_exact_historical_box_is_preserved_alongside_qwen_anchors(self):
+        inferred = {"target_label": "television", "hypotheses": [{
+            "id": "recovery_1", "room_id": 1, "anchor_object_id": "shelf1",
+            "anchor_label": "shelf", "relevance": "high",
+            "historical_confidence": 0.5, "source": "semantic_anchor",
+        }]}
+        merged = merge_historical_target_boxes(inferred, self.scene, set(), 3)
+        ids = [item["anchor_object_id"] for item in merged["hypotheses"]]
+        self.assertIn("tv1", ids)
+        self.assertIn("shelf1", ids)
 
 
 if __name__ == "__main__":

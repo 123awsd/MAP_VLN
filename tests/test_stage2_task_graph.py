@@ -121,7 +121,25 @@ class TaskGraphTest(unittest.TestCase):
         graph = normalize_and_validate_task_graph(value)
         policy = graph["tasks"][0]["search_policy"]
         self.assertEqual(policy["completion_policy"], "first_success")
+        self.assertEqual(policy["on_exhaustion"], "qwen_semantic_recovery")
         self.assertEqual(policy["maximum_location_hypotheses"], 5)
+
+    def test_fixed_location_can_opt_into_qwen_recovery_after_exhaustion(self):
+        value = self.base_graph()
+        value["tasks"][0]["search_policy"] = {
+            "mode": "fixed",
+            "on_exhaustion": "qwen_semantic_recovery",
+        }
+        graph = normalize_and_validate_task_graph(value)
+        policy = graph["tasks"][0]["search_policy"]
+        self.assertEqual(policy["mode"], "fixed")
+        self.assertEqual(policy["completion_policy"], "fixed_target")
+        self.assertEqual(policy["on_exhaustion"], "qwen_semantic_recovery")
+
+    def test_fixed_location_does_not_recover_by_default(self):
+        value = self.base_graph()
+        graph = normalize_and_validate_task_graph(value)
+        self.assertEqual(graph["tasks"][0]["search_policy"]["on_exhaustion"], "finish")
 
 
 if __name__ == "__main__":

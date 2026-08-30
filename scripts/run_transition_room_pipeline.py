@@ -255,6 +255,10 @@ def main():
     parser.add_argument("output", type=Path)
     parser.add_argument("--max-floor", type=int, default=3)
     parser.add_argument("--decomp-threshold", type=float, default=1.8)
+    parser.add_argument(
+        "--occusg-output-group", default="",
+        help="optional path below outputs/occusg used to group one pipeline run",
+    )
     args = parser.parse_args()
     transition_dir = args.run_dir / "transition_reconstruction"
     transition_json = transition_dir / "transitions.json"
@@ -292,8 +296,15 @@ def main():
         runtime_prefix = ROOT / "runtime/occusg" / f"{run_name}_grid"
         shutil.copy2(source.with_suffix(".npy"), runtime_prefix.with_suffix(".npy"))
         shutil.copy2(source.with_suffix(".json"), runtime_prefix.with_suffix(".json"))
-        subprocess.run([str(ROOT / "scripts/run_occusg.sh"), run_name, str(args.decomp_threshold)], check=True)
-        raw_path = ROOT / "outputs/occusg" / run_name / "regions.json"
+        output_rel = (
+            f"{args.occusg_output_group}/L{floor}_geometry"
+            if args.occusg_output_group else run_name
+        )
+        subprocess.run([
+            str(ROOT / "scripts/run_occusg.sh"), run_name,
+            str(args.decomp_threshold), output_rel,
+        ], check=True)
+        raw_path = ROOT / "outputs/occusg" / output_rel / "regions.json"
         raw = json.loads(raw_path.read_text())
         raw_copy = args.output / f"L{floor}_regions_raw.json"
         shutil.copy2(raw_path, raw_copy)

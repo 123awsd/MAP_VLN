@@ -30,7 +30,11 @@ from stage2.joint_planner import plan_joint_mission  # noqa: E402
 from stage2.mission_executor import MissionState  # noqa: E402
 from stage2.motion_cost_oracle import MotionCostOracle  # noqa: E402
 from stage2.planning_contract import PlannerProfile  # noqa: E402
-from stage2.spatial_verification import scoped_reference_objects, verify_target_reference_relation  # noqa: E402
+from stage2.spatial_verification import (  # noqa: E402
+    effective_relation_context,
+    scoped_reference_objects,
+    verify_target_reference_relation,
+)
 from stage2.task_graph import normalize_and_validate_task_graph  # noqa: E402
 from stage2.voxel_map_3d import VoxelMap3D  # noqa: E402
 from stage2.open_vocab_detector import (  # noqa: E402
@@ -190,7 +194,14 @@ def main() -> None:
     )
     parser.add_argument("--semantic-recovery", action="store_true")
     parser.add_argument("--max-recovery-hypotheses", type=int, default=3)
-    parser.add_argument("--max-recovery-visits", type=int, default=8)
+    parser.add_argument(
+        "--max-recovery-visits", type=int, default=8,
+        help="deprecated compatibility option; recovery is now budgeted by --max-recovery-locations",
+    )
+    parser.add_argument(
+        "--max-recovery-locations", type=int, default=4,
+        help="maximum distinct anchor/region hypotheses; viewpoints within one location do not consume this budget",
+    )
     parser.add_argument("--max-viewpoints-per-location", type=int, default=2)
     parser.add_argument("--recovery-budget-cny", type=float, default=20.0)
     parser.add_argument(
@@ -223,6 +234,13 @@ def main() -> None:
 
     task_graph = normalize_and_validate_task_graph(load_json(args.task_graph))
     tasks = {task["id"]: task for task in task_graph["tasks"]}
+
+    def allows_semantic_recovery(task: dict) -> bool:
+        policy = task.get("search_policy", {})
+        return (
+            policy.get("mode") == "semantic_recovery"
+            or policy.get("on_exhaustion") == "qwen_semantic_recovery"
+        )
     updated_scene_graph = copy.deepcopy(load_json(args.scene_graph))
     objects_by_id = {
         obj["id"]: obj
@@ -298,10 +316,11 @@ def main() -> None:
     open_vocab_observations = []
     fusion = OnlineSemanticFusion(minimum_novel_support=args.novel_object_min_support)
     recovery = ViewpointRecovery(
-        maximum_attempts=args.max_recovery_visits if args.semantic_recovery else args.max_viewpoint_attempts,
+        maximum_attempts=args.max_viewpoint_attempts,
         maximum_attempts_per_location=(
             args.max_viewpoints_per_location if args.semantic_recovery else None
         ),
+        maximum_locations=args.max_recovery_locations if args.semantic_recovery else None,
     )
     semantic_recovery_planner = (
         QwenSemanticRecoveryPlanner(budget_cny=args.recovery_budget_cny)
@@ -555,20 +574,28 @@ def main() -> None:
                 selected_found = bool(semantic_verification["found"]) or vlm_found
             else:
                 selected_found = bool(open_vocab_verification and open_vocab_verification["found"]) or vlm_found
-            target_object = objects_by_id.get(visit["object_id"])
-            reference_labels = list(tasks[visit["task_id"]]["target"].get("references") or [])
-            reference_objects = (
-                scoped_reference_objects(updated_scene_graph, visit["object_id"], reference_labels)
-                if target_object is not None else []
+            relation_context = effective_relation_context(
+                tasks[visit["task_id"]], executed_candidate, objects_by_id,
+                [] if open_vocab_verification is None else open_vocab_verification.get("projected_3d", []),
             )
+            target_object = relation_context.get("target")
+            reference_objects = relation_context.get("references")
+            if reference_objects is None:
+                reference_objects = (
+                    scoped_reference_objects(
+                        updated_scene_graph, visit["object_id"],
+                        relation_context.get("reference_labels", []),
+                    ) if target_object is not None else []
+                )
             relation_verification = verify_target_reference_relation(
-                tasks[visit["task_id"]]["spatial_constraints"].get("relation"),
+                relation_context.get("relation"),
                 target_object or {
                     "id": visit["object_id"], "center_xyz_m": executed_candidate["target_xyz_m"],
                     "size_xyz_m": [0.1, 0.1, 0.1],
                 },
                 reference_objects,
             )
+            relation_verification["scope"] = relation_context["scope"]
             selected_found = bool(selected_found and relation_verification["valid"])
             controlled_stale = visit["object_id"] in controlled_stale_object_ids
             controlled_found = visit["object_id"] in controlled_found_object_ids
@@ -609,7 +636,7 @@ def main() -> None:
             if (
                 (semantic_recovery_planner is not None or offline_recovery_plan is not None)
                 and action in {"inspect", "find", "observe"}
-                and tasks[visit["task_id"]].get("search_policy", {}).get("mode") == "semantic_recovery"
+                and allows_semantic_recovery(tasks[visit["task_id"]])
                 and not selected_found
                 and recovery_decision.get("location_exhausted")
             ):
@@ -664,7 +691,7 @@ def main() -> None:
                 and not recovery_decision["retry"]
                 and visit["task_id"] in room_fallback_candidates
                 and room_fallback_candidates[visit["task_id"]]
-                and recovery_decision["attempt_index"] < args.max_recovery_visits
+                and recovery_decision.get("location_attempt_index", 1) < args.max_recovery_locations
             ):
                 fallback = room_fallback_candidates.pop(visit["task_id"])
                 known_ids = {item["id"] for item in candidates[visit["task_id"]]}
@@ -748,7 +775,13 @@ def main() -> None:
                 })
             if not recovery_decision["retry"]:
                 state.finish_task(visit["task_id"], outcome)
-            print(f"task={visit['task_id']} outcome={mission_outcome} attempt={recovery_decision['attempt_index']} pixels={verification['matching_pixels']} active={sorted(state.active)}", flush=True)
+            print(
+                f"task={visit['task_id']} outcome={mission_outcome} "
+                f"view={recovery_decision.get('viewpoint_attempt_index', recovery_decision['attempt_index'])} "
+                f"location={recovery_decision.get('location_attempt_index', 1)}/{args.max_recovery_locations if args.semantic_recovery else 1} "
+                f"pixels={verification['matching_pixels']} active={sorted(state.active)}",
+                flush=True,
+            )
 
     if async_detector is not None:
         consume_async(async_detector.flush())
@@ -819,7 +852,9 @@ def main() -> None:
                 key: sorted(value) for key, value in semantic_region_belief.observed_samples.items()
             },
             "maximum_hypotheses": args.max_recovery_hypotheses,
-            "maximum_visits": args.max_recovery_visits,
+            "legacy_maximum_visits_ignored": args.max_recovery_visits,
+            "maximum_locations": args.max_recovery_locations,
+            "budget_unit": "location_hypothesis",
             "maximum_viewpoints_per_location": args.max_viewpoints_per_location,
             "controlled_stale_object_ids": sorted(controlled_stale_object_ids),
             "controlled_found_object_ids": sorted(controlled_found_object_ids),

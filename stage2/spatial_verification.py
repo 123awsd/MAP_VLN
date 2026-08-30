@@ -73,3 +73,57 @@ def verify_target_reference_relation(
         "reference_object_ids": [item.get("id") for item in references],
         "metrics": metrics,
     }
+
+
+def effective_relation_context(
+    task: dict[str, Any], candidate: dict[str, Any], mapped_objects: dict[str, dict[str, Any]],
+    projected_targets: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Resolve relation scope for initial and semantic-recovery observations.
+
+    A task may navigate using a known anchor (for example a vanity) while the
+    live detector searches for another category (toilet paper).  Recovery may
+    then move to a different anchor or an exact historical target box.  The
+    original location relation must not leak into that new hypothesis.
+    """
+    projected_targets = projected_targets or []
+    recovery = candidate.get("recovery_search") or {}
+    source = str(recovery.get("source", ""))
+    if source == "historical_target_box":
+        return {
+            "relation": None,
+            "target": mapped_objects.get(candidate.get("object_id")),
+            "references": [],
+            "scope": "historical_target_box_visual_recheck",
+        }
+
+    task_target_label = str(task.get("target", {}).get("label", "")).strip().lower()
+    verification_label = str(task.get("verification_label", task_target_label)).strip().lower()
+    anchor_search = bool(recovery) or task_target_label != verification_label
+    if anchor_search:
+        anchor_id = str(recovery.get("anchor_object_id") or candidate.get("object_id") or "")
+        anchor = mapped_objects.get(anchor_id)
+        relation = recovery.get("relation") if recovery else task.get("spatial_constraints", {}).get("relation")
+        confirmed = [item for item in projected_targets if item.get("confirmed")]
+        projected = max(confirmed, key=lambda item: float(item.get("score", 0.0))) if confirmed else None
+        target = None if projected is None else {
+            "id": projected.get("associated_object_id") or f"online_{verification_label}",
+            "center_xyz_m": projected["center"],
+            "size_xyz_m": projected["size"],
+        }
+        return {
+            "relation": relation,
+            "target": target,
+            "references": [] if anchor is None else [anchor],
+            "scope": "recovery_anchor" if recovery else "explicit_location_anchor",
+        }
+
+    target_object = mapped_objects.get(candidate.get("object_id"))
+    reference_labels = list(task.get("target", {}).get("references") or [])
+    return {
+        "relation": task.get("spatial_constraints", {}).get("relation"),
+        "target": target_object,
+        "reference_labels": reference_labels,
+        "references": None,
+        "scope": "original_task_relation",
+    }
