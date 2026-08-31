@@ -27,3 +27,8 @@ __pycache__/
 .ruff_cache/
 .idea/
 .vscode/
+
+# Generated paper PDFs (sources remain versioned under paper/latex/)
+/paper/main_zh.pdf
+/paper/main_en.pdf
+paper/system_overview

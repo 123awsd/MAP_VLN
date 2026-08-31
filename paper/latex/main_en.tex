@@ -1,0 +1,86 @@
+\documentclass[11pt]{article}
+\usepackage{fontspec}
+\input{preamble}
+
+\title{Semantic--Geometric Joint Planning with Pre-built 3D Maps for Long-Horizon Indoor UAV Tasks}
+\author{Author Name (TBD)}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Most vision-and-language navigation systems treat reaching a target neighborhood as success, leaving long-horizon task constraints and the final observation state under-specified. We present \systemname, a map-reusing system for indoor UAVs that unifies language-level task reasoning with executable three-dimensional observation poses and collision-free flight paths. The system first constructs a multi-floor 3D semantic map containing occupancy, object boxes, room regions, and inter-floor transition spaces. It then parses a natural-language instruction into a constrained task graph, generates task-conditioned pose candidates, and jointly selects task order, terminal poses, and 3D motion paths. During execution, open-vocabulary perception verifies task outcomes. When a historical object location becomes invalid, a semantic recovery module combines language-model priors, mapped scene instances, 3D reachability, and negative observations to continue the search. The current implementation integrates full 3D A*, collision checking, B-spline trajectories, multi-floor Habitat execution, and RViz visualization. We evaluate task success, path efficiency, terminal visibility, planning cost, and recovery efficiency.
+\end{abstract}
+
+\overviewfigure
+
+\section{Introduction}
+Domestic instructions naturally contain multiple goals, partial ordering constraints, conditional branches, and spatial expressions. A locally reactive agent cannot optimize the complete mission, while map-based methods often reduce each target to a 2D point and declare success once the agent enters a fixed neighborhood. This abstraction is particularly limiting for an indoor UAV with a fixed camera: position, altitude, and yaw jointly determine whether the requested region is observable.
+
+We study long-horizon language-guided task execution in a pre-mapped indoor environment. The agent must preserve necessary linguistic constraints while deciding which task to perform next, where to observe it, and how to reach that state safely in 3D. It must also recover when the historical semantic map no longer agrees with online observations.
+
+Our provisional contributions are:
+\begin{itemize}[leftmargin=*]
+  \item A reusable multi-floor 3D semantic mapping pipeline for indoor UAVs, representing occupancy, object instances, room regions, and transition spaces.
+  \item A constrained task graph that preserves partial order, conditional branches, spatial relations, and failure policies without forcing the literal sentence order.
+  \item Task-conditioned executable observation poses and joint optimization over task order, terminal pose, and 3D motion cost.
+  \item Semantic recovery after map-prior failure by combining language-model hypotheses, historical instances, 3D reachability, and negative online observations.
+\end{itemize}
+
+\section{Related Work}
+The final paper will review map-free VLN, semantic-map and scene-graph navigation, task-conditioned viewpoint planning, and aerial exploration and trajectory optimization. It will position the method against SpatialNav, VLMaps, SayNav, CondVLN, FALCON, OccuSG, and Boxer. \todo{Add verified references and a quantitative comparison table.}
+
+\section{Problem Formulation}
+Let $\mathcal{M}_g$ denote the 3D geometric map and $\mathcal{M}_s$ the semantic map. An instruction is converted into a task graph $\mathcal{G}_T=(\mathcal{V},\mathcal{E})$, where edges encode mandatory precedence and conditional dependencies. Task $i$ admits a set of terminal observation poses
+\begin{equation}
+G_i=\{\pose_i^1,\pose_i^2,\ldots,\pose_i^{K_i}\},\qquad
+\pose=(x,y,z,\psi).
+\end{equation}
+We optimize a feasible task order $\pi$ and one terminal pose per task:
+\begin{equation}
+\min_{\pi,\{k_i\}}\sum_j C_{\mathrm{motion}}
+(\pose_{\pi_j}^{k_{\pi_j}},\pose_{\pi_{j+1}}^{k_{\pi_{j+1}}};\mathcal{M}_g)
++\lambda C_{\mathrm{view}}(\pose_{\pi_j}^{k_{\pi_j}}),
+\end{equation}
+subject to task-graph constraints, 3D reachability, collision safety, and visibility. Online outcomes can activate or suppress branches and therefore trigger replanning.
+
+\section{Method}
+\subsection{3D Exploration and Semantic Mapping}
+FALCON explores the environment with an online voxel map and drives the simulated UAV through full 3D A*, collision validation, and B-spline trajectories. Boxer extracts object-oriented 3D boxes. Floor inference, wall extraction, transition-space reconstruction, and OccuSG produce room regions and inter-floor connectivity. Room labels are inferred from mapped object inventories. No ground-truth floor annotation is required by the online planner.
+
+\subsection{Language Task Graph}
+A language model produces structured targets, spatial references, floor or room scope, task intent, failure policy, conditional branches, and mandatory predecessors. Scene validation grounds the output in the current graph without replacing language-level decisions with a fixed ordering template. Explicit user scope is preserved during the initial search and is expanded only when the parsed failure policy permits recovery.
+
+\subsection{Task-Conditioned Observation Poses}
+Spatial expressions are normalized into support, below, nearby, and object-centric regions. For an anchor box of horizontal size $w,d$, candidate positions use
+\begin{equation}
+r=r_{\mathrm{box}}+d_{\mathrm{obs}},\qquad
+r_{\mathrm{box}}=\frac{1}{2}\sqrt{w^2+d^2}.
+\end{equation}
+Altitude is constrained by region height, horizontal distance, vertical camera field of view, and floor/ceiling clearance. Yaw faces the observation region. Candidates with collisions, poor reachability, severe occlusion, or insufficient coverage are rejected. Multiple views of one anchor are ordered by azimuth to support smooth local verification.
+
+\subsection{Joint Semantic--Geometric Planning}
+A coarse 3D A* query that shares occupancy semantics with the execution layer estimates candidate-to-candidate motion costs; unreachable transitions receive infinite cost rather than Euclidean fallback. The planner jointly selects a topologically valid task order and representative observation poses. Final execution is authorized by full-resolution 3D A*, collision checks, and B-spline optimization. Cached motion costs are tied to the geometry-map version.
+
+\subsection{Online Verification and Semantic Recovery}
+At each terminal pose, open-vocabulary detections are projected from RGB-D observations into the global frame. Exhausting valid views at a mapped location invalidates that prior. The language model then ranks plausible room and functional-region hypotheses using the original instruction, failed location, and scene inventory. These hypotheses are grounded into actual 3D anchors and ranked using semantic prior, path cost, view quality, and negative-observation history. A successful observation updates the semantic map and triggers replanning of the remaining mission.
+
+\section{Experimental Setup}
+Experiments use the Habitat simulator and a multi-floor HM3D residence, 00337-CFVBbU9Rsyb, with planned generalization tests on seven HM3D scenes. The UAV supports continuous 3D translation and yaw while the onboard camera has fixed pitch. \todo{Add sensor parameters, voxel resolution, safety margins, and hardware.}
+
+We evaluate two task families: multi-goal instructions with partial order, branches, and spatial relations; and recovery tasks in which the requested object is absent from the specified historical location. Metrics include task success, constraint satisfaction, terminal visibility, path length, planning time, rooms visited during recovery, false detections, and collisions.
+
+Baselines and ablations will include literal instruction order, Euclidean-only ordering, 2D candidate costs, no terminal-pose optimization, no conditional replanning, and no semantic recovery. \todo{Keep only completed and reproducible baselines in the final paper.}
+
+\section{Current Results and Discussion}
+The current 00337 implementation completes multi-floor exploration, object-box extraction, wall and room segmentation, transition reconstruction, task parsing, 3D candidate planning, online OWLv2 verification, conditional branches, and lost-target recovery. RViz visualizes task state, floor point clouds, executed trajectory, observation frustums, target boxes, and detection frames. The final evaluation will strictly distinguish successful completion from timeout, planning failure, and manual termination. \todo{Insert verified quantitative results and final visualizations.}
+
+\section{Limitations}
+Performance depends on pre-exploration coverage and open-vocabulary detector reliability. Structured language output still requires validation, and Habitat geometry at unusual flight altitudes does not fully reproduce real UAV sensing. Room semantics, dynamic-map updates, and cross-scene thresholds require broader evaluation.
+
+\section{Conclusion}
+\systemname moves beyond point-neighborhood navigation by planning task-completing 3D observation states together with language constraints and safe flight paths. Semantic recovery further allows execution to continue when historical object locations become stale. Future work will focus on multi-scene evaluation, controlled ablations, and real-UAV validation.
+
+\printbibliography
+\end{document}

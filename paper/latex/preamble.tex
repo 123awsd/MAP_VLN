@@ -1,0 +1,37 @@
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage{geometry}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage[backend=biber,style=ieee,sorting=none]{biblatex}
+
+\geometry{a4paper,margin=25mm}
+\graphicspath{{../system_overview/assets/final/}{../system_overview/assets/selected/}}
+\addbibresource{references.bib}
+\hypersetup{colorlinks=true,linkcolor=blue!55!black,citecolor=blue!55!black,urlcolor=blue!55!black}
+
+\newcommand{\systemname}{\textsc{PRE-MAP-VLN}}
+\newcommand{\pose}{\bm{q}}
+\newcommand{\todo}[1]{\textcolor{red!70!black}{[TODO: #1]}}
+
+\newcommand{\overviewfigure}{%
+  \begin{figure*}[t]
+    \centering
+    \IfFileExists{../system_overview/assets/final/system_overview.pdf}{%
+      \includegraphics[width=\textwidth]{system_overview.pdf}%
+    }{%
+      \fbox{\parbox[c][45mm][c]{0.94\textwidth}{\centering
+      System Overview placeholder\\
+      Export the final figure to\\
+      \texttt{paper/system\_overview/assets/final/system\_overview.pdf}}}%
+    }
+    \caption{Overview of \systemname. The system first constructs a reusable 3D semantic map, then jointly reasons about language constraints, executable observation poses, and collision-free flight paths. Online observations trigger conditional replanning or semantic recovery when needed.}
+    \label{fig:overview}
+  \end{figure*}%
+}
