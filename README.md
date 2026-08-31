@@ -6,6 +6,8 @@ PRE_MAP_VLN 是一个 Habitat-Sim + FALCON 的室内预探索项目，配合 Box
 
 只需要换机操作清单时，直接看 [新机器完整复现](docs/新机器完整复现.md)。
 
+论文绘图和项目展示使用的精选 Stage1/Stage2 图像见 [System Overview 素材库](docs/assets/system_overview/README.md)。
+
 ## 先了解三个事实
 
 1. git clone 只得到主仓库代码，不会得到 HM3D 场景、Boxer 权重、.envs、Bag 或 Docker 镜像。
