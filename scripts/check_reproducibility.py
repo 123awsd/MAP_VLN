@@ -48,6 +48,10 @@ def run(command: list[str]) -> subprocess.CompletedProcess[str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--scene-id", help="also verify one HM3D train scene, e.g. 00166-RaYrxWt5pR1")
+    parser.add_argument(
+        "--prepared",
+        help="also verify outputs/stage2_3d/prepared/<name> for the quick Stage2 path",
+    )
     parser.add_argument("--skip-weight-hash", action="store_true", help="only check checkpoint names and sizes")
     args = parser.parse_args()
     failures: list[str] = []
@@ -112,6 +116,33 @@ def main() -> int:
             for path in (scene, scene_config):
                 if not path.is_file():
                     failures.append(f"missing HM3D asset: {path}")
+
+    if args.prepared:
+        prepared = ROOT / "outputs/stage2_3d/prepared" / args.prepared
+        manifest_path = prepared / "manifest.json"
+        required = [
+            manifest_path,
+            prepared / "scene_graph.json",
+            prepared / "generated_stage1_config.json",
+            prepared / "voxel_snapshot/metadata.json",
+            prepared / "voxel_snapshot/voxel_map.npz",
+        ]
+        for path in required:
+            if not path.is_file():
+                failures.append(f"missing prepared Stage2 asset: {path}")
+        if manifest_path.is_file():
+            try:
+                import json
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                if manifest.get("format") != "pre_map_vln.prepared_multifloor_stage2.v1":
+                    failures.append(f"unsupported prepared manifest format: {manifest_path}")
+                prepared_scene_id = manifest.get("scene_id")
+                if args.scene_id and prepared_scene_id != args.scene_id:
+                    failures.append(
+                        f"prepared scene {prepared_scene_id} differs from --scene-id {args.scene_id}"
+                    )
+            except (OSError, ValueError) as error:
+                failures.append(f"invalid prepared Stage2 manifest: {error}")
 
     falcon_status = run(["git", "-C", str(ROOT / "third_party/FALCON"), "status", "--porcelain"]).stdout.strip()
     if falcon_status:

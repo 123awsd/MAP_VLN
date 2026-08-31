@@ -4,10 +4,12 @@ PRE_MAP_VLN 是一个 Habitat-Sim + FALCON 的室内预探索项目，配合 Box
 
 本文档以“新机器从 Git clone 开始”为目标，区分最小验证、第一阶段探索、房间/物体后处理和第二阶段演示。大型数据、模型权重、第三方源码、Docker 镜像和运行结果不进入主 Git。
 
+只需要换机操作清单时，直接看 [新机器完整复现](docs/新机器完整复现.md)。
+
 ## 先了解三个事实
 
 1. git clone 只得到主仓库代码，不会得到 HM3D 场景、Boxer 权重、.envs、Bag 或 Docker 镜像。
-2. 通用第一阶段入口 `run_hm3d_stage1_3d.sh` 是三维无人机探索：保留三维 viewpoint、三维 A*、可变 z、规划 yaw 和三维碰撞检查。旧的 `run_00166_stage1.sh` 与七场景批处理仍是兼容性单层入口；第二阶段底层目前仍是二维自由栅格 A*。
+2. 通用第一阶段入口 `run_hm3d_stage1_3d.sh` 是三维无人机探索：保留三维 viewpoint、三维 A*、可变 z、规划 yaw 和三维碰撞检查。当前多楼层第二阶段同样使用 XYZ 候选位姿、FALCON voxel 快照、粗三维 A*、三维碰撞检查和 B-spline；只有旧的兼容性单层演示仍使用二维自由栅格 A*。
 3. Docker 只承载 ROS1 FALCON 和 ROS2 OccuSG。Habitat-Sim 在宿主机 Python 环境中运行，Boxer 也在宿主机独立 Python 环境中运行。
 
 ## 项目结构
@@ -196,12 +198,26 @@ docker info
 ./scripts/check_reproducibility.py --scene-id 00166-RaYrxWt5pR1
 ~~~
 
+首次初始化需要下载第三方源码和约 1.4 GB Boxer 权重，并在本机创建约 8 GB 的两个 Python 环境；Docker 镜像还会额外占用空间。不要复制 `.envs/` 或旧镜像到另一台机器，按锁定脚本重建更可靠。
+
+### Clone 后的两条最短路径
+
+完整从原始数据复现：
+
+~~~text
+clone → bootstrap → 配置 HM3D/Qwen → Stage1 → 导出 Bag
+      → Boxer → 多楼层房间/墙/楼梯 → voxel 快照 → Stage2
+~~~
+
+只想快速复现第二阶段：从原机器复制一个小型 `outputs/stage2_3d/prepared/<name>/` bundle，再在新机器运行 `run_prepared_stage2.sh`。bundle 包含场景图、FALCON voxel 快照和 Stage1 规划配置，不包含 HM3D、Boxer 权重、API key 或大型 Bag。
+
 ## 5. 最小可运行验证
 
 准备 example 场景后，先验证 Habitat-Sim 能加载 GLB、navmesh、RGB、Depth 和 Semantic：
 
 ~~~bash
-.envs/habitat/bin/python scripts/smoke_habitat.py
+.envs/habitat/bin/python scripts/smoke_habitat.py \
+  --scene-id 00166-RaYrxWt5pR1
 ~~~
 
 成功后检查 ROS 容器：
@@ -215,15 +231,7 @@ docker compose run --rm occusg bash -lc 'ros2 --version'
 
 ### 00337 三维探索验证基线
 
-2026-08-28 已在 `00337-CFVBbU9Rsyb` 完成一次真实三维 FALCON 探索验证。Habitat 执行完整三维 `PositionCommand` 和规划 yaw，FALCON 保留三维 A*、三维 viewpoint 与发布前碰撞检查；轨迹没有固定或压平 z。该次运行完整探索了两层楼，并由 FALCON 以 `No frontier detected` 正常进入 `FINISH`：
-
-- Habitat elapsed：288.5 s；FALCON exploration duration：283.0 s；
-- 最终 map coverage：1229.23；轨迹 z 范围：0.808–10.002 m；
-- 条件式安全 A* 前缀成功发布 26 次，最长连续静止约 3 s，未出现持续振荡；
-- 44 次预测碰撞均在轨迹发布前被拒绝，没有把碰撞轨迹作为正常探索执行；
-- 验证镜像：`pre-map-vln/falcon-noetic:local`，image ID `sha256:1f539038fb69e30246da8b0743333b52ae2c176258d5f2edd3ceca2e6d9a8b6c`。
-
-成功 Bag 名为 `hm3d_stage1_00337_conditionalprefix_full_20260828_raw.bag`，约 17.2 GB。Bag、HM3D 数据和本地 Docker 镜像不进入 Git；在其他机器上应从本提交重新获取固定版本依赖并构建镜像。
+`00337-CFVBbU9Rsyb` 是当前多楼层参考场景。参考链路已验证 1–3 层的可变 z 探索、在线楼层/房间重建、物体框、跨层通道和第二阶段三维执行。历史 Bag 和运行输出不进入 Git，因此不要把某个本地 Bag 名、镜像 ID 或运行目录当作代码依赖；换机时按下方通用命令重跑，或复制 prepared bundle。
 
 其他 HM3D 场景不需要手写三维边界。通用入口会根据固定 seed 的 Habitat 起点和 navmesh 自动生成场景专用三维 YAML，并将同一精确起点传给实际运行：
 
@@ -231,7 +239,7 @@ docker compose run --rm occusg bash -lc 'ros2 --version'
 ./scripts/run_hm3d_stage1_3d.sh 00166-RaYrxWt5pR1 full3d_v1 600 5 5 true
 ~~~
 
-参数依次为场景 ID、实验名、最大时长、Habitat 频率、关键帧间隔和是否打开 RViz。默认录制 compact Bag：保留最终点云地图、轨迹和稀疏 RGB，避免重复保存每一帧完整占据图。
+参数依次为场景 ID、实验名、最大时长、Habitat 频率、关键帧间隔和是否打开 RViz；可追加第七个参数 `compact` 或 `full`。推荐 `compact`，它保留最终点云地图、轨迹和稀疏 RGB，避免重复保存每一帧完整占据图。
 
 ### 单场景 00166
 
@@ -266,11 +274,39 @@ FINISH 只表示 FALCON 状态机完成；真实覆盖率、规划失败、预�
 
 ## 7. 第一阶段后处理：Boxer、OccuSG 和房间语义
 
-已有 episode 可以离线生成物体框、结构占据图和场景图：
+推荐从一个已经合法结束并检查过质量的三维 Stage1 运行开始。先把 compact/full Bag 导出为互斥 occupied/free/unknown 点云和真实轨迹：
 
 ~~~bash
-./scripts/run_stage1_postprocess.sh hm3d_stage1_complete_v3
-.envs/habitat/bin/python scripts/validate_stage1.py --episode hm3d_stage1_complete_v3
+RUN=outputs/stage1_3d/00337-CFVBbU9Rsyb/<run-name>
+BAG=outputs/bags/hm3d_stage1_3d_00337_<run-name>_compact.bag
+./scripts/export_stage1_run.sh "$RUN" "$BAG"
+~~~
+
+再对 Stage1 保存的 episode 运行 Boxer。`indoor_v2` 是当前较完整的室内开放词表；输出 CSV 路径由命令最后打印：
+
+~~~bash
+./scripts/run_boxer_habitat.sh \
+  "$RUN/episode" \
+  outputs/boxer/00337_<run-name> \
+  config/stage1_indoor_v2.txt \
+  indoor_v2
+~~~
+
+最后用一个通用入口完成 1–3 层房间准备、纯几何墙提取、跨层通道、Qwen 房间语义、全局 scene graph 和 FALCON voxel 快照：
+
+~~~bash
+BOXES=outputs/boxer/00337_<run-name>/episode/indoor_v2_3dbbs_fused.csv
+./scripts/prepare_multifloor_stage2.sh \
+  "$RUN" "$BOXES" 00337_reference 3
+~~~
+
+生成的可移植输入位于 `outputs/stage2_3d/prepared/00337_reference/`。准备阶段需要 OccuSG 镜像和 Qwen key；它不会读取 HM3D 真值楼层或真值房间标签。
+
+旧的单层一键后处理仍保留用于兼容历史数据：
+
+~~~bash
+./scripts/run_stage1_postprocess.sh <legacy-episode-name>
+.envs/habitat/bin/python scripts/validate_stage1.py --episode <legacy-episode-name>
 ~~~
 
 典型数据流为：
@@ -331,20 +367,24 @@ Qwen 不生成房间坐标，也不创建、合并或拆分几何房间。房间
 
 ## 8. 第二阶段演示
 
-第二阶段依赖已经生成的 scene graph、occupancy grid、候选任务输入和 Habitat 场景：
+推荐直接使用上一节生成的 prepared bundle。自然语言会先由 Qwen 转成任务图，再由当前三维第二阶段执行：
 
 ~~~bash
-./scripts/run_stage2_demo.sh
+./scripts/run_prepared_stage2.sh \
+  00337_reference task_v1 \
+  "帮我看看二楼厨房台面附近的微波炉、二楼客厅沙发旁的茶几和三楼客厅的电视是不是都还在原位，再顺路确认一下二楼卫生间马桶旁还有没有厕纸，先后顺序你自己安排。" \
+  owlv2
 ~~~
 
-常用验收和回放：
+已有任务图也可以直接传入，从而不调用 Qwen：
 
 ~~~bash
-.envs/habitat/bin/python scripts/validate_stage2.py
-./scripts/replay_stage2_rviz.sh hm3d_stage2_complete false 1.0
+./scripts/run_prepared_stage2.sh \
+  00337_reference task_from_json \
+  config/stage2_tasks/00337_household_multifloor.json owlv2
 ~~~
 
-默认使用本地 OWLv2 做开放词表感知；Qwen 只在 task graph、结构策略或显式 VLM 复核/语义恢复路径中调用。原有单层演示仍使用二维自由栅格 A*；新增的多楼层仿真入口使用 FALCON 三维 occupancy 快照、真实 XYZ 候选位姿、粗三维 A* 和仿真 B-spline。Habitat 配置只允许 raw FREE，UNKNOWN/OCCUPIED 不可穿越；实测选择 0.10 m 硬 ESDF 距离和 0.20 m 软间距偏好。完整 B-spline 发布前必须通过逐点、逐段三维碰撞检查；失败时只沿锁定目标的同一条 A* 路径生成 0.70 m 分段 B-spline。该入口不等价于真实动力学或 C++ FALCON B-spline 验证。
+默认使用本地 OWLv2 做开放词表感知；Qwen 只负责自然语言任务图、房间语义或显式恢复推理。当前多楼层入口使用 FALCON 三维 occupancy 快照、真实 XYZ 候选位姿、粗三维 A*、逐点/逐段三维碰撞检查和 B-spline。UNKNOWN/OCCUPIED 不允许穿越。该 Python 仿真执行链验证的是规划和任务系统，不等价于真实四旋翼动力学或 C++ FALCON 的在线轨迹控制。
 
 00337 已完成的多楼层三维仿真验收为 1→2→3 层：A* 41.50 m、B-spline 41.35 m、847 个连续位姿，z 范围 0.25–6.53 m。三段均使用完整三次 B-spline，没有触发分段保底；所有执行位姿都满足 0.10 m 硬距离，且没有进入 UNKNOWN/OCCUPIED。仍有部分位姿低于 0.20 m 软偏好，因此结果保留 `near_surface_clipping_risk`，不能表述为具有真实机体尺寸约束的无碰撞飞行。可复用入口接受任意 task graph、扁平多层 scene graph、FALCON voxel snapshot 和对应 Stage 1 配置：
 
@@ -357,7 +397,7 @@ Qwen 不生成房间坐标，也不创建、合并或拆分几何房间。房间
   <run-name>
 ~~~
 
-为新地图准备三维输入时，先从 Stage 1 导出的三类互斥 PCD 构建不可变快照，再将逐层房间图转换为全局唯一 room/object ID：
+`prepare_multifloor_stage2.sh` 已封装下面两个底层步骤。需要单独调试时才直接调用：
 
 ~~~bash
 .envs/habitat/bin/python scripts/build_falcon_voxel_snapshot.py \
@@ -377,6 +417,8 @@ Qwen 不生成房间坐标，也不创建、合并或拆分几何房间。房间
 ./scripts/run_final_demos.sh
 .envs/habitat/bin/python scripts/validate_final_demos.py
 ~~~
+
+上面两个是历史单层演示和回归验证入口，不是新地图的首选路径。
 
 ## 9. RViz / Bag 回放
 
@@ -420,6 +462,20 @@ docker compose run --rm falcon \
 - 运行配置、随机种子、Bag、评估报告和失败原因。
 
 不要把 Bag、模型权重、API key 或宿主机绝对路径提交到 Git。需要共享结果时，单独打包 outputs/<experiment>/ 和对应报告，或使用外部对象存储。
+
+给另一台机器共享第二阶段最小输入时，只打包 prepared bundle：
+
+~~~bash
+tar -C outputs/stage2_3d/prepared -czf 00337_reference.tar.gz 00337_reference
+
+# 新机器 clone 并初始化后：
+mkdir -p outputs/stage2_3d/prepared
+tar -C outputs/stage2_3d/prepared -xzf /path/to/00337_reference.tar.gz
+./scripts/check_reproducibility.py \
+  --scene-id 00337-CFVBbU9Rsyb --prepared 00337_reference
+~~~
+
+prepared 配置中的旧绝对 HM3D 路径会在 `run_prepared_stage2.sh` 启动时按新机器的环境变量重写，不需要手工编辑。
 
 提交前检查：
 

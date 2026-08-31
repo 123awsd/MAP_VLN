@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Load the pinned HM3D example and export one synchronized observation."""
+"""Load one HM3D scene and export a synchronized RGB-D observation."""
 
+import argparse
+import os
 from pathlib import Path
 
 import habitat_sim
@@ -9,11 +11,6 @@ from PIL import Image
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SCENE_ROOT = PROJECT_ROOT / "data/scene_datasets/hm3d/example"
-SCENE_DIR = SCENE_ROOT / "00861-GLAQ4DNUx5U"
-SCENE = SCENE_DIR / "GLAQ4DNUx5U.basis.glb"
-SCENE_CONFIG = SCENE_ROOT / "hm3d_annotated_example_basis.scene_dataset_config.json"
-OUTPUT_DIR = PROJECT_ROOT / "outputs/smoke_habitat"
 
 
 def sensor(uuid: str, sensor_type: habitat_sim.SensorType) -> habitat_sim.CameraSensorSpec:
@@ -27,12 +24,32 @@ def sensor(uuid: str, sensor_type: habitat_sim.SensorType) -> habitat_sim.Camera
 
 
 def main() -> None:
-    if not SCENE.exists():
-        raise FileNotFoundError(SCENE)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--scene-id", default="00166-RaYrxWt5pR1")
+    parser.add_argument("--scene-root", type=Path, default=None)
+    parser.add_argument("--scene-config", type=Path, default=None)
+    parser.add_argument("--output", type=Path, default=None)
+    args = parser.parse_args()
+    if "-" not in args.scene_id:
+        parser.error("--scene-id must include numeric ID and HM3D token")
+    token = args.scene_id.split("-", 1)[1]
+    scene_root = args.scene_root or Path(os.environ.get(
+        "PRE_MAP_VLN_HM3D_TRAIN_ROOT",
+        "/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/train",
+    ))
+    scene_config = args.scene_config or Path(os.environ.get(
+        "PRE_MAP_VLN_HM3D_SCENE_CONFIG",
+        "/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/hm3d_annotated_basis.scene_dataset_config.json",
+    ))
+    scene = scene_root / args.scene_id / f"{token}.basis.glb"
+    output_dir = args.output or PROJECT_ROOT / "outputs/smoke_habitat" / args.scene_id
+    for path in (scene, scene_config):
+        if not path.is_file():
+            raise FileNotFoundError(path)
 
     sim_cfg = habitat_sim.SimulatorConfiguration()
-    sim_cfg.scene_id = str(SCENE)
-    sim_cfg.scene_dataset_config_file = str(SCENE_CONFIG)
+    sim_cfg.scene_id = str(scene)
+    sim_cfg.scene_dataset_config_file = str(scene_config)
     sim_cfg.enable_physics = True
 
     agent_cfg = habitat_sim.agent.AgentConfiguration()
@@ -56,19 +73,19 @@ def main() -> None:
         depth = np.asarray(obs["depth"], dtype=np.float32)
         semantic = np.asarray(obs["semantic"], dtype=np.int32)
 
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        Image.fromarray(rgb).save(OUTPUT_DIR / "rgb.png")
-        np.save(OUTPUT_DIR / "depth_m.npy", depth)
-        np.save(OUTPUT_DIR / "semantic.npy", semantic)
-        np.save(OUTPUT_DIR / "agent_position.npy", np.asarray(point))
+        output_dir.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(rgb).save(output_dir / "rgb.png")
+        np.save(output_dir / "depth_m.npy", depth)
+        np.save(output_dir / "semantic.npy", semantic)
+        np.save(output_dir / "agent_position.npy", np.asarray(point))
 
-        print(f"scene={SCENE}")
+        print(f"scene={scene}")
         print(f"position={np.asarray(point).tolist()}")
         print(f"rgb={rgb.shape} {rgb.dtype}")
         print(f"depth={depth.shape} {depth.dtype} range=({depth.min():.3f}, {depth.max():.3f})")
         print(f"semantic={semantic.shape} {semantic.dtype} unique={np.unique(semantic).size}")
         print(f"semantic_objects={len(sim.semantic_scene.objects)}")
-        print(f"output={OUTPUT_DIR}")
+        print(f"output={output_dir}")
 
 
 if __name__ == "__main__":
