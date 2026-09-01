@@ -433,6 +433,25 @@ Qwen 不生成房间坐标，也不创建、合并或拆分几何房间。房间
   <run-name>
 ~~~
 
+### 00337 自然语言任务通过率
+
+场景级端到端评测集位于
+`config/stage2_benchmarks/00337_functional_v1.json`，包含单目标空间关系、无序多目标、
+前置顺序、条件分支、跨层联合规划和语义恢复。先查看清单，再顺序执行全部样例：
+
+~~~bash
+.envs/habitat/bin/python scripts/run_stage2_instruction_benchmark.py --list
+.envs/habitat/bin/python scripts/run_stage2_instruction_benchmark.py
+~~~
+
+只跑一条时使用 `--case <case-id>`。每条指令都经过真实 Qwen 解析、三维规划、Habitat
+执行和 OWLv2 验证；中间失败不会阻止后续样例。结果写入
+`outputs/stage2_3d/benchmarks/00337_functional_v1/<session>/`，其中 `report.json` 和
+`summary.csv` 分别报告整句成功率、目标级成功率、碰撞自由率、路径长度和耗时。若本机
+已有 00337 的场景图、voxel 快照和 Stage1 配置，runner 会自动建立轻量 prepared
+软链接，不复制大型地图。当前确定性单次结果应称为场景任务通过率；统计鲁棒成功率还需
+在后续评测中加入起点、观测或检测扰动。
+
 `prepare_multifloor_stage2.sh` 已封装下面两个底层步骤。需要单独调试时才直接调用：
 
 ~~~bash

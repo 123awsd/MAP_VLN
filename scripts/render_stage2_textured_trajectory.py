@@ -42,6 +42,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hfov", type=float, default=72.0)
     parser.add_argument("--elevation-deg", type=float, default=24.0)
     parser.add_argument(
+        "--target-height-offset-m",
+        type=float,
+        default=0.0,
+        help="Vertical offset of the orbit look-at target; negative values move the scene up.",
+    )
+    parser.add_argument(
         "--orbit-padding",
         type=float,
         default=0.86,
@@ -82,6 +88,11 @@ def parse_args() -> argparse.Namespace:
         "--no-xray-overlay",
         action="store_true",
         help="Only render the depth-tested Habitat trajectory tube.",
+    )
+    parser.add_argument(
+        "--no-caption",
+        action="store_true",
+        help="Render without the title and exploration progress panel.",
     )
     return parser.parse_args()
 
@@ -401,6 +412,7 @@ def render(args: argparse.Namespace) -> None:
         scene_center = np.asarray(scene_bb.center(), dtype=np.float64)
         scene_size = np.asarray(scene_bb.size(), dtype=np.float64)
         target = scene_center.copy()
+        target[1] += args.target_height_offset_m
 
         # The native tube can only represent the complete path. Use it for the
         # depth-tested-only mode; the normal overlay mode draws a growing path.
@@ -506,13 +518,14 @@ def render(args: argparse.Namespace) -> None:
                         (float(points[:, 1].min()), float(points[:, 1].max())),
                         show_current_position=revealed_pose_count > 1,
                     )
-                rgb = add_caption(
-                    rgb,
-                    execution,
-                    scene_path.parent.name,
-                    light_theme=args.background != "black",
-                    revealed_pose_count=revealed_pose_count,
-                )
+                if not args.no_caption:
+                    rgb = add_caption(
+                        rgb,
+                        execution,
+                        scene_path.parent.name,
+                        light_theme=args.background != "black",
+                        revealed_pose_count=revealed_pose_count,
+                    )
                 if frame_index == args.frames - 1:
                     Image.fromarray(rgb).save(preview_path)
                 writer.append_data(rgb)
@@ -537,6 +550,7 @@ def render(args: argparse.Namespace) -> None:
         "background": args.background,
         "orbit_padding": args.orbit_padding,
         "elevation_deg": args.elevation_deg,
+        "target_height_offset_m": args.target_height_offset_m,
         "hfov_deg": args.hfov,
         "trajectory_radius_m": args.trajectory_radius,
         "trajectory_line_width_px": args.trajectory_line_width,
@@ -549,6 +563,7 @@ def render(args: argparse.Namespace) -> None:
         "frustum_line_width_px": args.frustum_line_width,
         "observation_hfov_deg": args.observation_hfov,
         "progressive_trajectory": not args.static_trajectory,
+        "caption": not args.no_caption,
         "start_hold_fraction": args.start_hold_fraction,
         "end_hold_fraction": args.end_hold_fraction,
         "video": str(video_path.resolve()),

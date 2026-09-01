@@ -59,18 +59,129 @@ def _detect_cycle(tasks: list[dict[str, Any]]) -> None:
     _require(visited == len(task_ids), "task prerequisites contain a cycle")
 
 
+def _collapse_generic_same_target_recovery(graph: dict[str, Any]) -> None:
+    """Fold a model-invented global fallback task into scoped semantic recovery.
+
+    A vague request such as "if it is not there, continue looking elsewhere"
+    is one locate-target task: exhaust the user-specified location, then invoke
+    semantic recovery.  It is not an explicit branch to a second, unscoped task.
+    Concrete fallback rooms/floors/references remain ordinary conditional tasks.
+    """
+    tasks = graph.get("tasks")
+    rules = graph.get("conditional_rules")
+    if not isinstance(tasks, list) or not isinstance(rules, list):
+        return
+    tasks_by_id = {
+        str(task.get("id", "")): task for task in tasks if isinstance(task, dict)
+    }
+    prerequisite_references = {
+        str(predecessor)
+        for task in tasks if isinstance(task, dict)
+        for predecessor in (task.get("prerequisites") or [])
+    }
+    rule_references: dict[str, int] = defaultdict(int)
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        for task_id in rule.get("activate_task_ids", []) or []:
+            rule_references[str(task_id)] += 1
+        for task_id in rule.get("skip_task_ids", []) or []:
+            rule_references[str(task_id)] += 1
+
+    removed_tasks: set[str] = set()
+    removed_rule_indices: set[int] = set()
+    for index, rule in enumerate(rules):
+        if not isinstance(rule, dict):
+            continue
+        if str(rule.get("if_outcome", "not_found")).strip().lower() != "not_found":
+            continue
+        activate = [str(item) for item in (rule.get("activate_task_ids") or [])]
+        if len(activate) != 1 or (rule.get("skip_task_ids") or []):
+            continue
+        source_id = str(rule.get("source_task_id", ""))
+        fallback_id = activate[0]
+        source = tasks_by_id.get(source_id)
+        fallback = tasks_by_id.get(fallback_id)
+        if source is None or fallback is None or fallback_id in prerequisite_references:
+            continue
+        if rule_references.get(fallback_id) != 1:
+            continue
+        source_label = str(
+            source.get("verification_label")
+            or (source.get("target") or {}).get("label", "")
+        ).strip().lower()
+        fallback_label = str(
+            fallback.get("verification_label")
+            or (fallback.get("target") or {}).get("label", "")
+        ).strip().lower()
+        if not source_label or source_label != fallback_label:
+            continue
+        fallback_target = fallback.get("target") or {}
+        has_concrete_scope = any(
+            _optional_text(fallback_target.get(key)) is not None
+            for key in ("room", "room_id", "floor_id", "reference", "reference_secondary")
+        ) or any(
+            _optional_text(item) is not None
+            for item in (fallback_target.get("references") or [])
+        )
+        if has_concrete_scope:
+            continue
+        fallback_intent = fallback.get("intent") or {}
+        fallback_search = fallback.get("search_policy") or {}
+        is_semantic_recovery = (
+            str(fallback_intent.get("not_found_policy", "")).strip().lower()
+            == "semantic_recovery"
+            or str(fallback_search.get("mode", "")).strip().lower()
+            == "semantic_recovery"
+            or str(fallback_search.get("on_exhaustion", "")).strip().lower()
+            == "qwen_semantic_recovery"
+        )
+        if not is_semantic_recovery:
+            continue
+
+        source["action"] = "find"
+        source["intent"] = {
+            "goal_type": "locate_target", "not_found_policy": "semantic_recovery",
+        }
+        source["search_policy"] = {
+            "mode": "fixed", "on_exhaustion": "qwen_semantic_recovery",
+            "maximum_location_hypotheses": int(
+                fallback_search.get("maximum_location_hypotheses", 3)
+            ),
+        }
+        removed_tasks.add(fallback_id)
+        removed_rule_indices.add(index)
+
+    if removed_tasks:
+        graph["tasks"] = [
+            task for task in tasks if str(task.get("id", "")) not in removed_tasks
+        ]
+        graph["conditional_rules"] = [
+            rule for index, rule in enumerate(rules) if index not in removed_rule_indices
+        ]
+
+
 def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = "") -> dict[str, Any]:
     """Return a normalized deep copy, rejecting unsafe or ambiguous VLM output."""
     _require(isinstance(value, dict), "task graph must be an object")
     graph = copy.deepcopy(value)
+    _collapse_generic_same_target_recovery(graph)
     graph["format"] = FORMAT
     graph["instruction"] = str(graph.get("instruction") or instruction).strip()
     tasks = graph.get("tasks")
     _require(isinstance(tasks, list) and tasks, "task graph must contain non-empty tasks")
+    declared_rules = graph.get("conditional_rules")
+    declared_negative_branch_sources: set[str] = set()
+    if isinstance(declared_rules, list):
+        declared_negative_branch_sources = {
+            str(rule.get("source_task_id", ""))
+            for rule in declared_rules
+            if isinstance(rule, dict)
+            and str(rule.get("if_outcome", "not_found")).strip().lower() == "not_found"
+        }
 
     seen: set[str] = set()
     explicit_intent_tasks: set[str] = set()
-    explicit_not_found_policy_tasks: set[str] = set()
     normalized_tasks = []
     for index, source in enumerate(tasks):
         _require(isinstance(source, dict), f"task {index} must be an object")
@@ -221,12 +332,6 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
         _require(isinstance(intent, dict), f"task {task_id} intent must be an object")
         if task.get("intent") is not None:
             explicit_intent_tasks.add(task_id)
-        if (
-            "not_found_policy" in intent
-            or "on_exhaustion" in search_policy
-            or search_mode == "semantic_recovery"
-        ):
-            explicit_not_found_policy_tasks.add(task_id)
         goal_type = str(intent.get(
             "goal_type",
             "locate_target" if (
@@ -244,6 +349,22 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
             not_found_policy in ALLOWED_NOT_FOUND_POLICIES,
             f"unsupported not-found policy {not_found_policy!r} in {task_id}",
         )
+        has_declared_negative_branch = task_id in declared_negative_branch_sources
+        requested_semantic_recovery = (
+            search_mode == "semantic_recovery"
+            or not_found_policy == "semantic_recovery"
+            or on_exhaustion == "qwen_semantic_recovery"
+        )
+        if has_declared_negative_branch:
+            _require(
+                not requested_semantic_recovery,
+                f"task {task_id} cannot combine autonomous recovery with an explicit branch",
+            )
+            # The conditional rule is the authoritative representation of the
+            # user's explicit fallback. Normalize redundant model fields instead
+            # of rejecting a valid verify-presence branch as report_absent.
+            not_found_policy = "explicit_branch"
+            on_exhaustion = "finish"
         expected_exhaustion = (
             "qwen_semantic_recovery" if not_found_policy == "semantic_recovery" else "finish"
         )
@@ -309,20 +430,16 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
     tasks_by_id = {task["id"]: task for task in normalized_tasks}
     for task_id in negative_branch_sources:
         task = tasks_by_id[task_id]
-        if task_id in explicit_not_found_policy_tasks:
-            _require(
-                task["intent"]["not_found_policy"] == "explicit_branch",
-                f"task {task_id} has a not_found conditional branch but intent does not select explicit_branch",
-            )
-        else:
-            # Legacy task graphs expressed this intent only through the rule.
-            if task_id not in explicit_intent_tasks:
-                task["intent"]["goal_type"] = "locate_target"
-            task["intent"]["not_found_policy"] = "explicit_branch"
-            task["search_policy"]["on_exhaustion"] = "finish"
+        # Legacy graphs without an explicit intent retain their historical
+        # locate-target interpretation. Explicit Qwen/user intent may instead
+        # be a presence check whose negative result activates another task.
+        if task_id not in explicit_intent_tasks:
+            task["intent"]["goal_type"] = "locate_target"
+        task["intent"]["not_found_policy"] = "explicit_branch"
+        task["search_policy"]["on_exhaustion"] = "finish"
         _require(
-            task["intent"]["goal_type"] == "locate_target",
-            f"task {task_id} with a not_found branch must use locate_target",
+            task["intent"]["goal_type"] in {"locate_target", "verify_presence"},
+            f"task {task_id} with a not_found branch must be observable",
         )
     for task in normalized_tasks:
         if task["intent"]["not_found_policy"] == "explicit_branch":

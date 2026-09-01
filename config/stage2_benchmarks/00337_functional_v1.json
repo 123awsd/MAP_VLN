@@ -1,0 +1,94 @@
+{
+  "format": "pre_map_vln.stage2_instruction_benchmark.v1",
+  "name": "00337_functional_v1",
+  "scene_id": "00337-CFVBbU9Rsyb",
+  "prepared_name": "00337_reference",
+  "prepared_sources": {
+    "scene_graph": "outputs/stage2_3d/00337_scene_graph.json",
+    "voxel_snapshot": "outputs/stage2_3d/maps/00337_dormant_recovery_clearance010_bspline_v2",
+    "generated_stage1_config": "outputs/stage1_3d/00337-CFVBbU9Rsyb/dormant_recovery_20260829/generated_3d_config.json"
+  },
+  "verification_mode": "owlv2",
+  "description": "Seven natural-language cases grounded in the mapped 00337 household scene. The suite measures end-to-end parsing, 3-D observation planning, execution, visual verification, branching, and recovery.",
+  "cases": [
+    {
+      "id": "single_l1_pillow",
+      "category": "single_target_spatial",
+      "instruction": "帮我确认一楼卧室床上的枕头还在不在。",
+      "expected": {
+        "task_count": 1,
+        "required_found_labels": ["pillow"],
+        "required_relations": ["on"],
+        "semantic_recovery": false
+      }
+    },
+    {
+      "id": "single_l2_toilet_paper",
+      "category": "single_target_spatial",
+      "instruction": "帮我看看二楼卫生间马桶旁还有没有卫生纸。",
+      "expected": {
+        "task_count": 1,
+        "required_found_labels": ["toilet paper"],
+        "required_relations": ["near"],
+        "semantic_recovery": false
+      }
+    },
+    {
+      "id": "unordered_l2_household",
+      "category": "unordered_multi_target",
+      "instruction": "客人快到了，帮我确认二楼厨房台面附近的微波炉、二楼客厅沙发旁的茶几和二楼卫生间马桶旁的卫生纸都还在，先看哪个你自己安排。",
+      "expected": {
+        "task_count": 3,
+        "required_found_labels": ["microwave", "coffee table", "toilet paper"],
+        "required_relations": ["near"],
+        "semantic_recovery": false
+      }
+    },
+    {
+      "id": "precedence_l2_to_l3",
+      "category": "precedence_multi_floor",
+      "instruction": "先确认二楼厨房台面附近的微波炉，再看看二楼客厅沙发旁的茶几，最后去三楼客厅确认电视。",
+      "expected": {
+        "task_count": 3,
+        "required_found_labels": ["microwave", "coffee table", "television"],
+        "required_found_order": ["microwave", "coffee table", "television"],
+        "minimum_precedence_edges": 2,
+        "semantic_recovery": false
+      }
+    },
+    {
+      "id": "conditional_found_skip",
+      "category": "conditional_branch",
+      "instruction": "先看看二楼厨房台面附近的微波炉还在不在；只有微波炉不在那里时，才去三楼客厅检查电视。",
+      "expected": {
+        "task_count": 2,
+        "required_found_labels": ["microwave"],
+        "forbidden_executed_labels": ["television"],
+        "minimum_conditional_rules": 1,
+        "semantic_recovery": false
+      }
+    },
+    {
+      "id": "unordered_multifloor_four",
+      "category": "joint_multifloor",
+      "instruction": "朋友快到了，帮我看看二楼厨房台面附近的微波炉、二楼客厅沙发旁的茶几和三楼客厅的电视是不是都还在原位，再顺路确认一下二楼卫生间马桶旁还有没有卫生纸，先后顺序你自己安排。",
+      "expected": {
+        "task_count": 4,
+        "required_found_labels": ["microwave", "coffee table", "television", "toilet paper"],
+        "required_floors": [2, 3],
+        "semantic_recovery": false
+      }
+    },
+    {
+      "id": "toilet_paper_semantic_recovery",
+      "category": "semantic_recovery",
+      "instruction": "去一楼卫生间的洗手台旁帮我找一卷卫生纸；如果那里没有，就继续去家里其他可能存放卫生纸的地方寻找，找到后拍张照片确认一下。",
+      "expected": {
+        "task_count": 1,
+        "required_found_labels": ["toilet paper"],
+        "semantic_recovery": true,
+        "minimum_recovery_events": 1
+      }
+    }
+  ]
+}

@@ -54,6 +54,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--look-height", type=float, default=0.02)
     parser.add_argument("--drone-scale", type=float, default=0.13)
     parser.add_argument(
+        "--drone-glow",
+        action="store_true",
+        help="Add cyan arm light strips and a soft screen-space glow to the drone.",
+    )
+    parser.add_argument(
+        "--model-emissive-bloom",
+        action="store_true",
+        help="Bloom only the cyan emissive pixels already present in the drone GLB.",
+    )
+    parser.add_argument(
+        "--emissive-bloom-strength",
+        type=float,
+        default=0.72,
+        help="Opacity of model-derived emissive bloom.",
+    )
+    parser.add_argument(
+        "--emissive-bloom-radius",
+        type=float,
+        default=7.0,
+        help="Gaussian radius in pixels for model-derived emissive bloom.",
+    )
+    parser.add_argument(
         "--found-box-hold-s", type=float, default=3.0,
         help="Seconds to show a green 3D box after a target is found.",
     )
@@ -211,6 +233,136 @@ def draw_found_boxes(rgb, boxes, camera_position, view_direction, hfov):
     return output
 
 
+def draw_drone_glow(
+    rgb: np.ndarray,
+    position: np.ndarray,
+    forward: np.ndarray,
+    camera_position: np.ndarray,
+    view_direction: np.ndarray,
+    hfov: float,
+    drone_scale: float,
+) -> np.ndarray:
+    """Draw emissive-looking arm strips and a body perimeter overlay."""
+    height, width = rgb.shape[:2]
+    world_up = np.asarray([0.0, 1.0, 0.0], dtype=np.float64)
+    drone_right = np.cross(forward, world_up)
+    drone_right /= max(np.linalg.norm(drone_right), 1e-9)
+    camera_right = np.cross(view_direction, world_up)
+    camera_right /= max(np.linalg.norm(camera_right), 1e-9)
+    camera_up = np.cross(camera_right, view_direction)
+    focal = 0.5 * width / math.tan(math.radians(hfov) * 0.5)
+
+    scale_ratio = drone_scale / 0.30
+    arm_half_width = 0.072 * scale_ratio
+    arm_half_length = 0.090 * scale_ratio
+    body_half_width = 0.030 * scale_ratio
+    body_half_length = 0.036 * scale_ratio
+    arm_side_offset = 0.018 * scale_ratio
+    lamp_height = 0.018 * scale_ratio
+    center_world = position + lamp_height * world_up
+    arm_tips_world = [
+        center_world + side * arm_half_width * drone_right + front * arm_half_length * forward
+        for side, front in ((-1.0, 1.0), (1.0, 1.0), (1.0, -1.0), (-1.0, -1.0))
+    ]
+    body_edges_world = [
+        center_world + side * body_half_width * drone_right + front * body_half_length * forward
+        for side, front in ((-1.0, 1.0), (1.0, 1.0), (1.0, -1.0), (-1.0, -1.0))
+    ]
+    arm_side_segments_world = []
+    for body_edge, arm_tip in zip(body_edges_world, arm_tips_world):
+        arm_direction = arm_tip - body_edge
+        arm_direction /= max(np.linalg.norm(arm_direction), 1e-9)
+        lateral = np.cross(world_up, arm_direction)
+        lateral /= max(np.linalg.norm(lateral), 1e-9)
+        arm_side_segments_world.extend([
+            (body_edge + sign * arm_side_offset * lateral,
+             arm_tip + sign * arm_side_offset * lateral)
+            for sign in (-1.0, 1.0)
+        ])
+
+    def project(point: np.ndarray) -> tuple[int, int] | None:
+        delta = point - camera_position
+        depth = float(np.dot(delta, view_direction))
+        if depth <= 0.05:
+            return None
+        x_value = focal * float(np.dot(delta, camera_right)) / depth + width * 0.5
+        y_value = -focal * float(np.dot(delta, camera_up)) / depth + height * 0.5
+        if not (-32 <= x_value < width + 32 and -32 <= y_value < height + 32):
+            return None
+        return int(round(x_value)), int(round(y_value))
+
+    arm_tips = [project(point) for point in arm_tips_world]
+    body_edges = [project(point) for point in body_edges_world]
+    arm_side_segments = [
+        (project(start), project(end)) for start, end in arm_side_segments_world
+    ]
+    side_points = [point for segment in arm_side_segments for point in segment]
+    if any(point is None for point in arm_tips + body_edges + side_points):
+        return rgb
+
+    cyan = (35, 215, 255)
+    glow = np.zeros_like(rgb)
+    crisp = rgb.copy()
+    # Two parallel strips sit beside each arm instead of underneath its centerline.
+    for start, end in arm_side_segments:
+        cv2.line(glow, start, end, cyan, 5, cv2.LINE_AA)
+        cv2.line(crisp, start, end, (150, 250, 255), 2, cv2.LINE_AA)
+
+    # A closed contour follows the fuselage perimeter; no bright center/end dots.
+    body_contour = np.asarray(body_edges, dtype=np.int32).reshape((-1, 1, 2))
+    cv2.polylines(glow, [body_contour], True, cyan, 7, cv2.LINE_AA)
+    cv2.polylines(crisp, [body_contour], True, (150, 250, 255), 2, cv2.LINE_AA)
+    glow = cv2.GaussianBlur(glow, (0, 0), sigmaX=3.5, sigmaY=3.5)
+    # Alpha tint remains visible on bright walls/floors where additive bloom clips.
+    glow_alpha = (np.max(glow, axis=2, keepdims=True).astype(np.float32) / 255.0) * 0.68
+    glow_color = np.asarray(cyan, dtype=np.float32).reshape((1, 1, 3))
+    composed = crisp.astype(np.float32) * (1.0 - glow_alpha) + glow_color * glow_alpha
+    return np.clip(composed, 0, 255).astype(np.uint8)
+
+
+def place_drone_over_glow(
+    scene_with_drone: np.ndarray,
+    scene_without_drone: np.ndarray,
+    scene_with_glow: np.ndarray,
+) -> np.ndarray:
+    """Composite the rendered drone over the screen-space light layer."""
+    difference = cv2.absdiff(scene_with_drone, scene_without_drone)
+    drone_mask = np.max(difference, axis=2) > 3
+    mask_u8 = (drone_mask.astype(np.uint8) * 255)
+    mask_u8 = cv2.morphologyEx(
+        mask_u8, cv2.MORPH_CLOSE, np.ones((3, 3), dtype=np.uint8)
+    )
+    output = scene_with_glow.copy()
+    output[mask_u8 > 0] = scene_with_drone[mask_u8 > 0]
+    return output
+
+
+def bloom_model_emission(
+    rgb: np.ndarray, strength: float = 0.72, radius: float = 7.0
+) -> np.ndarray:
+    """Add soft bloom around cyan emissive material rendered by the GLB itself."""
+    source = rgb.astype(np.int16)
+    red, green, blue = source[..., 0], source[..., 1], source[..., 2]
+    emissive = (
+        (blue >= 150)
+        & (green >= 105)
+        & ((blue - red) >= 75)
+        & ((green - red) >= 45)
+    )
+    if not np.any(emissive):
+        return rgb
+    core = (emissive.astype(np.uint8) * 255)
+    core = cv2.morphologyEx(core, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
+    halo = cv2.GaussianBlur(core, (0, 0), sigmaX=radius, sigmaY=radius)
+    alpha = np.clip(halo.astype(np.float32) / 255.0 * strength, 0.0, 0.95)[..., None]
+    cyan = np.asarray([20.0, 220.0, 255.0], dtype=np.float32).reshape(1, 1, 3)
+    output = rgb.astype(np.float32) * (1.0 - alpha) + cyan * alpha
+    # Keep the actual surface sharp and lift it toward a white-cyan LED core.
+    core_color = np.asarray([105.0, 248.0, 255.0], dtype=np.float32)
+    output[emissive] = np.maximum(rgb[emissive].astype(np.float32), core_color)
+    return np.clip(output, 0, 255).astype(np.uint8)
+
+
 def yaw_quaternion(yaw: float) -> mn.Quaternion:
     return mn.Quaternion.rotation(mn.Rad(yaw), mn.Vector3.y_axis())
 
@@ -272,6 +424,8 @@ def main() -> None:
         raise ValueError("source-hz and playback-rate must be positive")
     if not 0.0 < args.camera_smoothing <= 1.0:
         raise ValueError("camera-smoothing must be in (0, 1]")
+    if args.emissive_bloom_strength < 0.0 or args.emissive_bloom_radius <= 0.0:
+        raise ValueError("emissive bloom strength must be non-negative and radius positive")
     output_fps = args.source_hz * args.playback_rate
     if abs(output_fps - round(output_fps)) > 1e-6:
         raise ValueError("source-hz * playback-rate must produce an integer output FPS")
@@ -391,6 +545,15 @@ def main() -> None:
 
                 rgba = np.asarray(sim.get_sensor_observations()["third_person_rgb"])
                 rgb = np.ascontiguousarray(rgba[..., :3].astype(np.uint8))
+                if args.drone_glow:
+                    rgb = draw_drone_glow(
+                        rgb, position, forward, camera_position,
+                        smoothed_view_direction, args.hfov, args.drone_scale,
+                    )
+                if args.model_emissive_bloom:
+                    rgb = bloom_model_emission(
+                        rgb, args.emissive_bloom_strength, args.emissive_bloom_radius
+                    )
                 active_boxes = [
                     box for box in discovered_boxes
                     if box["frame"] <= args.start_frame + index
@@ -424,6 +587,10 @@ def main() -> None:
         "chase_height_m": args.chase_height,
         "camera_smoothing": args.camera_smoothing,
         "drone_scale": args.drone_scale,
+        "drone_glow": args.drone_glow,
+        "model_emissive_bloom": args.model_emissive_bloom,
+        "emissive_bloom_strength": args.emissive_bloom_strength,
+        "emissive_bloom_radius": args.emissive_bloom_radius,
         "found_box_hold_s": args.found_box_hold_s,
         "found_box_count": len(discovered_boxes),
         "show_found_boxes": args.show_found_boxes,

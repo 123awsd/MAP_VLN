@@ -186,6 +186,24 @@ class TaskGraphTest(unittest.TestCase):
         self.assertEqual(task["acceptable_outcomes"], ["found", "not_found"])
         self.assertEqual(task["search_policy"]["on_exhaustion"], "finish")
 
+    def test_presence_check_can_activate_explicit_not_found_branch(self):
+        value = self.base_graph()
+        value["tasks"][0]["intent"] = {
+            "goal_type": "verify_presence", "not_found_policy": "report_absent",
+        }
+        value["tasks"][0]["search_policy"] = {
+            "mode": "fixed", "on_exhaustion": "finish",
+        }
+        graph = normalize_and_validate_task_graph(value)
+        tasks = {task["id"]: task for task in graph["tasks"]}
+        source = tasks["inspect_kitchen_cup"]
+        self.assertEqual(source["intent"], {
+            "goal_type": "verify_presence", "not_found_policy": "explicit_branch",
+        })
+        self.assertEqual(source["search_policy"]["on_exhaustion"], "finish")
+        self.assertEqual(source["acceptable_outcomes"], ["found", "not_found"])
+        self.assertFalse(tasks["inspect_living_cup"]["active_initially"])
+
     def test_explicit_locate_intent_enables_recovery_compatibility_field(self):
         value = self.base_graph()
         value["conditional_rules"] = []
@@ -226,8 +244,71 @@ class TaskGraphTest(unittest.TestCase):
         value["tasks"][0]["search_policy"] = {
             "mode": "fixed", "on_exhaustion": "qwen_semantic_recovery",
         }
-        with self.assertRaisesRegex(TaskGraphError, "does not select explicit_branch"):
+        with self.assertRaisesRegex(TaskGraphError, "cannot combine autonomous recovery"):
             normalize_and_validate_task_graph(value)
+
+    def test_collapses_unscoped_same_target_fallback_into_semantic_recovery(self):
+        value = {
+            "tasks": [
+                {
+                    "id": "check_l1_vanity",
+                    "action": "find",
+                    "target": {"label": "vanity", "room": "bathroom", "floor_id": 1},
+                    "verification_label": "toilet paper",
+                    "intent": {
+                        "goal_type": "verify_presence", "not_found_policy": "explicit_branch",
+                    },
+                    "search_policy": {"mode": "fixed", "on_exhaustion": "finish"},
+                },
+                {
+                    "id": "search_toilet_paper_global",
+                    "action": "find",
+                    "target": {"label": "toilet paper", "room": None, "floor_id": None},
+                    "verification_label": "toilet paper",
+                    "intent": {
+                        "goal_type": "locate_target", "not_found_policy": "semantic_recovery",
+                    },
+                    "search_policy": {
+                        "mode": "semantic_recovery",
+                        "on_exhaustion": "qwen_semantic_recovery",
+                    },
+                },
+            ],
+            "conditional_rules": [{
+                "source_task_id": "check_l1_vanity", "if_outcome": "not_found",
+                "activate_task_ids": ["search_toilet_paper_global"], "skip_task_ids": [],
+            }],
+        }
+        graph = normalize_and_validate_task_graph(value)
+        self.assertEqual(len(graph["tasks"]), 1)
+        self.assertEqual(graph["conditional_rules"], [])
+        task = graph["tasks"][0]
+        self.assertEqual(task["id"], "check_l1_vanity")
+        self.assertEqual(task["intent"], {
+            "goal_type": "locate_target", "not_found_policy": "semantic_recovery",
+        })
+        self.assertEqual(task["search_policy"]["mode"], "fixed")
+        self.assertEqual(task["search_policy"]["on_exhaustion"], "qwen_semantic_recovery")
+
+    def test_keeps_concrete_same_target_fallback_as_explicit_branch(self):
+        value = self.base_graph()
+        value["tasks"][0]["intent"] = {
+            "goal_type": "verify_presence", "not_found_policy": "explicit_branch",
+        }
+        value["tasks"][2]["intent"] = {
+            "goal_type": "locate_target", "not_found_policy": "semantic_recovery",
+        }
+        value["tasks"][2]["search_policy"] = {
+            "mode": "semantic_recovery", "on_exhaustion": "qwen_semantic_recovery",
+        }
+        graph = normalize_and_validate_task_graph(value)
+        self.assertEqual(len(graph["tasks"]), 3)
+        self.assertEqual(len(graph["conditional_rules"]), 1)
+        tasks = {task["id"]: task for task in graph["tasks"]}
+        self.assertEqual(
+            tasks["inspect_kitchen_cup"]["intent"]["not_found_policy"],
+            "explicit_branch",
+        )
 
 
 if __name__ == "__main__":
