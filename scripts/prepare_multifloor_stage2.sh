@@ -41,9 +41,13 @@ transition_dir="$root_dir/outputs/room_pipeline/${name}_transition"
 semantic_dir="$root_dir/outputs/room_pipeline/${name}_semantics"
 prepared_dir="$root_dir/outputs/stage2_3d/prepared/$name"
 voxel_dir="$prepared_dir/voxel_snapshot"
+scene_stage2_dir="$root_dir/outputs/scenes/$scene_id/stage2"
+scene_bundle_dir="$scene_stage2_dir/$name"
 
-for target in "$floor_dir" "$wall_dir" "$transition_dir" "$semantic_dir" "$prepared_dir"; do
-  [[ ! -e "$target" ]] || { echo "target already exists; refusing to overwrite: $target" >&2; exit 2; }
+for target in "$floor_dir" "$wall_dir" "$transition_dir" "$semantic_dir" "$prepared_dir" "$scene_bundle_dir"; do
+  [[ ! -e "$target" && ! -L "$target" ]] || {
+    echo "target already exists; refusing to overwrite: $target" >&2; exit 2;
+  }
 done
 
 export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/pre_map_vln_mpl}"
@@ -53,19 +57,27 @@ export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/pre_map_vln_mpl}"
   --max-floor "$max_floor" --auto-policy \
   --occusg-output-group "$name/floor_preparation"
 
+actual_floor_count="$(.envs/habitat/bin/python -c \
+  'import json,sys; print(len(json.load(open(sys.argv[1]))))' \
+  "$floor_dir/floors.json")"
+[[ "$actual_floor_count" =~ ^[1-9][0-9]*$ ]] || {
+  echo "invalid inferred floor count: $actual_floor_count" >&2; exit 2;
+}
+echo "Inferred $actual_floor_count floor(s); requested maximum was $max_floor"
+
 .envs/habitat/bin/python scripts/extract_multifloor_wall_grid.py \
   "$run_dir/bag_export/map_occupied.pcd" \
   "$run_dir/bag_export/map_free.pcd" \
-  "$floor_dir" "$wall_dir" --max-floor "$max_floor"
+  "$floor_dir" "$wall_dir" --max-floor "$actual_floor_count"
 
 .envs/habitat/bin/python scripts/run_transition_room_pipeline.py \
   "$run_dir" "$wall_dir" "$transition_dir" \
-  --max-floor "$max_floor" --decomp-threshold 1.8 \
+  --max-floor "$actual_floor_count" --decomp-threshold 1.8 \
   --occusg-output-group "$name/transition_rooms"
 
 .envs/habitat/bin/python scripts/classify_multifloor_rooms_qwen.py \
   "$transition_dir" "$floor_dir" "$wall_dir" "$semantic_dir" \
-  --max-floor "$max_floor" --budget-cny "${PRE_MAP_VLN_QWEN_BUDGET_CNY:-20}"
+  --max-floor "$actual_floor_count" --budget-cny "${PRE_MAP_VLN_QWEN_BUDGET_CNY:-20}"
 
 mkdir -p "$prepared_dir"
 .envs/habitat/bin/python scripts/prepare_multifloor_stage2_scene.py \
@@ -79,7 +91,7 @@ mkdir -p "$prepared_dir"
 
 cp "$run_dir/generated_3d_config.json" "$prepared_dir/generated_stage1_config.json"
 .envs/habitat/bin/python - \
-  "$prepared_dir/manifest.json" "$name" "$scene_id" "$max_floor" \
+  "$prepared_dir/manifest.json" "$name" "$scene_id" "$actual_floor_count" \
   "$run_dir" "$boxes" "$floor_dir" "$wall_dir" "$transition_dir" "$semantic_dir" <<'PY'
 import json, pathlib, sys
 target = pathlib.Path(sys.argv[1])
@@ -101,5 +113,49 @@ document = {
 target.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
 
+# Publish a scene-centric, zero-copy view only after every processing stage
+# above has succeeded.  Relative links remain valid when the repository is
+# moved as a whole; the temporary directory makes publication atomic.
+mkdir -p "$scene_stage2_dir"
+bundle_tmp="$scene_stage2_dir/.${name}.tmp.$$"
+trap 'rm -rf -- "${bundle_tmp:-}"' EXIT
+mkdir "$bundle_tmp"
+link_into_bundle() {
+  local source="$1" link_name="$2" relative
+  relative="$(realpath --relative-to="$bundle_tmp" "$source")"
+  ln -s "$relative" "$bundle_tmp/$link_name"
+}
+link_into_bundle "$run_dir" stage1_run
+link_into_bundle "$boxes" fused_boxes.csv
+link_into_bundle "$floor_dir" floors
+link_into_bundle "$wall_dir" walls
+link_into_bundle "$transition_dir" transition_rooms
+link_into_bundle "$semantic_dir" semantics
+link_into_bundle "$prepared_dir" prepared
+.envs/habitat/bin/python - \
+  "$bundle_tmp/README.json" "$scene_id" "$name" "$actual_floor_count" <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+path.write_text(json.dumps({
+    "format": "pre_map_vln.scene_stage2_bundle.v1",
+    "scene_id": sys.argv[2],
+    "name": sys.argv[3],
+    "floor_count": int(sys.argv[4]),
+    "contents": {
+        "stage1_run": "stage1_run",
+        "fused_boxes": "fused_boxes.csv",
+        "floor_grids": "floors",
+        "wall_extraction": "walls",
+        "transition_rooms": "transition_rooms",
+        "room_semantics": "semantics",
+        "prepared_stage2": "prepared",
+    },
+    "storage": "Relative symlinks to canonical outputs; data is not duplicated.",
+}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+mv "$bundle_tmp" "$scene_bundle_dir"
+trap - EXIT
+
 echo "Prepared multi-floor Stage2 input: $prepared_dir"
+echo "Scene-centric Stage2 bundle: $scene_bundle_dir"
 echo "Run a task with: ./scripts/run_prepared_stage2.sh $name <run-name> '<instruction>'"

@@ -1,0 +1,115 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.32
+      Class: rviz/PointCloud2
+      Color Transformer: RGB8
+      Enabled: false
+      Name: Full Resolution Occupied Voxels
+      Position Transformer: XYZ
+      Queue Size: 1
+      Selectable: false
+      Size (Pixels): 1
+      Style: Points
+      Topic: /stage2/static_floor_cloud
+      Unreliable: false
+      Use Fixed Frame: true
+    - Alpha: 0.78
+      Class: rviz/PointCloud2
+      Color Transformer: RGB8
+      Enabled: true
+      Name: Exposed Surface Point Cloud
+      Position Transformer: XYZ
+      Queue Size: 1
+      Selectable: false
+      Size (Pixels): 1
+      Style: Points
+      Topic: /stage2/static_surface_cloud
+      Unreliable: false
+      Use Fixed Frame: true
+    - Alpha: 0.48
+      Class: rviz/PointCloud2
+      Enabled: false
+      Color Transformer: RGB8
+      Name: Floor 1 Roofless (Floor Retained)
+      Position Transformer: XYZ
+      Queue Size: 1
+      Selectable: false
+      Size (Pixels): 1
+      Style: Points
+      Topic: /stage2/static_floor_1
+    - Alpha: 0.48
+      Class: rviz/PointCloud2
+      Enabled: false
+      Color Transformer: RGB8
+      Name: Floor 2 Roofless (Floor Retained)
+      Position Transformer: XYZ
+      Queue Size: 1
+      Selectable: false
+      Size (Pixels): 1
+      Style: Points
+      Topic: /stage2/static_floor_2
+    - Alpha: 0.48
+      Class: rviz/PointCloud2
+      Enabled: false
+      Color Transformer: RGB8
+      Name: Floor 3 Roofless (Floor Retained)
+      Position Transformer: XYZ
+      Queue Size: 1
+      Selectable: false
+      Size (Pixels): 1
+      Style: Points
+      Topic: /stage2/static_floor_3
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 230; 65; 35
+      Enabled: true
+      Head Diameter: 0.18
+      Head Length: 0.12
+      Length: 0.24
+      Line Style: Billboards
+      Line Width: 0.065
+      Name: Executed UAV Trajectory
+      Offset: {X: 0, Y: 0, Z: 0}
+      Pose Color: 230; 65; 35
+      Pose Style: None
+      Radius: 0.025
+      Shaft Diameter: 0.05
+      Shaft Length: 0.10
+      Topic: /stage2/static_complete_path
+  Enabled: true
+  Global Options:
+    Background Color: 255; 255; 255
+    Default Light: true
+    Fixed Frame: world
+    Frame Rate: 15
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 14
+      Enable Stereo Rendering: false
+      Focal Point: {X: 0.0, Y: -1.8, Z: 1.0}
+      Name: Minimal Stage2 View
+      Near Clip Distance: 0.01
+      Pitch: 1.05
+      Target Frame: world
+      Yaw: 3.9
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 900
+  Hide Left Dock: false
+  Hide Right Dock: true
+  Width: 1500
+  X: 40
+  Y: 40

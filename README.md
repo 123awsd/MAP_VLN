@@ -243,6 +243,40 @@ docker compose run --rm occusg bash -lc 'ros2 --version'
 
 参数依次为场景 ID、实验名、最大时长、Habitat 频率、关键帧间隔和是否打开 RViz；可追加第七个参数 `compact` 或 `full`。推荐 `compact`，它保留最终点云地图、轨迹和稀疏 RGB，避免重复保存每一帧完整占据图。
 
+第八个可选参数是非负整数 seed；省略时仍使用 `7`。每次运行结束后，脚本还会自动刷新零复制的场景中心索引：
+
+~~~text
+outputs/scenes/<scene-id>/stage1/
+├── runs/          # 指向 outputs/stage1_3d 中各次运行的相对符号链接
+├── bags/          # 指向 outputs/bags 中 compact/full Bag 的相对符号链接
+├── comparisons/   # 指向该场景已有 benchmark/comparison 图组
+└── index.json     # 运行状态、Bag 大小和源路径清单
+~~~
+
+该索引不移动、不复制也不删除原始数据，因此不会增加大型 Bag 的磁盘占用，旧的回放和后处理命令保持可用。已有输出可以随时手动刷新：
+
+~~~bash
+.envs/habitat/bin/python scripts/refresh_scene_output_index.py
+~~~
+
+索引中的 Bag 链接可以直接传给 RViz 回放脚本，例如：
+
+~~~bash
+./scripts/replay_bag_rviz.sh \
+  outputs/scenes/00070-w7QyjJ3H9Bp/stage1/bags/seed_run01_compact.bag \
+  false 10.0 false
+~~~
+
+多个三维场景可以按四个固定轮次（seed `7/17/27/37`）运行。批处理按轮次遍历场景；每次 Bag 完整关闭后自动导出最终点云，并把 3D/逐层真值对比图写入对应场景目录：
+
+~~~bash
+./scripts/run_stage1_3d_benchmark.sh benchmark_v1 600 5 5 \
+  00155-iLDo95ZbDJq \
+  00273-8DDKELpgD99
+~~~
+
+图片位于 `outputs/scenes/<scene-id>/stage1/comparisons/<run-name>/`。脚本支持中断后用同一命令续跑：已有 run+Bag 会跳过探索并继续后处理；缺失或不一致的产物不会被覆盖。
+
 ### 单场景 00166
 
 这是最适合第一次完整运行的入口。它拒绝未登记的场景名，并且如果输出已存在会拒绝覆盖：

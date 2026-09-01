@@ -153,7 +153,7 @@ Visualization Manager:
       Namespaces: {}
       Queue Size: 10
     - Class: rviz/Image
-      Enabled: true
+      Enabled: false
       Image Topic: /stage2/rgb
       Max Value: 1
       Median window: 5
@@ -164,7 +164,7 @@ Visualization Manager:
       Transport Hint: raw
       Unreliable: false
     - Class: rviz/Image
-      Enabled: true
+      Enabled: false
       Image Topic: /stage2/evidence
       Max Value: 1
       Median window: 5
@@ -175,7 +175,7 @@ Visualization Manager:
       Transport Hint: raw
       Unreliable: false
     - Class: rviz/Image
-      Enabled: true
+      Enabled: false
       Image Topic: /stage2/task_panel
       Max Value: 1
       Median window: 5

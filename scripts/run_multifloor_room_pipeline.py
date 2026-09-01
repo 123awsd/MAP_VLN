@@ -45,6 +45,40 @@ def infer_levels(run_dir: Path, maximum: int) -> list[dict]:
             floor = float(values[idx])
             if all(abs(floor - item["floor_z_m"]) >= 1.5 for item in levels):
                 levels.append({"floor": len(levels) + 1, "floor_z_m": floor, "flight_z_m": mode})
+
+    # A UAV can cross a floor or inspect it briefly without producing a strong
+    # trajectory histogram peak.  Recover such levels from horizontal support
+    # in the already-built occupied map.  This remains online-map-only: no
+    # Habitat mesh, navmesh, or truth floor metadata is consulted.
+    if len(levels) < maximum:
+        support_limit = .05 * counts.max()
+        floor_support = []
+        for i in range(1, len(values) - 1):
+            if counts[i] < support_limit or counts[i] < counts[i - 1] or counts[i] < counts[i + 1]:
+                continue
+            floor_z = float(values[i])
+            # A floor must be below an observed flight band; this removes the
+            # upper ceiling/support surface from consideration.
+            if floor_z > float(z.max()) - .8:
+                continue
+            if any(abs(floor_z - item["floor_z_m"]) < 1.5 for item in levels):
+                continue
+            # Require trajectory evidence above the candidate floor.  Furniture
+            # tops without a corresponding higher flight band are rejected.
+            upper = z[z >= floor_z + .6]
+            if len(upper) < max(20, .002 * len(z)):
+                continue
+            flight_z = float(np.median(upper))
+            floor_support.append((int(counts[i]), floor_z, flight_z))
+        for _, floor_z, flight_z in sorted(floor_support, reverse=True):
+            if all(abs(floor_z - item["floor_z_m"]) >= 1.5 for item in levels):
+                levels.append({"floor": len(levels) + 1, "floor_z_m": floor_z, "flight_z_m": flight_z,
+                               "detection_source": "trajectory+occupied_horizontal_support"})
+                if len(levels) >= maximum:
+                    break
+        levels.sort(key=lambda item: item["floor_z_m"])
+        for number, item in enumerate(levels, start=1):
+            item["floor"] = number
     if not levels: raise RuntimeError("could not infer FALCON floor levels")
     return levels[:maximum]
 

@@ -3,14 +3,14 @@ set -euo pipefail
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$root_dir/scripts/lib/docker.sh"
-scene_id="${1:?usage: $0 SCENE_ID [RUN_NAME] [DURATION] [HZ] [RECORD_EVERY] [RVIZ] [RECORDER]}"
+scene_id="${1:?usage: $0 SCENE_ID [RUN_NAME] [DURATION] [HZ] [RECORD_EVERY] [RVIZ] [RECORDER] [SEED]}"
 run_name="${2:-full3d_v1}"
 max_duration="${3:-600}"
 hz="${4:-5}"
 record_every="${5:-5}"
 rviz="${6:-true}"
 recorder="${7:-compact}"
-seed=7
+seed="${8:-7}"
 
 scene_root="${PRE_MAP_VLN_HM3D_TRAIN_ROOT:-/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/train}"
 scene_config="${PRE_MAP_VLN_HM3D_SCENE_CONFIG:-/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/hm3d_annotated_basis.scene_dataset_config.json}"
@@ -33,6 +33,10 @@ if [[ "$rviz" != "true" && "$rviz" != "false" ]]; then
 fi
 if [[ "$recorder" != "compact" && "$recorder" != "full" ]]; then
   echo "recorder must be compact or full" >&2
+  exit 2
+fi
+if [[ ! "$seed" =~ ^[0-9]+$ ]]; then
+  echo "seed must be a non-negative integer" >&2
   exit 2
 fi
 
@@ -177,6 +181,13 @@ if [[ -f "$bridge_dir/exploration_complete.json" ]]; then
 fi
 printf '%s\n' "$runner_status" > "$output_dir/runner_exit_status.txt"
 printf '%s\n' "$falcon_status" > "$output_dir/falcon_wait_status.txt"
+
+# Keep a scene-centric, zero-copy view of runs and Bags for browsing.  The
+# historical artifact paths remain canonical so existing replay/postprocess
+# commands continue to work.
+"$root_dir/.envs/habitat/bin/python" "$root_dir/scripts/refresh_scene_output_index.py" \
+  --scene-id "$scene_id" || \
+  echo "warning: unable to refresh outputs/scenes index" >&2
 
 if [[ "$runner_status" -ne 0 ]]; then
   echo "Habitat runner failed with exit $runner_status; $recorder Bag retained: $bag_path" >&2

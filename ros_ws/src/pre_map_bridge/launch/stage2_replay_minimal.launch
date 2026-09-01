@@ -1,0 +1,17 @@
+<launch>
+  <arg name="bag_path"/>
+  <arg name="scene_graph"/>
+
+  <param name="/use_sim_time" value="false"/>
+
+  <node pkg="pre_map_bridge" type="stage2_static_map_path_node.py"
+        name="stage2_static_map_path" output="screen">
+    <param name="bag_path" value="$(arg bag_path)"/>
+    <param name="scene_graph" value="$(arg scene_graph)"/>
+    <param name="source_voxel_size" value="0.10"/>
+    <param name="max_floor" value="3"/>
+  </node>
+
+  <node pkg="rviz" type="rviz" name="pre_map_vln_stage2_minimal_rviz"
+        output="screen" args="-d $(find pre_map_bridge)/config/stage2_minimal.rviz"/>
+</launch>

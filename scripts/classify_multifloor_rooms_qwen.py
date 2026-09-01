@@ -19,7 +19,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.patches import Polygon
+from matplotlib import colors as mpl_colors
 
 from classify_room_semantics_qwen import QwenRoomSemanticClassifier, atomic_json
 
@@ -31,6 +31,12 @@ SEMANTIC_COLORS = {
     "laundry_utility": "#9c755f", "entry_hall": "#bab0ac",
     "corridor": "#86bcb6", "unknown": "#c7c7c7", "stairwell": "#e15759",
 }
+
+# Presentation-only styling. These values affect exported figures only; the
+# occupancy grid and room polygons written to disk remain unchanged.
+WALL_RGB = (28, 28, 28)
+FREE_RGB = (224, 224, 224)
+UNKNOWN_RGB = (255, 255, 255)
 
 
 def polygon_gap(first: list[list[float]], second: list[list[float]]) -> float:
@@ -144,9 +150,9 @@ def apply_qwen(graph: dict, classifier: QwenRoomSemanticClassifier) -> tuple[lis
 
 def grid_rgb(grid: np.ndarray) -> np.ndarray:
     image = np.zeros((*grid.shape, 3), dtype=np.uint8)
-    image[grid < 0] = (165, 165, 165)
-    image[grid == 0] = (248, 248, 248)
-    image[grid == 100] = (28, 28, 28)
+    image[grid < 0] = UNKNOWN_RGB
+    image[grid == 0] = FREE_RGB
+    image[grid == 100] = WALL_RGB
     return image
 
 
@@ -159,28 +165,80 @@ def grid_extent(grid: np.ndarray, metadata: dict) -> list[float]:
     ]
 
 
-def draw_semantic_floor(axis, floor: int, graph: dict, grid: np.ndarray, metadata: dict) -> None:
+def draw_semantic_floor(
+    axis, floor: int, graph: dict, grid: np.ndarray, metadata: dict,
+    show_labels: bool = True,
+) -> None:
     axis.imshow(
         grid_rgb(grid), origin="lower", extent=grid_extent(grid, metadata),
         interpolation="nearest", zorder=0,
     )
+    room_overlay = np.zeros((*grid.shape, 4), dtype=float)
+    origin = np.asarray(metadata["origin_xy_m"], dtype=float)
+    resolution = float(metadata["resolution_m"])
+    free_visual_mask = cv2.dilate(
+        (grid == 0).astype(np.uint8), np.ones((5, 5), dtype=np.uint8), iterations=1
+    ).astype(bool)
     for room in graph.get("rooms", []):
         polygon = np.asarray(room.get("polygon_xy_m", []), dtype=float)
         if len(polygon) < 3:
             continue
         label = room.get("semantic_type", "unknown")
-        axis.add_patch(Polygon(
-            polygon, closed=True, facecolor=SEMANTIC_COLORS.get(label, "#c7c7c7"),
-            edgecolor="#202020", alpha=.58, linewidth=1.4, zorder=2,
-        ))
-        center = room.get("centroid_xy_m", np.mean(polygon, axis=0))
-        prefix = room.get("stairwell_id", f'R{room["id"]}')
-        axis.text(
-            center[0], center[1], f"{prefix}\n{label}", ha="center", va="center",
-            fontsize=8, color="#101010", zorder=3,
-            bbox={"facecolor": "white", "edgecolor": "none", "alpha": .58, "pad": 1.0},
-        )
-    axis.set_aspect("equal"); axis.grid(alpha=.12)
+        room_color = SEMANTIC_COLORS.get(label, "#c7c7c7")
+        pixel_polygon = np.round((polygon - origin) / resolution).astype(np.int32)
+        room_mask = np.zeros(grid.shape, dtype=np.uint8)
+        cv2.fillPoly(room_mask, [pixel_polygon], 1)
+        # Fill the small rasterization gap between the OccuSG contour and the
+        # wall grid. The wall overlay below remains authoritative visually.
+        room_mask = cv2.dilate(room_mask, np.ones((7, 7), dtype=np.uint8), iterations=1)
+        # Clip only the rendered color to observed FREE space. This removes
+        # polygons that spill into exterior UNKNOWN cells without changing the
+        # source polygon used by room assignment or planning.
+        room_mask = room_mask.astype(bool) & free_visual_mask
+        rgb = mpl_colors.to_rgb(room_color)
+        room_overlay[room_mask > 0, :3] = rgb
+        room_overlay[room_mask > 0, 3] = .72
+    axis.imshow(
+        room_overlay, origin="lower", extent=grid_extent(grid, metadata),
+        interpolation="nearest", zorder=2.2,
+    )
+    # Keep presentation overlays inside the observed wall structure. Some
+    # OccuSG polygons slightly cross an occupied raster cell; redraw those
+    # wall cells above the fill so a semantic color cannot paint over a wall.
+    # This affects only the figure, never the stored polygons.
+    structure_overlay = np.zeros((*grid.shape, 4), dtype=float)
+    unknown_mask = (grid < 0).astype(np.uint8)
+    component_count, component_ids = cv2.connectedComponents(unknown_mask, connectivity=4)
+    outside_ids = set(np.unique(np.concatenate((
+        component_ids[0, :], component_ids[-1, :],
+        component_ids[:, 0], component_ids[:, -1],
+    ))).tolist())
+    outside_unknown = np.isin(component_ids, list(outside_ids)) & (grid < 0)
+    structure_overlay[outside_unknown, :3] = 1.0
+    structure_overlay[outside_unknown, 3] = 1.0
+    structure_overlay[grid == 100, :3] = np.asarray(WALL_RGB, dtype=float) / 255.0
+    structure_overlay[grid == 100, 3] = 1.0
+    axis.imshow(
+        structure_overlay, origin="lower", extent=grid_extent(grid, metadata),
+        interpolation="nearest", zorder=2.5,
+    )
+    if show_labels:
+        for room in graph.get("rooms", []):
+            polygon = np.asarray(room.get("polygon_xy_m", []), dtype=float)
+            if len(polygon) < 3:
+                continue
+            label = room.get("semantic_type", "unknown")
+            center = room.get("centroid_xy_m", np.mean(polygon, axis=0))
+            prefix = room.get("stairwell_id", f'R{room["id"]}')
+            axis.text(
+                center[0], center[1], f"{prefix}\n{label}", ha="center", va="center",
+                fontsize=8, color="#101010", zorder=3,
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": .58, "pad": 1.0},
+            )
+    if not show_labels:
+        axis.axis("off")
+        return
+    axis.set_aspect("equal"); axis.grid(False)
     axis.set_title(f"L{floor} | wall grid + Qwen room semantics")
     axis.set_xlabel("FALCON X (m)"); axis.set_ylabel("FALCON Y (m)")
 
