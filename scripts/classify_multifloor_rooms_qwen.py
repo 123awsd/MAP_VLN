@@ -87,9 +87,20 @@ def overlay_transition_roles(graph: dict, transition_data: dict, floor: int) -> 
     return links
 
 
-def group_stairwells(links: list[dict], maximum_shared_floor_gap_m: float) -> list[dict]:
-    """Join consecutive transitions only when their spaces meet on a shared floor."""
-    transition_ids = sorted({item["transition_id"] for item in links})
+def group_stairwells(
+    links: list[dict],
+    maximum_shared_floor_gap_m: float,
+    space_links: list[dict] | None = None,
+) -> list[dict]:
+    """Join consecutive transitions that meet on a shared floor.
+
+    ``links`` contains transition-to-OccuSG-room associations.  A transition
+    can legitimately have no such association when OccuSG leaves the stair
+    footprint as mask-only geometry, so callers may pass ``space_links`` with
+    the independent transition polygons used for grouping and visualization.
+    """
+    grouping_links = space_links if space_links is not None else links
+    transition_ids = sorted({item["transition_id"] for item in grouping_links})
     parent = {item: item for item in transition_ids}
 
     def find(item):
@@ -103,8 +114,8 @@ def group_stairwells(links: list[dict], maximum_shared_floor_gap_m: float) -> li
         if first != second:
             parent[second] = first
 
-    for index, first in enumerate(links):
-        for second in links[index + 1:]:
+    for index, first in enumerate(grouping_links):
+        for second in grouping_links[index + 1:]:
             if first["transition_id"] == second["transition_id"] or first["floor"] != second["floor"]:
                 continue
             if polygon_gap(first["polygon_xy_m"], second["polygon_xy_m"]) <= maximum_shared_floor_gap_m:
@@ -116,19 +127,46 @@ def group_stairwells(links: list[dict], maximum_shared_floor_gap_m: float) -> li
     stairwells = []
     for index, members in enumerate(sorted(groups.values()), start=1):
         member_set = set(members)
-        local_links = [item for item in links if item["transition_id"] in member_set]
+        local_links = [item for item in grouping_links if item["transition_id"] in member_set]
+        room_links = [item for item in links if item["transition_id"] in member_set]
         floor_regions = {}
+        floor_polygons = {}
+        for item in room_links:
+            room_id = item.get("room_id")
+            if room_id is not None:
+                floor_regions.setdefault(str(item["floor"]), []).append(room_id)
         for item in local_links:
-            floor_regions.setdefault(str(item["floor"]), []).append(item["room_id"])
+            floor_polygons.setdefault(str(item["floor"]), []).append(item["polygon_xy_m"])
         stairwells.append({
             "id": f"stairwell_{index}", "semantic_type": "stairwell",
             "transition_ids": sorted(members),
             "floors": sorted({floor for item in local_links for floor in item["connected_floors"]}),
             "floor_region_ids": {key: sorted(set(value)) for key, value in sorted(floor_regions.items())},
+            "floor_polygons_xy_m": {
+                key: value for key, value in sorted(floor_polygons.items())
+            },
             "confidence": min((item["confidence"] for item in local_links), default=0.0),
-            "geometry_note": "One logical stairwell; per-floor polygons remain separate observed components.",
+            "geometry_note": (
+                "One logical stairwell; per-floor polygons remain separate observed components. "
+                "Components may be mask-only when OccuSG has no matching room."
+            ),
         })
     return stairwells
+
+
+def transition_space_links(transition_data: dict, floor: int) -> list[dict]:
+    """Return one independent geometric link for every transition on a floor."""
+    return [
+        {
+            "transition_id": transition["id"],
+            "floor": floor,
+            "room_id": None,
+            "polygon_xy_m": transition["polygon_xy_m"],
+            "connected_floors": transition.get("connected_floors", []),
+            "confidence": float(transition.get("confidence", 0.0)),
+        }
+        for transition in transition_data.get("transition_spaces", [])
+    ]
 
 
 def apply_qwen(graph: dict, classifier: QwenRoomSemanticClassifier) -> tuple[list[dict], dict]:
@@ -227,6 +265,10 @@ def draw_semantic_floor(
             polygon = np.asarray(room.get("polygon_xy_m", []), dtype=float)
             if len(polygon) < 3:
                 continue
+            # Transition rooms are represented by the canonical global
+            # stairwell record below, so render their label only there.
+            if room.get("space_role") == "transition_space":
+                continue
             label = room.get("semantic_type", "unknown")
             center = room.get("centroid_xy_m", np.mean(polygon, axis=0))
             prefix = room.get("stairwell_id", f'R{room["id"]}')
@@ -234,6 +276,19 @@ def draw_semantic_floor(
                 center[0], center[1], f"{prefix}\n{label}", ha="center", va="center",
                 fontsize=8, color="#101010", zorder=3,
                 bbox={"facecolor": "white", "edgecolor": "none", "alpha": .58, "pad": 1.0},
+            )
+    for stairwell in graph.get("stairwells", []):
+        polygons = stairwell.get("floor_polygons_xy_m", {}).get(str(floor), [])
+        # The room-level polygon above is the only stairwell fill used in the
+        # figure. The global stairwell record remains available for cross-floor
+        # connectivity and contributes only the canonical label below.
+        valid_polygons = [np.asarray(polygon, dtype=float) for polygon in polygons if len(polygon) >= 3]
+        if valid_polygons:
+            center = np.mean(np.vstack(valid_polygons), axis=0)
+            axis.text(
+                center[0], center[1], f'{stairwell["id"]}\nstairwell',
+                ha="center", va="center", fontsize=8, color="#101010", zorder=3.2,
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": .64, "pad": 1.0},
             )
     if not show_labels:
         axis.axis("off")
@@ -268,7 +323,7 @@ def main() -> None:
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     classifier = QwenRoomSemanticClassifier(args.budget_cny, args.confidence_threshold)
-    graphs, floor_grids, all_links, floor_semantics = {}, {}, [], []
+    graphs, floor_grids, all_links, all_space_links, floor_semantics = {}, {}, [], [], []
     for floor in range(1, args.max_floor + 1):
         raw = args.transition_room_dir / f"L{floor}_regions_raw.json"
         aware = args.transition_room_dir / f"L{floor}_regions_transition_aware.json"
@@ -289,6 +344,7 @@ def main() -> None:
         graph = json.loads(graph_path.read_text(encoding="utf-8"))
         transition_data = json.loads(aware.read_text(encoding="utf-8"))
         all_links.extend(overlay_transition_roles(graph, transition_data, floor))
+        all_space_links.extend(transition_space_links(transition_data, floor))
         decisions, provenance = apply_qwen(graph, classifier)
         graph["floor_id"] = floor
         graph["room_semantics"] = {
@@ -299,7 +355,9 @@ def main() -> None:
         graphs[floor] = graph
         floor_semantics.append({"floor": floor, "decisions": decisions, "provenance": provenance})
 
-    stairwells = group_stairwells(all_links, args.stairwell_join_gap)
+    stairwells = group_stairwells(
+        all_links, args.stairwell_join_gap, space_links=all_space_links
+    )
     stairwell_by_transition = {
         transition_id: stairwell["id"] for stairwell in stairwells
         for transition_id in stairwell["transition_ids"]

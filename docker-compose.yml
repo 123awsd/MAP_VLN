@@ -1,5 +1,8 @@
 services:
   falcon:
+    # Keep files written to host bind mounts owned by the host user.
+    # Override these defaults on machines whose UID/GID are not 1000.
+    user: "${PRE_MAP_VLN_UID:-1000}:${PRE_MAP_VLN_GID:-1000}"
     build:
       context: .
       dockerfile: containers/falcon_noetic/Dockerfile
@@ -12,10 +15,13 @@ services:
       - ./runtime/bridge:/workspace/shared/bridge
       - ./ros_ws/src/pre_map_bridge:/workspace/falcon_ws/src/pre_map_bridge:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
-      - ./runtime/rviz.Xauthority:/root/.Xauthority:ro
+      - ./runtime/rviz.Xauthority:/tmp/pre-map-vln.Xauthority:ro
     environment:
       DISPLAY: ${DISPLAY:-:0}
-      XAUTHORITY: /root/.Xauthority
+      XAUTHORITY: /tmp/pre-map-vln.Xauthority
+      HOME: /tmp
+      ROS_HOME: /tmp/ros
+      ROS_LOG_DIR: /tmp/ros/log
       DISABLE_ROS1_EOL_WARNINGS: "1"
     stdin_open: true
     tty: true
@@ -23,6 +29,9 @@ services:
       - pre_map_vln
 
   occusg:
+    # Keep files written to host bind mounts owned by the host user.
+    # Override these defaults on machines whose UID/GID are not 1000.
+    user: "${PRE_MAP_VLN_UID:-1000}:${PRE_MAP_VLN_GID:-1000}"
     build:
       context: .
       dockerfile: containers/occusg_humble/Dockerfile
@@ -33,6 +42,10 @@ services:
       - ./runtime/occusg:/workspace/shared/occusg
       - ./outputs:/workspace/shared/outputs
       - ./occusg_bridge:/workspace/bridge:ro
+    environment:
+      HOME: /tmp
+      ROS_HOME: /tmp/ros
+      ROS_LOG_DIR: /tmp/ros/log
     stdin_open: true
     tty: true
     networks:

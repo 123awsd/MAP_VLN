@@ -1,0 +1,28 @@
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+@@ -5,6 +5,9 @@
+ #include <ros/package.h>
+ #include <thread>
+ #include <visualization_msgs/Marker.h>
++#include <cerrno>
++#include <cstdlib>
++#include <sys/stat.h>
+ 
+ #include "exploration_manager/exploration_manager.h"
+ #include "exploration_manager/exploration_data.h"
+@@ -54,7 +57,14 @@
+   nh.param("/exploration_manager/top_view_num", ep_->top_view_num_, -1);
+   nh.param("/exploration_manager/max_decay", ep_->max_decay_, -1.0);
+ 
+-  ep_->tsp_dir_ = ros::package::getPath("exploration_utils") + "/resource";
++  const char* tsp_dir_env = std::getenv("PRE_MAP_VLN_TSP_DIR");
++  ep_->tsp_dir_ = (tsp_dir_env != nullptr && *tsp_dir_env != '\0')
++      ? tsp_dir_env
++      : "/tmp/pre-map-vln-tsp";
++  if (mkdir(ep_->tsp_dir_.c_str(), 0777) != 0 && errno != EEXIST) {
++    ROS_ERROR_STREAM("[ExplorationManager] Cannot create writable TSP directory: "
++                     << ep_->tsp_dir_);
++  }
+ 
+   nh.param("/uav_model/dynamics_parameters/max_linear_velocity", PathCostEvaluator::vm_, -1.0);
+   nh.param("/uav_model/dynamics_parameters/max_linear_acceleration", PathCostEvaluator::am_, -1.0);

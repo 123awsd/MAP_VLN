@@ -35,4 +35,4 @@ fused_csv="$output_root/$sequence_name/${write_name}_3dbbs_fused.csv"
 PYTHONPATH="$root_dir/third_party/boxer" .envs/boxer/bin/python \
   third_party/boxer/utils/fuse_3d_boxes.py \
   --input "$raw_csv" --output "$fused_csv" \
-  --iou 0.2 --min_detections 4 --conf_threshold 0.45
+  --iou 0.2 --min_detections 1 --conf_threshold 0.35

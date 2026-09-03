@@ -8,5 +8,8 @@ episode_name="${1:-hm3d_panorama}"
 decomp_threshold="${2:-1.5}"
 output_rel="${3:-$episode_name}"
 pre_map_vln_resolve_docker
-exec "${docker_cmd[@]}" compose run --rm occusg \
+exec "${docker_cmd[@]}" compose run --rm \
+  -e ROS_LOG_DIR=/tmp/pre_map_vln_ros_log \
+  -e ROS_HOME=/tmp/pre_map_vln_ros_home \
+  occusg \
   bash /workspace/bridge/run_segmentation.sh "$episode_name" "$decomp_threshold" "$output_rel"

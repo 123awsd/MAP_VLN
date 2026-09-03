@@ -17,7 +17,7 @@ from .task_graph import TaskGraphError, normalize_and_validate_task_graph
 
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-MODEL = "qwen3.7-plus"
+MODEL = "qwen3.7-max-2026-06-08"
 PROMPT_VERSION = "stage2-task-graph-v13-preserve-explicit-scope-on-repair"
 INPUT_CNY_PER_MILLION = 2.0
 OUTPUT_CNY_PER_MILLION = 8.0

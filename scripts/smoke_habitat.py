@@ -73,6 +73,20 @@ def main() -> None:
         depth = np.asarray(obs["depth"], dtype=np.float32)
         semantic = np.asarray(obs["semantic"], dtype=np.int32)
 
+        if rgb.shape != (480, 640, 3) or depth.shape != (480, 640):
+            raise RuntimeError(
+                f"unexpected RGB-D shapes: rgb={rgb.shape}, depth={depth.shape}"
+            )
+        if not np.isfinite(depth).all() or not np.any(depth > 0.0):
+            raise RuntimeError("depth sensor did not produce finite positive measurements")
+        semantic_ids = np.unique(semantic)
+        semantic_object_count = len(sim.semantic_scene.objects)
+        if semantic_ids.size <= 1 or semantic_object_count == 0:
+            raise RuntimeError(
+                "semantic annotations did not load; use the HM3D annotated scene "
+                "dataset config and verify the .semantic.glb/.semantic.txt assets"
+            )
+
         output_dir.mkdir(parents=True, exist_ok=True)
         Image.fromarray(rgb).save(output_dir / "rgb.png")
         np.save(output_dir / "depth_m.npy", depth)
@@ -83,8 +97,8 @@ def main() -> None:
         print(f"position={np.asarray(point).tolist()}")
         print(f"rgb={rgb.shape} {rgb.dtype}")
         print(f"depth={depth.shape} {depth.dtype} range=({depth.min():.3f}, {depth.max():.3f})")
-        print(f"semantic={semantic.shape} {semantic.dtype} unique={np.unique(semantic).size}")
-        print(f"semantic_objects={len(sim.semantic_scene.objects)}")
+        print(f"semantic={semantic.shape} {semantic.dtype} unique={semantic_ids.size}")
+        print(f"semantic_objects={semantic_object_count}")
         print(f"output={output_dir}")
 
 

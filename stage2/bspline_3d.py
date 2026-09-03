@@ -56,7 +56,10 @@ def anchor_astar_path(
     voxel_map: VoxelMap3D,
 ) -> list[list[float]]:
     """Connect snapped A* cell centers to the actual executable endpoints."""
-    points = _deduplicate(astar_points_xyz_m).tolist()
+    # A* can legitimately return a single cell when the requested endpoint is
+    # already the current cell.  The old implementation treated that valid
+    # zero-length segment as malformed and crashed the whole mission.
+    points = _deduplicate(astar_points_xyz_m, minimum_distinct=1).tolist()
     for label, endpoint in (("start", start_xyz_m), ("goal", goal_xyz_m)):
         if not voxel_map.is_state_valid(endpoint):
             raise RuntimeError(f"actual B-spline {label} pose is not collision-free")
@@ -65,10 +68,12 @@ def anchor_astar_path(
     if not voxel_map.line_is_valid(points[-1], goal_xyz_m):
         raise RuntimeError("snapped A* path cannot connect to actual goal")
     anchored = [list(start_xyz_m), *points, list(goal_xyz_m)]
-    return _deduplicate(anchored).tolist()
+    return _deduplicate(anchored, minimum_distinct=1).tolist()
 
 
-def _deduplicate(points: list[list[float]]) -> np.ndarray:
+def _deduplicate(
+    points: list[list[float]], minimum_distinct: int = 2,
+) -> np.ndarray:
     kept: list[np.ndarray] = []
     for point in points:
         value = np.asarray(point, dtype=float)
@@ -76,8 +81,10 @@ def _deduplicate(points: list[list[float]]) -> np.ndarray:
             raise ValueError("B-spline path contains an invalid XYZ point")
         if not kept or np.linalg.norm(value - kept[-1]) > 1e-7:
             kept.append(value)
-    if len(kept) < 2:
-        raise ValueError("B-spline path requires at least two distinct points")
+    if len(kept) < minimum_distinct:
+        raise ValueError(
+            f"B-spline path requires at least {minimum_distinct} distinct points"
+        )
     return np.asarray(kept)
 
 
@@ -181,6 +188,14 @@ def plan_collision_checked_bspline(
     settings: BsplineSettings,
 ) -> BsplinePath3D:
     """Try a full curve, then validated pieces of the same locked A* path."""
+    values = _deduplicate(astar_points_xyz_m, minimum_distinct=1)
+    if len(values) == 1:
+        point = values[0].tolist()
+        if not voxel_map.is_state_valid(point):
+            raise RuntimeError("stationary B-spline point is not collision-free")
+        return BsplinePath3D(
+            [point], "stationary", 0, 0.0, 1, voxel_map.clearance(point),
+        )
     full = _try_piece(astar_points_xyz_m, voxel_map, settings, allow_linear=False)
     if full is not None:
         sampled, degree, smoothing = full

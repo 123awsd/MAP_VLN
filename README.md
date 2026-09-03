@@ -104,7 +104,7 @@ third_party/boxer/ckpts/
 .envs/habitat/bin/python scripts/configure_secrets.py --qwen-stdin
 ~~~
 
-Qwen 调用默认使用 qwen3.7-plus，结果和估算费用写入 API ledger；密钥不要写入命令记录、README、日志或 Git。
+Qwen 调用默认使用 qwen3.7-max-2026-06-08，结果和估算费用写入 API ledger；密钥不要写入命令记录、README、日志或 Git。
 
 ## 3. Python 环境
 
@@ -226,7 +226,7 @@ clone → bootstrap → 配置 HM3D/Qwen → Stage1 → 导出 Bag
 
 ~~~bash
 docker compose run --rm falcon bash -lc 'rosversion -d'
-docker compose run --rm occusg bash -lc 'ros2 --version'
+docker compose run --rm occusg bash -lc 'ros2 doctor --report'
 ~~~
 
 ## 6. 第一阶段运行

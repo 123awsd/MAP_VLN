@@ -55,6 +55,17 @@ class Bspline3DTest(unittest.TestCase):
         self.assertEqual(anchored[0], [.21, .21, .21])
         self.assertEqual(anchored[-1], [1.01, .31, .31])
 
+    def test_stationary_path_is_valid(self):
+        voxel_map = free_map()
+        anchored = anchor_astar_path(
+            [[.5, .5, .5]], [.5, .5, .5], [.5, .5, .5], voxel_map,
+        )
+        result = plan_collision_checked_bspline(
+            anchored, voxel_map, BsplineSettings(sample_step_m=.05),
+        )
+        self.assertEqual(result.mode, "stationary")
+        self.assertEqual(result.points_xyz_m, [[.5, .5, .5]])
+
 
 if __name__ == "__main__":
     unittest.main()

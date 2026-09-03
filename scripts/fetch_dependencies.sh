@@ -35,3 +35,13 @@ clone_at_commit nlopt https://github.com/stevengj/nlopt.git 09b3c2a6da71cabcb98d
 clone_at_commit Open-Nav https://github.com/YanyuanQiao/Open-Nav.git 3a8dcefe5bfdab5192c3c3bf80b14fb096cb08c7
 clone_at_commit VLN-Zero https://github.com/VLN-Zero/vln-zero.github.io.git 64b76cf9bbf4286803adb17477e5d0c222e3d63b true
 clone_at_commit Spatial-X https://github.com/IMNearth/Spatial-X.git 9afdacd294e54c76795c25005a0c4498f85f7ddf
+
+boxer_patch="$project_root/patches/boxer/run_boxer_habitat.patch"
+if git -C "$third_party_dir/boxer" apply --check "$boxer_patch" 2>/dev/null; then
+  git -C "$third_party_dir/boxer" apply "$boxer_patch"
+elif git -C "$third_party_dir/boxer" apply --reverse --check "$boxer_patch" 2>/dev/null; then
+  echo "Boxer Habitat loader patch is already applied."
+else
+  echo "Boxer Habitat loader patch cannot be applied cleanly: $boxer_patch" >&2
+  exit 1
+fi

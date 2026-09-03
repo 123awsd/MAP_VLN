@@ -1,7 +1,7 @@
 diff --git a/run_boxer.py b/run_boxer.py
 --- a/run_boxer.py
 +++ b/run_boxer.py
-@@ -137,7 +137,10 @@ def main():
+@@ -137,5 +137,8 @@ def main():
  
      # Determine dataset type and seq_name from input string
 -    if bool(re.search(r"scene\d{4}_\d{2}", args.input)) or "/scannet/" in args.input:
@@ -11,7 +11,7 @@ diff --git a/run_boxer.py b/run_boxer.py
 +    elif bool(re.search(r"scene\d{4}_\d{2}", args.input)) or "/scannet/" in args.input:
          dataset_type = "scannet"
          seq_name = os.path.basename(args.input.rstrip("/"))
-@@ -205,7 +208,11 @@ def main():
+@@ -205,5 +208,9 @@ def main():
          return
  
      # Create data loader

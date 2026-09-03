@@ -16,7 +16,7 @@ from .semantic_region_search import canonical_region_type, infer_region_type, ma
 
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-MODEL = "qwen3.7-plus"
+MODEL = "qwen3.7-max-2026-06-08"
 PROMPT_VERSION = "semantic-recovery-v5-canonical-observation-regions"
 INPUT_CNY_PER_MILLION = 2.0
 OUTPUT_CNY_PER_MILLION = 8.0

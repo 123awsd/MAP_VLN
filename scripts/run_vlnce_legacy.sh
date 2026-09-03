@@ -14,7 +14,7 @@ if [[ -z "${OPENAI_API_KEY:-}" && -s "$project_root/.secrets/dashscope_api_key" 
   export OPENAI_API_KEY
 fi
 export OPENAI_BASE_URL="${OPENAI_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}"
-export VLN_ZERO_MODEL="${VLN_ZERO_MODEL:-qwen3.7-plus}"
+export VLN_ZERO_MODEL="${VLN_ZERO_MODEL:-qwen3.7-max-2026-06-08}"
 export PRE_MAP_VLN_API_LEDGER="${PRE_MAP_VLN_API_LEDGER:-$project_root/outputs/baselines/qwen_usage.jsonl}"
 export CUDA_VISIBLE_DEVICES="${PRE_MAP_VLN_LEGACY_CUDA_VISIBLE_DEVICES:-0}"
 export PRE_MAP_VLN_FORCE_TORCH_CPU="${PRE_MAP_VLN_FORCE_TORCH_CPU:-1}"

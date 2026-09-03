@@ -13,8 +13,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 WEIGHTS = {
-    "boxernet_hw960in2x6d768-c88128f8.ckpt": "e195aac4badb543e8652c11b6fa1681607544c3a20d78bd16bdbfb4164b3c437",
-    "dinov3_vits16plus_pretrain_lvd1689m-4057cbaa.pth": "1edbaf93ae4798b6d64f1d860fe472be15c49f9d53a5f4406f4971208add28c0",
+    "boxernet_hw960in2x6d768-c88128f8.ckpt": "d5a30b348a8f5b0e5990ff3aa0e8f473ce77d860da22586322e7f47abc83ca6f",
+    "dinov3_vits16plus_pretrain_lvd1689m-4057cbaa.pth": "4057cbaaad8c16657adb09d6815f28d4164eeba30532fde23f0d17313124caea",
     "owlv2-base-patch16-ensemble.pt": "14aa78ffe7b13e5b3ebf55845bc9a07e339a095cfd88f4c4e8f726b38ce1ebbf",
 }
 
@@ -73,9 +73,15 @@ def main() -> int:
         if actual != expected:
             failures.append(f"third_party/{directory_names[name]}: expected {expected}, got {actual}")
 
+    boxer_runner = ROOT / "third_party/boxer/run_boxer.py"
+    if boxer_runner.is_file():
+        boxer_source = boxer_runner.read_text(encoding="utf-8")
+        if 'dataset_type = "habitat"' not in boxer_source or "HabitatLoader" not in boxer_source:
+            failures.append("Boxer Habitat loader patch is not applied")
+
     import_checks = {
         "habitat": [str(ROOT / ".envs/habitat/bin/python"), "-c", "import habitat,habitat_sim,numpy; assert habitat.__version__=='0.3.3'; assert habitat_sim.__version__=='0.3.3'; assert numpy.__version__=='1.26.4'"],
-        "boxer": [str(ROOT / ".envs/boxer/bin/python"), "-c", "import torch,numpy,cv2,dill; assert torch.__version__.startswith('2.13.0'); assert numpy.__version__=='2.5.2'"],
+        "boxer": [str(ROOT / ".envs/boxer/bin/python"), "-c", "import importlib.metadata,torch,numpy,cv2,dill,yaml; assert torch.__version__.startswith('2.13.0'); assert numpy.__version__=='2.5.2'; assert importlib.metadata.version('opencv-python')=='5.0.0.93'; assert dill.__version__=='0.4.1'; assert yaml.__version__=='6.0.3'"],
     }
     for name, command in import_checks.items():
         if not Path(command[0]).is_file():

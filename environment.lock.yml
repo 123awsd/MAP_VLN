@@ -1,5 +1,5 @@
 project: PRE_MAP_VLN
-updated: 2026-08-29
+updated: 2026-09-01
 
 habitat:
   prefix: .envs/habitat
@@ -19,6 +19,7 @@ boxer:
   numpy: 2.5.2
   opencv_python: 5.0.0.93
   dill: 0.4.1
+  pyyaml: 6.0.3
 
 host_gpu:
   model: NVIDIA GeForce RTX 5060 Ti
@@ -26,11 +27,11 @@ host_gpu:
 
 boxer_checkpoints:
   boxernet_hw960in2x6d768-c88128f8.ckpt:
-    bytes: 539422562
-    sha256: e195aac4badb543e8652c11b6fa1681607544c3a20d78bd16bdbfb4164b3c437
+    bytes: 343374266
+    sha256: d5a30b348a8f5b0e5990ff3aa0e8f473ce77d860da22586322e7f47abc83ca6f
   dinov3_vits16plus_pretrain_lvd1689m-4057cbaa.pth:
-    bytes: 140589180
-    sha256: 1edbaf93ae4798b6d64f1d860fe472be15c49f9d53a5f4406f4971208add28c0
+    bytes: 114924783
+    sha256: 4057cbaaad8c16657adb09d6815f28d4164eeba30532fde23f0d17313124caea
   owlv2-base-patch16-ensemble.pt:
     bytes: 742984963
     sha256: 14aa78ffe7b13e5b3ebf55845bc9a07e339a095cfd88f4c4e8f726b38ce1ebbf

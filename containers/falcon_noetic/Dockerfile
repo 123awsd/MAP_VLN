@@ -71,6 +71,7 @@ COPY patches/falcon/executed_goal_oscillation_guard.patch /tmp/executed_goal_osc
 COPY patches/falcon/online_floor_priority.patch /tmp/online_floor_priority.patch
 COPY patches/falcon/prepublish_collision_viewpoint_block.patch /tmp/prepublish_collision_viewpoint_block.patch
 COPY patches/falcon/unreachable_hgrid_relocation.patch /tmp/unreachable_hgrid_relocation.patch
+COPY patches/falcon/tsp_runtime_dir.patch /tmp/tsp_runtime_dir.patch
 RUN patch -d FALCON -p1 < /tmp/habitat_ground_viewpoint.patch
 RUN patch -d FALCON -p1 < /tmp/true_3d_viewpoints.patch
 RUN patch -d FALCON -p1 < /tmp/astar_start_voxel_escape.patch
@@ -94,6 +95,7 @@ RUN patch -d FALCON -p1 < /tmp/executed_goal_oscillation_guard.patch
 RUN patch -d FALCON -p1 < /tmp/online_floor_priority.patch
 RUN patch -d FALCON -p1 < /tmp/prepublish_collision_viewpoint_block.patch
 RUN patch -d FALCON -p1 < /tmp/unreachable_hgrid_relocation.patch
+RUN patch -d FALCON -p1 < /tmp/tsp_runtime_dir.patch
 
 # Habitat replaces FALCON's built-in CUDA/Open3D sensor renderers.
 RUN touch FALCON/uav_simulator/camera_sensing/pointcloud_render/CATKIN_IGNORE \

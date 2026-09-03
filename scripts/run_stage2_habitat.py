@@ -998,7 +998,7 @@ def main() -> None:
             "task_ids": sorted(semantic_recovery_task_ids),
             "planner": (
                 "offline_fixture" if offline_recovery_plan is not None
-                else "qwen3.7-plus" if semantic_recovery_enabled else None
+                else "qwen3.7-max-2026-06-08" if semantic_recovery_enabled else None
             ),
             "events": semantic_recovery_events,
             "plans_by_task": recovery_plans,
