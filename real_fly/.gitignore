@@ -1,0 +1,5 @@
+# Real-flight artifacts are local data, not source files.
+stage1_exploration/data/*
+!stage1_exploration/data/README.md
+stage2_offline/data/*
+!stage2_offline/data/README.md
