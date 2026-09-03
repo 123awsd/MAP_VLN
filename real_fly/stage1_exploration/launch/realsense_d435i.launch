@@ -1,0 +1,34 @@
+<launch>
+  <!-- Sensor-only launch. No flight, odometry, or command topics. -->
+  <arg name="camera_name" default="camera"/>
+  <arg name="serial_no" default=""/>
+  <arg name="usb_port_id" default=""/>
+  <arg name="enable_color" default="true"/>
+  <arg name="enable_depth" default="true"/>
+  <arg name="enable_infra1" default="false"/>
+  <arg name="enable_infra2" default="false"/>
+  <arg name="enable_gyro" default="true"/>
+  <arg name="enable_accel" default="true"/>
+  <arg name="enable_sync" default="true"/>
+  <arg name="align_depth" default="true"/>
+  <arg name="unite_imu_method" default="linear_interpolation"/>
+  <arg name="publish_tf" default="true"/>
+  <arg name="initial_reset" default="false"/>
+
+  <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+    <arg name="camera" value="$(arg camera_name)"/>
+    <arg name="serial_no" value="$(arg serial_no)"/>
+    <arg name="usb_port_id" value="$(arg usb_port_id)"/>
+    <arg name="enable_color" value="$(arg enable_color)"/>
+    <arg name="enable_depth" value="$(arg enable_depth)"/>
+    <arg name="enable_infra1" value="$(arg enable_infra1)"/>
+    <arg name="enable_infra2" value="$(arg enable_infra2)"/>
+    <arg name="enable_gyro" value="$(arg enable_gyro)"/>
+    <arg name="enable_accel" value="$(arg enable_accel)"/>
+    <arg name="enable_sync" value="$(arg enable_sync)"/>
+    <arg name="align_depth" value="$(arg align_depth)"/>
+    <arg name="unite_imu_method" value="$(arg unite_imu_method)"/>
+    <arg name="publish_tf" value="$(arg publish_tf)"/>
+    <arg name="initial_reset" value="$(arg initial_reset)"/>
+  </include>
+</launch>

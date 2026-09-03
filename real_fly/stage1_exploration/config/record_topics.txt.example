@@ -1,0 +1,15 @@
+# Reference only. The recorder reads topics.env so an unverified topic cannot
+# be recorded accidentally. Fill and verify topics.env instead.
+# role<TAB>topic<TAB>expected ROS type
+# lidar<TAB>/livox/lidar<TAB>livox_ros_driver2/CustomMsg
+# imu<TAB>/livox/imu<TAB>sensor_msgs/Imu
+# rgb<TAB>/camera/color/image_raw<TAB>sensor_msgs/Image
+# depth<TAB>/camera/aligned_depth_to_color/image_raw<TAB>sensor_msgs/Image
+# rgb_camera_info<TAB>/camera/color/camera_info<TAB>sensor_msgs/CameraInfo
+# depth_camera_info<TAB>/camera/aligned_depth_to_color/camera_info<TAB>sensor_msgs/CameraInfo
+# camera_imu<TAB>/camera/imu<TAB>sensor_msgs/Imu
+# Or, when no fused topic exists:
+# camera_gyro<TAB>/camera/gyro/sample<TAB>sensor_msgs/Imu
+# camera_accel<TAB>/camera/accel/sample<TAB>sensor_msgs/Imu
+# tf<TAB>/tf<TAB>tf2_msgs/TFMessage
+# tf_static<TAB>/tf_static<TAB>tf2_msgs/TFMessage

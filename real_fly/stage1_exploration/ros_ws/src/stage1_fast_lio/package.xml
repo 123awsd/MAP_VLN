@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>stage1_fast_lio</name>
+  <version>0.1.0</version>
+  <description>Stage-1 isolated wrapper around the existing FAST-LIO mapping sources.</description>
+
+  <maintainer email="pre-map-vln@example.invalid">PRE_MAP_VLN real-fly</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>roscpp</depend>
+  <depend>rospy</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>tf</depend>
+  <depend>tf2_ros</depend>
+  <depend>pcl_ros</depend>
+  <depend>pcl_conversions</depend>
+  <depend>livox_ros_driver2</depend>
+  <depend>eigen_conversions</depend>
+  <depend>cv_bridge</depend>
+
+  <export/>
+</package>
