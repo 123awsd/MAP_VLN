@@ -1,0 +1,16 @@
+{
+  "format": "pre_map_vln.exploded_exploration_progress.v1",
+  "target_coverage": 0.5,
+  "achieved_coverage": 0.5025735556608488,
+  "coverage_denominator": "final-map surface points observable from all archived RGB-D frames",
+  "cutoff_recorded_frame_index": 128,
+  "cutoff_sequence": 640,
+  "total_recorded_frames": 318,
+  "observable_final_map_points": 154067,
+  "observed_at_cutoff": 77430,
+  "ceiling_cutaway_height_m": 2.3,
+  "floor_display_spacing_m": 3.7,
+  "final_map_is_retrospective_context_only": true,
+  "png": "/home/uav/map_VLN/PRE_MAP_VLN/docs/assets/system_overview/stage1/00337_exploration_50pct_exploded.png",
+  "pdf": "/home/uav/map_VLN/PRE_MAP_VLN/docs/assets/system_overview/stage1/00337_exploration_50pct_exploded.pdf"
+}

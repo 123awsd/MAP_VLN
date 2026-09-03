@@ -1,0 +1,16 @@
+<launch>
+  <arg name="timeline_path"/>
+  <arg name="initial_percent" default="35"/>
+  <arg name="trajectory_lift" default="0.18"/>
+  <arg name="trajectory_width" default="0.10"/>
+  <param name="/use_sim_time" value="false"/>
+  <node pkg="pre_map_bridge" type="paper_timeline_visualization_node.py"
+        name="paper_timeline_visualization" output="screen">
+    <param name="timeline_path" value="$(arg timeline_path)"/>
+    <param name="initial_percent" value="$(arg initial_percent)"/>
+    <param name="trajectory_lift" value="$(arg trajectory_lift)"/>
+    <param name="trajectory_width" value="$(arg trajectory_width)"/>
+  </node>
+  <node pkg="rviz" type="rviz" name="paper_timeline_rviz" output="screen"
+        args="-d $(find pre_map_bridge)/config/paper_timeline.rviz"/>
+</launch>

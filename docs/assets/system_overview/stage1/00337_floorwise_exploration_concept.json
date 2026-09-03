@@ -1,0 +1,14 @@
+{
+  "format": "pre_map_vln.floorwise_exploration_concept.v1",
+  "source_point_cloud": "/home/uav/map_VLN/PRE_MAP_VLN/outputs/stage1_3d/00337-CFVBbU9Rsyb/dormant_recovery_20260829/bag_export/map_occupied.pcd",
+  "source_trajectory": "/home/uav/map_VLN/PRE_MAP_VLN/outputs/stage1_3d/00337-CFVBbU9Rsyb/dormant_recovery_20260829/bag_export/trajectory.csv",
+  "definition": "Illustrative floor-wise state: L1 complete, spatial half of L2 complete, L3 not started.",
+  "not_a_temporal_replay": true,
+  "l2_split_axis": "y",
+  "l2_split_y_m": 7.75,
+  "l2_explored_point_fraction": 0.5059587832895925,
+  "shown_point_count": 472516,
+  "trajectory_rows_shown": 1815,
+  "png": "/home/uav/map_VLN/PRE_MAP_VLN/docs/assets/system_overview/stage1/00337_floorwise_exploration_concept.png",
+  "pdf": "/home/uav/map_VLN/PRE_MAP_VLN/docs/assets/system_overview/stage1/00337_floorwise_exploration_concept.pdf"
+}

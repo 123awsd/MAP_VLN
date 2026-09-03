@@ -10,6 +10,7 @@ services:
       - ./outputs:/workspace/shared/outputs
       - ./logs:/workspace/shared/logs
       - ./runtime/bridge:/workspace/shared/bridge
+      - ./scripts:/workspace/shared/scripts:ro
       - ./ros_ws/src/pre_map_bridge:/workspace/falcon_ws/src/pre_map_bridge:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - ./runtime/rviz.Xauthority:/root/.Xauthority:ro

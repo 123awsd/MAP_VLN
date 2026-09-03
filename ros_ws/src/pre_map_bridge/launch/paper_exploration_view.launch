@@ -1,0 +1,20 @@
+<launch>
+  <arg name="cloud_path"/>
+  <arg name="trajectory_path"/>
+  <arg name="floors_path"/>
+  <arg name="floor_spacing" default="3.7"/>
+  <arg name="trajectory_lift" default="0.18"/>
+  <arg name="trajectory_width" default="0.10"/>
+  <param name="/use_sim_time" value="false"/>
+  <node pkg="pre_map_bridge" type="paper_exploration_visualization_node.py"
+        name="paper_exploration_visualization" output="screen">
+    <param name="cloud_path" value="$(arg cloud_path)"/>
+    <param name="trajectory_path" value="$(arg trajectory_path)"/>
+    <param name="floors_path" value="$(arg floors_path)"/>
+    <param name="floor_spacing" value="$(arg floor_spacing)"/>
+    <param name="trajectory_lift" value="$(arg trajectory_lift)"/>
+    <param name="trajectory_width" value="$(arg trajectory_width)"/>
+  </node>
+  <node pkg="rviz" type="rviz" name="paper_exploration_rviz" output="screen"
+        args="-d $(find pre_map_bridge)/config/paper_exploration.rviz"/>
+</launch>

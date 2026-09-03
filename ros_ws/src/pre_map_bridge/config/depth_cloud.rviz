@@ -1,0 +1,56 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 1
+      Class: rviz/PointCloud2
+      Color: 18; 63; 90
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Name: L2 fused depth cloud
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 2
+      Size (m): 0.02
+      Style: Points
+      Topic: /pre_map_vln/paper_depth_cloud
+      Unreliable: false
+      Use Fixed Frame: true
+    - Alpha: 0.25
+      Cell Size: 1
+      Class: rviz/Grid
+      Color: 170; 170; 170
+      Enabled: true
+      Name: Metric grid
+      Plane: XY
+      Reference Frame: world
+  Enabled: true
+  Global Options:
+    Background Color: 255; 255; 255
+    Default Light: true
+    Fixed Frame: world
+    Frame Rate: 20
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 22
+      Focal Point: {X: 1, Y: 8, Z: 3.8}
+      Pitch: 0.72
+      Yaw: 4.1
+Window Geometry:
+  Height: 950
+  Width: 1500
+  X: 80
+  Y: 40

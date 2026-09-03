@@ -15,6 +15,18 @@ seed="${8:-7}"
 scene_root="${PRE_MAP_VLN_HM3D_TRAIN_ROOT:-/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/train}"
 scene_config="${PRE_MAP_VLN_HM3D_SCENE_CONFIG:-/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/hm3d_annotated_basis.scene_dataset_config.json}"
 
+# Development machines may keep the checked-in HM3D examples locally rather
+# than mounting the full training set at /shared. Environment overrides remain
+# authoritative; only replace the unavailable built-in defaults.
+local_hm3d_root="$root_dir/data/versioned_data/hm3d-0.2/hm3d/example"
+local_scene="$local_hm3d_root/$scene_id/${scene_id#*-}.basis.glb"
+if [[ -z "${PRE_MAP_VLN_HM3D_TRAIN_ROOT:-}" && ! -f "$scene_root/$scene_id/${scene_id#*-}.basis.glb" && -f "$local_scene" ]]; then
+  scene_root="$local_hm3d_root"
+fi
+if [[ -z "${PRE_MAP_VLN_HM3D_SCENE_CONFIG:-}" && "$scene_root" == "$local_hm3d_root" && -f "$local_hm3d_root/hm3d_annotated_basis.scene_dataset_config.json" ]]; then
+  scene_config="$local_hm3d_root/hm3d_annotated_basis.scene_dataset_config.json"
+fi
+
 if [[ ! "$scene_id" =~ ^[0-9]{5}-[A-Za-z0-9]+$ ]]; then
   echo "scene id must look like 00166-RaYrxWt5pR1: $scene_id" >&2
   exit 2

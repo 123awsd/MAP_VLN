@@ -1,0 +1,84 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.22
+      Class: rviz/PointCloud2
+      Color: 165; 170; 176
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Name: Final map (unexplored context)
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.04
+      Style: Points
+      Topic: /pre_map_vln/timeline_final_context
+      Unreliable: false
+      Use Fixed Frame: true
+    - Alpha: 1
+      Class: rviz/PointCloud2
+      Color: 7; 155; 189
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Name: Explored at selected time
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 4
+      Size (m): 0.045
+      Style: Points
+      Topic: /pre_map_vln/timeline_explored
+      Unreliable: false
+      Use Fixed Frame: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /pre_map_vln/timeline_trajectory
+      Name: Executed trajectory
+      Namespaces: {}
+      Queue Size: 5
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /pre_map_vln/timeline_slider_bar
+      Name: Timeline bar
+      Namespaces: {}
+      Queue Size: 2
+    - Class: rviz/InteractiveMarkers
+      Enable Transparency: true
+      Enabled: true
+      Name: Drag red timeline handle
+      Show Axes: false
+      Show Descriptions: true
+      Show Visual Aids: false
+      Update Topic: /paper_timeline/update
+  Enabled: true
+  Global Options:
+    Background Color: 255; 255; 255
+    Default Light: true
+    Fixed Frame: world
+    Frame Rate: 20
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 25
+      Focal Point: {X: 0, Y: 7, Z: 5}
+      Pitch: 0.44
+      Yaw: 4.24
+Window Geometry:
+  Height: 950
+  Width: 1500
+  X: 80
+  Y: 40

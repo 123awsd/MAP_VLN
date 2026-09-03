@@ -1,0 +1,13 @@
+{
+  "format": "pre_map_vln.hm3d_reference_exploration_figure.v1",
+  "reference_geometry": "/home/uav/map_VLN/PRE_MAP_VLN/data/versioned_data/hm3d-0.2/hm3d/example/00337-CFVBbU9Rsyb/CFVBbU9Rsyb.basis.glb",
+  "reference_surface_samples": 477382,
+  "observed_reference_samples": 221285,
+  "observed_fraction_of_shown_reference": 0.4635386336309287,
+  "cutoff_sequence": 640,
+  "archived_frames_used": 129,
+  "measured_rgbd_surface_points": 404525,
+  "reference_mesh_used_for_visualization_only": true,
+  "png": "/home/uav/map_VLN/PRE_MAP_VLN/docs/assets/system_overview/stage1/00337_hm3d_reference_exploration.png",
+  "pdf": "/home/uav/map_VLN/PRE_MAP_VLN/docs/assets/system_overview/stage1/00337_hm3d_reference_exploration.pdf"
+}

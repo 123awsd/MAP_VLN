@@ -1,0 +1,14 @@
+{
+  "format": "pre_map_vln.partial_exploration_figure.v1",
+  "source_run": "/home/uav/map_VLN/PRE_MAP_VLN/outputs/stage1_3d/00337-CFVBbU9Rsyb/dormant_recovery_20260829",
+  "progress": 0.5,
+  "selected_recorded_frames": 159,
+  "total_recorded_frames": 318,
+  "cutoff_sequence": 790,
+  "colored_point_count": 294995,
+  "not_yet_observed_point_count": 460894,
+  "definition": "Gray points are final occupied-map points farther than observed_radius from RGB-D points accumulated by the temporal cutoff.",
+  "final_map_is_retrospective_context_only": true,
+  "png": "/home/uav/map_VLN/PRE_MAP_VLN/docs/assets/system_overview/stage1/00337_exploration_50pct.png",
+  "pdf": "/home/uav/map_VLN/PRE_MAP_VLN/docs/assets/system_overview/stage1/00337_exploration_50pct.pdf"
+}
