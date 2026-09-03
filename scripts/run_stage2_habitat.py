@@ -27,6 +27,7 @@ from stage2.bspline_3d import BsplineSettings, anchor_astar_path, plan_collision
 from stage2.candidate_poses import generate_all_candidates  # noqa: E402
 from stage2.io_utils import atomic_json, load_json  # noqa: E402
 from stage2.joint_planner import PlanningError, plan_joint_mission  # noqa: E402
+from stage2.lazy_representative_planner import LazyRepresentativePlanner  # noqa: E402
 from stage2.mission_executor import MissionState  # noqa: E402
 from stage2.motion_cost_oracle import MotionCostOracle  # noqa: E402
 from stage2.planning_contract import PlannerProfile  # noqa: E402
@@ -207,6 +208,12 @@ def main() -> None:
         help="maximum currently executable tasks in each rolling joint optimization",
     )
     parser.add_argument(
+        "--planning-strategy",
+        choices=("rolling_representative", "lazy_representative"),
+        default="rolling_representative",
+        help="stage-two route planner; lazy_representative uses one fixed candidate per task and on-demand A*",
+    )
+    parser.add_argument(
         "--semantic-recovery", action="store_true",
         help="deprecated force-enable switch; task intent now enables recovery automatically",
     )
@@ -284,6 +291,10 @@ def main() -> None:
         candidates = generate_all_candidates(
             grid, updated_scene_graph, task_graph, max_candidates=args.max_candidates,
         )
+    lazy_planner = (
+        LazyRepresentativePlanner(grid, yaw_rate_rps=args.yaw_rate_rps)
+        if args.planning_strategy == "lazy_representative" else None
+    )
     state = MissionState(task_graph)
     vlm_verifier = QwenImageVerifier() if args.verification_mode in {"qwen_vl", "hybrid", "owlv2_qwen_fallback"} else None
     open_vocab_modes = {"owlv2", "owlv2_qwen_fallback"}
@@ -362,6 +373,14 @@ def main() -> None:
     previous_executed_candidate = None
     frame_index = 0
     started = time.monotonic()
+    planning_wall_s = 0.0
+
+    def motion_counter() -> dict[str, int]:
+        return {
+            "cache_hits": int(getattr(grid, "cache_hits", 0)),
+            "cache_misses": int(getattr(grid, "cache_misses", 0)),
+            "entry_count": int(len(getattr(grid, "entries", {}))),
+        }
 
     def consume_async(packet: dict | None) -> None:
         if packet is None:
@@ -424,71 +443,108 @@ def main() -> None:
         while not state.is_finished():
             if not state.active:
                 break
+            planning_started = time.monotonic()
+            astar_before = motion_counter()
             planning_candidates = recovery.filtered_candidates(candidates)
             focused_tasks = recovery.focused_task_ids(state.active, planning_candidates)
-            available = state.available()
-            if focused_tasks:
-                planning_task_ids = focused_tasks
-            else:
-                def task_lower_bound(task_id: str) -> float:
-                    values = planning_candidates.get(task_id, [])
-                    return min((
-                        math.dist(
-                            current_f[:3],
-                            [item["pose"][axis] for axis in ("x", "y", "z")],
-                        ) + float(item.get("terminal_cost", 0.0))
-                        for item in values
-                    ), default=math.inf)
-                planning_task_ids = set(sorted(
-                    available, key=lambda task_id: (task_lower_bound(task_id), task_id)
-                )[:max(1, args.planning_horizon_tasks)])
             representative_limit = None
             representative_errors = []
             planning_input = planning_candidates
-            if not focused_tasks:
-                # Global ordering needs one entry pose per physical location,
-                # not every local camera angle around that location. If an
-                # entry pose proves unreachable, lazily admit the second-ranked
-                # pose and finally the full pool as a correctness fallback.
-                plan = None
-                for representative_limit in (1, 2, None):
-                    planning_input = (
-                        planning_candidates
-                        if representative_limit is None
-                        else select_location_representatives(
-                            planning_candidates, current_f, planning_task_ids,
-                            maximum_per_location=representative_limit,
-                            yaw_rate_rps=args.yaw_rate_rps,
-                        )
+            if args.planning_strategy == "lazy_representative":
+                available = state.available()
+                if focused_tasks:
+                    # ViewpointRecovery orders this list along the selected
+                    # angular direction.  Execute only the next local view;
+                    # global ordering resumes after the target is found or the
+                    # current location is exhausted.
+                    planning_task_ids = set(focused_tasks)
+                    local_task_id = sorted(focused_tasks)[0]
+                    local_candidates = planning_candidates.get(local_task_id, [])
+                    planning_input = {local_task_id: list(local_candidates)}
+                    plan = lazy_planner.plan_local_recovery(
+                        local_task_id, local_candidates, current_f,
                     )
-                    try:
-                        plan = plan_joint_mission(
-                            grid, task_graph, planning_input, current_f,
-                            active_task_ids=planning_task_ids,
-                            completed_task_ids=state.completed,
-                            yaw_rate_rps=args.yaw_rate_rps,
-                        )
-                        break
-                    except PlanningError as error:
-                        representative_errors.append({
-                            "maximum_per_location": representative_limit,
-                            "error": str(error),
-                        })
-                if plan is None:
-                    raise PlanningError("representative and full candidate planning both failed")
+                else:
+                    planning_task_ids = set(available)
+                    planning_input = {
+                        task_id: list(planning_candidates.get(task_id, []))
+                        for task_id in sorted(planning_task_ids)
+                    }
+                    plan = lazy_planner.plan_global(
+                        task_graph,
+                        planning_input,
+                        current_f,
+                        active_task_ids=planning_task_ids,
+                        completed_task_ids=state.completed,
+                    )
             else:
-                plan = plan_joint_mission(
-                    grid, task_graph, planning_input, current_f,
-                    active_task_ids=planning_task_ids,
-                    completed_task_ids=state.completed,
-                    yaw_rate_rps=args.yaw_rate_rps,
-                )
+                available = state.available()
+                if focused_tasks:
+                    planning_task_ids = focused_tasks
+                else:
+                    def task_lower_bound(task_id: str) -> float:
+                        values = planning_candidates.get(task_id, [])
+                        return min((
+                            math.dist(
+                                current_f[:3],
+                                [item["pose"][axis] for axis in ("x", "y", "z")],
+                            ) + float(item.get("terminal_cost", 0.0))
+                            for item in values
+                        ), default=math.inf)
+                    planning_task_ids = set(sorted(
+                        available, key=lambda task_id: (task_lower_bound(task_id), task_id)
+                    )[:max(1, args.planning_horizon_tasks)])
+                if not focused_tasks:
+                    # Global ordering needs one entry pose per physical location,
+                    # not every local camera angle around that location. If an
+                    # entry pose proves unreachable, lazily admit the second-ranked
+                    # pose and finally the full pool as a correctness fallback.
+                    plan = None
+                    for representative_limit in (1, 2, None):
+                        planning_input = (
+                            planning_candidates
+                            if representative_limit is None
+                            else select_location_representatives(
+                                planning_candidates, current_f, planning_task_ids,
+                                maximum_per_location=representative_limit,
+                                yaw_rate_rps=args.yaw_rate_rps,
+                            )
+                        )
+                        try:
+                            plan = plan_joint_mission(
+                                grid, task_graph, planning_input, current_f,
+                                active_task_ids=planning_task_ids,
+                                completed_task_ids=state.completed,
+                                yaw_rate_rps=args.yaw_rate_rps,
+                            )
+                            break
+                        except PlanningError as error:
+                            representative_errors.append({
+                                "maximum_per_location": representative_limit,
+                                "error": str(error),
+                            })
+                    if plan is None:
+                        raise PlanningError("representative and full candidate planning both failed")
+                else:
+                    plan = plan_joint_mission(
+                        grid, task_graph, planning_input, current_f,
+                        active_task_ids=planning_task_ids,
+                        completed_task_ids=state.completed,
+                        yaw_rate_rps=args.yaw_rate_rps,
+                    )
+            planning_elapsed_s = time.monotonic() - planning_started
+            planning_wall_s += planning_elapsed_s
+            astar_after = motion_counter()
             replans.append({
                 "index": len(replans),
                 "active_task_ids": sorted(state.active),
                 "focused_task_ids": sorted(focused_tasks),
                 "candidate_scope": (
-                    "focused_local" if focused_tasks else "location_representatives"
+                    "focused_local" if focused_tasks else (
+                        "lazy_global_representatives"
+                        if args.planning_strategy == "lazy_representative"
+                        else "location_representatives"
+                    )
                 ),
                 "representative_limit_per_location": representative_limit,
                 "planning_candidate_counts": {
@@ -496,6 +552,10 @@ def main() -> None:
                     for task_id in sorted(planning_task_ids)
                 },
                 "representative_fallback_errors": representative_errors,
+                "planning_wall_s": planning_elapsed_s,
+                "motion_cache_before": astar_before,
+                "motion_cache_after": astar_after,
+                "astar_cache_misses": astar_after["cache_misses"] - astar_before["cache_misses"],
                 "plan": plan,
             })
             visit = plan["visits"][0]
@@ -969,6 +1029,12 @@ def main() -> None:
         "unresolved_task_ids": state.unresolved_task_ids(),
         "scene": sim_cfg.scene_id,
         "planning_dimension": "3d" if use_3d else "2d",
+        "planning_strategy": args.planning_strategy,
+        "planning_wall_s": planning_wall_s,
+        "motion_cost_oracle": motion_counter(),
+        "lazy_representative_planner": (
+            None if lazy_planner is None else lazy_planner.statistics()
+        ),
         "verification_mode": args.verification_mode,
         "task_status": state.status,
         "events": state.events,
