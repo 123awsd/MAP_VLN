@@ -79,9 +79,10 @@ done
 camera_imu="$(value CAMERA_IMU_TOPIC)"
 camera_gyro="$(value CAMERA_GYRO_TOPIC)"
 camera_accel="$(value CAMERA_ACCEL_TOPIC)"
+camera_imu_required="$(value CAMERA_IMU_REQUIRED)"
 if [[ -n "$camera_imu" ]]; then
   check_one camera_imu CAMERA_IMU_TOPIC CAMERA_IMU_TYPE || failed=1
-elif [[ "$require_rgb" -eq 1 ]]; then
+elif [[ "$require_rgb" -eq 1 && "$camera_imu_required" == "1" ]]; then
   [[ -n "$camera_gyro" ]] || { echo "missing D435i gyro topic (CAMERA_GYRO_TOPIC)" >&2; failed=1; }
   [[ -n "$camera_accel" ]] || { echo "missing D435i accel topic (CAMERA_ACCEL_TOPIC)" >&2; failed=1; }
   if [[ -n "$camera_gyro" ]]; then

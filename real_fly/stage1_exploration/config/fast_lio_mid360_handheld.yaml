@@ -1,8 +1,7 @@
-# Handheld Stage-1 profile. This is deliberately separate from the borrowed
-# aircraft profile, which subscribes to MAVROS IMU and contains aircraft
-# mounting assumptions.
+# Stage-1 profile using the aircraft's tuned flight-controller IMU path.
 common:
-  imu_topic: /livox/imu
+  # This is the calibrated input used by the borrowed aircraft setup.
+  imu_topic: /mavros/imu/data
   lid_topic: /livox/lidar
   time_offset_lidar_to_imu: 0.0
   time_sync_en: false
@@ -12,25 +11,29 @@ mapping:
   b_acc_cov: 0.0001
   b_gyr_cov: 0.0001
   det_range: 100.0
-  # Provisional MID-360 internal-IMU alignment. Validate against a measured
-  # calibration before using this map as a Stage-2 metric/occupancy source.
+  # Aircraft mounting calibration from the existing tuned MID-360 profile.
   extrinsic_R:
-  - 1.0
+  - 0.9659258
   - 0.0
-  - 0.0
-  - 0.0
-  - 1.0
-  - 0.0
-  - 0.0
+  - 0.2588190
   - 0.0
   - 1.0
+  - 0.0
+  - -0.2588190
+  - 0.0
+  - 0.9659258
   extrinsic_T:
-  - 0.0
-  - 0.0
-  - 0.0
+  - -0.011
+  - -0.02329
+  - 0.04412
   extrinsic_est_en: false
   fov_degree: 360.0
   gyr_cov: 0.1
+
+# Preserve enough indoor geometry for scan-to-map matching. At 0.2 m the NX
+# processed the live 10 Hz stream with about 31 ms mean ICP time.
+filter_size_surf: 0.2
+filter_size_map: 0.2
 
 pcd_save:
   interval: -1

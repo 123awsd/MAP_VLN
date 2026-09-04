@@ -1,9 +1,11 @@
 <launch>
   <!-- Explicit config is mandatory: do not fall back to 192.168.1.x. -->
   <arg name="config"/>
+  <arg name="model" default="mid360"/>
   <arg name="publish_freq" default="10.0"/>
   <arg name="frame_id" default="livox_frame"/>
 
+  <group if="$(eval arg('model') == 'mid360')">
   <include file="$(find livox_ros_driver2)/launch_ROS1/msg_MID360.launch">
     <arg name="lidar_type" value="mid360"/>
     <arg name="xfer_format" value="1"/>
@@ -19,4 +21,23 @@
     <arg name="user_config_path" value="$(arg config)"/>
     <arg name="bd_list" value=""/>
   </include>
+  </group>
+
+  <group if="$(eval arg('model') == 'mid360s')">
+  <include file="$(find livox_ros_driver2)/launch_ROS1/msg_MID360s.launch">
+    <arg name="lidar_type" value="mid360s"/>
+    <arg name="xfer_format" value="1"/>
+    <arg name="multi_topic" value="0"/>
+    <arg name="data_src" value="0"/>
+    <arg name="publish_freq" value="$(arg publish_freq)"/>
+    <arg name="output_type" value="0"/>
+    <arg name="rviz_enable" value="false"/>
+    <arg name="rosbag_enable" value="false"/>
+    <arg name="lidar_bag" value="false"/>
+    <arg name="imu_bag" value="false"/>
+    <arg name="msg_frame_id" value="$(arg frame_id)"/>
+    <arg name="user_config_path" value="$(arg config)"/>
+    <arg name="bd_list" value=""/>
+  </include>
+  </group>
 </launch>

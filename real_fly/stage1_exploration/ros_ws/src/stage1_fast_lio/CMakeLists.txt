@@ -60,7 +60,7 @@ include_directories(
 add_definitions(${PCL_DEFINITIONS})
 
 add_executable(fastlio_mapping
-  ${DLS_FAST_LIO_SOURCE}/src/laserMapping.cpp
+  src/laserMapping.cpp
   ${DLS_FAST_LIO_SOURCE}/src/preprocess.cpp
   ${DLS_FAST_LIO_SOURCE}/include/ikd-Tree/ikd_Tree.cpp
 )

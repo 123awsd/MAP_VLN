@@ -15,7 +15,9 @@ export STAGE1_ROOT
 export STAGE1_WS
 export DLS_WS
 export PATH="/opt/ros/noetic/bin:${STAGE1_WS}/devel/bin:${DLS_WS}/devel/bin:${PATH}"
-export LD_LIBRARY_PATH="${STAGE1_WS}/devel/lib:${DLS_WS}/devel/lib:/usr/local/lib:/opt/ros/noetic/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+# Debian arm64 ROS packages place librealsense and other target libraries in
+# the multiarch subdirectory; include it explicitly for nodelet plugins.
+export LD_LIBRARY_PATH="${STAGE1_WS}/devel/lib:${DLS_WS}/devel/lib:/usr/local/lib:/opt/ros/noetic/lib:/opt/ros/noetic/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 export CMAKE_PREFIX_PATH="${STAGE1_WS}/devel:${DLS_WS}/devel:/opt/ros/noetic${CMAKE_PREFIX_PATH:+:${CMAKE_PREFIX_PATH}}"
 export ROS_PACKAGE_PATH="${STAGE1_WS}/src:${DLS_WS}/src:/opt/ros/noetic/share${ROS_PACKAGE_PATH:+:${ROS_PACKAGE_PATH}}"
 export PYTHONPATH="${STAGE1_WS}/devel/lib/python3/dist-packages:${DLS_WS}/devel/lib/python3/dist-packages:/opt/ros/noetic/lib/python3/dist-packages${PYTHONPATH:+:${PYTHONPATH}}"

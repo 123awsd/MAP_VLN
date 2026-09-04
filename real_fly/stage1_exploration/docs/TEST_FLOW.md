@@ -26,6 +26,7 @@ real_fly/stage1_exploration/scripts/start_sensor_only.sh \
   --master-port 11312 \
   --start-d435i \
   --start-mid360 \
+  --mid360-model mid360s \
   --mid360-config /home/nv/SL_WS/PRE_MAP_VLN_real_fly/real_fly/stage1_exploration/data/<run_id>/MID360_config.json
 ```
 
