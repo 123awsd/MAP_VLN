@@ -1,0 +1,39 @@
+{
+  "format": "pre_map_vln.task_graph.v1",
+  "instruction": "离线检查已建图场景中的chair。",
+  "tasks": [
+    {
+      "id": "inspect_detected_object",
+      "action": "inspect",
+      "target": {
+        "label": "chair",
+        "room": "flight_room",
+        "room_id": "L1_R1",
+        "floor_id": 1,
+        "reference": null,
+        "reference_secondary": null,
+        "references": []
+      },
+      "verification_label": "chair",
+      "spatial_constraints": {
+        "relation": null,
+        "distance_m": null,
+        "region_type": "auto",
+        "observation_detail": "normal",
+        "vertical_fov_deg": 70,
+        "horizontal_fov_deg": 90,
+        "yaw_tolerance_deg": 55,
+        "face_target": true,
+        "visibility_required": true
+      },
+      "prerequisites": [],
+      "active_initially": true,
+      "success_outcome": "found",
+      "search_policy": {
+        "mode": "fixed",
+        "maximum_location_hypotheses": 1
+      }
+    }
+  ],
+  "conditional_rules": []
+}

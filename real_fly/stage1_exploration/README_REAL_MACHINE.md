@@ -20,6 +20,11 @@ RViz configured for `world` and `/cloud_registered`. Closing RViz stops only
 the child processes created by this invocation. Use `--no-camera` for a
 LiDAR-only diagnostic run, or `--no-rviz` when no desktop display is present.
 
+Before FAST-LIO starts, the launcher requests the same 200 Hz PX4
+`HIGHRES_IMU` stream used by the borrowed aircraft's `fly.sh`. It does not add
+a timestamp-stability waiting period; FAST-LIO still records any detected IMU
+timestamp rollback in the run's `fastlio.log`.
+
 For a formal handheld pass, record the raw sensors, RGB-D, FAST-LIO pose and
 map output while watching RViz:
 

@@ -1,0 +1,27 @@
+{
+  "format": "pre_map_vln.boxer_assets_lock.v1",
+  "boxer_git_commit": "1f86542dc342a4b1d474c87c97c5d1d6566d9148",
+  "runtime": {
+    "python": "3.8.10",
+    "torch": "2.4.1",
+    "device": "cpu",
+    "reason": "Jetson image has CUDA driver interfaces but not the CUDA Toolkit libraries required by the NVIDIA torch wheel"
+  },
+  "assets": [
+    {
+      "name": "boxernet_hw960in2x6d768-c88128f8.ckpt",
+      "bytes": 343374266,
+      "sha256": "d5a30b348a8f5b0e5990ff3aa0e8f473ce77d860da22586322e7f47abc83ca6f"
+    },
+    {
+      "name": "dinov3_vits16plus_pretrain_lvd1689m-4057cbaa.pth",
+      "bytes": 114924783,
+      "sha256": "4057cbaaad8c16657adb09d6815f28d4164eeba30532fde23f0d17313124caea"
+    },
+    {
+      "name": "owlv2-base-patch16-ensemble.pt",
+      "bytes": 742984963,
+      "sha256": "14aa78ffe7b13e5b3ebf55845bc9a07e339a095cfd88f4c4e8f726b38ce1ebbf"
+    }
+  ]
+}

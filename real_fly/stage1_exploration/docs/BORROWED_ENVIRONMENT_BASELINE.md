@@ -167,3 +167,29 @@ git status --short
 一致、`wlan0` 和默认路由与基线一致、未残留本次 Stage-1 进程，并且没有
 停止学长原有 ROS 节点。若任何一项不一致，应先记录差异，不要自动覆盖或
 删除。
+
+## 实验后追加变更记录（2026-09-05）
+
+上面的“基线”描述保留实验开始时的历史状态。经设备负责人后续明确授权，
+实际发生了以下系统变更，恢复或重刷前应以本节为准：
+
+- 2026-09-04 执行 `apt-get --fix-broken install`，APT 删除了半安装状态的
+  `clash-verge 2.5.2`；没有修改 Mihomo/Clash 订阅文件的记录。
+- 随后新装 `ros-noetic-realsense2-camera 2.3.2`、
+  `ros-noetic-realsense2-description 2.3.2`、`ros-noetic-librealsense2 2.50.0`、
+  `v4l-utils 1.18.0` 及其必要库。
+- 2026-09-05 新装 `python3.8-venv 3.8.10`。该次 APT 交易为 0 升级、1 新装、
+  0 删除、0 降级，没有重启网络服务。
+- NetworkManager 中新增持久连接 `lidar-eth`，UUID
+  `a169cb9f-8140-4dc1-a309-aebecdcaa527`，绑定 `eth0`，静态地址
+  `192.168.1.5/24`，无网关；MID-360S 实测地址为 `192.168.1.122`。
+- 核对时默认路由仍为 `wlan0 -> 192.168.0.1`，Wi-Fi 地址仍为
+  `192.168.0.250/24`；SSH、NoMachine 和 ROS Noetic 全局配置没有因阶段二
+  离线准备而修改。
+- 阶段二依赖、Boxer 源码、权重和 Python 包均位于项目
+  `real_fly/stage2_offline/` 下。没有安装 CUDA Toolkit，也没有修改 JetPack、
+  内核或系统时间。
+
+若不采用整机重刷，恢复 LAN1 可先只读确认连接 UUID，再由负责人决定是否执行
+`nmcli connection delete a169cb9f-8140-4dc1-a309-aebecdcaa527`；不要按名称猜测
+删除其他连接。APT 包也应按上述精确清单人工评估，不要执行 `apt autoremove`。

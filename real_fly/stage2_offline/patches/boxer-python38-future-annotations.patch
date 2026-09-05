@@ -1,0 +1,118 @@
+diff --git a/boxernet/boxernet.py b/boxernet/boxernet.py
+--- a/boxernet/boxernet.py
++++ b/boxernet/boxernet.py
+@@ -4,4 +4,6 @@
+ 
+ # pyre-unsafe
+ 
++from __future__ import annotations
++
+ import os
+diff --git a/owl/clip_tokenizer.py b/owl/clip_tokenizer.py
+--- a/owl/clip_tokenizer.py
++++ b/owl/clip_tokenizer.py
+@@ -9,3 +9,5 @@ for use with traced OWLv2 models.
+ """
+ 
++from __future__ import annotations
++
+ import io
+diff --git a/owl/owl_wrapper.py b/owl/owl_wrapper.py
+--- a/owl/owl_wrapper.py
++++ b/owl/owl_wrapper.py
+@@ -3,4 +3,6 @@
+ # LICENSE file in the root directory of this source tree.
+ 
+ # pyre-unsafe
++from __future__ import annotations
++
+ import io
+diff --git a/owl/owlv2_model.py b/owl/owlv2_model.py
+--- a/owl/owlv2_model.py
++++ b/owl/owlv2_model.py
+@@ -8,3 +8,5 @@ without importing transformers at runtime.
+ """
+ 
++from __future__ import annotations
++
+ import torch
+diff --git a/utils/file_io.py b/utils/file_io.py
+--- a/utils/file_io.py
++++ b/utils/file_io.py
+@@ -2,4 +2,6 @@
+ # This source code is licensed under the CC-BY-NC 4.0 license found in the
+ # LICENSE file in the root directory of this source tree.
+ 
++from __future__ import annotations
++
+ import csv
+diff --git a/utils/fuse_3d_boxes.py b/utils/fuse_3d_boxes.py
+--- a/utils/fuse_3d_boxes.py
++++ b/utils/fuse_3d_boxes.py
+@@ -19,4 +19,6 @@ Algorithm Overview:
+ 4. Filter by minimum detection count threshold
+ """
+ 
++from __future__ import annotations
++
+ import argparse
+diff --git a/utils/gravity.py b/utils/gravity.py
+--- a/utils/gravity.py
++++ b/utils/gravity.py
+@@ -3,4 +3,6 @@
+ # LICENSE file in the root directory of this source tree.
+ 
+ # pyre-unsafe
++from __future__ import annotations
++
+ import numpy as np
+diff --git a/utils/image.py b/utils/image.py
+--- a/utils/image.py
++++ b/utils/image.py
+@@ -3,4 +3,6 @@
+ # LICENSE file in the root directory of this source tree.
+ 
+ # pyre-unsafe
++from __future__ import annotations
++
+ from typing import Optional, Tuple, Union
+diff --git a/utils/taxonomy.py b/utils/taxonomy.py
+--- a/utils/taxonomy.py
++++ b/utils/taxonomy.py
+@@ -6,4 +6,6 @@
+ 
+ # pyre-ignore-all-errors
+ 
++from __future__ import annotations
++
+ import os
+diff --git a/utils/track_3d_boxes.py b/utils/track_3d_boxes.py
+--- a/utils/track_3d_boxes.py
++++ b/utils/track_3d_boxes.py
+@@ -25,4 +25,6 @@ Algorithm per frame:
+ 7. Age and remove stale tracks (unmatched visible + all invisible)
+ """
+ 
++from __future__ import annotations
++
+ import time
+diff --git a/utils/tw/obb.py b/utils/tw/obb.py
+--- a/utils/tw/obb.py
++++ b/utils/tw/obb.py
+@@ -3,4 +3,6 @@
+ # LICENSE file in the root directory of this source tree.
+ 
+ # pyre-unsafe
++from __future__ import annotations
++
+ import logging
+diff --git a/utils/tw/pose.py b/utils/tw/pose.py
+--- a/utils/tw/pose.py
++++ b/utils/tw/pose.py
+@@ -3,4 +3,6 @@
+ # LICENSE file in the root directory of this source tree.
+ 
+ # pyre-unsafe
++from __future__ import annotations
++
+ import math

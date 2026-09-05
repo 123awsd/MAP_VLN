@@ -1,0 +1,23 @@
+format: pre_map_vln.uav_3d_planning.v1
+occupancy:
+  unknown_value: -1
+  free_value: 0
+  occupied_value: 100
+  unknown_is_blocked: true
+vehicle:
+  radius_xy_m: 0.35
+  radius_z_m: 0.20
+  safety_margin_m: 0.15
+planning:
+  minimum_esdf_distance_m: 0.50
+  preferred_esdf_distance_m: 0.80
+  clearance_cost_weight: 0.30
+  coarse_resolution_m: 0.50
+  connectivity: 26
+  nearest_free_radius_m: 1.50
+  esdf_version_bands_m: [0.50, 0.65, 0.80, 1.20]
+  maximum_expansions: 2000000
+bspline:
+  sample_step_m: 0.05
+  smoothing_candidates: [0.03, 0.01, 0.0]
+  conditional_prefix_length_m: 0.70

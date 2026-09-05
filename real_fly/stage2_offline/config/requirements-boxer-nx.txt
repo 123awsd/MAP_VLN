@@ -1,0 +1,13 @@
+# Python 3.8 / aarch64 environment used on the current Jetson image.
+torch==2.4.1
+numpy==1.24.4
+scipy==1.10.1
+opencv-python-headless==4.8.1.78
+pillow==10.4.0
+tqdm==4.66.5
+dill==0.3.8
+PyYAML==6.0.2
+pycryptodomex==3.20.0
+python-gnupg==0.5.2
+rospkg==1.5.1
+catkin-pkg==1.0.0

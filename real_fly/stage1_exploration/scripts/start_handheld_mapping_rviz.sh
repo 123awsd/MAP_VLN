@@ -154,6 +154,13 @@ fi
 grep -q '^connected: True' <<<"$state" || { echo "MAVROS is running but the flight controller is not connected." >&2; exit 1; }
 echo "OK: flight controller connected and disarmed"
 
+echo "Requesting FCU HIGHRES_IMU telemetry at 200 Hz (no control command)"
+if ! timeout 10 rosrun mavros mavcmd long 511 105 5000 0 0 0 0 0 \
+    >"$LOG_DIR/imu_rate_setup.log" 2>&1; then
+  echo "Failed to request 200 Hz HIGHRES_IMU; inspect $LOG_DIR/imu_rate_setup.log" >&2
+  exit 1
+fi
+
 if node_exists /livox_lidar_publisher2; then
   echo "Reusing /livox_lidar_publisher2"
 else
