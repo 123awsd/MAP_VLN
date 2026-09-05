@@ -4,3 +4,10 @@ stage1_exploration/data/*
 stage2_offline/data/*
 !stage2_offline/data/README.md
 stage2_offline/third_party/
+stage2_runtime/runtime/
+**/__pycache__/
+calibration/third_party/
+calibration/ros_ws/
+calibration/runtime/
+calibration/data/*
+!calibration/data/README.md

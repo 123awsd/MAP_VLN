@@ -78,6 +78,7 @@ double T1[MAXN], s_plot[MAXN], s_plot2[MAXN], s_plot3[MAXN], s_plot4[MAXN], s_pl
 double match_time = 0, solve_time = 0, solve_const_H_time = 0;
 int    kdtree_size_st = 0, kdtree_size_end = 0, add_point_size = 0, kdtree_delete_counter = 0;
 bool   runtime_pos_log = false, pcd_save_en = false, time_sync_en = false, extrinsic_est_en = true, path_en = true;
+bool   lidar_bins_pub_en = true;
 /**************************/
 
 float res_last[100000] = {0.0};
@@ -459,20 +460,22 @@ void livox_pcl_cbk(const livox_ros_driver2::CustomMsg::ConstPtr &msg)
     mtx_buffer.unlock();
     sig_buffer.notify_all();
 
-    // process the lidar bins and bin images pub
-    // std::cout<< "[zyh debug] process pts num: "<<ptr->points.size()<<std::endl;
-    std::fill(lidar_bins_.begin(), lidar_bins_.end(), sensor_range_);
-    std::fill(rayhits_.begin(), rayhits_.end(), Eigen::Vector3d::Zero());
-    for (const auto& pt : ptr->points) {
-      double dist_sq = pt.x * pt.x + pt.y * pt.y + pt.z * pt.z;
-      if (dist_sq > sensor_range_ * sensor_range_) {
-        continue;
+    if (lidar_bins_pub_en)
+    {
+      // Process and publish the optional planner-facing LiDAR bins.
+      std::fill(lidar_bins_.begin(), lidar_bins_.end(), sensor_range_);
+      std::fill(rayhits_.begin(), rayhits_.end(), Eigen::Vector3d::Zero());
+      for (const auto& pt : ptr->points) {
+        double dist_sq = pt.x * pt.x + pt.y * pt.y + pt.z * pt.z;
+        if (dist_sq > sensor_range_ * sensor_range_) {
+          continue;
+        }
+        Eigen::Vector3d pt_eigen(pt.x, pt.y, pt.z);
+        calculateHitsLidarFrame(rayhits_, lidar_bins_, pt_eigen);
       }
-      Eigen::Vector3d pt_eigen(pt.x, pt.y, pt.z);
-      calculateHitsLidarFrame(rayhits_, lidar_bins_, pt_eigen);
+      publishBinsAsImage(ros::Time::now());
+      publishBinsForRL();
     }
-    publishBinsAsImage(ros::Time::now());
-    publishBinsForRL();
 }
 
 void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in) 
@@ -1066,6 +1069,7 @@ int main(int argc, char** argv)
     nh.param<bool>("publish/scan_bodyframe_pub_en",scan_body_pub_en, true);
     nh.param<bool>("publish/map_en",map_pub_en, false);
     nh.param<int>("publish/map_interval",map_pub_interval, 40);
+    nh.param<bool>("publish/lidar_bins_en",lidar_bins_pub_en, true);
     map_pub_interval = std::max(1, map_pub_interval);
     nh.param<int>("max_iteration",NUM_MAX_ITERATIONS,4);
     nh.param<int>("max_icp_times",NUM_MAX_ICP_TIMES,4);
@@ -1284,9 +1288,13 @@ int main(int argc, char** argv)
     ros::Publisher pubLioDebug      = nh.advertise<fast_lio::LioDebug> 
             ("/LioDebug", 100000);
 
-    // zyh added, for lidar bins pub
-    pub_bin_image_ = nh.advertise<sensor_msgs::Image>("sensed_bins_image", 1);
-    pub_rl_obs_ = nh.advertise<std_msgs::Float32MultiArray>("lidar_bins_observation", 1);
+    // Optional planner-facing LiDAR bins. Localization-only mode disables
+    // both their per-point computation and ROS publication.
+    if (lidar_bins_pub_en)
+    {
+      pub_bin_image_ = nh.advertise<sensor_msgs::Image>("sensed_bins_image", 1);
+      pub_rl_obs_ = nh.advertise<std_msgs::Float32MultiArray>("lidar_bins_observation", 1);
+    }
 
     nh.param("sensor_frame_id", sensor_frame_id_, std::string("world"));
 
@@ -1307,8 +1315,11 @@ int main(int argc, char** argv)
     inv_azimuth_a_per_ = 1.0 / azimuth_a_per_;
     inv_elevation_a_per_ = 1.0 / elevation_a_per_;
   
-    rayhits_.resize(bin_horizons_ * bin_verticals_ * sample_res_ * sample_res_);
-    lidar_bins_.resize(bin_horizons_ * bin_verticals_ * sample_res_ * sample_res_);
+    if (lidar_bins_pub_en)
+    {
+      rayhits_.resize(bin_horizons_ * bin_verticals_ * sample_res_ * sample_res_);
+      lidar_bins_.resize(bin_horizons_ * bin_verticals_ * sample_res_ * sample_res_);
+    }
 //------------------------------------------------------------------------------------------------------
     signal(SIGINT, SigHandle);
     // Use wall time so the mapper can drain queued sensor callbacks after

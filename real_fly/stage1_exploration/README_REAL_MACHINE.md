@@ -20,6 +20,17 @@ RViz configured for `world` and `/cloud_registered`. Closing RViz stops only
 the child processes created by this invocation. Use `--no-camera` for a
 LiDAR-only diagnostic run, or `--no-rviz` when no desktop display is present.
 
+The RViz profile also shows calibrated RGB coverage based on FAST-LIO pose and
+the `calib_01` FAST-Calib result:
+
+- red frustum: current D435 color view;
+- cyan frustums: sampled views that received an RGB frame;
+- yellow line: camera trajectory at those samples.
+
+A new sample is retained after roughly 0.4 m translation or 15 degrees of
+rotation. This is a camera-field-of-view guide, not proof that every surface
+pixel has usable texture or illumination.
+
 Before FAST-LIO starts, the launcher requests the same 200 Hz PX4
 `HIGHRES_IMU` stream used by the borrowed aircraft's `fly.sh`. It does not add
 a timestamp-stability waiting period; FAST-LIO still records any detected IMU
@@ -37,6 +48,12 @@ Recording at the same time as mapping preserves the synchronized evidence
 needed for offline FAST-LIO replay and Boxer processing. Closing RViz cleanly
 stops the bag before the launch processes are stopped. Never defer recording
 until after the mapping walk has finished.
+
+The current recording profile requests D435 color and depth at 640x480 and
+15 Hz. Both raw depth (`/camera/depth/image_rect_raw`) and the slower
+CPU-aligned depth (`/camera/aligned_depth_to_color/image_raw`) are retained.
+Use raw depth for high-rate offline alignment; the aligned topic remains for
+compatibility with the existing Stage-2 exporter.
 
 ## Current machine findings
 

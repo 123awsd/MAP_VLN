@@ -108,7 +108,7 @@ wait_for_master() {
 wait_for_topic() {
   local topic="$1"
   local label="$2"
-  local deadline=$((SECONDS + 25))
+  local deadline=$((SECONDS + 45))
   until rostopic info "$topic" 2>/dev/null | grep -q '^Publishers:'; do
     (( SECONDS < deadline )) || { echo "Timed out waiting for $label ($topic)." >&2; return 1; }
     sleep 1
@@ -118,6 +118,12 @@ wait_for_topic() {
     return 1
   }
   echo "OK: $label ($topic)"
+}
+
+stop_owned_pid() {
+  local pid="$1"
+  kill -INT "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
 }
 
 start_launch() {
@@ -163,12 +169,28 @@ fi
 
 if node_exists /livox_lidar_publisher2; then
   echo "Reusing /livox_lidar_publisher2"
+  wait_for_topic /livox/lidar "Livox point cloud"
 else
-  echo "Starting MID-360S at 192.168.1.122"
-  start_launch livox.log roslaunch "$DLS_WS/src/localization/FAST_LIO/launch/lidar.launch" \
-    "bd_list:=$LIVOX_SERIAL"
+  livox_ready=0
+  for attempt in 1 2; do
+    echo "Starting MID-360S at 192.168.1.122 (attempt $attempt/2)"
+    livox_log="livox.log"
+    [[ "$attempt" -eq 1 ]] || livox_log="livox_retry.log"
+    start_launch "$livox_log" roslaunch "$DLS_WS/src/localization/FAST_LIO/launch/lidar.launch" \
+      "bd_list:=$LIVOX_SERIAL"
+    livox_pid="${owned_pids[-1]}"
+    if wait_for_topic /livox/lidar "Livox point cloud"; then
+      livox_ready=1
+      break
+    fi
+    stop_owned_pid "$livox_pid"
+    [[ "$attempt" -eq 2 ]] || sleep 5
+  done
+  [[ "$livox_ready" -eq 1 ]] || {
+    echo "MID-360S did not produce point cloud after two attempts." >&2
+    exit 1
+  }
 fi
-wait_for_topic /livox/lidar "Livox point cloud"
 
 if [[ "$with_camera" -eq 1 ]]; then
   if node_exists /camera/realsense2_camera_manager || node_exists /camera/realsense2_camera; then
@@ -181,9 +203,12 @@ if [[ "$with_camera" -eq 1 ]]; then
     echo "Starting D435 RGB-D"
     start_launch d435.log roslaunch "$STAGE1_ROOT/launch/realsense_d435i.launch" \
       camera_name:=camera enable_color:=true enable_depth:=true \
-      enable_accel:=false enable_gyro:=false enable_sync:=true align_depth:=true
+      enable_accel:=false enable_gyro:=false enable_sync:=false align_depth:=true \
+      depth_width:=640 depth_height:=480 depth_fps:=15 \
+      color_width:=640 color_height:=480 color_fps:=15
   fi
   wait_for_topic /camera/color/image_raw "D435 RGB"
+  wait_for_topic /camera/depth/image_rect_raw "D435 raw depth"
   wait_for_topic /camera/aligned_depth_to_color/image_raw "D435 aligned depth"
 fi
 
@@ -195,6 +220,12 @@ else
     "map_name:=handheld_${RUN_STAMP}.pcd"
 fi
 wait_for_topic /cloud_registered "FAST-LIO registered cloud"
+
+if [[ "$with_camera" -eq 1 ]]; then
+  echo "Starting calibrated RGB coverage overlay"
+  start_launch rgb_coverage.log "$SCRIPT_DIR/rgb_coverage_visualizer.py"
+  wait_for_topic /rgb_coverage/current_frustum "RGB current-view overlay"
+fi
 
 if [[ -n "$record_run_id" ]]; then
   RECORD_DIR="$STAGE1_ROOT/data/$record_run_id"
@@ -211,6 +242,7 @@ lidar=/livox/lidar
 mapping_imu=/mavros/imu/data
 rgb=/camera/color/image_raw
 depth=/camera/aligned_depth_to_color/image_raw
+depth_raw=/camera/depth/image_rect_raw
 odometry=/Odometry
 registered_cloud=/cloud_registered
 EOF
@@ -218,9 +250,14 @@ EOF
   start_launch rosbag.log rosbag record --lz4 \
     -O "$RECORD_DIR/raw/sensors.bag" \
     /livox/lidar /livox/imu /mavros/imu/data \
-    /camera/color/image_raw /camera/aligned_depth_to_color/image_raw \
-    /camera/color/camera_info /camera/aligned_depth_to_color/camera_info \
-    /tf /tf_static /Odometry /cloud_registered
+    /camera/color/image_raw /camera/depth/image_rect_raw \
+    /camera/aligned_depth_to_color/image_raw \
+    /camera/color/camera_info /camera/depth/camera_info \
+    /camera/aligned_depth_to_color/camera_info \
+    /camera/extrinsics/depth_to_color \
+    /tf /tf_static /Odometry /cloud_registered \
+    /rgb_coverage/frustums /rgb_coverage/camera_path \
+    /rgb_coverage/current_frustum /rgb_coverage/count
   sleep 2
   kill -0 "${owned_pids[-1]}" 2>/dev/null || {
     echo "rosbag recorder exited; inspect $LOG_DIR/rosbag.log" >&2

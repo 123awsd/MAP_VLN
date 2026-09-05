@@ -1,0 +1,63 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index bb5db2d..1118032 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -7,11 +7,13 @@ find_package(catkin REQUIRED COMPONENTS
+   pcl_ros
+   pcl_conversions
+   geometry_msgs
++  cv_bridge
++  livox_ros_driver2
+ )
+ 
+ find_package(PCL 1.10 REQUIRED)
+ find_package(OpenCV REQUIRED)
+ 
+ catkin_package(
+-  CATKIN_DEPENDS roscpp sensor_msgs pcl_conversions pcl_ros
++  CATKIN_DEPENDS roscpp sensor_msgs pcl_conversions pcl_ros cv_bridge livox_ros_driver2
+ )
+diff --git a/package.xml b/package.xml
+index cdbcad3..1875e1e 100755
+--- a/package.xml
++++ b/package.xml
+@@ -22,7 +22,7 @@
+   <build_depend>sensor_msgs</build_depend>
+   <build_depend>tf</build_depend>
+   <build_depend>pcl_ros</build_depend>
+-  <build_depend>livox_ros_driver</build_depend>
++  <build_depend>livox_ros_driver2</build_depend>
+   <build_depend>message_generation</build_depend>
+   <build_depend>cv_bridge</build_depend>
+   <build_depend>pcl_conversions</build_depend>
+@@ -35,7 +35,7 @@
+   <run_depend>std_msgs</run_depend>
+   <run_depend>tf</run_depend>
+   <run_depend>pcl_ros</run_depend>
+-  <run_depend>livox_ros_driver</run_depend>
++  <run_depend>livox_ros_driver2</run_depend>
+   <run_depend>message_runtime</run_depend>
+   <run_depend>cv_bridge</run_depend>
+   <build_depend>image_transport</build_depend>
+diff --git a/src/data_preprocess.hpp b/src/data_preprocess.hpp
+index 32f658a..94ba167 100644
+--- a/src/data_preprocess.hpp
++++ b/src/data_preprocess.hpp
+@@ -8,7 +8,7 @@ which is included as part of this source code package.
+ #ifndef DATA_PREPROCESS_HPP
+ #define DATA_PREPROCESS_HPP
+ 
+-#include "CustomMsg.h"
++#include <livox_ros_driver2/CustomMsg.h>
+ #include <Eigen/Core>
+ #include <pcl/io/pcd_io.h>
+ #include <pcl/point_cloud.h>
+@@ -81,7 +81,7 @@ public:
+         for (const rosbag::MessageInstance &m : view)
+         {
+             // 1) Livox 自定义消息（含 line 字段）
+-            if (auto livox_custom_msg = m.instantiate<livox_ros_driver::CustomMsg>())
++            if (auto livox_custom_msg = m.instantiate<livox_ros_driver2::CustomMsg>())
+             {
+                 lidar_type_ = LiDARType::Solid;
+                 cloud_input_->reserve(livox_custom_msg->point_num);

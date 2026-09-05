@@ -123,6 +123,30 @@ Visualization Manager:
       Shape: Arrow
       Topic: /Odometry
       Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /rgb_coverage/frustums
+      Name: RGB Seen Frustums
+      Namespaces:
+        rgb_seen: true
+      Queue Size: 10
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /rgb_coverage/current_frustum
+      Name: RGB Current View
+      Namespaces:
+        rgb_current: true
+      Queue Size: 10
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /rgb_coverage/camera_path
+      Name: RGB Camera Path
+      Namespaces:
+        rgb_camera_path: true
+      Queue Size: 10
+      Value: true
     - Class: rviz/Image
       Enabled: false
       Image Topic: /camera/color/image_raw

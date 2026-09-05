@@ -1,0 +1,36 @@
+# Intel RealSense D435 color intrinsics read from Drone_room CameraInfo.
+# These values are valid only for the 640x480 color stream used by capture.
+fx: 605.2134399414062
+fy: 605.4168090820312
+cx: 330.0566101074219
+cy: 245.53988647460938
+k1: 0.0
+k2: 0.0
+p1: 0.0
+p2: 0.0
+
+# Official FAST-Calib 1400x1000 mm target:
+# 200 mm ArUco markers, 240 mm diameter holes, hole-center spacing 500x400 mm.
+marker_size: 0.20
+delta_width_qr_center: 0.55
+delta_height_qr_center: 0.35
+delta_width_circles: 0.50
+delta_height_circles: 0.40
+circle_radius: 0.12
+min_detected_markers: 4
+
+# Safe initial crop when the target center is about 2.5 m in front of LiDAR.
+# Override per scene in run_single_calib.sh if nearby planes enter this crop.
+x_min: 1.5
+x_max: 3.5
+y_min: -1.2
+y_max: 1.2
+z_min: -1.2
+z_max: 1.2
+
+lidar_topic: /livox/lidar
+
+# Replaced with absolute, per-run paths by run_single_calib.sh.
+bag_path: /invalid/set/by/runner/lidar.bag
+image_path: /invalid/set/by/runner/image.png
+output_path: /invalid/set/by/runner/output/
