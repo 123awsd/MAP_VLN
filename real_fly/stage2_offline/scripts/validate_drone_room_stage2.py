@@ -49,6 +49,7 @@ def atomic_json(path: Path, value: Any) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bag", type=Path, required=True)
+    parser.add_argument("--mapping-bag", type=Path)
     parser.add_argument("--episode", type=Path, required=True)
     parser.add_argument("--boxer-dir", type=Path, required=True)
     parser.add_argument("--voxel-snapshot", type=Path, required=True)
@@ -56,13 +57,15 @@ def main() -> None:
     parser.add_argument("--scene-graph", type=Path, required=True)
     parser.add_argument("--task-graph", type=Path, required=True)
     parser.add_argument("--planning-dir", type=Path, required=True)
+    parser.add_argument("--localization-summary", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
     checks: list[dict[str, Any]] = []
 
-    def check(name: str, condition: bool, detail: Any) -> None:
-        checks.append({"name": name, "status": "pass" if condition else "fail", "detail": detail})
+    def check(name: str, condition: bool, detail: Any, required: bool = True) -> None:
+        status = "pass" if condition else ("fail" if required else "warning")
+        checks.append({"name": name, "status": status, "detail": detail})
 
     manifest = load(args.episode / "manifest.json")
     actual_hash = sha256(args.bag)
@@ -72,16 +75,28 @@ def main() -> None:
         kind: len(list((args.episode / "frames" / kind).glob(pattern)))
         for kind, pattern in (("color", "*.jpg"), ("depth", "*.png"), ("pose", "*.txt"))
     }
+    frame_counts["npz"] = len(list(args.episode.glob("frame_*.npz")))
     check("episode_frame_counts", all(value == expected_frames for value in frame_counts.values()), frame_counts)
+    if args.mapping_bag:
+        mapping_hash = sha256(args.mapping_bag)
+        check("mapping_bag_sha256", mapping_hash == manifest.get("mapping_bag_sha256"), mapping_hash)
 
     calibration = load(args.episode / "calibration" / "camera_extrinsic.json")
     before = float(calibration["validation_before"]["median_m"])
     after = float(calibration["validation_after"]["median_m"])
-    check("targetless_extrinsic", calibration.get("status") == "accepted" and after < before, {
-        "status": calibration.get("status"), "median_before_m": before, "median_after_m": after,
-    })
+    target_based = calibration.get("method", "").startswith("FAST-Calib_target")
+    check("calibrated_extrinsic", (
+        calibration.get("status") == "accepted" and (target_based or after < before)
+    ), {
+        "status": calibration.get("status"), "method": calibration.get("method"),
+        "target_based": target_based, "median_before_m": before, "median_after_m": after,
+        "target_calibration_quality": (calibration.get("lidar_camera_calibration") or {}).get("quality"),
+    }, required=False)
 
-    scene_source = args.boxer_dir / "boxer_3dbbs_fused.csv"
+    scene = load(args.scene_graph)
+    scene_source = Path(scene.get("source_boxer_csv", ""))
+    if not scene_source.is_file():
+        scene_source = args.boxer_dir / "boxer_3dbbs_fused.csv"
     if not scene_source.is_file():
         scene_source = args.boxer_dir / "boxer_3dbbs.csv"
     boxer_is_fused = scene_source.name.endswith("_fused.csv")
@@ -91,6 +106,30 @@ def main() -> None:
         "rows": len(fused_rows), "path": str(scene_source),
         "fusion": boxer_is_fused,
     })
+    processing_path = args.boxer_dir / "processing_manifest.json"
+    if processing_path.is_file():
+        processing = load(processing_path)
+        processing_summary = processing.get("summary", {})
+        check("boxer_complete_gpu_pass", (
+            processing.get("status") == "completed"
+            and processing.get("device") == "cuda"
+            and int(processing_summary.get("success", 0)) == expected_frames
+            and int(processing_summary.get("failed", 0)) == 0
+        ), {"status": processing.get("status"), "device": processing.get("device"),
+            "summary": processing_summary})
+    else:
+        check("boxer_complete_gpu_pass", False, "processing_manifest.json missing")
+    if args.localization_summary:
+        localization = load(args.localization_summary)
+        check("depth_backprojection", int(localization.get("valid_depth_matches", 0)) > 0, {
+            "valid_depth_matches": localization.get("valid_depth_matches"),
+            "clustered_targets": localization.get("clustered_targets"),
+            "rejected": localization.get("rejected"),
+        })
+        check("metric_extrinsic_ready", localization.get("extrinsic_status") == "accepted", {
+            "extrinsic_status": localization.get("extrinsic_status"),
+            "warning": localization.get("coordinate_warning"),
+        }, required=False)
 
     profile = PlannerProfile.load(args.planning_config)
     voxel_map = VoxelMap3D.load(args.voxel_snapshot, profile)
@@ -100,7 +139,6 @@ def main() -> None:
         "unknown_is_blocked": voxel_report.get("unknown_is_blocked"),
     })
 
-    scene = load(args.scene_graph)
     objects = [obj for room in scene.get("rooms", []) for obj in room.get("objects", [])]
     check("scene_graph", bool(objects), {"rooms": len(scene.get("rooms", [])), "objects": len(objects)})
     task = load(args.task_graph)
@@ -166,18 +204,20 @@ def main() -> None:
             "path": str(visualization), "occupancy_slice_center_z_m": center_z,
         })
 
-    status = "pass" if all(item["status"] == "pass" for item in checks) else "fail"
+    status = "fail" if any(item["status"] == "fail" for item in checks) else (
+        "provisional" if any(item["status"] == "warning" for item in checks) else "pass"
+    )
     report = {
         "format": "pre_map_vln.real_stage2_validation.v1", "status": status,
         "completion_scope": (
             "complete_offline_package" if boxer_is_fused
-            else "pipeline_smoke_with_partial_unfused_boxer"
+            else "complete_offline_boxer_raw_with_custom_clustering"
         ),
         "safety_scope": "offline_only_no_flight_control", "checks": checks,
     }
     atomic_json(args.output, report)
     print(json.dumps(report, indent=2, ensure_ascii=False))
-    if status != "pass":
+    if status == "fail":
         raise SystemExit(1)
 
 

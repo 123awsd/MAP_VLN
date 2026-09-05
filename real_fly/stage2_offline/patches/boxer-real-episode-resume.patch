@@ -1,0 +1,277 @@
+diff --git a/run_boxer.py b/run_boxer.py
+index 2043760..949d6cb 100644
+--- a/run_boxer.py
++++ b/run_boxer.py
+@@ -6,6 +6,8 @@
+ 
+ # pyre-unsafe
+ import argparse
++import atexit
++import json
+ import os
+ import re
+ import time
+@@ -114,6 +116,8 @@ def main():
+     parser.add_argument("--ckpt", type=str, default=os.path.join(CKPT_PATH, DEFAULT_BOXERNET_CKPT), help="path to BoxerNet checkpoint")
+     parser.add_argument("--force_precision", type=str, default=None, choices=["float32", "bfloat16"], help="Override auto-detected inference precision")
+     parser.add_argument("--output_dir", type=str, default=EVAL_PATH, help="Output directory for results (default: output/)")
++    parser.add_argument("--resume", action="store_true", help="resume using the per-frame processing manifest")
++    parser.add_argument("--processing_manifest", type=str, default=None, help="optional processing manifest path")
+     args = parser.parse_args()
+ 
+     if args.fuse and args.track:
+@@ -140,7 +144,10 @@ def main():
+         _t_prev = now
+ 
+     # Determine dataset type and seq_name from input string
+-    if bool(re.search(r"scene\d{4}_\d{2}", args.input)) or "/scannet/" in args.input:
++    if os.path.isfile(os.path.join(args.input, "manifest.json")):
++        dataset_type = "habitat"
++        seq_name = os.path.basename(args.input.rstrip("/"))
++    elif bool(re.search(r"scene\d{4}_\d{2}", args.input)) or "/scannet/" in args.input:
+         dataset_type = "scannet"
+         seq_name = os.path.basename(args.input.rstrip("/"))
+     elif args.input in OMNI3D_DATASETS:
+@@ -168,6 +175,11 @@ def main():
+     os.makedirs(log_dir, exist_ok=True)
+     csv_path = os.path.join(log_dir, f"{args.write_name}_3dbbs.csv")
+     csv2d_out_path = os.path.join(log_dir, "owl_2dbbs.csv")
++    processing_manifest_path = args.processing_manifest or os.path.join(
++        log_dir, "processing_manifest.json"
++    )
++    if not args.resume and os.path.exists(csv2d_out_path):
++        os.remove(csv2d_out_path)
+     print(f"==> Created output folder {log_dir}")
+     _dbg("setup")
+ 
+@@ -195,7 +207,11 @@ def main():
+         return
+ 
+     # Create data loader
+-    if dataset_type == "scannet":
++    if dataset_type == "habitat":
++        from habitat_loader import HabitatLoader
++        loader = HabitatLoader(args.input, start_frame=args.start_n - 1,
++                               skip_frames=args.skip_n, max_frames=args.max_n)
++    elif dataset_type == "scannet":
+         loader = ScanNetLoader(
+             scene_dir=args.input,
+             annotation_path=os.path.join(
+@@ -261,6 +277,99 @@ def main():
+         device = "cpu"
+     print(f"==> Using device {device}")
+ 
++    if args.resume and os.path.isfile(processing_manifest_path):
++        with open(processing_manifest_path, "r", encoding="utf-8") as stream:
++            processing_manifest = json.load(stream)
++    else:
++        processing_manifest = {
++            "format": "boxer.processing_manifest.v1",
++            "input": os.path.abspath(args.input),
++            "frames": {},
++            "runs": [],
++        }
++    processing_manifest.setdefault("frames", {})
++    processing_manifest.setdefault("runs", [])
++    processed_timestamps = {
++        int(value["time_ns"])
++        for value in processing_manifest["frames"].values()
++        if value.get("status") in ("success", "skipped")
++        and value.get("time_ns") is not None
++    }
++    processing_manifest.update(
++        {
++            "status": "running",
++            "device": device,
++            "cuda_available": bool(torch.cuda.is_available()),
++            "total_input_frames": len(loader),
++            "updated_unix_sec": time.time(),
++        }
++    )
++    processing_manifest["runs"].append(
++        {"started_unix_sec": time.time(), "resume": bool(args.resume)}
++    )
++
++    def save_processing_manifest():
++        counts = {"success": 0, "failed": 0, "skipped": 0}
++        detection_2d_count = 0
++        detection_3d_count = 0
++        for value in processing_manifest["frames"].values():
++            status = value.get("status")
++            if status in counts:
++                counts[status] += 1
++            detection_2d_count += int(value.get("detections_2d", 0))
++            detection_3d_count += int(value.get("detections_3d", 0))
++        processing_manifest["summary"] = {
++            **counts,
++            "detections_2d": detection_2d_count,
++            "detections_3d": detection_3d_count,
++        }
++        processing_manifest["updated_unix_sec"] = time.time()
++        temporary = processing_manifest_path + ".tmp"
++        with open(temporary, "w", encoding="utf-8") as stream:
++            json.dump(processing_manifest, stream, indent=2, sort_keys=True)
++            stream.write("\n")
++        os.replace(temporary, processing_manifest_path)
++
++    def record_frame(
++        frame_index,
++        time_ns,
++        status,
++        detections_2d=0,
++        detections_3d=0,
++        reason=None,
++    ):
++        key = str(time_ns) if time_ns is not None else f"index:{frame_index}"
++        value = {
++            "frame_index": int(frame_index),
++            "time_ns": int(time_ns) if time_ns is not None else None,
++            "status": status,
++            "detections_2d": int(detections_2d),
++            "detections_3d": int(detections_3d),
++        }
++        if reason:
++            value["reason"] = reason
++        processing_manifest["frames"][key] = value
++        save_processing_manifest()
++
++    current_frame = {"index": None, "time_ns": None}
++    run_completed = {"value": False}
++
++    def record_interrupted_run():
++        if run_completed["value"]:
++            return
++        if current_frame["index"] is not None:
++            record_frame(
++                current_frame["index"],
++                current_frame["time_ns"],
++                "failed",
++                reason="process_terminated_before_frame_completion",
++            )
++        processing_manifest["status"] = "interrupted"
++        save_processing_manifest()
++
++    atexit.register(record_interrupted_run)
++    save_processing_manifest()
++
+     # Load text labels if they match special strings.
+     text_labels = load_text_labels(args.labels)
+     # Track taxonomy name for visualization
+@@ -317,9 +426,13 @@ def main():
+ 
+     video_dir = os.path.join(log_dir, f"{args.write_name}_viz")
+     if args.viz_headless:
+-        safe_delete_folder(
+-            video_dir, extensions=[".jpg", ".png"], keep_folder=True, recursive=True
+-        )
++        if not args.resume:
++            safe_delete_folder(
++                video_dir,
++                extensions=[".jpg", ".png"],
++                keep_folder=True,
++                recursive=True,
++            )
+         os.makedirs(video_dir, exist_ok=True)
+         print(
+             f"==> Current frame: {os.path.join(log_dir, f'{args.write_name}_viz_current.jpg')}"
+@@ -341,7 +454,7 @@ def main():
+         sem_name_to_id = {label: i for i, label in enumerate(text_labels)}
+         sem_id_to_name = {v: k for k, v in sem_name_to_id.items()}
+ 
+-    writer = None if args.no_csv else ObbCsvWriter2(csv_path)
++    writer = None if args.no_csv else ObbCsvWriter2(csv_path, append=args.resume)
+ 
+     tracker = None
+     if args.track:
+@@ -378,6 +491,8 @@ def main():
+     _dbg("ready")
+ 
+     for ii in pbar:
++        current_frame["index"] = ii
++        current_frame["time_ns"] = None
+         # Data loading
+         timer.start("load")
+         if DEBUG_VIZ:
+@@ -389,6 +504,15 @@ def main():
+ 
+         if datum is False:
+             pbar.set_postfix_str("Skipped (time misalignment)")
++            record_frame(ii, None, "skipped", reason="loader_time_misalignment")
++            current_frame["index"] = None
++            continue
++
++        time_ns = int(datum["time_ns0"])
++        current_frame["time_ns"] = time_ns
++        if args.resume and time_ns in processed_timestamps:
++            pbar.set_postfix_str("Already complete (resume)")
++            current_frame["index"] = None
+             continue
+ 
+         if DEBUG_VIZ:
+@@ -451,7 +575,8 @@ def main():
+                 )
+                 if args.viz_headless:
+                     write_empty_frame(img_np, HH, WW, ii)
+-
++                record_frame(ii, time_ns, "success")
++                current_frame["index"] = None
+                 continue
+ 
+             # Use pre-computed 2D bounding boxes (CA-1M, Omni3D, or SST)
+@@ -473,6 +598,8 @@ def main():
+                 )
+                 if args.viz_headless:
+                     write_empty_frame(img_np, HH, WW, ii)
++                record_frame(ii, time_ns, "success")
++                current_frame["index"] = None
+                 continue
+ 
+             scores2d = 0.5 * torch.ones(bb2d.shape[0])
+@@ -490,6 +617,8 @@ def main():
+             pbar.set_postfix_str(f"0 dets | load:{t_load:.0f}ms owl:{t_owl:.0f}ms")
+             if args.viz_headless:
+                 write_empty_frame(img_np, HH, WW, ii)
++            record_frame(ii, time_ns, "success")
++            current_frame["index"] = None
+             continue
+ 
+         # 3D BoxerNet
+@@ -548,7 +677,6 @@ def main():
+ 
+         # Visualization (includes writing CSV and images)
+         timer.start("csv")
+-        time_ns = int(datum["time_ns0"])
+         if writer is not None:
+             writer.write(obb_pr_w, time_ns, sem_id_to_name=sem_id_to_name)
+ 
+@@ -561,7 +689,7 @@ def main():
+                 scores=scores2d,
+                 labels=labels2d,
+                 sem_name_to_id=sem_name_to_id,
+-                append=(ii > 0),
++                append=os.path.exists(csv2d_out_path),
+                 time_ns=time_ns,
+                 img_width=WW,
+                 img_height=HH,
+@@ -760,6 +888,8 @@ def main():
+         if args.viz_headless:
+             timing_str += f" viz:{t_viz:.0f}ms"
+         pbar.set_postfix_str(f"{len(bb2d)} 2D, {obb_pr_w.shape[0]} 3D | " + timing_str)
++        record_frame(ii, time_ns, "success", len(bb2d), obb_pr_w.shape[0])
++        current_frame["index"] = None
+ 
+     if writer is not None:
+         writer.close()
+@@ -819,6 +949,11 @@ def main():
+             track_writer.close()
+             print(f"==> Saved {len(active_tracks)} tracked OBBs to {track_output_path}")
+ 
++    processing_manifest["status"] = "completed"
++    processing_manifest["runs"][-1]["completed_unix_sec"] = time.time()
++    run_completed["value"] = True
++    save_processing_manifest()
++
+ 
+ if __name__ == "__main__":
+     main()
+

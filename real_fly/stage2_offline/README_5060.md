@@ -1,31 +1,26 @@
-# RTX 5060 上运行 Boxer
+# RTX 5060 离线处理
 
-NX 上的 CPU 推理用于验证链路；完整语义推理建议放到 RTX 5060 主机。只需要
-传输导出的 ScanNet 子集和模型，不需要传输原始 4.5 GB bag。
-
-在 NX 上打包（不会修改输入）：
-
-```bash
-cd /home/nv/SL_WS/PRE_MAP_VLN_real_fly
-tar -C real_fly/stage2_offline/data/Drone_room -czf /tmp/scene9002_00.tgz scene9002_00
-tar -C real_fly/stage2_offline/third_party/boxer -czf /tmp/boxer-ckpts.tgz ckpts
-```
-
-将两个压缩包和项目的 `real_fly/stage2_offline/` 脚本/配置复制到 5060 主机，
-在已安装 CUDA 的环境中执行：
+`Drone_room` 的完整离线流水线由主机执行，原始 bag 只读，输出均在被忽略的
+`real_fly/stage2_offline/data/` 下。流程不会启动 MAVROS、飞控、PX4Ctrl 或任何
+运动节点。
 
 ```bash
-cd /path/to/project/real_fly/stage2_offline/third_party/boxer
-python3 run_boxer.py \
-  --input ../../data/Drone_room/scene9002_00 \
-  --skip_n 3 --max_n 999 \
-  --labels="chair,table,desk,cabinet,door,sofa,monitor,backpack,box" \
-  --thresh2d 0.18 --thresh3d 0.20 --skip_viz --fuse \
-  --output_dir ../../data/Drone_room/boxer_final_5060
+cd /home/uav/map_VLN/PRE_MAP_VLN
+./real_fly/stage2_offline/scripts/run_drone_room_5060_complete.sh
 ```
 
-预计 49 帧约为几分钟级，具体取决于显卡驱动、CUDA、PyTorch 和输入尺寸。完成
-后将 `boxer_final_5060/scene9002_00/boxer_3dbbs_fused.csv` 复制回 NX，使用
-现有 `build_boxer_scene_and_task.py`、`plan_stage2_mission.py` 和
-`validate_drone_room_stage2.py` 重新生成最终场景图与规划。不要把 bag、认证文件
-或飞控配置上传到 5060 主机。
+流程会在 Noetic Docker 中重跑完整 FAST-LIO（必要时自动降低 rosbag 回放速率），
+导出 RGB-D 关键帧，在 RTX 5060 上用 CUDA 完整运行 Boxer，进行深度反投影、目标
+聚类、voxel 快照、scene/task、离线规划和质量审计；已有完整结果会安全复用，Boxer
+支持 `--resume`。
+
+主要输出：
+
+- `data/Drone_room/fastlio_complete/`：完整位姿、PCD、轨迹和审计
+- `data/Drone_room/boxer_final_5060_complete/`：检测 CSV、处理清单和类别汇总
+- `data/Drone_room/localization/`：原始/聚类三维目标
+- `data/Drone_room/stage2_complete/`：scene、task、规划结果和可视化
+- `data/Drone_room/reports/`：验证与质量审计 JSON
+
+当前数据的相机—机体外参仍是临时估计值；它足够验证离线链路，但真机执行前必须
+用实测刚体外参替换，不能直接用于有安全要求的飞行。

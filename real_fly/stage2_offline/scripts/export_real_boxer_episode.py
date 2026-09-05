@@ -19,6 +19,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import rosbag
+import yaml
 from scipy.optimize import least_squares
 from scipy.spatial import cKDTree
 from scipy.spatial.transform import Rotation
@@ -38,10 +39,23 @@ def stamp(msg, bag_time) -> float:
     return float(value if value > 0 else bag_time.to_sec())
 
 
+def rotation_matrix(rotation: Rotation) -> np.ndarray:
+    """Support both focal's SciPy 1.3 and current SciPy releases."""
+    if hasattr(rotation, "as_matrix"):
+        return rotation.as_matrix()
+    return rotation.as_dcm()
+
+
+def rotation_from_matrix(matrix: np.ndarray) -> Rotation:
+    if hasattr(Rotation, "from_matrix"):
+        return Rotation.from_matrix(matrix)
+    return Rotation.from_dcm(matrix)
+
+
 def pose_matrix(msg) -> np.ndarray:
     p, q = msg.pose.pose.position, msg.pose.pose.orientation
     out = np.eye(4, dtype=np.float64)
-    out[:3, :3] = Rotation.from_quat([q.x, q.y, q.z, q.w]).as_matrix()
+    out[:3, :3] = rotation_matrix(Rotation.from_quat([q.x, q.y, q.z, q.w]))
     out[:3, 3] = [p.x, p.y, p.z]
     return out
 
@@ -49,7 +63,7 @@ def pose_matrix(msg) -> np.ndarray:
 def transform_matrix(transform) -> np.ndarray:
     p, q = transform.translation, transform.rotation
     out = np.eye(4, dtype=np.float64)
-    out[:3, :3] = Rotation.from_quat([q.x, q.y, q.z, q.w]).as_matrix()
+    out[:3, :3] = rotation_matrix(Rotation.from_quat([q.x, q.y, q.z, q.w]))
     out[:3, 3] = [p.x, p.y, p.z]
     return out
 
@@ -123,7 +137,7 @@ def depth_points(depth_mm: np.ndarray, K: np.ndarray, stride: int = 20) -> np.nd
 
 def parameter_matrix(values: np.ndarray) -> np.ndarray:
     out = np.eye(4, dtype=np.float64)
-    out[:3, :3] = Rotation.from_rotvec(values[3:]).as_matrix()
+    out[:3, :3] = rotation_matrix(Rotation.from_rotvec(values[3:]))
     out[:3, 3] = values[:3]
     return out
 
@@ -147,22 +161,34 @@ def main() -> None:
     parser.add_argument("bag", type=Path)
     parser.add_argument("map_pcd", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--mapping-bag", type=Path,
+                        help="bag containing regenerated /Odometry and /cloud_registered")
     parser.add_argument("--frame-period", type=float, default=1.0)
     parser.add_argument("--max-frames", type=int, default=180)
+    parser.add_argument("--max-rgb-depth-dt", type=float, default=0.08)
+    parser.add_argument("--max-pose-dt", type=float, default=0.08)
+    parser.add_argument("--max-cloud-dt", type=float, default=0.10)
+    parser.add_argument("--lidar-camera-extrinsic", type=Path,
+                        help="FAST-Calib JSON containing LiDAR-to-color-optical T_cam_lidar")
+    parser.add_argument("--fastlio-config", type=Path,
+                        help="FAST-LIO YAML containing LiDAR-to-IMU extrinsic_R/extrinsic_T")
     args = parser.parse_args()
     if args.output.exists():
         raise SystemExit(f"refusing to overwrite: {args.output}")
-    if not args.bag.is_file() or not args.map_pcd.is_file():
+    mapping_bag = args.mapping_bag or args.bag
+    if not args.bag.is_file() or not mapping_bag.is_file() or not args.map_pcd.is_file():
         raise SystemExit("bag or PCD input is missing")
 
     odom_times, odom_poses, rgb_times, depth_times = [], [], [], []
     K, camera_link_to_optical = None, None
+    with rosbag.Bag(str(mapping_bag), "r") as bag:
+        for _, msg, bt in bag.read_messages(topics=[TOPICS["odom"]]):
+            odom_times.append(stamp(msg, bt)); odom_poses.append(pose_matrix(msg))
     with rosbag.Bag(str(args.bag), "r") as bag:
-        for topic, msg, bt in bag.read_messages(topics=list(TOPICS.values())):
+        source_topics = [TOPICS["rgb"], TOPICS["depth"], TOPICS["info"], TOPICS["tf_static"]]
+        for topic, msg, bt in bag.read_messages(topics=source_topics):
             current = stamp(msg, bt)
-            if topic == TOPICS["odom"]:
-                odom_times.append(current); odom_poses.append(pose_matrix(msg))
-            elif topic == TOPICS["rgb"]: rgb_times.append(current)
+            if topic == TOPICS["rgb"]: rgb_times.append(current)
             elif topic == TOPICS["depth"]: depth_times.append(current)
             elif topic == TOPICS["info"] and K is None: K = np.asarray(msg.K, dtype=np.float64).reshape(3, 3)
             elif topic == TOPICS["tf_static"]:
@@ -177,7 +203,21 @@ def main() -> None:
     if camera_link_to_optical is None:
         camera_link_to_optical = np.array([[0, 0, 1, 0], [-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 0, 1]], dtype=float)
 
-    valid_depth = [t for t in depth_times if odom_times[0] <= t <= odom_times[-1]]
+    valid_depth = []
+    rejected_alignment = {"outside_pose_coverage": 0, "rgb_depth_dt": 0, "pose_dt": 0}
+    for current in depth_times:
+        if not odom_times[0] <= current <= odom_times[-1]:
+            rejected_alignment["outside_pose_coverage"] += 1
+            continue
+        rgb_dt = abs(rgb_times[nearest_index(rgb_times, current)] - current)
+        pose_dt = abs(odom_times[nearest_index(odom_times, current)] - current)
+        if rgb_dt > args.max_rgb_depth_dt:
+            rejected_alignment["rgb_depth_dt"] += 1
+            continue
+        if pose_dt > args.max_pose_dt:
+            rejected_alignment["pose_dt"] += 1
+            continue
+        valid_depth.append(current)
     selected, last = [], -math.inf
     for value in valid_depth:
         if value - last >= args.frame_period:
@@ -193,13 +233,22 @@ def main() -> None:
     for path in (color_dir, depth_dir, pose_dir, intrinsic_dir, root / "calibration", root / "reports"):
         path.mkdir(parents=True, exist_ok=False)
     depth_arrays = [None] * len(selected)
+    rgb_arrays = [None] * len(selected)
     with rosbag.Bag(str(args.bag), "r") as bag:
         for topic, msg, bt in bag.read_messages(topics=[TOPICS["rgb"], TOPICS["depth"]]):
             key = round(stamp(msg, bt), 6)
             if topic == TOPICS["rgb"] and key in rgb_lookup:
                 idx = rgb_lookup[key]; image = image_array(msg)
-                if msg.encoding == "rgb8": image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                cv2.imwrite(str(color_dir / f"{idx:06d}.jpg"), image, [cv2.IMWRITE_JPEG_QUALITY, 94])
+                if msg.encoding == "rgb8":
+                    rgb_image = image
+                    jpeg_image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                elif msg.encoding == "bgr8":
+                    rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                    jpeg_image = image
+                else:
+                    raise SystemExit(f"unsupported RGB encoding: {msg.encoding}")
+                rgb_arrays[idx] = np.ascontiguousarray(rgb_image)
+                cv2.imwrite(str(color_dir / f"{idx:06d}.jpg"), jpeg_image, [cv2.IMWRITE_JPEG_QUALITY, 94])
             elif topic == TOPICS["depth"] and key in depth_lookup:
                 idx = depth_lookup[key]; image = image_array(msg).astype(np.uint16)
                 depth_arrays[idx] = image
@@ -220,12 +269,12 @@ def main() -> None:
     # walls elsewhere in the accumulated room map.
     sample_times = [item[0] for item in calibration_samples]
     best_dt = [math.inf] * len(calibration_samples)
-    with rosbag.Bag(str(args.bag), "r") as bag:
+    with rosbag.Bag(str(mapping_bag), "r") as bag:
         for _, msg, bt in bag.read_messages(topics=["/cloud_registered"]):
             current = stamp(msg, bt)
             idx = nearest_index(sample_times, current)
             delta = abs(sample_times[idx] - current)
-            if delta < best_dt[idx] and delta <= 0.10:
+            if delta < best_dt[idx] and delta <= args.max_cloud_dt:
                 points = cloud_xyz(msg)
                 points = voxel_downsample(points[np.isfinite(points).all(axis=1)], 0.08)
                 calibration_samples[idx][3] = cKDTree(points)
@@ -234,54 +283,125 @@ def main() -> None:
     if len(calibration_samples) < 8:
         raise SystemExit("too few time-paired depth/LiDAR scans for targetless calibration")
 
-    def residual(values, samples):
-        body_to_optical = parameter_matrix(values) @ camera_link_to_optical
+    def residual_transform(body_to_optical, samples):
         result = []
         for _, body_pose, points, tree in samples:
             world = (body_pose @ body_to_optical @ np.column_stack([points, np.ones(len(points))]).T).T[:, :3]
-            distances = tree.query(world, k=1, workers=-1)[0]
+            # SciPy 1.3 in the ROS Noetic image predates the workers keyword.
+            distances = tree.query(world, k=1)[0]
             result.append(np.minimum(distances, 0.75))
         return np.concatenate(result)
+
+    def residual(values, samples):
+        return residual_transform(parameter_matrix(values) @ camera_link_to_optical, samples)
 
     train = calibration_samples[::2]
     validation = calibration_samples[1::2] or train
     initial = np.zeros(6, dtype=np.float64)
     before = residual(initial, validation)
-    fit = least_squares(residual, initial, args=(train,), loss="soft_l1", f_scale=0.12,
-                        bounds=([-0.25] * 3 + [-0.40] * 3, [0.25] * 3 + [0.40] * 3), max_nfev=80, verbose=1)
-    after = residual(fit.x, validation)
-    body_to_link = parameter_matrix(fit.x)
-    body_to_optical = body_to_link @ camera_link_to_optical
+    if args.lidar_camera_extrinsic:
+        if not args.fastlio_config:
+            raise SystemExit("--fastlio-config is required with --lidar-camera-extrinsic")
+        calibrated = json.loads(args.lidar_camera_extrinsic.read_text(encoding="utf-8"))
+        if calibrated.get("direction") != "lidar_to_camera_optical":
+            raise SystemExit("calibration direction must be lidar_to_camera_optical")
+        fastlio = yaml.safe_load(args.fastlio_config.read_text(encoding="utf-8"))
+        mapping = fastlio["mapping"]
+        imu_to_lidar = np.eye(4, dtype=np.float64)
+        imu_to_lidar[:3, :3] = np.asarray(mapping["extrinsic_R"], dtype=np.float64).reshape(3, 3)
+        imu_to_lidar[:3, 3] = np.asarray(mapping["extrinsic_T"], dtype=np.float64)
+        camera_to_lidar = np.eye(4, dtype=np.float64)
+        camera_to_lidar[:3, :3] = np.asarray(calibrated["R_cam_lidar"], dtype=np.float64)
+        camera_to_lidar[:3, 3] = np.asarray(calibrated["P_cam_lidar_m"], dtype=np.float64)
+        # FAST-LIO stores T_imu_lidar, while FAST-Calib reports T_camera_lidar.
+        # Camera points reach the FAST-LIO body frame through T_imu_lidar * T_lidar_camera.
+        body_to_optical = imu_to_lidar @ np.linalg.inv(camera_to_lidar)
+        after = residual_transform(body_to_optical, validation)
+        body_to_link = body_to_optical @ np.linalg.inv(camera_link_to_optical)
+        fit = None
+        method = "FAST-Calib_target_three_scene_composed_with_FAST-LIO_lidar_to_IMU"
+        status = "accepted"
+    else:
+        fit = least_squares(residual, initial, args=(train,), loss="soft_l1", f_scale=0.12,
+                            bounds=([-0.25] * 3 + [-0.40] * 3, [0.25] * 3 + [0.40] * 3), max_nfev=80, verbose=1)
+        after = residual(fit.x, validation)
+        body_to_link = parameter_matrix(fit.x)
+        body_to_optical = body_to_link @ camera_link_to_optical
+        method = "targetless_multiframe_depth_to_concurrent_lidar_scan_nearest_surface_robust_fit"
+        status = "accepted" if np.median(after) < 0.25 and np.median(after) < np.median(before) * 0.90 else "provisional"
 
     intrinsic = np.eye(4); intrinsic[:3, :3] = K
     np.savetxt(str(intrinsic_dir / "intrinsic_color.txt"), intrinsic, fmt="%.12g")
     np.savetxt(str(intrinsic_dir / "intrinsic_depth.txt"), intrinsic, fmt="%.12g")
+    frame_records = []
     for idx, current in enumerate(selected):
-        body_pose = odom_poses[nearest_index(odom_times, current)]
-        np.savetxt(str(pose_dir / f"{idx:06d}.txt"), body_pose @ body_to_optical, fmt="%.12g")
+        if depth_arrays[idx] is None or rgb_arrays[idx] is None:
+            raise SystemExit(f"selected frame {idx} was not decoded from the source bag")
+        odom_idx = nearest_index(odom_times, current)
+        optical_pose = odom_poses[odom_idx] @ body_to_optical
+        np.savetxt(str(pose_dir / f"{idx:06d}.txt"), optical_pose, fmt="%.12g")
+        rgb_time = selected_rgb[idx]
+        time_ns = int(round(rgb_time * 1e9))
+        orientation_xyzw = rotation_from_matrix(optical_pose[:3, :3]).as_quat().astype(np.float32)
+        np.savez_compressed(
+            str(root / f"frame_{idx:06d}.npz"),
+            rgb=rgb_arrays[idx],
+            depth_m=depth_arrays[idx].astype(np.float32) / 1000.0,
+            position=optical_pose[:3, 3].astype(np.float32),
+            orientation_xyzw=orientation_xyzw,
+            time_ns=np.int64(time_ns),
+            rgb_time_sec=np.float64(rgb_time),
+            depth_time_sec=np.float64(current),
+            odometry_time_sec=np.float64(odom_times[odom_idx]),
+        )
+        frame_records.append({
+            "index": idx,
+            "time_ns": time_ns,
+            "rgb_time_sec": rgb_time,
+            "depth_time_sec": current,
+            "odometry_time_sec": odom_times[odom_idx],
+            "rgb_depth_dt_sec": abs(rgb_time - current),
+            "depth_odometry_dt_sec": abs(odom_times[odom_idx] - current),
+        })
 
     metric = lambda data: {"count": int(len(data)), "median_m": float(np.median(data)), "p90_m": float(np.percentile(data, 90)), "mean_m": float(np.mean(data))}
     report = {
         "format": "pre_map_vln.real_rgbd_extrinsic.v1",
-        "method": "targetless_multiframe_depth_to_concurrent_lidar_scan_nearest_surface_robust_fit",
-        "status": "accepted" if np.median(after) < 0.25 and np.median(after) < np.median(before) * 0.90 else "provisional",
+        "method": method,
+        "status": status,
         "body_to_camera_link": body_to_link.tolist(),
         "camera_link_to_color_optical": camera_link_to_optical.tolist(),
         "body_to_color_optical": body_to_optical.tolist(),
-        "rotation_xyz_deg": Rotation.from_matrix(body_to_link[:3, :3]).as_euler("xyz", degrees=True).tolist(),
+        "rotation_xyz_deg": rotation_from_matrix(body_to_link[:3, :3]).as_euler("xyz", degrees=True).tolist(),
         "translation_xyz_m": body_to_link[:3, 3].tolist(),
         "validation_before": metric(before), "validation_after": metric(after),
-        "optimizer": {"success": bool(fit.success), "cost": float(fit.cost), "message": fit.message},
-        "warning": "Targetless result is valid only while the rigid camera/LiDAR mounting remains unchanged."
+        "optimizer": ({"success": bool(fit.success), "cost": float(fit.cost), "message": fit.message}
+                      if fit is not None else None),
+        "lidar_camera_calibration": calibrated if args.lidar_camera_extrinsic else None,
+        "fastlio_lidar_imu_config": str(args.fastlio_config.resolve()) if args.fastlio_config else None,
+        "warning": "Calibration is valid only while the rigid camera/LiDAR mounting remains unchanged."
     }
     atomic_json(root / "calibration/camera_extrinsic.json", report)
     sha = sha256_file(args.bag)
+    mapping_sha = sha if mapping_bag.resolve() == args.bag.resolve() else sha256_file(mapping_bag)
+    rgb_depth_errors = [item["rgb_depth_dt_sec"] for item in frame_records]
+    pose_errors = [item["depth_odometry_dt_sec"] for item in frame_records]
     manifest = {
-        "format": "pre_map_vln.real_boxer_episode.v1", "source_bag": str(args.bag.resolve()),
-        "source_bag_sha256": sha, "source_map": str(args.map_pcd.resolve()), "frames": len(selected),
+        "format": "pre_map_vln.real_boxer_episode.v2", "source_bag": str(args.bag.resolve()),
+        "source_bag_sha256": sha, "mapping_bag": str(mapping_bag.resolve()),
+        "mapping_bag_sha256": mapping_sha, "source_map": str(args.map_pcd.resolve()), "frames": len(selected),
         "first_sec": selected[0], "last_sec": selected[-1], "frame_period_sec": args.frame_period,
+        "fx": float(K[0, 0]), "fy": float(K[1, 1]), "cx": float(K[0, 2]), "cy": float(K[1, 2]),
         "intrinsics": {"fx": K[0, 0], "fy": K[1, 1], "cx": K[0, 2], "cy": K[1, 2], "width": 640, "height": 480},
-        "coordinate_frame": "FAST-LIO world, z-up", "extrinsic_status": report["status"]
+        "coordinate_frame": "FAST-LIO world, z-up", "extrinsic_status": report["status"],
+        "alignment": {
+            "max_rgb_depth_dt_sec": max(rgb_depth_errors),
+            "max_depth_odometry_dt_sec": max(pose_errors),
+            "limits_sec": {"rgb_depth": args.max_rgb_depth_dt, "depth_odometry": args.max_pose_dt,
+                           "depth_cloud": args.max_cloud_dt},
+            "rejected_depth_frames": rejected_alignment,
+        },
+        "frame_records": frame_records,
     }
     atomic_json(root / "manifest.json", manifest)
     atomic_json(root / "reports/export_report.json", {"status": "ok", "manifest": manifest, "calibration": report})

@@ -1,0 +1,22 @@
+{
+  "format": "pre_map_vln.lidar_camera_extrinsic.v1",
+  "calibration_id": "calib_01",
+  "method": "FAST-Calib three-scene target calibration",
+  "direction": "lidar_to_camera_optical",
+  "equation": "p_camera = R_cam_lidar * p_lidar + P_cam_lidar",
+  "R_cam_lidar": [
+    [-0.021484, -0.999724, -0.009470],
+    [0.256997, 0.003631, -0.966405],
+    [0.966173, -0.023196, 0.256849]
+  ],
+  "P_cam_lidar_m": [0.037228, -0.121695, -0.033376],
+  "quality": {
+    "front_rmse_m": 0.0024,
+    "right_rmse_m": 0.0031,
+    "left_rmse_m": 0.0022,
+    "joint_rmse_m": 0.0087,
+    "aruco_ids": [1, 2, 3, 4],
+    "circle_centers_per_scene": 4
+  },
+  "source_on_nx": "/home/nv/SL_WS/PRE_MAP_VLN_real_fly/real_fly/calibration/data/calib_01/results/multi/multi_calib_result.txt"
+}

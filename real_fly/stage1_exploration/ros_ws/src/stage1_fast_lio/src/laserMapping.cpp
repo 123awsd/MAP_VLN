@@ -1253,10 +1253,14 @@ int main(int argc, char** argv)
     }
 
     /*** ROS subscribe initialization ***/
+    // Offline rosbag playback can briefly deliver faster than the mapping loop,
+    // especially while the first map is being initialized.  The old live-sized
+    // queues (10 lidar / 200 IMU messages) silently dropped data in that case.
+    // These queues are still bounded, but cover the complete Drone_room bag.
     ros::Subscriber sub_pcl = p_pre->lidar_type == AVIA ? \
-        nh.subscribe(lid_topic, 10, livox_pcl_cbk) : \
-        nh.subscribe(lid_topic, 10, standard_pcl_cbk);
-    ros::Subscriber sub_imu = nh.subscribe(imu_topic, 200, imu_cbk);
+        nh.subscribe(lid_topic, 10000, livox_pcl_cbk) : \
+        nh.subscribe(lid_topic, 10000, standard_pcl_cbk);
+    ros::Subscriber sub_imu = nh.subscribe(imu_topic, 200000, imu_cbk);
     // ros::Timer hardware_anomaly_detection_timer = nh.createTimer(ros::Duration(0.05), hardware_anomaly_detection_cbk);
 
     ros::Publisher pubLaserCloudFull = nh.advertise<sensor_msgs::PointCloud2>
@@ -1307,7 +1311,10 @@ int main(int argc, char** argv)
     lidar_bins_.resize(bin_horizons_ * bin_verticals_ * sample_res_ * sample_res_);
 //------------------------------------------------------------------------------------------------------
     signal(SIGINT, SigHandle);
-    ros::Rate rate(5000);
+    // Use wall time so the mapper can drain queued sensor callbacks after
+    // rosbag play stops advancing /clock.  ros::Rate can block forever here
+    // when use_sim_time=true and leave the tail of an offline bag unprocessed.
+    ros::WallRate rate(5000);
     bool status = ros::ok();
     while (status)
     {

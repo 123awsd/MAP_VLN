@@ -1,0 +1,6 @@
+FROM pre-map-vln/falcon-noetic:local
+
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3-scipy python3-yaml \
+    && rm -rf /var/lib/apt/lists/*

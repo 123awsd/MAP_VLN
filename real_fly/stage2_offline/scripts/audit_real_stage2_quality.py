@@ -72,6 +72,8 @@ def atomic_json(path: Path, value: Any) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bag", type=Path, required=True)
+    parser.add_argument("--mapping-bag", type=Path,
+                        help="regenerated bag providing complete /Odometry")
     parser.add_argument("--pcd", type=Path, required=True)
     parser.add_argument("--episode", type=Path, required=True)
     parser.add_argument("--voxel-snapshot", type=Path, required=True)
@@ -81,14 +83,17 @@ def main() -> None:
     args = parser.parse_args()
 
     streams: dict[str, list[float]] = {name: [] for name in ("rgb", "depth", "lidar", "livox_imu", "fc_imu", "odom")}
-    topics = {
+    source_topics = {
         "/camera/color/image_raw": "rgb", "/camera/aligned_depth_to_color/image_raw": "depth",
         "/livox/lidar": "lidar", "/livox/imu": "livox_imu", "/mavros/imu/data": "fc_imu",
-        "/Odometry": "odom",
     }
     with rosbag.Bag(str(args.bag), "r") as bag:
-        for topic, msg, bag_time in bag.read_messages(topics=list(topics)):
-            streams[topics[topic]].append(stamp(msg, bag_time))
+        for topic, msg, bag_time in bag.read_messages(topics=list(source_topics)):
+            streams[source_topics[topic]].append(stamp(msg, bag_time))
+    pose_bag = args.mapping_bag or args.bag
+    with rosbag.Bag(str(pose_bag), "r") as bag:
+        for _, msg, bag_time in bag.read_messages(topics=["/Odometry"]):
+            streams["odom"].append(stamp(msg, bag_time))
 
     profile = PlannerProfile.load(args.planning_config)
     voxel_map = VoxelMap3D.load(args.voxel_snapshot, profile)
@@ -119,6 +124,7 @@ def main() -> None:
     report = {
         "format": "pre_map_vln.real_stage2_quality_audit.v1", "status": "pass",
         "safety_scope": "offline_only_no_flight_control", "source_bag_sha256": sha256(args.bag),
+        "mapping_bag_sha256": sha256(pose_bag),
         "source_bag_bytes": args.bag.stat().st_size, "map_pcd_points": pcd_points(args.pcd),
         "stream_counts": counts, "timing_nearest_message_deltas": timing,
         "map": {"voxel_counts": voxel_counts, "inflated_free_voxels": int(voxel_map.inflated_free.sum()), "unknown_is_blocked": True},

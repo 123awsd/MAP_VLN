@@ -135,25 +135,31 @@ def valid_task(label: str, room_id: str) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--boxer-dir", type=Path, required=True)
+    parser.add_argument("--boxer-csv", type=Path,
+                        help="explicit pre-fused Boxer-compatible CSV")
     parser.add_argument("--voxel-snapshot", type=Path, required=True)
     parser.add_argument("--planning-config", type=Path, required=True)
     parser.add_argument("--scene-output", type=Path, required=True)
     parser.add_argument("--task-output", type=Path, required=True)
     parser.add_argument("--start-output", type=Path, required=True)
     parser.add_argument("--minimum-probability", type=float, default=0.20)
+    parser.add_argument("--prefer-raw", action="store_true",
+                        help="cluster the complete per-frame CSV instead of preferring strict fusion")
+    parser.add_argument("--target-label", type=str,
+                        help="require the feasibility task to use this detected label")
     args = parser.parse_args()
 
-    candidates = [
-        args.boxer_dir / "boxer_3dbbs_fused.csv",
-        args.boxer_dir / "boxer_3dbbs.csv",
-    ]
-    source = next((path for path in candidates if path.is_file() and path.stat().st_size > 100), None)
+    fused = args.boxer_dir / "boxer_3dbbs_fused.csv"
+    raw = args.boxer_dir / "boxer_3dbbs.csv"
+    candidates = ([args.boxer_csv] if args.boxer_csv else
+                  ([raw, fused] if args.prefer_raw else [fused, raw]))
+    source = next((path for path in candidates if path and path.is_file() and path.stat().st_size > 100), None)
     if source is None:
         raise SystemExit(f"no Boxer 3-D CSV under {args.boxer_dir}")
     boxes = read_boxes(source, args.minimum_probability)
     if not boxes:
         raise SystemExit(f"no valid Boxer detections in {source}")
-    if source.name != "boxer_3dbbs_fused.csv":
+    if not source.stem.endswith("_fused"):
         boxes = cluster_raw_boxes(boxes)
 
     profile = PlannerProfile.load(args.planning_config)
@@ -162,6 +168,14 @@ def main() -> None:
     extent = np.asarray(metadata["shape_xyz"], dtype=float) * float(metadata["resolution_m"])
     origin = np.asarray(metadata["origin_xyz_m"], dtype=float)
     upper = origin + extent
+    free_indices_zyx = np.argwhere(voxel_map.inflated_free)
+    if not len(free_indices_zyx):
+        raise SystemExit("voxel snapshot has no inflated-free flight states")
+    resolution = float(metadata["resolution_m"])
+    camera_height_band = [
+        float(origin[2] + (free_indices_zyx[:, 0].min() + 0.5) * resolution),
+        float(origin[2] + (free_indices_zyx[:, 0].max() + 0.5) * resolution),
+    ]
     boxes = [box for box in boxes if np.all(np.asarray(box["center_xyz_m"]) >= origin) and np.all(np.asarray(box["center_xyz_m"]) <= upper)]
     boxes.sort(key=lambda item: (-item["probability"], item["label"], item["center_xyz_m"]))
     if not boxes:
@@ -184,7 +198,7 @@ def main() -> None:
             "id": room_id, "floor_id": 1, "semantic_type": "flight_room",
             "space_role": "room", "adjacent_room_ids": [],
             "centroid_xy_m": ((origin[:2] + upper[:2]) * 0.5).tolist(),
-            "camera_height_band_m": [0.65, 1.80], "objects": objects,
+            "camera_height_band_m": camera_height_band, "objects": objects,
         }],
     }
     atomic_json(args.scene_output, scene)
@@ -205,6 +219,11 @@ def main() -> None:
         -int(item.get("observation_count", 1)),
         -float(item["probability"]),
     ))
+    if args.target_label:
+        required_label = args.target_label.strip().lower()
+        selection_objects = [item for item in selection_objects if item["label"] == required_label]
+        if not selection_objects:
+            raise SystemExit(f"requested target label is absent from the scene: {required_label}")
     for obj in selection_objects:
         task_graph = valid_task(obj["label"], room_id)
         task = task_graph["tasks"][0]

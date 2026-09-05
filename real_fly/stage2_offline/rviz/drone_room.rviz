@@ -1,0 +1,61 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz/Grid
+      Enabled: true
+      Name: Grid
+      Plane: XY
+      Cell Size: 1
+      Line Style: Lines
+      Color: 80; 80; 80
+      Alpha: 0.35
+    - Class: rviz/PointCloud2
+      Enabled: true
+      Name: FAST-LIO map
+      Topic: /drone_room/map
+      Style: Points
+      Size (Pixels): 2
+      Color Transformer: Intensity
+      Queue Size: 2
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Name: Semantic 3D boxes and labels
+      Marker Topic: /drone_room/targets
+    - Class: rviz/Path
+      Enabled: true
+      Name: FAST-LIO trajectory
+      Topic: /drone_room/trajectory
+      Color: 0; 255; 0
+      Line Style: Lines
+      Line Width: 0.03
+    - Class: rviz/Path
+      Enabled: true
+      Name: planned path
+      Topic: /drone_room/planned_path
+      Color: 255; 0; 0
+      Line Style: Lines
+      Line Width: 0.08
+  Enabled: true
+  Global Options:
+    Fixed Frame: map
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 25
+      Focal Point: {X: 5, Y: -3, Z: -2}
+      Pitch: 0.8
+      Yaw: 0.8
+Window Geometry:
+  Height: 900
+  Width: 1400
