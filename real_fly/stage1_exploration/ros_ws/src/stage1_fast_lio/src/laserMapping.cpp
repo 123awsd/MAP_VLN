@@ -103,6 +103,8 @@ bool   point_selected_surf[100000] = {0};
 bool   lidar_pushed, flg_first_scan = true, flg_exit = false, flg_EKF_inited;
 bool   scan_pub_en = false, dense_pub_en = false, scan_body_pub_en = false, debug_circular_scan_pub_en = false;
 double debug_circular_cloud_radius = 1.0;
+bool   map_pub_en = false;
+int    map_pub_interval = 40;
 
 // wxx
 bool map_incremental_ = true;
@@ -798,8 +800,16 @@ void publish_effect_world(const ros::Publisher & pubLaserCloudEffect)
 
 void publish_map(const ros::Publisher & pubLaserCloudMap)
 {
+    if (ikdtree.Root_Node == nullptr) return;
+    PointVector map_storage;
+    ikdtree.flatten(ikdtree.Root_Node, map_storage, NOT_RECORD);
+    PointCloudXYZI map_cloud;
+    map_cloud.points = map_storage;
+    map_cloud.width = static_cast<uint32_t>(map_cloud.points.size());
+    map_cloud.height = 1;
+    map_cloud.is_dense = true;
     sensor_msgs::PointCloud2 laserCloudMap;
-    pcl::toROSMsg(*featsFromMap, laserCloudMap);
+    pcl::toROSMsg(map_cloud, laserCloudMap);
     laserCloudMap.header.stamp = ros::Time().fromSec(lidar_end_time);
     laserCloudMap.header.frame_id = "world";
     pubLaserCloudMap.publish(laserCloudMap);
@@ -1054,6 +1064,9 @@ int main(int argc, char** argv)
     nh.param<double>("publish/debug_circular_cloud_radius",debug_circular_cloud_radius, 1.0);
     nh.param<bool>("publish/dense_publish_en",dense_pub_en, true);
     nh.param<bool>("publish/scan_bodyframe_pub_en",scan_body_pub_en, true);
+    nh.param<bool>("publish/map_en",map_pub_en, false);
+    nh.param<int>("publish/map_interval",map_pub_interval, 40);
+    map_pub_interval = std::max(1, map_pub_interval);
     nh.param<int>("max_iteration",NUM_MAX_ITERATIONS,4);
     nh.param<int>("max_icp_times",NUM_MAX_ICP_TIMES,4);
     nh.param<string>("map_file_path",map_file_path,"");
@@ -1439,12 +1452,17 @@ int main(int argc, char** argv)
             t5 = ros::Time::now().toSec();
             
             /******* Publish points *******/
-            // if (path_en)                         publish_path(pubPath);
+            if (path_en)                          publish_path(pubPath);
             if (scan_pub_en || pcd_save_en)      publish_frame_world(pubLaserCloudFull);
             if (debug_circular_scan_pub_en)      publish_debug_circular_frame_world(pubDugCircularLaserCloudFull);
             if (scan_pub_en && scan_body_pub_en) publish_frame_body(pubLaserCloudFull_body);
             // publish_effect_world(pubLaserCloudEffect);
-            // publish_map(pubLaserCloudMap);
+            static int map_publish_counter = 0;
+            if (map_pub_en && ++map_publish_counter >= map_pub_interval)
+            {
+                publish_map(pubLaserCloudMap);
+                map_publish_counter = 0;
+            }
             // t6 = omp_get_wtime();
             t6 = ros::Time::now().toSec();
 

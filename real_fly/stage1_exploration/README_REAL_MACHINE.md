@@ -4,6 +4,35 @@ This directory is the real-machine-only entry point for sensor checks,
 handheld data capture, offline replay, and map handoff. It never starts a
 flight controller and it never publishes motion commands.
 
+## One-command live mapping view
+
+With the aircraft disarmed and propellers removed, open a NoMachine terminal
+and run:
+
+```bash
+cd /home/nv/SL_WS/PRE_MAP_VLN_real_fly
+./real_fly/stage1_exploration/scripts/start_handheld_mapping_rviz.sh
+```
+
+The command starts or reuses the local ROS master, starts MAVROS telemetry,
+the aircraft MID-360S, D435 RGB-D, the borrowed tuned FAST-LIO profile, and
+RViz configured for `world` and `/cloud_registered`. Closing RViz stops only
+the child processes created by this invocation. Use `--no-camera` for a
+LiDAR-only diagnostic run, or `--no-rviz` when no desktop display is present.
+
+For a formal handheld pass, record the raw sensors, RGB-D, FAST-LIO pose and
+map output while watching RViz:
+
+```bash
+./real_fly/stage1_exploration/scripts/start_handheld_mapping_rviz.sh \
+  --record room_01
+```
+
+Recording at the same time as mapping preserves the synchronized evidence
+needed for offline FAST-LIO replay and Boxer processing. Closing RViz cleanly
+stops the bag before the launch processes are stopped. Never defer recording
+until after the mapping walk has finished.
+
 ## Current machine findings
 
 - The host is the Jetson Orin NX described in `real_fly/machine_profile.md`.
