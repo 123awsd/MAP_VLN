@@ -47,7 +47,9 @@ def median_delta(first: list[float], second: list[float]) -> dict[str, float | i
         if value < second[0] or value > second[-1]:
             outside += 1
             continue
-        index = min(len(second) - 1, bisect.bisect_left(second, value))
+        insertion = bisect.bisect_left(second, value)
+        choices = [max(0, insertion - 1), min(len(second) - 1, insertion)]
+        index = min(choices, key=lambda item: abs(second[item] - value))
         values.append(1000.0 * abs(value - second[index]))
     if not values:
         return {"count": 0, "outside_overlap": outside, "median_ms": None, "p95_ms": None, "max_ms": None}
@@ -82,9 +84,11 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
+    manifest = json.loads((args.episode / "manifest.json").read_text(encoding="utf-8"))
+    requested_depth_topic = manifest.get("depth_source_topic", "/camera/aligned_depth_to_color/image_raw")
     streams: dict[str, list[float]] = {name: [] for name in ("rgb", "depth", "lidar", "livox_imu", "fc_imu", "odom")}
     source_topics = {
-        "/camera/color/image_raw": "rgb", "/camera/aligned_depth_to_color/image_raw": "depth",
+        "/camera/color/image_raw": "rgb", requested_depth_topic: "depth",
         "/livox/lidar": "lidar", "/livox/imu": "livox_imu", "/mavros/imu/data": "fc_imu",
     }
     with rosbag.Bag(str(args.bag), "r") as bag:
@@ -126,7 +130,9 @@ def main() -> None:
         "safety_scope": "offline_only_no_flight_control", "source_bag_sha256": sha256(args.bag),
         "mapping_bag_sha256": sha256(pose_bag),
         "source_bag_bytes": args.bag.stat().st_size, "map_pcd_points": pcd_points(args.pcd),
-        "stream_counts": counts, "timing_nearest_message_deltas": timing,
+        "stream_counts": counts, "depth_source_topic": requested_depth_topic,
+        "depth_source": manifest.get("depth_source"),
+        "timing_nearest_message_deltas": timing,
         "map": {"voxel_counts": voxel_counts, "inflated_free_voxels": int(voxel_map.inflated_free.sum()), "unknown_is_blocked": True},
         "bspline": {"segments": curve_results, "all_collision_free": all(item["collision_free"] for item in curve_results)},
         "notes": [

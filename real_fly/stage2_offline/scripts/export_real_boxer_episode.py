@@ -28,8 +28,11 @@ from scipy.spatial.transform import Rotation
 TOPICS = {
     "odom": "/Odometry",
     "rgb": "/camera/color/image_raw",
-    "depth": "/camera/aligned_depth_to_color/image_raw",
-    "info": "/camera/color/camera_info",
+    "depth_aligned": "/camera/aligned_depth_to_color/image_raw",
+    "depth_raw": "/camera/depth/image_rect_raw",
+    "color_info": "/camera/color/camera_info",
+    "depth_info": "/camera/depth/camera_info",
+    "depth_to_color": "/camera/extrinsics/depth_to_color",
     "tf_static": "/tf_static",
 }
 
@@ -135,6 +138,60 @@ def depth_points(depth_mm: np.ndarray, K: np.ndarray, stride: int = 20) -> np.nd
     return np.column_stack([x, y, z])
 
 
+def align_depth_to_color(
+    depth_mm: np.ndarray,
+    depth_K: np.ndarray,
+    color_K: np.ndarray,
+    color_D: np.ndarray,
+    color_shape: tuple[int, int],
+    color_from_depth_R: np.ndarray,
+    color_from_depth_t: np.ndarray,
+) -> np.ndarray:
+    """Project rectified depth into the color optical frame with a z-buffer.
+
+    RealSense's Extrinsics message stores its rotation column-major.  The
+    caller converts it to a conventional row-major matrix before this helper.
+    A 2x2 pixel splat approximates the source-pixel footprint and avoids holes
+    caused by the D435 color camera's higher focal length.
+    """
+    height, width = depth_mm.shape
+    vv, uu = np.mgrid[:height, :width]
+    z = depth_mm.reshape(-1).astype(np.float64) / 1000.0
+    valid = (z > 0.1) & (z < 10.0)
+    z = z[valid]
+    u = uu.reshape(-1)[valid].astype(np.float64)
+    v = vv.reshape(-1)[valid].astype(np.float64)
+    points_depth = np.column_stack([
+        (u - depth_K[0, 2]) * z / depth_K[0, 0],
+        (v - depth_K[1, 2]) * z / depth_K[1, 1],
+        z,
+    ])
+    points_color = points_depth @ color_from_depth_R.T + color_from_depth_t
+    in_front = points_color[:, 2] > 0.1
+    points_color = points_color[in_front]
+    if not len(points_color):
+        return np.zeros(color_shape, dtype=np.uint16)
+    projected, _ = cv2.projectPoints(
+        points_color.reshape(-1, 1, 3),
+        np.zeros(3), np.zeros(3), color_K, color_D,
+    )
+    projected = projected.reshape(-1, 2)
+    base = np.floor(projected).astype(np.int32)
+    depth_color_mm = np.rint(points_color[:, 2] * 1000.0).astype(np.int64)
+    color_height, color_width = color_shape
+    zbuffer = np.full(color_height * color_width, np.iinfo(np.uint32).max, dtype=np.uint32)
+    for du, dv in ((0, 0), (1, 0), (0, 1), (1, 1)):
+        px = base[:, 0] + du
+        py = base[:, 1] + dv
+        inside = ((px >= 0) & (px < color_width) & (py >= 0) & (py < color_height)
+                  & (depth_color_mm > 0) & (depth_color_mm <= np.iinfo(np.uint16).max))
+        flat = py[inside] * color_width + px[inside]
+        np.minimum.at(zbuffer, flat, depth_color_mm[inside].astype(np.uint32))
+    missing = zbuffer == np.iinfo(np.uint32).max
+    zbuffer[missing] = 0
+    return zbuffer.reshape(color_height, color_width).astype(np.uint16)
+
+
 def parameter_matrix(values: np.ndarray) -> np.ndarray:
     out = np.eye(4, dtype=np.float64)
     out[:3, :3] = rotation_matrix(Rotation.from_rotvec(values[3:]))
@@ -168,6 +225,8 @@ def main() -> None:
     parser.add_argument("--max-rgb-depth-dt", type=float, default=0.08)
     parser.add_argument("--max-pose-dt", type=float, default=0.08)
     parser.add_argument("--max-cloud-dt", type=float, default=0.10)
+    parser.add_argument("--depth-source", choices=("auto", "raw", "aligned"), default="auto",
+                        help="auto prefers raw depth plus recorded depth-to-color calibration")
     parser.add_argument("--lidar-camera-extrinsic", type=Path,
                         help="FAST-Calib JSON containing LiDAR-to-color-optical T_cam_lidar")
     parser.add_argument("--fastlio-config", type=Path,
@@ -180,50 +239,83 @@ def main() -> None:
         raise SystemExit("bag or PCD input is missing")
 
     odom_times, odom_poses, rgb_times, depth_times = [], [], [], []
-    K, camera_link_to_optical = None, None
+    color_K, depth_K, color_D = None, None, None
+    color_from_depth_R, color_from_depth_t = None, None
+    camera_link_to_optical = None
     with rosbag.Bag(str(mapping_bag), "r") as bag:
         for _, msg, bt in bag.read_messages(topics=[TOPICS["odom"]]):
             odom_times.append(stamp(msg, bt)); odom_poses.append(pose_matrix(msg))
     with rosbag.Bag(str(args.bag), "r") as bag:
-        source_topics = [TOPICS["rgb"], TOPICS["depth"], TOPICS["info"], TOPICS["tf_static"]]
+        available_topics = set(bag.get_type_and_topic_info()[1])
+        raw_ready = all(TOPICS[name] in available_topics for name in
+                        ("depth_raw", "depth_info", "color_info", "depth_to_color"))
+        if args.depth_source == "raw" and not raw_ready:
+            raise SystemExit("raw depth requested but raw depth calibration topics are missing")
+        use_raw_depth = raw_ready if args.depth_source == "auto" else args.depth_source == "raw"
+        source_depth_topic = TOPICS["depth_raw"] if use_raw_depth else TOPICS["depth_aligned"]
+        if source_depth_topic not in available_topics:
+            raise SystemExit(f"selected depth topic is missing: {source_depth_topic}")
+        source_topics = [TOPICS["rgb"], source_depth_topic, TOPICS["color_info"],
+                         TOPICS["depth_info"], TOPICS["depth_to_color"], TOPICS["tf_static"]]
+        first_tf, second_tf = None, None
         for topic, msg, bt in bag.read_messages(topics=source_topics):
             current = stamp(msg, bt)
             if topic == TOPICS["rgb"]: rgb_times.append(current)
-            elif topic == TOPICS["depth"]: depth_times.append(current)
-            elif topic == TOPICS["info"] and K is None: K = np.asarray(msg.K, dtype=np.float64).reshape(3, 3)
+            elif topic == source_depth_topic: depth_times.append(current)
+            elif topic == TOPICS["color_info"] and color_K is None:
+                color_K = np.asarray(msg.K, dtype=np.float64).reshape(3, 3)
+                color_D = np.asarray(msg.D, dtype=np.float64)
+                color_shape = (int(msg.height), int(msg.width))
+            elif topic == TOPICS["depth_info"] and depth_K is None:
+                depth_K = np.asarray(msg.K, dtype=np.float64).reshape(3, 3)
+            elif topic == TOPICS["depth_to_color"] and color_from_depth_R is None:
+                # librealsense rs2_extrinsics.rotation is serialized column-major.
+                color_from_depth_R = np.asarray(msg.rotation, dtype=np.float64).reshape(3, 3).T
+                color_from_depth_t = np.asarray(msg.translation, dtype=np.float64)
             elif topic == TOPICS["tf_static"]:
                 for item in msg.transforms:
                     if item.header.frame_id == "camera_link" and item.child_frame_id == "camera_aligned_depth_to_color_frame":
-                        first = transform_matrix(item.transform)
+                        first_tf = transform_matrix(item.transform)
                     elif item.header.frame_id == "camera_aligned_depth_to_color_frame" and item.child_frame_id == "camera_color_optical_frame":
-                        second = transform_matrix(item.transform)
-                        if "first" in locals(): camera_link_to_optical = first @ second
-    if not odom_times or not rgb_times or not depth_times or K is None:
+                        second_tf = transform_matrix(item.transform)
+                if first_tf is not None and second_tf is not None:
+                    camera_link_to_optical = first_tf @ second_tf
+    if not odom_times or not rgb_times or not depth_times or color_K is None:
         raise SystemExit("required odometry/RGB/depth/CameraInfo stream is missing")
+    if use_raw_depth and any(value is None for value in
+                             (depth_K, color_D, color_from_depth_R, color_from_depth_t)):
+        raise SystemExit("raw depth selected but intrinsics/extrinsics could not be decoded")
     if camera_link_to_optical is None:
         camera_link_to_optical = np.array([[0, 0, 1, 0], [-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 0, 1]], dtype=float)
 
-    valid_depth = []
+    valid_pairs = []
     rejected_alignment = {"outside_pose_coverage": 0, "rgb_depth_dt": 0, "pose_dt": 0}
-    for current in depth_times:
-        if not odom_times[0] <= current <= odom_times[-1]:
+    # RGB is the semantic inference clock. Select RGB keyframes first, then
+    # attach the nearest raw/aligned depth and pose; selecting on the faster
+    # depth stream can unnecessarily retain a poor RGB-depth pairing.
+    for rgb_time in rgb_times:
+        depth_time = depth_times[nearest_index(depth_times, rgb_time)]
+        if not odom_times[0] <= rgb_time <= odom_times[-1]:
             rejected_alignment["outside_pose_coverage"] += 1
             continue
-        rgb_dt = abs(rgb_times[nearest_index(rgb_times, current)] - current)
-        pose_dt = abs(odom_times[nearest_index(odom_times, current)] - current)
+        rgb_dt = abs(rgb_time - depth_time)
+        pose_dt = abs(odom_times[nearest_index(odom_times, rgb_time)] - rgb_time)
         if rgb_dt > args.max_rgb_depth_dt:
             rejected_alignment["rgb_depth_dt"] += 1
             continue
         if pose_dt > args.max_pose_dt:
             rejected_alignment["pose_dt"] += 1
             continue
-        valid_depth.append(current)
-    selected, last = [], -math.inf
-    for value in valid_depth:
-        if value - last >= args.frame_period:
-            selected.append(value); last = value
-        if len(selected) >= args.max_frames: break
-    selected_rgb = [rgb_times[nearest_index(rgb_times, value)] for value in selected]
+        valid_pairs.append((rgb_time, depth_time))
+    selected_pairs, last = [], -math.inf
+    for rgb_time, depth_time in valid_pairs:
+        if rgb_time - last >= args.frame_period:
+            selected_pairs.append((rgb_time, depth_time)); last = rgb_time
+        if len(selected_pairs) >= args.max_frames: break
+    selected_rgb = [item[0] for item in selected_pairs]
+    selected = [item[1] for item in selected_pairs]
+    if not selected:
+        raise SystemExit("no RGB/depth/odometry triples satisfy the timestamp limits")
     depth_lookup = {round(value, 6): idx for idx, value in enumerate(selected)}
     rgb_lookup = {round(value, 6): idx for idx, value in enumerate(selected_rgb)}
 
@@ -235,7 +327,7 @@ def main() -> None:
     depth_arrays = [None] * len(selected)
     rgb_arrays = [None] * len(selected)
     with rosbag.Bag(str(args.bag), "r") as bag:
-        for topic, msg, bt in bag.read_messages(topics=[TOPICS["rgb"], TOPICS["depth"]]):
+        for topic, msg, bt in bag.read_messages(topics=[TOPICS["rgb"], source_depth_topic]):
             key = round(stamp(msg, bt), 6)
             if topic == TOPICS["rgb"] and key in rgb_lookup:
                 idx = rgb_lookup[key]; image = image_array(msg)
@@ -249,15 +341,20 @@ def main() -> None:
                     raise SystemExit(f"unsupported RGB encoding: {msg.encoding}")
                 rgb_arrays[idx] = np.ascontiguousarray(rgb_image)
                 cv2.imwrite(str(color_dir / f"{idx:06d}.jpg"), jpeg_image, [cv2.IMWRITE_JPEG_QUALITY, 94])
-            elif topic == TOPICS["depth"] and key in depth_lookup:
+            elif topic == source_depth_topic and key in depth_lookup:
                 idx = depth_lookup[key]; image = image_array(msg).astype(np.uint16)
+                if use_raw_depth:
+                    image = align_depth_to_color(
+                        image, depth_K, color_K, color_D, color_shape,
+                        color_from_depth_R, color_from_depth_t,
+                    )
                 depth_arrays[idx] = image
                 cv2.imwrite(str(depth_dir / f"{idx:06d}.png"), image)
 
     calibration_samples = []
     for idx in range(0, len(selected), max(1, len(selected) // 30)):
         if depth_arrays[idx] is None: continue
-        points = depth_points(depth_arrays[idx], K, stride=24)
+        points = depth_points(depth_arrays[idx], color_K, stride=24)
         if len(points) < 50: continue
         body_pose = odom_poses[nearest_index(odom_times, selected[idx])]
         calibration_samples.append([selected[idx], body_pose, points, None])
@@ -330,7 +427,7 @@ def main() -> None:
         method = "targetless_multiframe_depth_to_concurrent_lidar_scan_nearest_surface_robust_fit"
         status = "accepted" if np.median(after) < 0.25 and np.median(after) < np.median(before) * 0.90 else "provisional"
 
-    intrinsic = np.eye(4); intrinsic[:3, :3] = K
+    intrinsic = np.eye(4); intrinsic[:3, :3] = color_K
     np.savetxt(str(intrinsic_dir / "intrinsic_color.txt"), intrinsic, fmt="%.12g")
     np.savetxt(str(intrinsic_dir / "intrinsic_depth.txt"), intrinsic, fmt="%.12g")
     frame_records = []
@@ -379,6 +476,10 @@ def main() -> None:
                       if fit is not None else None),
         "lidar_camera_calibration": calibrated if args.lidar_camera_extrinsic else None,
         "fastlio_lidar_imu_config": str(args.fastlio_config.resolve()) if args.fastlio_config else None,
+        "depth_source": "raw_offline_aligned_to_color" if use_raw_depth else "realtime_aligned_depth",
+        "depth_source_topic": source_depth_topic,
+        "depth_to_color_rotation": color_from_depth_R.tolist() if use_raw_depth else None,
+        "depth_to_color_translation_m": color_from_depth_t.tolist() if use_raw_depth else None,
         "warning": "Calibration is valid only while the rigid camera/LiDAR mounting remains unchanged."
     }
     atomic_json(root / "calibration/camera_extrinsic.json", report)
@@ -391,8 +492,12 @@ def main() -> None:
         "source_bag_sha256": sha, "mapping_bag": str(mapping_bag.resolve()),
         "mapping_bag_sha256": mapping_sha, "source_map": str(args.map_pcd.resolve()), "frames": len(selected),
         "first_sec": selected[0], "last_sec": selected[-1], "frame_period_sec": args.frame_period,
-        "fx": float(K[0, 0]), "fy": float(K[1, 1]), "cx": float(K[0, 2]), "cy": float(K[1, 2]),
-        "intrinsics": {"fx": K[0, 0], "fy": K[1, 1], "cx": K[0, 2], "cy": K[1, 2], "width": 640, "height": 480},
+        "fx": float(color_K[0, 0]), "fy": float(color_K[1, 1]), "cx": float(color_K[0, 2]), "cy": float(color_K[1, 2]),
+        "intrinsics": {"fx": color_K[0, 0], "fy": color_K[1, 1], "cx": color_K[0, 2], "cy": color_K[1, 2],
+                       "width": color_shape[1], "height": color_shape[0]},
+        "depth_source": report["depth_source"],
+        "depth_source_topic": source_depth_topic,
+        "raw_depth_intrinsics": ({"K": depth_K.tolist()} if use_raw_depth else None),
         "coordinate_frame": "FAST-LIO world, z-up", "extrinsic_status": report["status"],
         "alignment": {
             "max_rgb_depth_dt_sec": max(rgb_depth_errors),

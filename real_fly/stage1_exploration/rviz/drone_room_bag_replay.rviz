@@ -1,0 +1,110 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 1
+      Cell Size: 1
+      Class: rviz/Grid
+      Color: 140; 140; 140
+      Enabled: true
+      Name: Grid
+      Plane: XY
+      Plane Cell Count: 30
+      Reference Frame: <Fixed Frame>
+      Value: true
+    - Class: rviz/PointCloud2
+      Alpha: 0.75
+      Autocompute Intensity Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Color Transformer: AxisColor
+      Decay Time: 8
+      Enabled: true
+      Name: Registered cloud (8 s history)
+      Position Transformer: XYZ
+      Queue Size: 20
+      Selectable: true
+      Size (Pixels): 2
+      Style: Points
+      Topic: /cloud_registered
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Class: rviz/Odometry
+      Alpha: 1
+      Axes Length: 0.35
+      Axes Radius: 0.025
+      Color: 255; 210; 0
+      Enabled: true
+      Keep: 5000
+      Name: Recorded FAST-LIO odometry
+      Position Tolerance: 0.05
+      Queue Size: 100
+      Shape: Axes
+      Topic: /Odometry
+      Value: true
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /camera/color/image_raw
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: D435 RGB
+      Normalize Range: true
+      Queue Size: 5
+      Transport Hint: raw
+      Unreliable: false
+      Value: true
+    - Class: rviz/Image
+      Enabled: false
+      Image Topic: /camera/depth/image_rect_raw
+      Max Value: 5000
+      Median window: 5
+      Min Value: 300
+      Name: D435 raw depth
+      Normalize Range: true
+      Queue Size: 5
+      Transport Hint: raw
+      Unreliable: false
+      Value: false
+  Enabled: true
+  Global Options:
+    Background Color: 35; 35; 35
+    Default Light: true
+    Fixed Frame: world
+    Frame Rate: 20
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+  Value: true
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 18
+      Focal Point:
+        X: -2
+        Y: -5
+        Z: -1
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.01
+      Pitch: 0.55
+      Target Frame: world
+      Yaw: 0.8
+    Saved: ~
+Window Geometry:
+  Height: 950
+  Width: 1600
+  X: 20
+  Y: 20
