@@ -44,6 +44,10 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STAGE1_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/env.sh"
+REALSENSE_PROFILE="$STAGE1_ROOT/config/realsense_d435_recording.conf"
+[[ -r "$REALSENSE_PROFILE" ]] || { echo "Missing RealSense profile: $REALSENSE_PROFILE" >&2; exit 1; }
+# shellcheck disable=SC1090
+source "$REALSENSE_PROFILE"
 
 if [[ "$start_mid360" -eq 1 ]]; then
   [[ "$mid360_model" == "mid360" || "$mid360_model" == "mid360s" ]] || {
@@ -131,8 +135,12 @@ if [[ "$start_d435" -eq 1 || "$start_d435i" -eq 1 ]]; then
     camera_name:=camera enable_color:=true enable_depth:=true \
     enable_accel:="$motion_enabled" enable_gyro:="$motion_enabled" \
     enable_sync:=true align_depth:=true \
+    color_width:="$REALSENSE_COLOR_WIDTH" color_height:="$REALSENSE_COLOR_HEIGHT" \
+    color_fps:="$REALSENSE_COLOR_FPS" depth_width:="$REALSENSE_DEPTH_WIDTH" \
+    depth_height:="$REALSENSE_DEPTH_HEIGHT" depth_fps:="$REALSENSE_DEPTH_FPS" \
     > "$session_dir/realsense.log" 2>&1 &
   pids+=("$!")
+  "$SCRIPT_DIR/configure_realsense_rgb.sh"
 fi
 
 if [[ "$start_mid360" -eq 1 ]]; then

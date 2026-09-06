@@ -49,11 +49,14 @@ needed for offline FAST-LIO replay and Boxer processing. Closing RViz cleanly
 stops the bag before the launch processes are stopped. Never defer recording
 until after the mapping walk has finished.
 
-The current recording profile requests D435 color and depth at 640x480 and
-15 Hz. Both raw depth (`/camera/depth/image_rect_raw`) and the slower
-CPU-aligned depth (`/camera/aligned_depth_to_color/image_raw`) are retained.
-Use raw depth for high-rate offline alignment; the aligned topic remains for
-compatibility with the existing Stage-2 exporter.
+The checked-in `config/realsense_d435_recording.conf` profile requests D435
+color and depth at 640x480 and 30 Hz, with RGB manual exposure 120. Both raw
+depth (`/camera/depth/image_rect_raw`) and the slower CPU-aligned depth
+(`/camera/aligned_depth_to_color/image_raw`) are retained. Recording entry
+points apply and read back the RGB exposure before `rosbag record` starts;
+gain, white balance, and depth exposure remain driver defaults. Use raw depth
+for high-rate offline alignment; the aligned topic remains for compatibility
+with the existing Stage-2 exporter.
 
 ## Current machine findings
 

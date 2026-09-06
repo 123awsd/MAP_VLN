@@ -46,6 +46,7 @@ ROS_MASTER_PORT=11311
 LIVOX_CONFIG="$STAGE1_ROOT/data/mid360s_static_20260904_145259/MID360s_config.json"
 LIVOX_SERIAL=ARMCP720033122
 RVIZ_CONFIG="$STAGE1_ROOT/rviz/stage1_handheld_mapping.rviz"
+REALSENSE_PROFILE="$STAGE1_ROOT/config/realsense_d435_recording.conf"
 RUN_STAMP="$(date +%Y%m%d_%H%M%S)"
 LOG_DIR="$STAGE1_ROOT/runtime/live_mapping/$RUN_STAMP"
 mkdir -p "$LOG_DIR"
@@ -68,6 +69,9 @@ export LIVOX_LIDAR_CONFIG="$LIVOX_CONFIG"
 
 [[ -r "$LIVOX_CONFIG" ]] || { echo "Missing Livox config: $LIVOX_CONFIG" >&2; exit 1; }
 [[ -r "$RVIZ_CONFIG" ]] || { echo "Missing RViz config: $RVIZ_CONFIG" >&2; exit 1; }
+[[ -r "$REALSENSE_PROFILE" ]] || { echo "Missing RealSense profile: $REALSENSE_PROFILE" >&2; exit 1; }
+# shellcheck disable=SC1090
+source "$REALSENSE_PROFILE"
 [[ -x "$STAGE1_WS/devel/lib/stage1_fast_lio/fastlio_mapping" ]] || { echo "Stage-1 FAST-LIO binary is missing; run scripts/build_stage1_fast_lio.sh." >&2; exit 1; }
 [[ -x "$DLS_WS/devel/lib/livox_ros_driver2/livox_ros_driver2_node" ]] || { echo "Livox driver binary is missing." >&2; exit 1; }
 
@@ -204,12 +208,14 @@ if [[ "$with_camera" -eq 1 ]]; then
     start_launch d435.log roslaunch "$STAGE1_ROOT/launch/realsense_d435i.launch" \
       camera_name:=camera enable_color:=true enable_depth:=true \
       enable_accel:=false enable_gyro:=false enable_sync:=false align_depth:=true \
-      depth_width:=640 depth_height:=480 depth_fps:=15 \
-      color_width:=640 color_height:=480 color_fps:=15
+      color_width:="$REALSENSE_COLOR_WIDTH" color_height:="$REALSENSE_COLOR_HEIGHT" \
+      color_fps:="$REALSENSE_COLOR_FPS" depth_width:="$REALSENSE_DEPTH_WIDTH" \
+      depth_height:="$REALSENSE_DEPTH_HEIGHT" depth_fps:="$REALSENSE_DEPTH_FPS"
   fi
   wait_for_topic /camera/color/image_raw "D435 RGB"
   wait_for_topic /camera/depth/image_rect_raw "D435 raw depth"
   wait_for_topic /camera/aligned_depth_to_color/image_raw "D435 aligned depth"
+  "$SCRIPT_DIR/configure_realsense_rgb.sh"
 fi
 
 if node_exists /laserMapping; then
@@ -243,6 +249,9 @@ mapping_imu=/mavros/imu/data
 rgb=/camera/color/image_raw
 depth=/camera/aligned_depth_to_color/image_raw
 depth_raw=/camera/depth/image_rect_raw
+rgb_profile=$REALSENSE_PROFILE
+rgb_auto_exposure=$REALSENSE_RGB_AUTO_EXPOSURE
+rgb_exposure=$REALSENSE_RGB_EXPOSURE
 odometry=/Odometry
 registered_cloud=/cloud_registered
 EOF

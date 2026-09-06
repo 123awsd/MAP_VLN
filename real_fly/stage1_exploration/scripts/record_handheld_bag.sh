@@ -34,6 +34,7 @@ source "$SCRIPT_DIR/env.sh"
 [[ "${ROS_MASTER_URI:-}" != *:11311* ]] || { echo "Refusing borrowed ROS master ${ROS_MASTER_URI:-unset}." >&2; exit 2; }
 command -v rosbag >/dev/null 2>&1 || { echo "rosbag not found." >&2; exit 1; }
 "$SCRIPT_DIR/check_ros_topics.sh" --config "$topics_config" --require-rgb
+"$SCRIPT_DIR/configure_realsense_rgb.sh"
 
 value() {
   /usr/bin/awk -F= -v key="$1" '$1 == key { sub(/^[ \t]+/, "", $2); sub(/[ \t]+$/, "", $2); print $2; exit }' "$topics_config"
@@ -68,6 +69,9 @@ manifest="$run_dir/manifest.txt"
   echo "started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "ros_master_uri=$ROS_MASTER_URI"
   echo "topics_config=$topics_config"
+  echo "rgb_profile=$STAGE1_ROOT/config/realsense_d435_recording.conf"
+  echo "rgb_auto_exposure=false"
+  echo "rgb_exposure=120"
   for topic in "${topics[@]}"; do
     echo "topic=$topic"
   done
