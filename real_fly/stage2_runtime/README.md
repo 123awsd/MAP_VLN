@@ -95,6 +95,13 @@ individual 3-D `PoseStamped` goals to the senior SUPER planner. SUPER remains
 responsible for the live occupancy map, trajectory continuity, dynamics and
 `/planning/pos_cmd`; PX4Ctrl remains the only aircraft controller.
 
+Intermediate `transit` goals are pass-through route constraints: the adapter
+switches to the next goal inside a 0.40 m radius without requiring low speed or
+a dwell, allowing SUPER to preserve trajectory continuity. Only final
+`observation` goals require the configured 0.20 m arrival tolerance, low speed,
+and 0.75 s dwell. The pass-through radius can be changed explicitly with
+`--transit-switch-radius`, but must remain in `[0.10, 1.0]` m.
+
 SUPER receives the approved PCD as **occupied-only** prior constraints and the
 registered live LiDAR cloud for ray-integrated free space and current obstacles.
 The prior map is never used to manufacture free space, and unknown space remains

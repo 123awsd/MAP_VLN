@@ -217,6 +217,9 @@ class Adapter:
             ok, reason = self.healthy(require_armed=True)
             if not ok:
                 raise RuntimeError(reason)
+            goal_kind = goal.get("kind")
+            if goal_kind not in ("transit", "observation"):
+                raise RuntimeError(f"unsupported goal kind: {goal_kind!r}")
             message = PoseStamped()
             message.header.frame_id = "world"
             message.header.stamp = rospy.Time.now()
@@ -231,7 +234,7 @@ class Adapter:
                 message.pose.orientation.x, message.pose.orientation.y = qx, qy
                 message.pose.orientation.z, message.pose.orientation.w = qz, qw
             self.goal_pub.publish(message)
-            self.status(f"EXECUTING goal {index + 1}/{len(self.bundle['goals'])}: {goal['kind']}")
+            self.status(f"EXECUTING goal {index + 1}/{len(self.bundle['goals'])}: {goal_kind}")
             deadline = time.monotonic() + self.args.goal_timeout
             dwell_started = None
             while not rospy.is_shutdown() and time.monotonic() < deadline:
@@ -240,8 +243,16 @@ class Adapter:
                     raise RuntimeError(reason)
                 odom, _, _, _, _ = self.snapshot()
                 position, speed = self.position_and_speed(odom)
-                reached = math.dist(position, goal["xyz"]) <= self.args.goal_tolerance
-                if reached and speed <= self.args.arrival_speed:
+                distance = math.dist(position, goal["xyz"])
+                if goal_kind == "transit" and distance <= self.args.transit_switch_radius:
+                    self.status(
+                        f"PASSING goal {index + 1}/{len(self.bundle['goals'])}: "
+                        f"switching at {distance:.2f} m without stopping"
+                    )
+                    break
+                if (goal_kind == "observation" and
+                        distance <= self.args.goal_tolerance and
+                        speed <= self.args.arrival_speed):
                     dwell_started = dwell_started or time.monotonic()
                     if time.monotonic() - dwell_started >= self.args.arrival_dwell:
                         break
@@ -267,11 +278,16 @@ def main():
     parser.add_argument("--ready-timeout", type=float, default=15.0)
     parser.add_argument("--start-tolerance", type=float, default=0.35)
     parser.add_argument("--start-speed", type=float, default=0.20)
+    parser.add_argument("--transit-switch-radius", type=float, default=0.40)
     parser.add_argument("--goal-tolerance", type=float, default=0.20)
     parser.add_argument("--arrival-speed", type=float, default=0.20)
     parser.add_argument("--arrival-dwell", type=float, default=0.75)
     parser.add_argument("--goal-timeout", type=float, default=45.0)
     args = parser.parse_args()
+    if not 0.10 <= args.transit_switch_radius <= 1.0:
+        raise SystemExit("--transit-switch-radius must be in [0.10, 1.0] m")
+    if not 0.05 <= args.goal_tolerance <= 1.0:
+        raise SystemExit("--goal-tolerance must be in [0.05, 1.0] m")
     bundle = json.loads(args.bundle.read_text(encoding="utf-8"))
     if bundle.get("format") != "pre_map_vln.real_execution_bundle.v1":
         raise SystemExit("unsupported execution bundle")
