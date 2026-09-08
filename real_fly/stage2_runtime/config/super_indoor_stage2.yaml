@@ -1,0 +1,148 @@
+fsm:
+  click_goal_en: true
+  click_goal_topic: "/planning/click_goal"
+  pause_topic: "/planning/super_pause"
+  click_height: -10.0
+  click_yaw_en: true
+  replan_rate: 10.0
+  cmd_topic: "/planning/super_pos_cmd"
+  mpc_cmd_topic: "/planning_cmd/poly_traj"
+  timer_en: true
+
+super_planner:
+  backup_traj_en: true
+  detailed_log_en: true
+  visualization_en: true
+  use_fov_cut: false
+  print_log: false
+  visual_process: false
+  # The online planner may only connect goals through observed free space.
+  frontend_in_known_free: true
+  goal_yaw_en: true
+  goal_vel_en: false
+  corridor_bound_dis: 0.6
+  corridor_line_max_length: 0.8
+  safe_corridor_line_max_length: 2.0
+  iris_iter_num: 2
+  obs_skip_num: 1
+  replan_forward_dt: 0.10
+  planning_horizon: 3.0
+  sensing_horizon: -1
+  receding_dis: 2.0
+  robot_r: 0.30
+  yaw_dot_max: 0.8
+  yaw_mode: 1
+  mpc_horizon: 15
+
+traj_opt:
+  switch:
+    save_log_en: true
+    print_optimizer_log: false
+  boundary:
+    # Initial indoor envelope. Raise only after measured tracking tests.
+    max_vel: 0.60
+    max_acc: 1.00
+    max_jerk: 5.0
+    max_omg: 1.0
+    max_acc_thr: 15.0
+    min_acc_thr: 6.0
+    penna_margin: 0.05
+  exp_traj:
+    pos_constraint_type: 1
+    energy_cost_type: 4
+    block_energy_cost: false
+    opt_accuracy: 5.0e-6
+    scale_factor: 1.0
+    integral_reso: 15
+    smooth_eps: 0.01
+    penna_t: 12000.0
+    penna_pos: 5.0e+6
+    penna_vel: 5.0e+5
+    penna_acc: 5.0e+5
+    penna_jerk: -5.0e+5
+    penna_attract: 1.0e+3
+    penna_omg: 5.0e+5
+    penna_thr: 1.0e+5
+  backup_traj:
+    uniform_time_en: true
+    pos_constraint_type: 1
+    piece_num: 2
+    energy_cost_type: 4
+    block_energy_cost: true
+    opt_accuracy: 1.0e-6
+    scale_factor: 1.0
+    integral_reso: 12
+    smooth_eps: 0.01
+    penna_t: 1200.0
+    penna_ts: 1.0e+5
+    penna_pos: 1.0e+6
+    penna_vel: 1.0e+5
+    penna_acc: 1.0e+5
+    penna_jerk: -1.0e+5
+    penna_omg: -1
+    penna_thr: -1
+  flatness:
+    # Match the currently installed PX4Ctrl profile exactly.
+    mass: 1.055
+    dh: 0.35
+    dv: 0.35
+    cp: 0.001
+    v_eps: 0.0001
+    grav: 9.81
+
+astar:
+  map_voxel_num: [300, 300, 120]
+  visual_process: false
+  allow_diag: true
+  heu_type: 2
+  debug_visualization_en: false
+
+rog_map:
+  resolution: 0.1
+  inflation_resolution: 0.1
+  inflation_step: 3
+  unk_inflation_en: true
+  unk_inflation_step: 2
+  map_size: [30, 30, 12]
+  fix_map_origin: [0, 0, 0]
+  frontier_extraction_en: false
+  # Effectively disabled: the real floor/ceiling must come from LiDAR geometry.
+  virtual_ceil_height: 100.0
+  virtual_ground_height: -100.0
+  load_pcd_en: false
+  map_sliding:
+    enable: true
+    threshold: 0.3
+  esdf:
+    enable: false
+    resolution: 0.1
+    local_update_box: [5, 5, 3]
+  ros_callback:
+    enable: true
+    cloud_topic: "/cloud_registered"
+    occupied_cloud_topic: "/pre_map_vln/static_constraint_cloud"
+    odom_topic: "/ekf_quat/ekf_odom"
+    odom_timeout: 0.25
+  visualization:
+    enable: true
+    use_dynamic_reconfigure: false
+    time_rate: 2
+    frame_rate: 0
+    range: [12, 12, 5]
+    frame_id: "world"
+    pub_unknown_map_en: false
+  intensity_thresh: -10
+  point_filt_num: 1
+  raycasting:
+    enable: true
+    batch_update_size: 1
+    local_update_box: [30, 30, 10]
+    ray_range: [0.5, 20]
+    p_min: 0.12
+    p_miss: 0.47
+    p_free: 0.499
+    p_occ: 0.85
+    p_hit: 0.9
+    p_max: 0.98
+    # Conservative unknown handling for initial indoor tests.
+    unk_thresh: 0.1

@@ -6,6 +6,11 @@ real flight. It is separate from Stage 1 mapping and from the GPU-heavy Stage
 
 ## Localization-only mode
 
+This launcher is a lightweight **local-origin diagnostic**. It is useful for
+latency tests, but it does not perform global relocalization against an approved
+map and does not publish `/ekf_quat/ekf_odom`; therefore it must not be used as
+the localization source for a Stage-2 mission or PX4Ctrl.
+
 With the flight controller powered, aircraft disarmed, and MID-360 connected:
 
 ```bash
@@ -47,3 +52,75 @@ Current limitation: the files can be checked without attached sensors, but
 frequency and end-to-end latency must be validated after the MID-360 is
 connected. A real-flight planner/controller must not be enabled merely because
 the launcher starts successfully.
+
+## Persistent global localization for Stage 2
+
+Before PX4Ctrl or SUPER, start the senior's complete global-localization chain
+in its own terminal with the exact approved map:
+
+```bash
+./real_fly/stage2_runtime/scripts/start_global_localization.sh \
+  /absolute/path/to/handheld_map_RUN_ID_complete.pcd
+```
+
+This runs MAVROS, MID-360, global FAST-LIO relocalization and the downstream EKF.
+It must remain alive from before entering PX4Ctrl hover mode until the aircraft
+has landed and is disarmed. Its `/ekf_quat/ekf_odom` is consumed continuously by
+both PX4Ctrl and SUPER. If it becomes stale, PX4Ctrl's state machine leaves
+AUTO_HOVER/CMD_CTRL and restores the pre-Offboard flight mode.
+
+The senior stack does not currently feed this odometry into PX4's own EKF via
+`/mavros/vision_pose/pose` or `/mavros/odometry/in`. Consequently, native PX4
+position modes must not be assumed to have LiDAR localization. Position hold in
+this workflow is PX4Ctrl `AUTO_HOVER` operating in PX4 `OFFBOARD` mode.
+
+Run the read-only single-aircraft terminal monitor in another terminal:
+
+```bash
+./real_fly/stage2_runtime/scripts/monitor_single_uav.sh
+```
+
+It combines the senior GCS health semantics into one local display: FCU link,
+arming and PX4 mode; battery; RC channels 5/6; EKF pose, frequency, delay and
+rolling position jump; IMU; PX4Ctrl FSM state; planner command flow and attitude
+setpoint flow. It publishes no topic and calls no ROS service. `PASS` is only a
+software readiness result and does not replace the QGC pre-arm report or a
+physical aircraft inspection.
+
+## Guarded Stage-2 to SUPER adapter
+
+The task layer does not publish `PositionCommand`. It converts an offline
+validated `mission_plan.json` into an immutable execution bundle and sends only
+individual 3-D `PoseStamped` goals to the senior SUPER planner. SUPER remains
+responsible for the live occupancy map, trajectory continuity, dynamics and
+`/planning/pos_cmd`; PX4Ctrl remains the only aircraft controller.
+
+SUPER receives the approved PCD as **occupied-only** prior constraints and the
+registered live LiDAR cloud for ray-integrated free space and current obstacles.
+The prior map is never used to manufacture free space, and unknown space remains
+blocked by the indoor profile.
+
+Prepare a bundle on the workstation:
+
+```bash
+./real_fly/stage2_runtime/scripts/prepare_real_execution.sh \
+  RUN_ID /absolute/path/to/mission_plan.json
+```
+
+The runtime adapter defaults to `preview`. In preview mode it publishes only
+`/pre_map_vln/approved_route`, `/pre_map_vln/approved_goals`, and status; the
+process does not even create a `/planning/click_goal` publisher.
+
+Start the planner (still without sending a goal) with the exact approved map:
+
+```bash
+./real_fly/stage2_runtime/scripts/start_super_indoor_planner.sh \
+  /absolute/path/to/handheld_map_RUN_ID_complete.pcd
+```
+
+Real execution is deliberately not wrapped in a one-command launcher. It
+requires the exact approved map SHA256, live `world`-frame EKF odometry, a
+connected and armed FCU, a SUPER subscriber, start-pose agreement, low initial
+speed, per-goal arrival checks and bounded timeouts. It never arms, takes off,
+lands, or publishes `PositionCommand`. Validate preview and a restrained test
+with the aircraft secured before enabling free flight.

@@ -23,10 +23,28 @@ def read_binary_pcd(path):
     if marker < 0:
         raise RuntimeError("Only binary PCD is supported")
     header = raw[:marker].decode("ascii", errors="strict")
-    points = int(next(line.split()[1] for line in header.splitlines() if line.startswith("POINTS ")))
+    lines = header.splitlines()
+    fields = next(line.split()[1:] for line in lines if line.startswith("FIELDS "))
+    sizes = [int(value) for value in next(line.split()[1:] for line in lines if line.startswith("SIZE "))]
+    counts = [int(value) for value in next(line.split()[1:] for line in lines if line.startswith("COUNT "))]
+    points = int(next(line.split()[1] for line in lines if line.startswith("POINTS ")))
     payload = raw[marker + len(b"DATA binary\n"):]
-    stride = 32
-    return [struct.unpack_from("<fff", payload, i * stride) for i in range(points)]
+    offsets = {}
+    offset = 0
+    for name, size, count in zip(fields, sizes, counts):
+        offsets[name] = offset
+        offset += size * count
+    stride = offset
+    if not all(name in offsets for name in ("x", "y", "z")):
+        raise RuntimeError("PCD lacks x/y/z fields")
+    intensity_offset = offsets.get("intensity")
+    return [(
+        struct.unpack_from("<f", payload, i * stride + offsets["x"])[0],
+        struct.unpack_from("<f", payload, i * stride + offsets["y"])[0],
+        struct.unpack_from("<f", payload, i * stride + offsets["z"])[0],
+        struct.unpack_from("<f", payload, i * stride + intensity_offset)[0]
+        if intensity_offset is not None else 0.0,
+    ) for i in range(points)]
 
 
 def load_path(csv_path, topic):
@@ -101,7 +119,8 @@ def main():
     frame = "map"
 
     fields = [PointField("x", 0, PointField.FLOAT32, 1), PointField("y", 4, PointField.FLOAT32, 1),
-              PointField("z", 8, PointField.FLOAT32, 1)]
+              PointField("z", 8, PointField.FLOAT32, 1),
+              PointField("intensity", 12, PointField.FLOAT32, 1)]
     cloud_header = Header(frame_id=frame, stamp=rospy.Time.now())
     cloud = point_cloud2.create_cloud(cloud_header, fields, read_binary_pcd(map_path))
     cloud_pub = rospy.Publisher("/drone_room/map", PointCloud2, queue_size=1, latch=True)

@@ -88,12 +88,17 @@ strings "$binary" | /usr/bin/grep -F "$runtime_root/" >/dev/null || {
 mkdir -p "$output_dir"
 config="$STAGE1_ROOT/config/fast_lio_mid360_handheld.yaml"
 output_bag="$output_dir/mapping_outputs.bag"
-runtime_map="$runtime_root/PCD/handheld_map_${run_id}.pcd"
+# Keep the original iKD-tree dump as a diagnostic, but use FAST-LIO's native
+# complete scan map as the canonical offline map. The live configuration keeps
+# pcd_save disabled to protect real-time performance; this script explicitly
+# enables it only for offline replay.
+runtime_kdtree_map="$runtime_root/PCD/handheld_map_${run_id}.pcd"
+runtime_native_map="$runtime_root/PCD/scans.pcd"
 output_map="$output_dir/handheld_map_${run_id}.pcd"
 progress_file="$output_dir/mapping_progress.json"
 audit_file="$output_dir/fastlio_audit.json"
 for existing_output in \
-  "$output_bag" "$output_bag.active" "$runtime_map" "$output_map" "$progress_file" "$audit_file" \
+  "$output_bag" "$output_bag.active" "$runtime_kdtree_map" "$runtime_native_map" "$output_map" "$progress_file" "$audit_file" \
   "$output_dir/fastlio.log" "$output_dir/roscore.log" \
   "$output_dir/rosbag_record.log" "$output_dir/rosbag_play.log" "$output_dir/progress_monitor.log"; do
   [[ ! -e "$existing_output" ]] || { echo "Refusing to overwrite existing output: $existing_output" >&2; exit 2; }
@@ -141,6 +146,10 @@ rosparam list >/dev/null 2>&1 || { echo "isolated roscore did not become ready."
 
 rosparam load "$config"
 rosparam set use_sim_time true
+# Native FAST-LIO complete-map export is enabled only in this offline mapper.
+# It stores the registered scans with their original x/y/z/intensity fields.
+rosparam set pcd_save/pcd_save_en true
+rosparam set pcd_save/interval -1
 rosparam set wxx/new_map_pcd_name "handheld_map_${run_id}.pcd"
 echo "Starting only the Stage-1 FAST-LIO mapper"
 "$binary" > "$output_dir/fastlio.log" 2>&1 &
@@ -199,8 +208,14 @@ kill -INT "$record_pid" 2>/dev/null || true
 wait "$record_pid" 2>/dev/null || true
 record_pid=""
 
-[[ -f "$runtime_map" ]] || { echo "FAST-LIO did not produce the expected map: $runtime_map" >&2; exit 1; }
-cp --reflink=auto "$runtime_map" "$output_map"
+[[ -s "$runtime_native_map" ]] || {
+  echo "FAST-LIO did not produce its native complete map: $runtime_native_map" >&2
+  exit 1
+}
+cp --reflink=auto "$runtime_native_map" "$output_map"
+if [[ -s "$runtime_kdtree_map" ]]; then
+  cp --reflink=auto "$runtime_kdtree_map" "$output_dir/handheld_map_${run_id}_kdtree_local.pcd"
+fi
 python3 "$SCRIPT_DIR/audit_fastlio_output.py" \
   --input-bag "$bag" \
   --output-bag "$output_bag" \
@@ -209,5 +224,7 @@ python3 "$SCRIPT_DIR/audit_fastlio_output.py" \
 
 echo "Offline mapping output: $output_dir"
 echo "Output bag: $output_bag"
-echo "Map PCD: $output_map"
+echo "Native FAST-LIO map PCD: $output_map"
+[[ -s "$output_dir/handheld_map_${run_id}_kdtree_local.pcd" ]] && \
+  echo "Diagnostic local iKD-tree PCD: $output_dir/handheld_map_${run_id}_kdtree_local.pcd"
 echo "Audit: $audit_file"

@@ -1,0 +1,22 @@
+<launch>
+  <!-- Planner and command mux only. This launch never starts PX4Ctrl, arms,
+       takes off, lands, or publishes a mission goal. -->
+  <arg name="config_path"
+       default="$(optenv PRE_MAP_VLN_SUPER_CONFIG /home/nv/SL_WS/PRE_MAP_VLN_real_fly/real_fly/stage2_runtime/config/super_indoor_stage2.yaml)"/>
+  <arg name="map_pcd"/>
+
+  <!-- The approved Stage-1 map contributes occupied-only prior constraints.
+       ROG-Map still derives free space from the live registered LiDAR cloud. -->
+  <node pkg="pcl_ros" name="pre_map_vln_static_map"
+        type="pcd_to_pointcloud" args="$(arg map_pcd) 0.0" output="screen">
+    <param name="frame_id" value="world"/>
+    <param name="latch" value="true"/>
+    <remap from="/cloud_pcd" to="/pre_map_vln/static_constraint_cloud"/>
+  </node>
+
+  <node pkg="super_planner" name="fsm_node" type="fsm_node" output="screen">
+    <param name="config_path" value="$(arg config_path)"/>
+  </node>
+  <node pkg="mission_planner" name="competition_command_mux"
+        type="competition_command_mux" output="screen"/>
+</launch>

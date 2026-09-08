@@ -7,8 +7,8 @@ Usage: start_handheld_mapping_rviz.sh [--record RUN_ID] [--no-camera] [--no-rviz
 
 Starts the existing ROS master (or a private one when none exists), MAVROS
 telemetry, the aircraft MID-360S, the borrowed FAST-LIO mapping profile, the
-D435 RGB-D stream, and the checked-in RViz view. It never arms the aircraft or
-publishes motion commands.
+senior-provided ekf_quat fusion node, the D435 RGB-D stream, and the checked-in
+RViz view. It never arms the aircraft or publishes motion commands.
 
 Close RViz or press Ctrl-C to stop only the processes started by this script.
 With --record, recording begins only after all requested streams and FAST-LIO
@@ -54,7 +54,11 @@ mkdir -p "$LOG_DIR"
 # A stale exported catkin helper variable can make setup.bash resolve the wrong
 # setup.sh when this script is launched from an IDE terminal.
 unset _CATKIN_SETUP_DIR || true
+# ROS profile hooks inspect variables that are intentionally absent in a fresh
+# non-interactive SSH shell, so do not apply nounset while sourcing them.
+set +u
 source /opt/ros/noetic/setup.bash
+set -u
 
 export ROS_MASTER_URI="http://127.0.0.1:${ROS_MASTER_PORT}"
 export ROS_IP=127.0.0.1
@@ -227,6 +231,21 @@ else
 fi
 wait_for_topic /cloud_registered "FAST-LIO registered cloud"
 
+# Use the senior-provided EKF as the downstream pose consumed by later
+# semantic/localization stages.  Keep raw /Odometry available for diagnostics.
+EKF_LAUNCH="$DLS_WS/src/localization/ekf_quat_pose/launch/ekf_quat_lidar_mavros.launch"
+[[ -r "$EKF_LAUNCH" ]] || {
+  echo "Missing senior EKF launch file: $EKF_LAUNCH" >&2
+  exit 1
+}
+if node_exists /ekf_quat; then
+  echo "Reusing senior EKF /ekf_quat"
+else
+  echo "Starting senior EKF fusion (/ekf_quat/ekf_odom)"
+  start_launch ekf_quat.log roslaunch "$EKF_LAUNCH"
+fi
+wait_for_topic /ekf_quat/ekf_odom "senior EKF fused odometry"
+
 if [[ "$with_camera" -eq 1 ]]; then
   echo "Starting calibrated RGB coverage overlay"
   start_launch rgb_coverage.log "$SCRIPT_DIR/rgb_coverage_visualizer.py"
@@ -252,10 +271,11 @@ depth_raw=/camera/depth/image_rect_raw
 rgb_profile=$REALSENSE_PROFILE
 rgb_auto_exposure=$REALSENSE_RGB_AUTO_EXPOSURE
 rgb_exposure=$REALSENSE_RGB_EXPOSURE
-odometry=/Odometry
+odometry_raw=/Odometry
+odometry_ekf=/ekf_quat/ekf_odom
 registered_cloud=/cloud_registered
 EOF
-  echo "Recording synchronized raw sensors, RGB-D, pose, TF and map outputs"
+  echo "Recording synchronized raw sensors, RGB-D, raw FAST-LIO pose, EKF pose, TF and map outputs"
   start_launch rosbag.log rosbag record --lz4 \
     -O "$RECORD_DIR/raw/sensors.bag" \
     /livox/lidar /livox/imu /mavros/imu/data \
@@ -264,7 +284,7 @@ EOF
     /camera/color/camera_info /camera/depth/camera_info \
     /camera/aligned_depth_to_color/camera_info \
     /camera/extrinsics/depth_to_color \
-    /tf /tf_static /Odometry /cloud_registered \
+    /tf /tf_static /Odometry /ekf_quat/ekf_odom /cloud_registered \
     /rgb_coverage/frustums /rgb_coverage/camera_path \
     /rgb_coverage/current_frustum /rgb_coverage/count
   sleep 2

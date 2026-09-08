@@ -74,38 +74,65 @@ echo "不会启动 PX4Ctrl，不会解锁，也不会发送运动指令。"
 echo "按 Ctrl+C 退出。"
 sleep 2
 
+last_connected="--"
+last_armed="--"
+last_mode="--"
+last_voltage="--"
+last_current="--"
+last_percentage="--"
+last_battery_epoch=0
+last_battery_time="尚未收到"
+
 while true; do
   state_msg="$(timeout 2 rostopic echo -n 1 /mavros/state 2>/dev/null || true)"
   battery_msg="$(timeout 2 rostopic echo -n 1 /mavros/battery 2>/dev/null || true)"
 
-  connected="$(awk '$1 == "connected:" {print $2; exit}' <<<"$state_msg")"
-  armed="$(awk '$1 == "armed:" {print $2; exit}' <<<"$state_msg")"
-  mode="$(awk '$1 == "mode:" {print $2; exit}' <<<"$state_msg")"
-  voltage="$(awk '$1 == "voltage:" {print $2; exit}' <<<"$battery_msg")"
-  current="$(awk '$1 == "current:" {print $2; exit}' <<<"$battery_msg")"
-  percentage="$(awk '$1 == "percentage:" {print $2; exit}' <<<"$battery_msg")"
+  if [[ -n "$state_msg" ]]; then
+    connected="$(awk '$1 == "connected:" {print $2; exit}' <<<"$state_msg")"
+    armed="$(awk '$1 == "armed:" {print $2; exit}' <<<"$state_msg")"
+    mode="$(awk '$1 == "mode:" {print $2; exit}' <<<"$state_msg")"
+    [[ -n "$connected" ]] && last_connected="$connected"
+    [[ -n "$armed" ]] && last_armed="$armed"
+    [[ -n "$mode" ]] && last_mode="$mode"
+  fi
 
-  if [[ "$percentage" =~ ^-?[0-9]+([.][0-9]+)?$ ]] && awk -v p="$percentage" 'BEGIN {exit !(p >= 0)}'; then
-    percentage="$(awk -v p="$percentage" 'BEGIN {printf "%.0f%%", p * 100}')"
+  if [[ -n "$battery_msg" ]]; then
+    voltage="$(awk '$1 == "voltage:" {print $2; exit}' <<<"$battery_msg")"
+    current="$(awk '$1 == "current:" {print $2; exit}' <<<"$battery_msg")"
+    percentage="$(awk '$1 == "percentage:" {print $2; exit}' <<<"$battery_msg")"
+
+    [[ "$voltage" =~ ^-?[0-9]+([.][0-9]+)?$ ]] && last_voltage="$voltage"
+    [[ "$current" =~ ^-?[0-9]+([.][0-9]+)?$ ]] && last_current="$current"
+    if [[ "$percentage" =~ ^-?[0-9]+([.][0-9]+)?$ ]] && awk -v p="$percentage" 'BEGIN {exit !(p >= 0)}'; then
+      last_percentage="$(awk -v p="$percentage" 'BEGIN {printf "%.0f%%", p * 100}')"
+    fi
+    last_battery_epoch="$(date +%s)"
+    last_battery_time="$(date '+%Y-%m-%d %H:%M:%S')"
+  fi
+
+  now_epoch="$(date +%s)"
+  if (( last_battery_epoch > 0 )); then
+    battery_age="$((now_epoch - last_battery_epoch)) 秒前"
   else
-    percentage="--"
+    battery_age="--"
   fi
 
   printf '\033[H\033[2J'
   echo "========== 无人机状态 =========="
-  printf '飞控连接 : %s\n' "${connected:---}"
-  printf '解锁状态 : %s\n' "${armed:---}"
-  printf '飞行模式 : %s\n' "${mode:---}"
+  printf '飞控连接 : %s\n' "$last_connected"
+  printf '解锁状态 : %s\n' "$last_armed"
+  printf '飞行模式 : %s\n' "$last_mode"
   echo "--------------------------------"
-  printf '电池电压 : %s V\n' "${voltage:---}"
-  printf '当前电流 : %s A\n' "${current:---}"
-  printf '剩余电量 : %s\n' "$percentage"
+  printf '电池电压 : %s V\n' "$last_voltage"
+  printf '当前电流 : %s A\n' "$last_current"
+  printf '剩余电量 : %s\n' "$last_percentage"
+  printf '最后更新 : %s（%s）\n' "$last_battery_time" "$battery_age"
   echo "================================"
 
   if [[ -z "$state_msg" ]]; then
     echo "等待飞控数据：请确认飞控已上电并连接串口。"
   elif [[ -z "$battery_msg" ]]; then
-    echo "飞控已响应，正在等待电池数据……"
+    echo "本轮未收到新电池数据，以上保留最近一次有效读数。"
   fi
   sleep 1
 done

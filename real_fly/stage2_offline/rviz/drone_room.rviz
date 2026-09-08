@@ -20,7 +20,13 @@ Visualization Manager:
       Topic: /drone_room/map
       Style: Points
       Size (Pixels): 2
-      Color Transformer: Intensity
+      Size (m): 0.03
+      Axis: Z
+      Channel Name: intensity
+      Color Transformer: AxisColor
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds: {Max Value: 3, Min Value: -1, Value: true}
+      Use rainbow: true
       Queue Size: 2
     - Class: rviz/MarkerArray
       Enabled: true

@@ -220,6 +220,10 @@ def main() -> None:
     parser.add_argument("output", type=Path)
     parser.add_argument("--mapping-bag", type=Path,
                         help="bag containing regenerated /Odometry and /cloud_registered")
+    parser.add_argument("--pose-bag", type=Path,
+                        help="bag containing the pose topic; defaults to mapping bag")
+    parser.add_argument("--pose-topic", default="auto",
+                        help="pose topic, or auto to prefer /ekf_quat/ekf_odom and fall back to /Odometry")
     parser.add_argument("--frame-period", type=float, default=1.0)
     parser.add_argument("--max-frames", type=int, default=180)
     parser.add_argument("--max-rgb-depth-dt", type=float, default=0.08)
@@ -235,16 +239,26 @@ def main() -> None:
     if args.output.exists():
         raise SystemExit(f"refusing to overwrite: {args.output}")
     mapping_bag = args.mapping_bag or args.bag
-    if not args.bag.is_file() or not mapping_bag.is_file() or not args.map_pcd.is_file():
+    pose_bag = args.pose_bag or mapping_bag
+    if not args.bag.is_file() or not mapping_bag.is_file() or not pose_bag.is_file() or not args.map_pcd.is_file():
         raise SystemExit("bag or PCD input is missing")
 
     odom_times, odom_poses, rgb_times, depth_times = [], [], [], []
     color_K, depth_K, color_D = None, None, None
     color_from_depth_R, color_from_depth_t = None, None
     camera_link_to_optical = None
-    with rosbag.Bag(str(mapping_bag), "r") as bag:
-        for _, msg, bt in bag.read_messages(topics=[TOPICS["odom"]]):
+    with rosbag.Bag(str(pose_bag), "r") as bag:
+        available_pose_topics = set(bag.get_type_and_topic_info()[1])
+        if args.pose_topic == "auto":
+            pose_topic = "/ekf_quat/ekf_odom" if "/ekf_quat/ekf_odom" in available_pose_topics else TOPICS["odom"]
+        else:
+            pose_topic = args.pose_topic
+        if pose_topic not in available_pose_topics:
+            raise SystemExit(f"selected pose topic is missing: {pose_topic}")
+        for _, msg, bt in bag.read_messages(topics=[pose_topic]):
             odom_times.append(stamp(msg, bt)); odom_poses.append(pose_matrix(msg))
+    if not odom_times:
+        raise SystemExit(f"pose topic has no messages: {pose_topic}")
     with rosbag.Bag(str(args.bag), "r") as bag:
         available_topics = set(bag.get_type_and_topic_info()[1])
         raw_ready = all(TOPICS[name] in available_topics for name in
@@ -490,6 +504,7 @@ def main() -> None:
     manifest = {
         "format": "pre_map_vln.real_boxer_episode.v2", "source_bag": str(args.bag.resolve()),
         "source_bag_sha256": sha, "mapping_bag": str(mapping_bag.resolve()),
+        "pose_bag": str(pose_bag.resolve()), "pose_topic": pose_topic,
         "mapping_bag_sha256": mapping_sha, "source_map": str(args.map_pcd.resolve()), "frames": len(selected),
         "first_sec": selected[0], "last_sec": selected[-1], "frame_period_sec": args.frame_period,
         "fx": float(color_K[0, 0]), "fy": float(color_K[1, 1]), "cx": float(color_K[0, 2]), "cy": float(color_K[1, 2]),

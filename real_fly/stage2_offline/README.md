@@ -6,6 +6,60 @@
 
 ## 一键运行
 
+### 真机阶段二：自然语言任务与安全预览
+
+完成语义地图并人工验收后，在主机离线生成任务图、观察位姿、三维路径、碰撞检查和
+只读执行包：
+
+```bash
+./real_fly/stage2_offline/scripts/run_real_stage2_task.sh \
+  --run-id RUN_ID \
+  --task-id TASK_ID \
+  --instruction '检查房间里的白板是否还在。'
+```
+
+若已确定真机起飞后稳定悬停点在地图 `world` 坐标中的位姿，应显式传入：
+
+```bash
+./real_fly/stage2_offline/scripts/run_real_stage2_task.sh \
+  --run-id RUN_ID --task-id TASK_ID \
+  --instruction '检查房间里的白板是否还在。' \
+  --start X Y Z YAW
+```
+
+RViz 只读预览：
+
+```bash
+./real_fly/stage2_offline/scripts/view_real_scene_rviz.sh RUN_ID 1 TASK_ID
+```
+
+未传 `--start` 时会复用自动选择的 `planning_start.json`，仅可预览，运行时适配器
+拒绝正式发送目标。当前执行包也只覆盖运动测试；真机在线目标检测、条件分支和
+Qwen 主动恢复尚未接通时，不会被标记为完整自主语义执行。
+
+### 任意真机 Bag 的通用语义地图入口
+
+新 Bag 放在 `stage1_exploration/data/<run_id>/raw/sensors.bag` 后，使用通用入口：
+
+```bash
+./real_fly/stage2_offline/scripts/run_real_scene_semantic.sh \
+  --run-id Drone_room_03_20260906
+```
+
+该脚本为每个 run 单独创建 `stage2_offline/data/<run_id>/`，默认完成
+原生 FAST-LIO 离线重放并保存完整 `scans.pcd`、原始深度离线对齐、体素快照、完整 Boxer 3D 融合和
+`scene_graph.json` 生成，不覆盖其他场景结果。若只想快速 smoke：
+
+```bash
+./real_fly/stage2_offline/scripts/run_real_scene_semantic.sh \
+  --run-id Drone_room_03_20260906 --boxer-mode smoke
+```
+
+如需继续生成离线任务规划，在命令末尾增加 `--with-planning`。脚本默认使用
+`real_fly/calibration/config/calib_01_lidar_camera.json` 和
+`fast_lio_mid360_handheld.yaml`；若相机与 LiDAR 安装关系发生变化，必须先更换
+对应标定文件，不能直接复用 `calib_01`。
+
 环境和权重已经准备在项目内。以后重启 NX 后只需：
 
 ```bash
@@ -31,7 +85,10 @@ RGB-D 导出、体素快照和 Boxer 结果，再生成场景图、
 ## 当前输入和产物
 
 - 原始 bag：`stage1_exploration/data/Drone_room/raw/sensors.bag`
-- FAST-LIO 点云：`stage1_exploration/runtime/live_fast_lio/PCD/handheld_20260905_003121.pcd`
+- FAST-LIO 最终地图：`stage2_offline/data/<run_id>/fastlio_complete/handheld_map_<run_id>_complete.pcd`
+- FAST-LIO 原生地图来源：离线运行时由 FAST-LIO 原生 `pcd_save` 生成的 `PCD/scans.pcd`；同目录下的
+  `handheld_map_<run_id>_complete_kdtree_local.pcd` 仅作局部 iKD-Tree 诊断，不作为最终地图。
+- FAST-LIO 重放输出：`stage2_offline/data/<run_id>/fastlio_complete/mapping_outputs.bag`
 - Boxer/ScanNet 序列：`stage2_offline/data/Drone_room/scene9002_00/`
 - 无靶标外参：`scene9002_00/calibration/camera_extrinsic.json`
 - 三态体素图：`stage2_offline/data/Drone_room/voxel_snapshot/`
