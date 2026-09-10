@@ -19,6 +19,8 @@ from geometry_msgs.msg import PoseStamped
 from mavros_msgs.msg import State
 from nav_msgs.msg import Odometry, Path as RosPath
 from quadrotor_msgs.msg import Px4ctrlDebug
+from sensor_msgs import point_cloud2
+from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import Bool, String
 from visualization_msgs.msg import Marker, MarkerArray
 
@@ -45,6 +47,8 @@ class Adapter:
         self.state = None
         self.px4ctrl_state = None
         self.px4ctrl_arrival = 0.0
+        self.live_cloud = None
+        self.live_cloud_arrival = 0.0
         self.abort_reason = None
         self.status_pub = rospy.Publisher("/pre_map_vln/runtime_status", String,
                                          queue_size=1, latch=True)
@@ -63,6 +67,8 @@ class Adapter:
         rospy.Subscriber(args.odom_topic, Odometry, self.odom_cb, queue_size=20)
         rospy.Subscriber("/mavros/state", State, self.state_cb, queue_size=10)
         rospy.Subscriber("/debugPx4ctrl", Px4ctrlDebug, self.px4ctrl_cb, queue_size=10)
+        rospy.Subscriber(args.live_cloud_topic, PointCloud2, self.live_cloud_cb,
+                         queue_size=1)
         self.publish_preview()
 
     def pause_super(self):
@@ -85,6 +91,11 @@ class Adapter:
         with self.lock:
             self.px4ctrl_state = int(message.state)
             self.px4ctrl_arrival = time.monotonic()
+
+    def live_cloud_cb(self, message):
+        with self.lock:
+            self.live_cloud = message
+            self.live_cloud_arrival = time.monotonic()
 
     def status(self, value):
         self.status_pub.publish(String(data=value))
@@ -175,6 +186,72 @@ class Adapter:
             rospy.sleep(0.1)
         raise RuntimeError(reason)
 
+    def wait_goal_subscriber(self, timeout):
+        """Wait for the ROS publisher/subscriber handshake before execution."""
+        deadline = time.monotonic() + timeout
+        while not rospy.is_shutdown() and time.monotonic() < deadline:
+            ok, reason = self.healthy(require_armed=True)
+            if not ok:
+                raise RuntimeError(reason)
+            if self.goal_pub.get_num_connections() >= 1:
+                return
+            rospy.sleep(0.1)
+        raise RuntimeError("SUPER is not subscribed to /planning/click_goal")
+
+    def verify_planner_identity(self):
+        bundle_hash = sha256(self.args.bundle)
+        loaded_hash = rospy.get_param(
+            "/pre_map_vln_static_map/launch_clearance_bundle_sha256", "")
+        if loaded_hash != bundle_hash:
+            raise RuntimeError(
+                "SUPER static prior was not prepared for this execution bundle; "
+                "restart start_super_indoor_planner.sh with --bundle"
+            )
+        metadata_path = rospy.get_param(
+            "/pre_map_vln_static_map/collision_metadata", "")
+        if not metadata_path:
+            raise RuntimeError("SUPER launch-clearance metadata is missing")
+        metadata_file = Path(metadata_path)
+        if not metadata_file.is_file():
+            raise RuntimeError(f"SUPER collision metadata not found: {metadata_file}")
+        metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
+        if metadata.get("format") != "pre_map_vln.super_collision_pcd.v2":
+            raise RuntimeError("SUPER collision metadata has an unsupported format")
+        if metadata.get("source_sha256") != self.bundle["map_sha256"]:
+            raise RuntimeError("SUPER collision prior/map SHA256 mismatch")
+        if metadata.get("launch_clearance_bundle_sha256") != bundle_hash:
+            raise RuntimeError("SUPER launch-clearance bundle identity mismatch")
+
+    def verify_live_clearance(self):
+        with self.lock:
+            cloud = self.live_cloud
+            cloud_arrival = self.live_cloud_arrival
+            odom = self.odom
+        if cloud is None or time.monotonic() - cloud_arrival > self.args.live_cloud_timeout:
+            raise RuntimeError("live registered cloud is missing or stale")
+        if cloud.header.frame_id != "world":
+            raise RuntimeError(
+                f"live cloud frame is {cloud.header.frame_id!r}, expected 'world'")
+        if odom is None:
+            raise RuntimeError("odometry is unavailable for live-clearance check")
+        center = (odom.pose.pose.position.x, odom.pose.pose.position.y,
+                  odom.pose.pose.position.z)
+        minimum = math.inf
+        points = 0
+        for point in point_cloud2.read_points(
+                cloud, field_names=("x", "y", "z"), skip_nans=True):
+            xyz = (float(point[0]), float(point[1]), float(point[2]))
+            distance = math.dist(center, xyz)
+            minimum = min(minimum, distance)
+            points += 1
+        if points == 0:
+            raise RuntimeError("live registered cloud contains no finite XYZ points")
+        if minimum < self.args.live_clearance:
+            raise RuntimeError(
+                f"live start clearance {minimum:.3f} m < "
+                f"{self.args.live_clearance:.3f} m")
+        self.status(f"LIVE_CLEARANCE_OK: nearest={minimum:.3f} m")
+
     def run_preview(self):
         self.status("PREVIEW_ONLY: no planner goal publisher exists")
         rospy.spin()
@@ -193,8 +270,9 @@ class Adapter:
         if self.args.confirm_execute != self.bundle["map_sha256"]:
             raise RuntimeError("--confirm-execute must equal the complete approved map SHA256")
         self.wait_ready(require_armed=True, timeout=self.args.ready_timeout)
-        if self.goal_pub.get_num_connections() < 1:
-            raise RuntimeError("SUPER is not subscribed to /planning/click_goal")
+        self.wait_goal_subscriber(timeout=self.args.ready_timeout)
+        self.verify_planner_identity()
+        self.verify_live_clearance()
         master = rosgraph.Master(rospy.get_name())
         publishers, subscribers, _ = master.getSystemState()
         publishers = {topic: nodes for topic, nodes in publishers}
@@ -276,18 +354,23 @@ def main():
     parser.add_argument("--odom-timeout", type=float, default=0.25)
     parser.add_argument("--px4ctrl-timeout", type=float, default=0.25)
     parser.add_argument("--ready-timeout", type=float, default=15.0)
-    parser.add_argument("--start-tolerance", type=float, default=0.35)
+    parser.add_argument("--start-tolerance", type=float, default=0.15)
     parser.add_argument("--start-speed", type=float, default=0.20)
     parser.add_argument("--transit-switch-radius", type=float, default=0.40)
     parser.add_argument("--goal-tolerance", type=float, default=0.20)
     parser.add_argument("--arrival-speed", type=float, default=0.20)
-    parser.add_argument("--arrival-dwell", type=float, default=0.75)
+    parser.add_argument("--arrival-dwell", type=float, default=4.0)
     parser.add_argument("--goal-timeout", type=float, default=45.0)
+    parser.add_argument("--live-cloud-topic", default="/cloud_registered")
+    parser.add_argument("--live-cloud-timeout", type=float, default=0.50)
+    parser.add_argument("--live-clearance", type=float, default=0.40)
     args = parser.parse_args()
     if not 0.10 <= args.transit_switch_radius <= 1.0:
         raise SystemExit("--transit-switch-radius must be in [0.10, 1.0] m")
     if not 0.05 <= args.goal_tolerance <= 1.0:
         raise SystemExit("--goal-tolerance must be in [0.05, 1.0] m")
+    if not 0.35 <= args.live_clearance <= 0.60:
+        raise SystemExit("--live-clearance must be in [0.35, 0.60] m")
     bundle = json.loads(args.bundle.read_text(encoding="utf-8"))
     if bundle.get("format") != "pre_map_vln.real_execution_bundle.v1":
         raise SystemExit("unsupported execution bundle")

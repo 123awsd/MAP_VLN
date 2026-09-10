@@ -22,10 +22,11 @@ def main() -> None:
     parser.add_argument("--scene-graph", type=Path, default=ROOT / "outputs/scene_graph/hm3d_stage1.json")
     parser.add_argument("--output", type=Path, default=ROOT / "outputs/stage2/task_graph.json")
     parser.add_argument("--budget-cny", type=float, default=20.0)
+    parser.add_argument("--api-key-file", type=Path, default=None)
     parser.add_argument("--no-cache", action="store_true")
     args = parser.parse_args()
     scene_graph = load_json(args.scene_graph)
-    qwen = QwenTaskParser(budget_cny=args.budget_cny)
+    qwen = QwenTaskParser(api_key_path=args.api_key_file, budget_cny=args.budget_cny)
     graph = qwen.parse(
         args.instruction,
         scene_graph,

@@ -90,12 +90,116 @@ def audit_odometry(path, topic):
     return summary
 
 
+def odometry_samples(path, topic):
+    samples = []
+    with rosbag.Bag(path, "r") as bag:
+        for _, message, bag_stamp in bag.read_messages(topics=[topic]):
+            stamp = message_stamp(message, bag_stamp)
+            p = message.pose.pose.position
+            values = (stamp, p.x, p.y, p.z)
+            if all(math.isfinite(value) for value in values):
+                samples.append(values)
+    return samples
+
+
+def interpolate_position(samples, stamp, start_index=0):
+    index = start_index
+    while index + 1 < len(samples) and samples[index + 1][0] < stamp:
+        index += 1
+    if index + 1 >= len(samples):
+        return None, index
+    before = samples[index]
+    after = samples[index + 1]
+    if stamp < before[0] or after[0] <= before[0]:
+        return None, index
+    fraction = (stamp - before[0]) / (after[0] - before[0])
+    position = tuple(
+        before[axis] + fraction * (after[axis] - before[axis])
+        for axis in range(1, 4)
+    )
+    return position, index
+
+
+def compare_odometry(input_bag, output_bag, topic):
+    reference = odometry_samples(input_bag, topic)
+    regenerated = odometry_samples(output_bag, topic)
+    result = {
+        "topic": topic,
+        "reference_count": len(reference),
+        "regenerated_count": len(regenerated),
+        "available": False,
+    }
+    if len(reference) < 2 or len(regenerated) < 2:
+        result["reason"] = "reference or regenerated odometry is missing"
+        return result
+
+    overlap_start = max(reference[0][0], regenerated[0][0])
+    overlap_end = min(reference[-1][0], regenerated[-1][0])
+    if overlap_end <= overlap_start:
+        result["reason"] = "odometry time ranges do not overlap"
+        return result
+
+    reference_origin, reference_index = interpolate_position(reference, overlap_start)
+    regenerated_origin, _ = interpolate_position(regenerated, overlap_start)
+    if reference_origin is None or regenerated_origin is None:
+        result["reason"] = "cannot interpolate odometry at overlap start"
+        return result
+
+    errors = []
+    vertical_errors = []
+    final_delta = None
+    # Cap the comparison work while retaining the complete time span.
+    stride = max(1, len(regenerated) // 5000)
+    for sample in regenerated[::stride]:
+        stamp = sample[0]
+        if stamp < overlap_start or stamp > overlap_end:
+            continue
+        reference_position, reference_index = interpolate_position(
+            reference, stamp, reference_index
+        )
+        if reference_position is None:
+            continue
+        regenerated_relative = tuple(
+            sample[axis + 1] - regenerated_origin[axis] for axis in range(3)
+        )
+        reference_relative = tuple(
+            reference_position[axis] - reference_origin[axis] for axis in range(3)
+        )
+        delta = tuple(
+            regenerated_relative[axis] - reference_relative[axis]
+            for axis in range(3)
+        )
+        errors.append(math.sqrt(sum(value * value for value in delta)))
+        vertical_errors.append(abs(delta[2]))
+        final_delta = delta
+
+    if not errors:
+        result["reason"] = "no matched odometry samples"
+        return result
+
+    result.update({
+        "available": True,
+        "overlap_start_sec": overlap_start,
+        "overlap_end_sec": overlap_end,
+        "matched_count": len(errors),
+        "median_relative_position_error_m": statistics.median(errors),
+        "p95_relative_position_error_m": percentile(errors, 0.95),
+        "max_relative_position_error_m": max(errors),
+        "p95_relative_vertical_error_m": percentile(vertical_errors, 0.95),
+        "final_relative_delta_xyz_m": list(final_delta),
+        "final_relative_position_error_m": errors[-1],
+    })
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-bag", required=True)
     parser.add_argument("--output-bag")
     parser.add_argument("--lidar-topic", default="/livox/lidar")
     parser.add_argument("--odom-topic", default="/Odometry")
+    parser.add_argument("--max-reference-p95-error-m", type=float, default=0.75)
+    parser.add_argument("--max-reference-final-error-m", type=float, default=1.0)
     parser.add_argument("--map-pcd")
     parser.add_argument("--json")
     parser.add_argument("--last-input-only", action="store_true")
@@ -131,6 +235,18 @@ def main():
             and abs(final_lag) <= 0.25
             and 15.0 <= odometry["frequency_hz"] <= 25.0
         )
+        consistency = compare_odometry(args.input_bag, args.output_bag, args.odom_topic)
+        report["online_offline_odometry_consistency"] = consistency
+        if consistency["available"]:
+            consistency["max_p95_error_m"] = args.max_reference_p95_error_m
+            consistency["max_final_error_m"] = args.max_reference_final_error_m
+            consistency["passed"] = (
+                consistency["p95_relative_position_error_m"]
+                <= args.max_reference_p95_error_m
+                and consistency["final_relative_position_error_m"]
+                <= args.max_reference_final_error_m
+            )
+            passed = passed and consistency["passed"]
     if args.map_pcd:
         report["map_pcd"] = {
             "path": os.path.abspath(args.map_pcd),

@@ -146,6 +146,8 @@ rosparam list >/dev/null 2>&1 || { echo "isolated roscore did not become ready."
 
 rosparam load "$config"
 rosparam set use_sim_time true
+# Match live handheld mapping while rebuilding the canonical map from raw Bag.
+rosparam set preprocess/handheld_self_filter/enabled true
 # Native FAST-LIO complete-map export is enabled only in this offline mapper.
 # It stores the registered scans with their original x/y/z/intensity fields.
 rosparam set pcd_save/pcd_save_en true

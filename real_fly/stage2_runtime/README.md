@@ -80,6 +80,11 @@ Run the read-only single-aircraft terminal monitor in another terminal:
 ./real_fly/stage2_runtime/scripts/monitor_single_uav.sh
 ```
 
+The monitor is configured for the aircraft's 4S pack and uses the existing
+3.5 V/cell lower bound (14.0 V total). For different hardware, pass the cell
+count explicitly, for example `monitor_single_uav.sh --battery-cells 6`; it is
+intentionally never inferred from pack voltage.
+
 It combines the senior GCS health semantics into one local display: FCU link,
 arming and PX4 mode; battery; RC channels 5/6; EKF pose, frequency, delay and
 rolling position jump; IMU; PX4Ctrl FSM state; planner command flow and attitude
@@ -99,7 +104,7 @@ Intermediate `transit` goals are pass-through route constraints: the adapter
 switches to the next goal inside a 0.40 m radius without requiring low speed or
 a dwell, allowing SUPER to preserve trajectory continuity. Only final
 `observation` goals require the configured 0.20 m arrival tolerance, low speed,
-and 0.75 s dwell. The pass-through radius can be changed explicitly with
+and 4.0 s dwell. The pass-through radius can be changed explicitly with
 `--transit-switch-radius`, but must remain in `[0.10, 1.0]` m.
 
 SUPER receives the approved PCD as **occupied-only** prior constraints and the
@@ -118,12 +123,34 @@ The runtime adapter defaults to `preview`. In preview mode it publishes only
 `/pre_map_vln/approved_route`, `/pre_map_vln/approved_goals`, and status; the
 process does not even create a `/planning/click_goal` publisher.
 
-Start the planner (still without sending a goal) with the exact approved map:
+Start the planner (still without sending a goal) with the exact approved map
+and execution bundle:
 
 ```bash
 ./real_fly/stage2_runtime/scripts/start_super_indoor_planner.sh \
-  /absolute/path/to/handheld_map_RUN_ID_complete.pcd
+  /absolute/path/to/handheld_map_RUN_ID_complete.pcd \
+  --bundle real_fly/stage2_runtime/missions/RUN_ID/TASK_ID/execution_bundle.json
 ```
+
+The launcher keeps that original PCD unchanged for localization and identity
+checks. For ROG's occupied-only prior it creates and reuses an XYZ-only 0.15 m
+voxel cache under `~/.cache/pre_map_vln/super_collision/`. Every live LiDAR
+point is retained, matching the senior real-flight profile, while headless
+planner/map visualization is disabled. Collision inflation, unknown-space
+handling, map resolution, and flight limits are not relaxed. Set
+`PRE_MAP_VLN_SUPER_STATIC_VOXEL` only for an explicit benchmark, not on a
+per-map basis.
+
+The task-specific collision cache removes only static voxels inside a 0.60 m
+sphere around the explicitly approved launch hover pose, with a hard maximum
+of 100 removed voxels. Execution also requires the aircraft to start within
+0.15 m of that approved pose. Together these bounds retain at least 0.45 m of
+static clearance at the actual start. The original localization PCD and its
+SHA256 remain unchanged. Before the first goal is released, the adapter
+verifies the cache identity and requires the current registered LiDAR cloud to
+show at least 0.40 m clearance around the aircraft. A dense static structure
+or a live obstacle therefore causes a refusal instead of being silently carved
+away.
 
 Real execution is deliberately not wrapped in a one-command launcher. It
 requires the exact approved map SHA256, live `world`-frame EKF odometry, a
@@ -131,3 +158,48 @@ connected and armed FCU, a SUPER subscriber, start-pose agreement, low initial
 speed, per-goal arrival checks and bounded timeouts. It never arms, takes off,
 lands, or publishes `PositionCommand`. Validate preview and a restrained test
 with the aircraft secured before enabling free flight.
+
+## NX planning from the localized takeoff point
+
+After host-side room and semantic approval, export the compact per-run planning
+package and copy it to the NX. The exporter verifies the approved PCD SHA256 and
+refuses to overwrite an existing NX package:
+
+```bash
+./real_fly/stage2_offline/scripts/export_real_planning_package.sh \
+  --run-id "$RUN_ID" --sync-nx
+```
+
+With persistent global localization running, and the FCU connected and
+disarmed, parse the natural-language instruction with Qwen and plan directly on
+the NX:
+
+```bash
+./real_fly/stage2_runtime/scripts/plan_from_current_pose.sh \
+  "$RUN_ID" "$TASK_ID" --instruction '先观察灭火器，再观察电视柜。'
+```
+
+The API key is intentionally not included in the map package. It defaults to
+`~/.config/pre_map_vln/dashscope_api_key` on the NX and must be provisioned
+separately with mode `600`. Natural-language Qwen parsing is the only task-input
+path; there is no fixed-target shortcut.
+
+The start capture is subscriber-only. It samples stable
+`/ekf_quat/ekf_odom`, reads the senior PX4Ctrl profile's relative
+`takeoff_height`, and plans from `(ground x, ground y, ground z + height,
+ground yaw)`. It refuses to run while the FCU is armed. Qwen only produces the
+task graph; the geometry modules still choose observation poses and routes. The
+command publishes no ROS topic, service call, setpoint, or flight command.
+
+On an NX desktop terminal, inspect the result and then close RViz:
+
+```bash
+./real_fly/stage2_runtime/scripts/view_runtime_plan_rviz.sh \
+  "$RUN_ID" "$TASK_ID"
+```
+
+The preview starts only a static PCD publisher and visualization markers. It
+does not start SUPER or PX4Ctrl and does not create a goal publisher. Close it
+before flight to release NX graphics and memory resources. The same local
+`execution_bundle.json` can then be used by the guarded adapter; no round trip
+to the host is required.

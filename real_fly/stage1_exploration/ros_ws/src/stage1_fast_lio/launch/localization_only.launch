@@ -17,6 +17,8 @@
   <param name="filter_size_map" type="double" value="0.25"/>
   <param name="cube_side_length" type="double" value="1000"/>
   <param name="runtime_pos_log_enable" type="bool" value="false"/>
+  <!-- Flight localization must retain the full 360-degree surroundings. -->
+  <param name="preprocess/handheld_self_filter/enabled" type="bool" value="false"/>
 
   <param name="publish/path_en" type="bool" value="false"/>
   <param name="publish/scan_publish_en" type="bool" value="false"/>

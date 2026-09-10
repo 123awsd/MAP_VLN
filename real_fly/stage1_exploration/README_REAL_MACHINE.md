@@ -49,6 +49,12 @@ needed for offline FAST-LIO replay and Boxer processing. Closing RViz cleanly
 stops the bag before the launch processes are stopped. Never defer recording
 until after the mapping walk has finished.
 
+For a formal `--record` run, the launcher refuses to reuse an existing
+`/laserMapping` or `/ekf_quat` node. It starts rosbag before a fresh FAST-LIO
+instance and captures eight seconds of stationary raw-sensor pre-roll. Keep
+the rig still until `Mapping is ready` is printed; this gives online mapping
+and cold offline replay equivalent initialization data.
+
 The checked-in `config/realsense_d435_recording.conf` profile requests D435
 color and depth at 640x480 and 30 Hz, with RGB manual exposure 120. Both raw
 depth (`/camera/depth/image_rect_raw`) and the slower CPU-aligned depth
@@ -114,10 +120,20 @@ accepted for Stage 2.
 5. Stop the bag while the device is stationary. Run `scripts/check_bag.py`.
 6. Replay the bag with `scripts/run_mapping_from_bag.sh`. This starts only a
    local roscore, FAST-LIO, rosbag record/play, and no hardware/control node.
+   Automatic replay begins at 1.0x, rejects a regenerated trajectory whose
+   relative motion disagrees with the online `/Odometry` saved in the Bag,
+   and retries at a slower rate only after such a failure.
 7. Run `scripts/export_stage1_report.py` to produce
    `outputs/<run_id>/` with the trajectory CSV, start pose, frame description,
    PCD/header manifest, calibration status, target-annotation template,
    temporal RGB coverage report, and Stage 2 handoff metadata.
+
+Handheld mapping removes the operator in the LiDAR-frame `+X` rear half over
+`0.5--1.5 m` and `z=-1.6--0.4 m`; the direction was checked against the
+`test_room_v2` raw Bag. The same filter is explicitly enabled during offline
+Bag reconstruction. Its shared-config default is disabled, and
+`localization_only.launch` explicitly disables it, so flight localization and
+planner-facing 360-degree sensing never inherit the handheld blind sector.
 
 `scripts/monitor_resources.sh` can be run in a second shell during the static
 test, capture, or replay. It records only resource observations and never

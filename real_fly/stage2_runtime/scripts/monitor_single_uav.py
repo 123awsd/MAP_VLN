@@ -140,6 +140,8 @@ class Monitor:
         _, rates, ages, msg, history, odom_delay = self.snapshot()
         failures = []
         warnings = []
+        min_voltage = (self.args.min_voltage if self.args.min_voltage is not None else
+                       self.args.battery_cells * self.args.min_cell_voltage)
 
         state = msg["state"]
         connected = bool(state and ages["state"] < 1.0 and state.connected)
@@ -156,8 +158,9 @@ class Monitor:
         ) else math.nan
         if ages["battery"] >= 2.0:
             failures.append("电池数据缺失或过期")
-        elif not math.isfinite(voltage) or voltage < self.args.min_voltage:
-            failures.append(f"电池电压低于{self.args.min_voltage:.1f} V或读数无效")
+        elif not math.isfinite(voltage) or voltage < min_voltage:
+            failures.append(
+                f"{self.args.battery_cells}S电池电压低于{min_voltage:.1f} V或读数无效")
 
         rc = msg["rc"]
         channels = list(rc.channels) if rc else []
@@ -231,7 +234,8 @@ class Monitor:
         print(f"结论: {'PASS' if ready else 'FAIL'} / {phase}    刷新: {time.strftime('%H:%M:%S')}")
         print("------------------------------------------------------")
         print(f"飞控  connected={connected!s:<5} armed={armed!s:<5} PX4={px4_mode:<12} age={fmt_age(ages['state'])}")
-        print(f"电池  {voltage:5.2f} V  {current:6.2f} A  {percentage:5.1f}%  age={fmt_age(ages['battery'])}")
+        print(f"电池  {voltage:5.2f} V  {current:6.2f} A  {percentage:5.1f}%  "
+              f"{self.args.battery_cells}S(min={min_voltage:.1f}V)  age={fmt_age(ages['battery'])}")
         print(f"遥控  {rates['rc']:6.1f} Hz  CH5={self.rc_switch(ch5):<6}({ch5 or 0:4})  CH6={self.rc_switch(ch6):<6}({ch6 or 0:4})")
         print("------------------------------------------------------")
         print(f"定位  frame={frame:<8} xyz=({position[0]:7.2f},{position[1]:7.2f},{position[2]:7.2f})")
@@ -255,7 +259,11 @@ class Monitor:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--min-voltage", type=float, default=21.0)
+    parser.add_argument("--battery-cells", type=int, default=4,
+                        help="configured pack cell count; do not infer this from voltage")
+    parser.add_argument("--min-cell-voltage", type=float, default=3.5)
+    parser.add_argument("--min-voltage", type=float, default=None,
+                        help="optional explicit pack-voltage threshold override")
     parser.add_argument("--min-odom-hz", type=float, default=100.0)
     parser.add_argument("--min-imu-hz", type=float, default=100.0)
     parser.add_argument("--min-rc-hz", type=float, default=5.0)
@@ -264,6 +272,10 @@ def main():
     parser.add_argument("--max-stationary-speed", type=float, default=0.10)
     parser.add_argument("--max-odom-delay-ms", type=float, default=150.0)
     args = parser.parse_args()
+    if args.battery_cells < 1 or not 2.5 <= args.min_cell_voltage <= 4.2:
+        parser.error("invalid battery cell count or per-cell voltage threshold")
+    if args.min_voltage is not None and args.min_voltage <= 0:
+        parser.error("--min-voltage must be positive")
     rospy.init_node("pre_map_vln_single_uav_monitor", anonymous=False)
     monitor = Monitor(args)
     rate = rospy.Rate(2.0)

@@ -1,67 +1,231 @@
 Panels:
   - Class: rviz/Displays
+    Help Height: 70
     Name: Displays
+    Property Tree Widget:
+      Expanded: ~
+      Splitter Ratio: 0.5
+    Tree Height: 363
   - Class: rviz/Views
+    Expanded:
+      - /Current View1
     Name: Views
+    Splitter Ratio: 0.5
+Preferences:
+  PromptSaveOnExit: false
+Toolbars:
+  toolButtonStyle: 2
 Visualization Manager:
   Class: ""
+  Current Tool: rviz/MoveCamera
   Displays:
-    - Class: rviz/Grid
-      Enabled: true
-      Name: Grid
-      Plane: XY
+    - Alpha: 0.3499999940395355
       Cell Size: 1
-      Line Style: Lines
+      Class: rviz/Grid
       Color: 80; 80; 80
-      Alpha: 0.35
-    - Class: rviz/PointCloud2
       Enabled: true
-      Name: FAST-LIO map
-      Topic: /drone_room/map
-      Style: Points
-      Size (Pixels): 2
-      Size (m): 0.03
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
+      Name: Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 10
+      Reference Frame: <Fixed Frame>
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 15.106938362121582
+        Min Value: -14.99693775177002
+        Value: true
       Axis: Z
       Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
       Color Transformer: AxisColor
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds: {Max Value: 3, Min Value: -1, Value: true}
-      Use rainbow: true
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: FAST-LIO map
+      Position Transformer: XYZ
       Queue Size: 2
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.029999999329447746
+      Style: Points
+      Topic: /drone_room/map
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+    - Alpha: 0.029999999329447746
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 40; 220; 90
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Name: Traversable after inflation
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.23000000417232513
+      Style: Boxes
+      Topic: /drone_room/inflated_free
+      Unreliable: false
+      Use Fixed Frame: true
+      Value: true
+    - Alpha: 0.11999999731779099
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 90; 20
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Name: Removed by safety inflation
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.23999999463558197
+      Style: Boxes
+      Topic: /drone_room/inflation_excluded
+      Unreliable: false
+      Use Fixed Frame: true
+      Value: true
     - Class: rviz/MarkerArray
       Enabled: true
-      Name: Semantic 3D boxes and labels
       Marker Topic: /drone_room/targets
-    - Class: rviz/Path
+      Name: Semantic 3D boxes and labels
+      Namespaces:
+        semantic_boxes: true
+        semantic_labels: true
+        trajectory_clearance: true
+        trajectory_clearance_labels: true
+      Queue Size: 100
+      Value: true
+    - Class: rviz/MarkerArray
       Enabled: true
-      Name: FAST-LIO trajectory
-      Topic: /drone_room/trajectory
+      Marker Topic: /drone_room/clicked_point
+      Name: Clicked point coordinate
+      Queue Size: 10
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
       Color: 0; 255; 0
-      Line Style: Lines
-      Line Width: 0.03
-    - Class: rviz/Path
       Enabled: true
-      Name: planned path
-      Topic: /drone_room/planned_path
-      Color: 255; 0; 0
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
       Line Style: Lines
-      Line Width: 0.08
+      Line Width: 0.029999999329447746
+      Name: FAST-LIO trajectory
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Queue Size: 10
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic: /drone_room/trajectory
+      Unreliable: false
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 255; 0; 0
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Billboards
+      Line Width: 0.11999999731779099
+      Name: planned path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Queue Size: 10
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic: /drone_room/planned_path
+      Unreliable: false
+      Value: true
   Enabled: true
   Global Options:
+    Background Color: 48; 48; 48
+    Default Light: true
     Fixed Frame: map
     Frame Rate: 30
   Name: root
   Tools:
-    - Class: rviz/Interact
     - Class: rviz/MoveCamera
+    - Class: rviz/Interact
+      Hide Inactive Objects: true
     - Class: rviz/Select
+    - Class: rviz/PublishPoint
+      Single click: true
+      Topic: /clicked_point
+  Value: true
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 25
-      Focal Point: {X: 5, Y: -3, Z: -2}
-      Pitch: 0.8
+      Distance: 16
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Field of View: 0.7853981852531433
+      Focal Point:
+        X: 1.16
+        Y: 1.77
+        Z: 1.5
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05000000074505806
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.009999999776482582
+      Pitch: 0.7
+      Target Frame: <Fixed Frame>
       Yaw: 0.8
+    Saved: ~
 Window Geometry:
+  Displays:
+    collapsed: false
   Height: 900
+  Hide Left Dock: false
+  Hide Right Dock: false
+  QMainWindow State: 000000ff00000000fd0000000100000000000001560000032efc0200000002fb000000100044006900730070006c006100790073010000003b000001ec000000c700fffffffb0000000a00560069006500770073010000022d0000013c000000a000ffffff0000041c0000032e00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Views:
+    collapsed: false
   Width: 1400
+  X: 520
+  Y: 143

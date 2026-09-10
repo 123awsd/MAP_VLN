@@ -6,6 +6,10 @@ import hashlib
 import json
 import os
 import re
+import socket
+import subprocess
+import tempfile
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -102,6 +106,125 @@ class QwenTaskParser:
         ).encode("utf-8")
         return self.cache_dir / f"{hashlib.sha256(encoded).hexdigest()}.json"
 
+    def _request_json(self, payload: dict[str, Any], api_key: str) -> dict[str, Any]:
+        """Call DashScope with bounded retries for transient network failures.
+
+        NX occasionally gets a TLS EOF while opening the HTTPS connection. The
+        request is idempotent for this parser, so retry only transport errors
+        and temporary service responses; authentication/client errors remain
+        fatal and are reported immediately.
+        """
+        body = json.dumps(payload).encode("utf-8")
+
+        # On the NX, urllib's TLS POST occasionally reaches the server but is
+        # closed during the handshake/request setup. curl uses the system's
+        # stable IPv4/HTTP1.1 path and is the primary transport there.
+        if subprocess.call(
+            ["bash", "-lc", "command -v curl >/dev/null 2>&1"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ) == 0:
+            with tempfile.NamedTemporaryFile(mode="w", prefix="pre_map_vln_curl_", delete=False) as cfg:
+                cfg_path = cfg.name
+                cfg.write('url = "' + ENDPOINT + '"\n')
+                cfg.write('request = "POST"\n')
+                cfg.write('header = "Authorization: Bearer ' + api_key + '"\n')
+                cfg.write('header = "Content-Type: application/json"\n')
+                cfg.write('header = "Accept: application/json"\n')
+                cfg.write('ipv4\nhttp1.1\nsilent\nshow-error\n')
+                cfg.write('max-time = "120"\nwrite-out = "%{http_code}"\n')
+                cfg.write('data-binary = "@-"\n')
+            response_path = cfg_path + ".response"
+            try:
+                ipv4_addresses = []
+                try:
+                    ipv4_addresses = sorted({
+                        item[4][0]
+                        for item in socket.getaddrinfo(
+                            "dashscope.aliyuncs.com", 443,
+                            family=socket.AF_INET, type=socket.SOCK_STREAM,
+                        )
+                    })
+                except socket.gaierror:
+                    pass
+                # Rotate through the service's IPv4 frontends twice. A broken
+                # route to one frontend must not fail the whole task.
+                attempts = (ipv4_addresses * 2) or [None] * 8
+                last_error = "unknown curl failure"
+                for attempt, address in enumerate(attempts, start=1):
+                    Path(response_path).unlink(missing_ok=True)
+                    command = ["curl", "--config", cfg_path]
+                    if address:
+                        command += [
+                            "--resolve",
+                            f"dashscope.aliyuncs.com:443:{address}",
+                        ]
+                    command += ["--output", response_path]
+                    result = subprocess.run(
+                        command,
+                        input=body,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        timeout=130,
+                        check=False,
+                    )
+                    status_text = result.stdout.decode("ascii", "replace").strip()
+                    response_body = (
+                        Path(response_path).read_text(encoding="utf-8")
+                        if Path(response_path).exists() else ""
+                    )
+                    if result.returncode == 0 and status_text.startswith("2"):
+                        return json.loads(response_body)
+                    if result.returncode == 0 and status_text not in {
+                        "429", "500", "502", "503", "504",
+                    }:
+                        raise RuntimeError(
+                            f"DashScope HTTP {status_text}: {response_body[:1000]}"
+                        )
+                    last_error = (
+                        result.stderr.decode("utf-8", "replace").strip()
+                        or f"DashScope HTTP {status_text}: {response_body[:1000]}"
+                    )
+                    if attempt < len(attempts):
+                        time.sleep(min(attempt, 3))
+                raise RuntimeError(
+                    f"DashScope curl transport failed after {len(attempts)} attempts: "
+                    f"{last_error[:1000]}"
+                )
+            finally:
+                for path in (cfg_path, response_path):
+                    try:
+                        Path(path).unlink()
+                    except FileNotFoundError:
+                        pass
+
+        max_attempts = 4
+        for attempt in range(1, max_attempts + 1):
+            request = urllib.request.Request(
+                ENDPOINT,
+                data=body,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=120) as response:
+                    return json.load(response)
+            except urllib.error.HTTPError as error:
+                detail = error.read().decode("utf-8", "replace")[:1000]
+                if error.code not in {429, 500, 502, 503, 504} or attempt == max_attempts:
+                    raise RuntimeError(f"DashScope HTTP {error.code}: {detail}") from error
+                time.sleep(2 ** (attempt - 1))
+            except urllib.error.URLError as error:
+                if attempt == max_attempts:
+                    raise RuntimeError(
+                        f"DashScope connection failed after {max_attempts} attempts: {error}"
+                    ) from error
+                time.sleep(2 ** (attempt - 1))
+        raise RuntimeError("DashScope request failed unexpectedly")
+
     def parse(self, instruction: str, scene_graph: dict[str, Any], use_cache: bool = True) -> dict[str, Any]:
         inventory = compact_inventory(scene_graph)
         cache_path = self._cache_path(instruction, inventory)
@@ -128,18 +251,7 @@ class QwenTaskParser:
             "temperature": 0.0,
             "max_tokens": 3000,
         }
-        request = urllib.request.Request(
-            ENDPOINT,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=120) as response:
-                body = json.load(response)
-        except urllib.error.HTTPError as error:
-            detail = error.read().decode("utf-8", "replace")[:1000]
-            raise RuntimeError(f"DashScope HTTP {error.code}: {detail}") from error
+        body = self._request_json(payload, api_key)
         content = body["choices"][0]["message"]["content"]
         usage = body.get("usage") or {}
         input_tokens = int(usage.get("prompt_tokens", 0))
@@ -204,15 +316,9 @@ class QwenTaskParser:
             "response_format": {"type": "json_object"},
             "enable_thinking": False, "temperature": 0.0, "max_tokens": 3000,
         }
-        request = urllib.request.Request(
-            ENDPOINT, data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {self.api_key_path.read_text(encoding='utf-8').strip()}",
-                "Content-Type": "application/json",
-            }, method="POST",
+        body = self._request_json(
+            payload, self.api_key_path.read_text(encoding="utf-8").strip()
         )
-        with urllib.request.urlopen(request, timeout=120) as response:
-            body = json.load(response)
         usage = body.get("usage") or {}
         estimated_cost = (
             int(usage.get("prompt_tokens", 0)) * INPUT_CNY_PER_MILLION

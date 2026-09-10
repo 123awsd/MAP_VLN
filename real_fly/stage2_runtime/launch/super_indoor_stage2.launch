@@ -4,6 +4,8 @@
   <arg name="config_path"
        default="$(optenv PRE_MAP_VLN_SUPER_CONFIG /home/nv/SL_WS/PRE_MAP_VLN_real_fly/real_fly/stage2_runtime/config/super_indoor_stage2.yaml)"/>
   <arg name="map_pcd"/>
+  <arg name="bundle_sha256"/>
+  <arg name="collision_metadata"/>
 
   <!-- The approved Stage-1 map contributes occupied-only prior constraints.
        ROG-Map still derives free space from the live registered LiDAR cloud. -->
@@ -11,6 +13,8 @@
         type="pcd_to_pointcloud" args="$(arg map_pcd) 0.0" output="screen">
     <param name="frame_id" value="world"/>
     <param name="latch" value="true"/>
+    <param name="launch_clearance_bundle_sha256" value="$(arg bundle_sha256)"/>
+    <param name="collision_metadata" value="$(arg collision_metadata)"/>
     <remap from="/cloud_pcd" to="/pre_map_vln/static_constraint_cloud"/>
   </node>
 

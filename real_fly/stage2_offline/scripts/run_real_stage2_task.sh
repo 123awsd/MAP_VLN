@@ -65,6 +65,12 @@ root="$(cd -- "$stage2_dir/../.." && pwd)"
 python="$root/.envs/habitat/bin/python"
 run_data="$stage2_dir/data/$run_id"
 scene_graph="$run_data/scene_graph.json"
+if [[ -s "$run_data/approved_scene_graph.json" ]]; then
+  scene_graph="$run_data/approved_scene_graph.json"
+  echo "Using manually approved per-run room scene: $scene_graph"
+else
+  echo "No approved room scene found; using the original single-room scene: $scene_graph"
+fi
 voxel_snapshot="$run_data/voxel_snapshot"
 planning_config="$stage2_dir/config/uav_3d_planning_real.yaml"
 planning_start="$run_data/planning_start.json"
@@ -137,7 +143,7 @@ else
 fi
 
 "$python" - "$task_dir/run_manifest.json" "$run_id" "$task_id" "$start_source" \
-  "$task_graph" "$mission" "$audit" "$runtime_bundle" "$bundle_eligible" <<'PY'
+  "$task_graph" "$mission" "$audit" "$runtime_bundle" "$bundle_eligible" "$scene_graph" <<'PY'
 import json
 import pathlib
 import sys
@@ -154,6 +160,7 @@ document = {
     "mission_audit": str(pathlib.Path(sys.argv[7]).resolve()),
     "execution_bundle": str(bundle.resolve()) if bundle.is_file() else None,
     "motion_preview_bundle_eligible": sys.argv[9] == "true",
+    "scene_graph": str(pathlib.Path(sys.argv[10]).resolve()),
     "autonomous_semantic_execution_eligible": False,
     "safety_scope": "offline_preview_only",
 }

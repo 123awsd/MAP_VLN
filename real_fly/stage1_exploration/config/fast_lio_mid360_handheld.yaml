@@ -6,6 +6,15 @@ common:
   time_offset_lidar_to_imu: 0.0
   time_sync_en: false
 
+# Estimator parameters shared by live mapping and offline replay. Keep these
+# here instead of overriding them only in the live launch file.
+feature_extract_enable: false
+point_filter_num: 2
+max_icp_times: 2
+max_iteration: 4
+cube_side_length: 1000
+runtime_pos_log_enable: false
+
 mapping:
   acc_cov: 0.1
   b_acc_cov: 0.0001
@@ -30,10 +39,10 @@ mapping:
   fov_degree: 360.0
   gyr_cov: 0.1
 
-# Preserve enough indoor geometry for scan-to-map matching. At 0.2 m the NX
-# processed the live 10 Hz stream with about 31 ms mean ICP time.
-filter_size_surf: 0.2
-filter_size_map: 0.2
+# Preserve enough indoor geometry for scan-to-map matching. The 0.25 m value
+# is the previously validated live-launch setting and is now shared offline.
+filter_size_surf: 0.25
+filter_size_map: 0.25
 
 pcd_save:
   interval: -1
@@ -45,6 +54,17 @@ preprocess:
   blind: 0.5
   lidar_type: 1
   scan_line: 4
+  # Safe default because this file is shared with flight localization.
+  # Handheld mapping and offline Bag replay explicitly enable the filter.
+  handheld_self_filter:
+    enabled: false
+    min_range_m: 0.5
+    max_range_m: 1.5
+    # Bag verification: the operator's physical rear side is LiDAR +X.
+    rear_azimuth_deg: 0.0
+    rear_half_angle_deg: 90.0
+    min_z_m: -1.6
+    max_z_m: 0.4
 
 publish:
   dense_publish_en: true

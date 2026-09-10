@@ -5,11 +5,11 @@ occupancy:
   occupied_value: 100
   unknown_is_blocked: true
 vehicle:
-  radius_xy_m: 0.35
+  radius_xy_m: 0.20
   radius_z_m: 0.20
   safety_margin_m: 0.15
 planning:
-  minimum_esdf_distance_m: 0.50
+  minimum_esdf_distance_m: 0.35
   preferred_esdf_distance_m: 0.80
   clearance_cost_weight: 0.30
   coarse_resolution_m: 0.50

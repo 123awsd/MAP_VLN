@@ -3,13 +3,15 @@
 import csv
 import colorsys
 import json
+import math
 import struct
 import sys
 import zlib
 from pathlib import Path
 
+import numpy as np
 import rospy
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Point, PointStamped, PoseStamped
 from nav_msgs.msg import Path as RosPath
 from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs import point_cloud2
@@ -110,11 +112,221 @@ def semantic_color(label):
     return colorsys.hsv_to_rgb(hue, 0.78, 1.0)
 
 
+def add_observation_frustums(marker_array, mission, mission_path, frame):
+    """Draw the selected candidate's nominal camera FoV at every visit."""
+    candidates_path = mission_path.parent / "candidates.json"
+    if not candidates_path.is_file():
+        return 0
+    document = json.loads(candidates_path.read_text())
+    candidate_by_id = {
+        candidate["id"]: candidate
+        for values in document.get("by_task", {}).values()
+        for candidate in values
+    }
+    count = 0
+    for index, visit in enumerate(mission.get("visits", [])):
+        candidate = candidate_by_id.get(visit.get("candidate_id"))
+        if candidate is None:
+            continue
+        pose = visit["pose"]
+        origin = [float(pose[key]) for key in ("x", "y", "z")]
+        yaw = float(pose["yaw"])
+        target = [float(value) for value in candidate.get("target_xyz_m", origin)]
+        horizontal_fov = math.radians(float(candidate.get("horizontal_fov_deg", 90.0)))
+        vertical_fov = math.radians(float(candidate.get("vertical_fov_deg", 70.0)))
+        target_range = math.dist(origin, target)
+        depth = min(3.0, max(0.5, target_range))
+        half_width = depth * math.tan(horizontal_fov * 0.5)
+        half_height = depth * math.tan(vertical_fov * 0.5)
+        forward = [math.cos(yaw), math.sin(yaw), 0.0]
+        right = [-math.sin(yaw), math.cos(yaw), 0.0]
+        center = [origin[axis] + depth * forward[axis] for axis in range(3)]
+        corners = [
+            [center[0] + side * half_width * right[0],
+             center[1] + side * half_width * right[1],
+             center[2] + vertical * half_height]
+            for side, vertical in ((-1.0, -1.0), (1.0, -1.0),
+                                   (1.0, 1.0), (-1.0, 1.0))
+        ]
+        lines = [(origin, corner) for corner in corners]
+        lines.extend((corners[i], corners[(i + 1) % 4]) for i in range(4))
+        lines.append((origin, target))
+
+        marker = Marker()
+        marker.header.frame_id = frame
+        marker.ns = "planned_observation_frustums"
+        marker.id = index
+        marker.type = Marker.LINE_LIST
+        marker.action = Marker.ADD
+        marker.pose.orientation.w = 1.0
+        marker.scale.x = 0.035
+        marker.color.r = 1.0
+        marker.color.g = 0.82
+        marker.color.b = 0.10
+        marker.color.a = 0.95
+        marker.lifetime = rospy.Duration(0)
+        marker.points = [Point(x=a[0], y=a[1], z=a[2])
+                         for line in lines for a in line]
+        marker_array.markers.append(marker)
+        count += 1
+    return count
+
+
+def add_clearance_markers(marker_array, mission, voxel_snapshot, frame):
+    """Mark the minimum-ESDF point of each validated trajectory segment."""
+    if voxel_snapshot is None:
+        return 0
+    metadata_path = voxel_snapshot / "metadata.json"
+    arrays_path = voxel_snapshot / "voxel_map.npz"
+    if not metadata_path.is_file() or not arrays_path.is_file():
+        return 0
+    metadata = json.loads(metadata_path.read_text())
+    arrays = np.load(arrays_path)
+    esdf = arrays["esdf_zyx_m"]
+    origin = np.asarray(metadata["origin_xyz_m"], dtype=float)
+    resolution = float(metadata["resolution_m"])
+    threshold = float(metadata.get("minimum_esdf_distance_m", 0.0))
+
+    def clearance(point):
+        index = np.floor((np.asarray(point, dtype=float) - origin) / resolution).astype(int)
+        x, y, z = [int(value) for value in index]
+        if z < 0 or y < 0 or x < 0 or z >= esdf.shape[0] or y >= esdf.shape[1] or x >= esdf.shape[2]:
+            return 0.0
+        return float(esdf[z, y, x])
+
+    count = 0
+    for segment_index, segment in enumerate(mission.get("segments", [])):
+        validated = segment.get("validated_trajectory") or {}
+        points = validated.get("points_xyz_m") or segment.get("points_xyz_m", [])
+        if not points:
+            continue
+        values = [(clearance(point), point) for point in points]
+        minimum, point = min(values, key=lambda item: item[0])
+
+        sphere = Marker()
+        sphere.header.frame_id = frame
+        sphere.ns = "trajectory_clearance"
+        sphere.id = segment_index * 2
+        sphere.type = Marker.SPHERE
+        sphere.action = Marker.ADD
+        sphere.pose.position.x, sphere.pose.position.y, sphere.pose.position.z = map(float, point)
+        sphere.pose.orientation.w = 1.0
+        sphere.scale.x = sphere.scale.y = sphere.scale.z = 0.18
+        sphere.color.r = 1.0
+        sphere.color.g = 0.05 if minimum < threshold else 0.75
+        sphere.color.b = 0.05
+        sphere.color.a = 1.0
+        marker_array.markers.append(sphere)
+
+        label = Marker()
+        label.header.frame_id = frame
+        label.ns = "trajectory_clearance_labels"
+        label.id = segment_index * 2 + 1
+        label.type = Marker.TEXT_VIEW_FACING
+        label.action = Marker.ADD
+        label.pose.position.x = float(point[0])
+        label.pose.position.y = float(point[1])
+        label.pose.position.z = float(point[2]) + 0.18
+        label.pose.orientation.w = 1.0
+        label.scale.z = 0.18
+        label.color.r = label.color.g = label.color.b = label.color.a = 1.0
+        label.text = f"seg {segment_index + 1}: clearance={minimum:.2f}m"
+        marker_array.markers.append(label)
+        count += 1
+    return count
+
+
+def publish_traversability(voxel_snapshot, frame):
+    """Publish inflated-free and inflation-excluded voxel centers for RViz."""
+    if voxel_snapshot is None:
+        return [], 0, 0, 0.0
+    metadata_path = voxel_snapshot / "metadata.json"
+    arrays_path = voxel_snapshot / "voxel_map.npz"
+    if not metadata_path.is_file() or not arrays_path.is_file():
+        return [], 0, 0, 0.0
+
+    metadata = json.loads(metadata_path.read_text())
+    arrays = np.load(arrays_path)
+    raw = arrays["raw_occupancy_zyx"]
+    esdf = arrays["esdf_zyx_m"]
+    origin = np.asarray(metadata["origin_xyz_m"], dtype=np.float32)
+    resolution = float(metadata["resolution_m"])
+    threshold = float(metadata["minimum_esdf_distance_m"])
+
+    observed_free = raw == 0
+    inflated_free = observed_free & (esdf + 1e-6 >= threshold)
+    inflation_excluded = observed_free & ~inflated_free
+    header = Header(frame_id=frame, stamp=rospy.Time.now())
+    publishers = []
+
+    def publish_mask(mask, topic):
+        # np.argwhere returns z/y/x; RViz needs center coordinates in x/y/z.
+        zyx = np.argwhere(mask)
+        xyz = zyx[:, ::-1].astype(np.float32)
+        xyz = origin + (xyz + 0.5) * resolution
+        message = point_cloud2.create_cloud_xyz32(header, xyz)
+        publisher = rospy.Publisher(topic, PointCloud2, queue_size=1, latch=True)
+        publisher.publish(message)
+        publishers.append(publisher)
+        return len(xyz)
+
+    free_count = publish_mask(inflated_free, "/drone_room/inflated_free")
+    excluded_count = publish_mask(inflation_excluded, "/drone_room/inflation_excluded")
+    return publishers, free_count, excluded_count, threshold
+
+
+def setup_clicked_point_display(frame):
+    """Show Publish Point coordinates directly in the RViz scene."""
+    publisher = rospy.Publisher(
+        "/drone_room/clicked_point", MarkerArray, queue_size=1, latch=True
+    )
+
+    def clicked(message):
+        point = message.point
+        markers = MarkerArray()
+        sphere = Marker()
+        sphere.header.frame_id = message.header.frame_id or frame
+        sphere.header.stamp = rospy.Time.now()
+        sphere.ns = "clicked_point"
+        sphere.id = 0
+        sphere.type = Marker.SPHERE
+        sphere.action = Marker.ADD
+        sphere.pose.position = point
+        sphere.pose.orientation.w = 1.0
+        sphere.scale.x = sphere.scale.y = sphere.scale.z = 0.16
+        sphere.color.r = 0.10
+        sphere.color.g = 0.85
+        sphere.color.b = 1.0
+        sphere.color.a = 1.0
+        markers.markers.append(sphere)
+
+        label = Marker()
+        label.header = sphere.header
+        label.ns = "clicked_point_coordinate"
+        label.id = 1
+        label.type = Marker.TEXT_VIEW_FACING
+        label.action = Marker.ADD
+        label.pose.position.x = point.x
+        label.pose.position.y = point.y
+        label.pose.position.z = point.z + 0.24
+        label.pose.orientation.w = 1.0
+        label.scale.z = 0.20
+        label.color.r = label.color.g = label.color.b = label.color.a = 1.0
+        label.text = f"x={point.x:.2f}  y={point.y:.2f}  z={point.z:.2f}"
+        markers.markers.append(label)
+        publisher.publish(markers)
+        rospy.loginfo("Clicked world point: x=%.3f y=%.3f z=%.3f", point.x, point.y, point.z)
+
+    subscriber = rospy.Subscriber("/clicked_point", PointStamped, clicked, queue_size=1)
+    return publisher, subscriber
+
+
 def main():
-    if len(sys.argv) != 8:
-        raise SystemExit("usage: publish_drone_room_visualization.py MAP_PCD CLUSTERS_JSON RAW_TARGETS_JSON BOXER_3D_CSV TRAJECTORY_CSV MISSION_JSON MIN_OBSERVATIONS")
+    if len(sys.argv) not in (8, 9):
+        raise SystemExit("usage: publish_drone_room_visualization.py MAP_PCD CLUSTERS_JSON RAW_TARGETS_JSON BOXER_3D_CSV TRAJECTORY_CSV MISSION_JSON MIN_OBSERVATIONS [VOXEL_SNAPSHOT]")
     map_path, clusters_path, raw_targets_path, boxer_3d_path, trajectory_path, mission_path = map(Path, sys.argv[1:7])
     min_observations = int(sys.argv[7])
+    voxel_snapshot = Path(sys.argv[8]) if len(sys.argv) == 9 else None
     rospy.init_node("drone_room_offline_visualization", anonymous=False)
     frame = "map"
 
@@ -125,6 +337,10 @@ def main():
     cloud = point_cloud2.create_cloud(cloud_header, fields, read_binary_pcd(map_path))
     cloud_pub = rospy.Publisher("/drone_room/map", PointCloud2, queue_size=1, latch=True)
     cloud_pub.publish(cloud)
+    traversability_pubs, free_count, excluded_count, inflation_threshold = (
+        publish_traversability(voxel_snapshot, frame)
+    )
+    clicked_point_pub, clicked_point_sub = setup_clicked_point_display(frame)
 
     marker_array = MarkerArray()
     boxes = load_box_geometry(clusters_path, raw_targets_path, boxer_3d_path, min_observations)
@@ -169,15 +385,19 @@ def main():
         text.text = "%s #%d  obs=%d  conf=%.2f" % (
             item["label"], item["cluster_id"], item["observations"], item["confidence_max"])
         marker_array.markers.append(text)
+    trajectory_pub = load_path(trajectory_path, "/drone_room/trajectory")
+    mission = json.loads(mission_path.read_text())
+    frustum_count = add_observation_frustums(marker_array, mission, mission_path, frame)
+    clearance_count = add_clearance_markers(marker_array, mission, voxel_snapshot, frame)
     marker_pub = rospy.Publisher("/drone_room/targets", MarkerArray, queue_size=1, latch=True)
     marker_pub.publish(marker_array)
 
-    trajectory_pub = load_path(trajectory_path, "/drone_room/trajectory")
-    mission = json.loads(mission_path.read_text())
     plan = RosPath()
     plan.header.frame_id = frame
     for segment in mission.get("segments", []):
-        for xyz in segment.get("points_xyz_m", []):
+        validated = segment.get("validated_trajectory") or {}
+        points = validated.get("points_xyz_m") or segment.get("points_xyz_m", [])
+        for xyz in points:
             pose = PoseStamped()
             pose.header.frame_id = frame
             pose.pose.position.x, pose.pose.position.y, pose.pose.position.z = map(float, xyz)
@@ -185,8 +405,12 @@ def main():
             plan.poses.append(pose)
     plan_pub = rospy.Publisher("/drone_room/planned_path", RosPath, queue_size=1, latch=True)
     plan_pub.publish(plan)
-    rospy.loginfo("Published map (%d points), %d semantic 3D boxes, trajectory and plan (%d poses)",
-                  len(cloud.data) // cloud.point_step, len(boxes), len(plan.poses))
+    rospy.loginfo("Published map (%d points), inflated-free=%d, inflation-excluded=%d "
+                  "(minimum clearance %.2fm), %d semantic 3D boxes, %d observation frustums, "
+                  "%d clearance markers, trajectory and validated plan (%d poses)",
+                  len(cloud.data) // cloud.point_step, free_count, excluded_count,
+                  inflation_threshold, len(boxes), frustum_count,
+                  clearance_count, len(plan.poses))
     rospy.spin()
 
 

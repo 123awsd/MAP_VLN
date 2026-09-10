@@ -1,0 +1,61 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz/Grid
+      Name: Grid
+      Enabled: true
+      Plane: XY
+      Cell Size: 1
+      Plane Cell Count: 30
+      Alpha: 0.35
+    - Class: rviz/PointCloud2
+      Name: Approved FAST-LIO map
+      Enabled: true
+      Topic: /pre_map_vln/preview/map
+      Queue Size: 2
+      Style: Points
+      Size (Pixels): 2
+      Color Transformer: AxisColor
+      Axis: Z
+      Use Fixed Frame: true
+    - Class: rviz/MarkerArray
+      Name: Rooms, semantic boxes, goals and frustums
+      Enabled: true
+      Marker Topic: /pre_map_vln/preview/markers
+      Queue Size: 100
+    - Class: rviz/Path
+      Name: NX collision-checked reference trajectory
+      Enabled: true
+      Topic: /pre_map_vln/preview/planned_path
+      Queue Size: 10
+      Color: 255; 40; 40
+      Line Style: Lines
+      Line Width: 0.06
+      Pose Style: None
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: world
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 15
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 1
+      Pitch: 0.55
+      Yaw: 0.75
+Window Geometry:
+  Height: 900
+  Width: 1400

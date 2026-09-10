@@ -15,6 +15,8 @@ Options:
   --run-id ID                 Input/output run id.
   --input-run-id ID           Existing Stage-1 Bag run id; defaults to --run-id.
   --boxer-mode complete|smoke Complete fused Boxer pass (default: complete).
+  --2d-detector grounding_dino|owlv2
+                              2-D detector; default is grounding_dino.
   --frame-period SEC          RGB-D keyframe interval (default: 1.0).
   --max-frames N              Maximum exported RGB-D frames (default: 999).
   --depth-source raw|aligned  Depth source; raw is the default and recommended.
@@ -33,6 +35,7 @@ EOF
 run_id=""
 input_run_id=""
 boxer_mode="complete"
+detector_2d="grounding_dino"
 frame_period="1.0"
 max_frames="999"
 depth_source="raw"
@@ -47,6 +50,7 @@ while [[ $# -gt 0 ]]; do
     --run-id) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; run_id="$2"; shift 2 ;;
     --input-run-id) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; input_run_id="$2"; shift 2 ;;
     --boxer-mode) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; boxer_mode="$2"; shift 2 ;;
+    --2d-detector) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; detector_2d="$2"; shift 2 ;;
     --frame-period) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; frame_period="$2"; shift 2 ;;
     --max-frames) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; max_frames="$2"; shift 2 ;;
     --depth-source) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; depth_source="$2"; shift 2 ;;
@@ -64,9 +68,18 @@ done
 if [[ -z "$input_run_id" ]]; then input_run_id="$run_id"; fi
 [[ "$input_run_id" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { echo "Invalid --input-run-id: $input_run_id" >&2; exit 2; }
 [[ "$boxer_mode" == complete || "$boxer_mode" == smoke ]] || { echo "--boxer-mode must be complete or smoke" >&2; exit 2; }
+[[ "$detector_2d" == grounding_dino || "$detector_2d" == owlv2 ]] || { echo "--2d-detector must be grounding_dino or owlv2" >&2; exit 2; }
 [[ "$depth_source" == raw || "$depth_source" == aligned ]] || { echo "--depth-source must be raw or aligned" >&2; exit 2; }
 [[ "$frame_period" =~ ^[0-9]+([.][0-9]+)?$ && "$frame_period" != 0 ]] || { echo "Invalid --frame-period" >&2; exit 2; }
 [[ "$max_frames" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid --max-frames" >&2; exit 2; }
+
+if [[ "$detector_2d" == grounding_dino ]]; then
+  boxer_detector="grounding_dino"
+  detector_threshold="0.25"
+else
+  boxer_detector="owl"
+  detector_threshold="0.18"
+fi
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 STAGE2_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
@@ -195,11 +208,13 @@ else
   if [[ "$boxer_mode" == complete ]]; then
     "$BOXER_PY" "$ROOT/third_party/boxer/run_boxer.py" \
       --input "$EPISODE" --skip_n 1 --max_n 999 --labels="$LABELS" \
-      --thresh2d 0.18 --thresh3d 0.20 --skip_viz --fuse --resume --output_dir "$BOXER_OUT"
+      --detector "$boxer_detector" --thresh2d "$detector_threshold" \
+      --thresh3d 0.20 --skip_viz --fuse --resume --output_dir "$BOXER_OUT"
   else
     "$BOXER_PY" "$ROOT/third_party/boxer/run_boxer.py" \
       --input "$EPISODE" --skip_n 3 --max_n 999 --labels="$LABELS" \
-      --thresh2d 0.18 --thresh3d 0.20 --skip_viz --fuse --resume --output_dir "$BOXER_OUT"
+      --detector "$boxer_detector" --thresh2d "$detector_threshold" \
+      --thresh3d 0.20 --skip_viz --fuse --resume --output_dir "$BOXER_OUT"
   fi
 fi
 [[ -s "$BOXER_SCENE/boxer_3dbbs_fused.csv" || -s "$BOXER_SCENE/boxer_3dbbs.csv" ]] || {

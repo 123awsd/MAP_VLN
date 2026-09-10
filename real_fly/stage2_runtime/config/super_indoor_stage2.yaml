@@ -12,12 +12,15 @@ fsm:
 super_planner:
   backup_traj_en: true
   detailed_log_en: true
-  visualization_en: true
+  # The NX runs headless during flight; route preview is performed separately.
+  visualization_en: false
   use_fov_cut: false
   print_log: false
   visual_process: false
-  # The online planner may only connect goals through observed free space.
-  frontend_in_known_free: true
+  # The approved static occupied prior and live LiDAR remain authoritative.
+  # Requiring fully ray-observed free voxels deadlocks a freshly started 3-D
+  # map because the PCD provides occupied points, not a free-space volume.
+  frontend_in_known_free: false
   goal_yaw_en: true
   goal_vel_en: false
   corridor_bound_dis: 0.6
@@ -101,8 +104,10 @@ rog_map:
   resolution: 0.1
   inflation_resolution: 0.1
   inflation_step: 3
-  unk_inflation_en: true
-  unk_inflation_step: 2
+  # Match the senior real-flight profile: do not inflate unknown cells into a
+  # closed shell around the launch pose. Occupied cells remain inflated below.
+  unk_inflation_en: false
+  unk_inflation_step: 1
   map_size: [30, 30, 12]
   fix_map_origin: [0, 0, 0]
   frontier_extraction_en: false
@@ -124,7 +129,7 @@ rog_map:
     odom_topic: "/ekf_quat/ekf_odom"
     odom_timeout: 0.25
   visualization:
-    enable: true
+    enable: false
     use_dynamic_reconfigure: false
     time_rate: 2
     frame_rate: 0
@@ -132,6 +137,8 @@ rog_map:
     frame_id: "world"
     pub_unknown_map_en: false
   intensity_thresh: -10
+  # Preserve every live LiDAR point, matching the senior real-flight profile.
+  # The static occupied prior is independently voxelized by the launcher.
   point_filt_num: 1
   raycasting:
     enable: true
@@ -144,5 +151,6 @@ rog_map:
     p_occ: 0.85
     p_hit: 0.9
     p_max: 0.98
-    # Conservative unknown handling for initial indoor tests.
-    unk_thresh: 0.1
+    # Match the senior real-flight profile. Static-map occupied constraints,
+    # live LiDAR hits and the runtime launch-clearance gate remain active.
+    unk_thresh: 1.0

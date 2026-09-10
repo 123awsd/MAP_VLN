@@ -6,6 +6,7 @@ cache/
 checkpoints/*
 data/*
 logs/*
+/flight_logs/
 outputs/*
 runtime/bridge/*
 runtime/occusg/*

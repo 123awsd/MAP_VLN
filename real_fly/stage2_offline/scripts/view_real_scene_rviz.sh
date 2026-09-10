@@ -22,7 +22,7 @@ fi
 
 run_data="$stage2_dir/data/$run_id"
 mapping_bag="$run_data/fastlio_complete/mapping_outputs.bag"
-map_pcd="$run_data/fastlio_complete/handheld_map_${run_id}_complete.pcd"
+map_pcd="${RVIZ_MAP_PCD:-$run_data/fastlio_complete/handheld_map_${run_id}_complete.pcd}"
 # The canonical visualization is the native FAST-LIO PCD. The older
 # global_dense_map is retained for diagnostics and is not silently preferred.
 clusters="$run_data/localization/target_points_clustered.json"
@@ -61,6 +61,7 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 mission_rel="${mission#"$root/"}"
+voxel_snapshot="$run_data/voxel_snapshot"
 
 exec "${docker_cmd[@]}" run --rm --init --net host \
   -e DISPLAY="${DISPLAY:-:0}" \
@@ -70,6 +71,7 @@ exec "${docker_cmd[@]}" run --rm --init --net host \
   -e QT_X11_NO_MITSHM=1 \
   -e RVIZ_RUN_ID="$run_id" \
   -e RVIZ_MISSION="/workspace/project/$mission_rel" \
+  -e RVIZ_VOXEL_SNAPSHOT="/workspace/project/${voxel_snapshot#"$root/"}" \
   -e RVIZ_MIN_OBSERVATIONS="$min_observations" \
   -e RVIZ_MAP_PCD="/workspace/project/${map_pcd#"$root/"}" \
   -v "$root:/workspace/project" \
@@ -90,14 +92,19 @@ exec "${docker_cmd[@]}" run --rm --init --net host \
     trap "kill $master $publisher 2>/dev/null || true" EXIT INT TERM
     sleep 2
 
-    python3 /workspace/project/real_fly/stage2_offline/rviz/publish_drone_room_visualization.py \
+    publisher_args=( \
+      /workspace/project/real_fly/stage2_offline/rviz/publish_drone_room_visualization.py \
       "$RVIZ_MAP_PCD" \
       "/workspace/project/real_fly/stage2_offline/data/$RVIZ_RUN_ID/localization/target_points_clustered.json" \
       "/workspace/project/real_fly/stage2_offline/data/$RVIZ_RUN_ID/localization/target_points_raw.json" \
       "/workspace/project/real_fly/stage2_offline/data/$RVIZ_RUN_ID/boxer_complete/episode/boxer_3dbbs.csv" \
       "/workspace/project/real_fly/stage2_offline/data/$RVIZ_RUN_ID/fastlio_complete/trajectory.csv" \
       "$RVIZ_MISSION" \
-      "$RVIZ_MIN_OBSERVATIONS" \
+      "$RVIZ_MIN_OBSERVATIONS" )
+    if [[ -s "$RVIZ_VOXEL_SNAPSHOT/metadata.json" && -s "$RVIZ_VOXEL_SNAPSHOT/voxel_map.npz" ]]; then
+      publisher_args+=("$RVIZ_VOXEL_SNAPSHOT")
+    fi
+    python3 "${publisher_args[@]}" \
       >/tmp/real_scene_rviz_publisher.log 2>&1 &
     publisher=$!
 

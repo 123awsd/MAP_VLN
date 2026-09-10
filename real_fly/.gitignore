@@ -6,6 +6,7 @@ stage2_offline/data/*
 stage2_offline/third_party/
 stage2_runtime/runtime/
 stage2_runtime/missions/
+stage2_runtime/map_packages/
 **/__pycache__/
 calibration/third_party/
 calibration/ros_ws/

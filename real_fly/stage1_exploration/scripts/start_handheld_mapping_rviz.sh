@@ -11,8 +11,9 @@ senior-provided ekf_quat fusion node, the D435 RGB-D stream, and the checked-in
 RViz view. It never arms the aircraft or publishes motion commands.
 
 Close RViz or press Ctrl-C to stop only the processes started by this script.
-With --record, recording begins only after all requested streams and FAST-LIO
-are ready, and is stored below data/RUN_ID/raw/.
+With --record, raw recording starts before a fresh FAST-LIO initialization so
+offline replay contains the complete stationary pre-roll. Output is stored
+below data/RUN_ID/raw/.
 EOF
 }
 
@@ -80,16 +81,26 @@ source "$REALSENSE_PROFILE"
 [[ -x "$DLS_WS/devel/lib/livox_ros_driver2/livox_ros_driver2_node" ]] || { echo "Livox driver binary is missing." >&2; exit 1; }
 
 owned_pids=()
+record_pid=""
 cleanup() {
-  local pid
+  local pid priority_record_pid
   trap - EXIT INT TERM
   set +e
+  # Stop rosbag first so derived topics are finalized while their publishers
+  # are still alive. The same PID remains in owned_pids and is skipped below.
+  priority_record_pid="$record_pid"
+  if [[ -n "$priority_record_pid" ]]; then
+    kill -INT "$priority_record_pid" 2>/dev/null || true
+    wait "$priority_record_pid" 2>/dev/null || true
+  fi
   for ((idx=${#owned_pids[@]}-1; idx>=0; idx--)); do
     pid="${owned_pids[$idx]}"
+    [[ "$pid" == "$priority_record_pid" ]] && continue
     kill -INT "$pid" 2>/dev/null || true
   done
   for ((idx=${#owned_pids[@]}-1; idx>=0; idx--)); do
     pid="${owned_pids[$idx]}"
+    [[ "$pid" == "$priority_record_pid" ]] && continue
     wait "$pid" 2>/dev/null || true
   done
   echo "Stopped only this launch's child processes. Logs: $LOG_DIR"
@@ -222,13 +233,69 @@ if [[ "$with_camera" -eq 1 ]]; then
   "$SCRIPT_DIR/configure_realsense_rgb.sh"
 fi
 
-if node_exists /laserMapping; then
-  echo "Reusing /laserMapping"
-else
-  echo "Starting tuned Stage-1 FAST-LIO with FCU IMU and live map"
-  start_launch fastlio.log roslaunch stage1_fast_lio live_mapping.launch \
-    "map_name:=handheld_${RUN_STAMP}.pcd"
+if [[ -n "$record_run_id" ]]; then
+  # A formal recording must have a reproducible cold estimator start. Reusing
+  # either node would make the saved online state impossible to reconstruct
+  # from the beginning of the Bag.
+  if node_exists /laserMapping || node_exists /ekf_quat; then
+    echo "Refusing formal recording while /laserMapping or /ekf_quat already exists." >&2
+    echo "Stop the previous mapping launch, then run this command again." >&2
+    exit 2
+  fi
+
+  RECORD_DIR="$STAGE1_ROOT/data/$record_run_id"
+  [[ ! -e "$RECORD_DIR" ]] || {
+    echo "Refusing to overwrite existing run: $RECORD_DIR" >&2
+    exit 2
+  }
+  mkdir -p "$RECORD_DIR/raw"
+  cat >"$RECORD_DIR/manifest.txt" <<EOF
+run_id=$record_run_id
+started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+ros_master_uri=$ROS_MASTER_URI
+lidar=/livox/lidar
+mapping_imu=/mavros/imu/data
+rgb=/camera/color/image_raw
+depth=/camera/aligned_depth_to_color/image_raw
+depth_raw=/camera/depth/image_rect_raw
+rgb_profile=$REALSENSE_PROFILE
+rgb_auto_exposure=$REALSENSE_RGB_AUTO_EXPOSURE
+rgb_exposure=$REALSENSE_RGB_EXPOSURE
+odometry_raw=/Odometry
+odometry_ekf=/ekf_quat/ekf_odom
+registered_cloud=/cloud_registered
+EOF
+  echo "Starting raw recording before FAST-LIO initialization"
+  start_launch rosbag.log rosbag record --lz4 \
+    -O "$RECORD_DIR/raw/sensors.bag" \
+    /livox/lidar /livox/imu /mavros/imu/data \
+    /camera/color/image_raw /camera/depth/image_rect_raw \
+    /camera/aligned_depth_to_color/image_raw \
+    /camera/color/camera_info /camera/depth/camera_info \
+    /camera/aligned_depth_to_color/camera_info \
+    /camera/extrinsics/depth_to_color \
+    /tf /tf_static /Odometry /ekf_quat/ekf_odom /cloud_registered \
+    /rgb_coverage/frustums /rgb_coverage/camera_path \
+    /rgb_coverage/current_frustum /rgb_coverage/count
+  record_pid="${owned_pids[-1]}"
+  sleep 2
+  kill -0 "$record_pid" 2>/dev/null || {
+    echo "rosbag recorder exited; inspect $LOG_DIR/rosbag.log" >&2
+    exit 1
+  }
+  echo "RECORDING: $RECORD_DIR/raw/sensors.bag"
+  echo "Keep the rig stationary: capturing 8 seconds of raw initialization data."
+  sleep 8
 fi
+
+if node_exists /laserMapping; then
+  echo "Refusing to reuse /laserMapping because its active self-filter profile is unknown." >&2
+  echo "Stop the existing FAST-LIO process and run handheld mapping again." >&2
+  exit 1
+fi
+echo "Starting tuned Stage-1 FAST-LIO with handheld-only rear self filter"
+start_launch fastlio.log roslaunch stage1_fast_lio live_mapping.launch \
+  "map_name:=handheld_${RUN_STAMP}.pcd"
 wait_for_topic /cloud_registered "FAST-LIO registered cloud"
 
 # Use the senior-provided EKF as the downstream pose consumed by later
@@ -252,52 +319,12 @@ if [[ "$with_camera" -eq 1 ]]; then
   wait_for_topic /rgb_coverage/current_frustum "RGB current-view overlay"
 fi
 
-if [[ -n "$record_run_id" ]]; then
-  RECORD_DIR="$STAGE1_ROOT/data/$record_run_id"
-  [[ ! -e "$RECORD_DIR" ]] || {
-    echo "Refusing to overwrite existing run: $RECORD_DIR" >&2
-    exit 2
-  }
-  mkdir -p "$RECORD_DIR/raw"
-  cat >"$RECORD_DIR/manifest.txt" <<EOF
-run_id=$record_run_id
-started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-ros_master_uri=$ROS_MASTER_URI
-lidar=/livox/lidar
-mapping_imu=/mavros/imu/data
-rgb=/camera/color/image_raw
-depth=/camera/aligned_depth_to_color/image_raw
-depth_raw=/camera/depth/image_rect_raw
-rgb_profile=$REALSENSE_PROFILE
-rgb_auto_exposure=$REALSENSE_RGB_AUTO_EXPOSURE
-rgb_exposure=$REALSENSE_RGB_EXPOSURE
-odometry_raw=/Odometry
-odometry_ekf=/ekf_quat/ekf_odom
-registered_cloud=/cloud_registered
-EOF
-  echo "Recording synchronized raw sensors, RGB-D, raw FAST-LIO pose, EKF pose, TF and map outputs"
-  start_launch rosbag.log rosbag record --lz4 \
-    -O "$RECORD_DIR/raw/sensors.bag" \
-    /livox/lidar /livox/imu /mavros/imu/data \
-    /camera/color/image_raw /camera/depth/image_rect_raw \
-    /camera/aligned_depth_to_color/image_raw \
-    /camera/color/camera_info /camera/depth/camera_info \
-    /camera/aligned_depth_to_color/camera_info \
-    /camera/extrinsics/depth_to_color \
-    /tf /tf_static /Odometry /ekf_quat/ekf_odom /cloud_registered \
-    /rgb_coverage/frustums /rgb_coverage/camera_path \
-    /rgb_coverage/current_frustum /rgb_coverage/count
-  sleep 2
-  kill -0 "${owned_pids[-1]}" 2>/dev/null || {
-    echo "rosbag recorder exited; inspect $LOG_DIR/rosbag.log" >&2
-    exit 1
-  }
-  echo "RECORDING: $RECORD_DIR/raw/sensors.bag"
-fi
-
 echo
 echo "Mapping is ready. Keep the rig still for 5 seconds, then move slowly."
 echo "RViz: Fixed Frame=world, PointCloud2=/cloud_registered"
+echo "Starting read-only FAST-LIO coordinate display (/Odometry, 1 Hz)"
+python3 "$SCRIPT_DIR/monitor_handheld_pose.py" --topic /Odometry --rate-hz 1.0 &
+owned_pids+=("$!")
 
 if [[ "$with_rviz" -eq 1 ]]; then
   [[ -n "${DISPLAY:-}" ]] || { echo "DISPLAY is unset. Run this command inside a NoMachine terminal." >&2; exit 1; }

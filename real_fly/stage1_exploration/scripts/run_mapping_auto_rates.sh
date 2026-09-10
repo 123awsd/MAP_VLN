@@ -51,7 +51,11 @@ for rate in $rates; do
     echo "FAST-LIO completed at ${rate}x: $output_dir"
     exit 0
   fi
-  echo "Attempt ${rate}x did not meet complete-coverage checks; preserving diagnostics and trying slower playback." >&2
+  runtime_native_map="$runtime_root/PCD/scans.pcd"
+  if [[ -f "$runtime_native_map" && -d "$attempt_dir" ]]; then
+    mv "$runtime_native_map" "$attempt_dir/runtime_scans_after_failed_audit.pcd"
+  fi
+  echo "Attempt ${rate}x did not meet coverage/trajectory-consistency checks; preserving diagnostics and trying slower playback." >&2
 done
 
 echo "All FAST-LIO playback rates failed; diagnostics remain under $attempt_root" >&2

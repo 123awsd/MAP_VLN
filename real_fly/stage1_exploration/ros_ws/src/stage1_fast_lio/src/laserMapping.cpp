@@ -33,6 +33,7 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 #include <omp.h>
+#include <algorithm>
 #include <mutex>
 #include <math.h>
 #include <thread>
@@ -79,6 +80,13 @@ double match_time = 0, solve_time = 0, solve_const_H_time = 0;
 int    kdtree_size_st = 0, kdtree_size_end = 0, add_point_size = 0, kdtree_delete_counter = 0;
 bool   runtime_pos_log = false, pcd_save_en = false, time_sync_en = false, extrinsic_est_en = true, path_en = true;
 bool   lidar_bins_pub_en = true;
+bool   handheld_self_filter_en = false;
+double handheld_self_filter_min_range = 0.5;
+double handheld_self_filter_max_range = 1.5;
+double handheld_self_filter_rear_azimuth_deg = 0.0;
+double handheld_self_filter_half_angle_deg = 90.0;
+double handheld_self_filter_min_z = -1.6;
+double handheld_self_filter_max_z = 0.4;
 /**************************/
 
 float res_last[100000] = {0.0};
@@ -187,6 +195,35 @@ shared_ptr<ImuProcess> p_imu(new ImuProcess());
 
 // zyh added
 ros::Publisher pub_bin_image_, pub_rl_obs_;
+
+void apply_handheld_self_filter(PointCloudXYZI::Ptr &cloud)
+{
+    if (!handheld_self_filter_en || cloud->empty()) {
+        return;
+    }
+    const std::size_t before = cloud->points.size();
+    const double min_range_sq = handheld_self_filter_min_range * handheld_self_filter_min_range;
+    const double max_range_sq = handheld_self_filter_max_range * handheld_self_filter_max_range;
+    cloud->points.erase(
+        std::remove_if(cloud->points.begin(), cloud->points.end(),
+            [&](const PointType &point) {
+                const double range_sq = point.x * point.x + point.y * point.y + point.z * point.z;
+                if (range_sq < min_range_sq || range_sq > max_range_sq ||
+                    point.z < handheld_self_filter_min_z || point.z > handheld_self_filter_max_z) {
+                    return false;
+                }
+                const double azimuth_deg = std::atan2(point.y, point.x) * 180.0 / M_PI;
+                const double delta_deg = std::remainder(
+                    azimuth_deg - handheld_self_filter_rear_azimuth_deg, 360.0);
+                return std::abs(delta_deg) <= handheld_self_filter_half_angle_deg;
+            }),
+        cloud->points.end());
+    cloud->width = static_cast<std::uint32_t>(cloud->points.size());
+    cloud->height = 1;
+    const std::size_t removed = before - cloud->points.size();
+    ROS_INFO_THROTTLE(5.0,
+        "[handheld_self_filter] removed %zu/%zu points in rear body sector", removed, before);
+}
 
 int bin_horizons_, bin_verticals_, sample_res_;
 double fov_horizon_low_, fov_horizon_up_, fov_vertical_up_, fov_vertical_low_;
@@ -413,6 +450,7 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
 
     PointCloudXYZI::Ptr  ptr(new PointCloudXYZI());
     p_pre->process(msg, ptr);
+    apply_handheld_self_filter(ptr);
     lidar_buffer.push_back(ptr);
     time_buffer.push_back(msg->header.stamp.toSec());
     last_timestamp_lidar = msg->header.stamp.toSec();
@@ -453,6 +491,7 @@ void livox_pcl_cbk(const livox_ros_driver2::CustomMsg::ConstPtr &msg)
 
     PointCloudXYZI::Ptr  ptr(new PointCloudXYZI());
     p_pre->process(msg, ptr);
+    apply_handheld_self_filter(ptr);
     lidar_buffer.push_back(ptr);
     time_buffer.push_back(last_timestamp_lidar);
     
@@ -1089,6 +1128,13 @@ int main(int argc, char** argv)
     nh.param<double>("mapping/b_gyr_cov",b_gyr_cov,0.0001);
     nh.param<double>("mapping/b_acc_cov",b_acc_cov,0.0001);
     nh.param<double>("preprocess/blind", p_pre->blind, 0.01);
+    nh.param<bool>("preprocess/handheld_self_filter/enabled", handheld_self_filter_en, false);
+    nh.param<double>("preprocess/handheld_self_filter/min_range_m", handheld_self_filter_min_range, 0.5);
+    nh.param<double>("preprocess/handheld_self_filter/max_range_m", handheld_self_filter_max_range, 1.5);
+    nh.param<double>("preprocess/handheld_self_filter/rear_azimuth_deg", handheld_self_filter_rear_azimuth_deg, 0.0);
+    nh.param<double>("preprocess/handheld_self_filter/rear_half_angle_deg", handheld_self_filter_half_angle_deg, 90.0);
+    nh.param<double>("preprocess/handheld_self_filter/min_z_m", handheld_self_filter_min_z, -1.6);
+    nh.param<double>("preprocess/handheld_self_filter/max_z_m", handheld_self_filter_max_z, 0.4);
     nh.param<int>("preprocess/lidar_type", p_pre->lidar_type, AVIA);
     nh.param<int>("preprocess/scan_line", p_pre->N_SCANS, 16);
     nh.param<int>("preprocess/timestamp_unit", p_pre->time_unit, US);
@@ -1103,6 +1149,21 @@ int main(int argc, char** argv)
     nh.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
     nh.param<vector<double>>("wxx/Lidar_wrt_Body_T", Lidar_wrt_Body_T_vec, vector<double>());
     nh.param<vector<double>>("wxx/Lidar_wrt_Body_R", Lidar_wrt_Body_R_vec, vector<double>());
+    if (handheld_self_filter_min_range < p_pre->blind ||
+        handheld_self_filter_max_range <= handheld_self_filter_min_range ||
+        handheld_self_filter_half_angle_deg < 0.0 || handheld_self_filter_half_angle_deg > 180.0 ||
+        handheld_self_filter_max_z <= handheld_self_filter_min_z) {
+        ROS_FATAL("Invalid preprocess/handheld_self_filter bounds");
+        return 2;
+    }
+    if (handheld_self_filter_en) {
+        ROS_WARN("HANDHELD-ONLY self filter ENABLED: range=[%.2f, %.2f]m rear=%.1f+/-%.1fdeg z=[%.2f, %.2f]m",
+                 handheld_self_filter_min_range, handheld_self_filter_max_range,
+                 handheld_self_filter_rear_azimuth_deg, handheld_self_filter_half_angle_deg,
+                 handheld_self_filter_min_z, handheld_self_filter_max_z);
+    } else {
+        ROS_INFO("Handheld self filter disabled (full surroundings retained)");
+    }
     cout<<"p_pre->lidar_type "<<p_pre->lidar_type<<endl;
     
     // [wxx] map

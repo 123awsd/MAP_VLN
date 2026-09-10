@@ -6,6 +6,37 @@
 
 ## 一键运行
 
+### 每张真机地图的房间分割与人工确认
+
+完成 `run_real_scene_semantic.sh` 并用 RViz 选定适合当前地图的 Box 最小出现次数后，
+只需再运行一条命令。例如本图选择 3 次：
+
+```bash
+./real_fly/stage2_offline/scripts/review_and_approve_real_scene.sh \
+  --run-id "$RUN_ID" \
+  --min-observations 3 \
+  --room-max-z 2.0 \
+  --wall-min-count 100 \
+  --min-room-area 5.0
+```
+
+脚本直接从该 RUN 的最终 FAST-LIO PCD 提取墙体几何，再用 OccuSG 给出房间边界草案，
+最后打开人工编辑器。D435 RGB-D 只用于物体语义，不参与房间几何。单击选择房间，Shift+单击
+多选；可新建、修改、删除或合并多边形，填写房间名、允许的观察飞行 z 范围和相邻房间。若要拆分，
+删除原区域后绘制两个新区域即可；`Auto Adj` 可按门口距离重建相邻关系。按
+`Save Draft` 后会检查房间重叠、邻接连通、碰撞安全体素以及从
+`planning_start.json` 的可达性。
+
+校验通过后，先查看 `room_review_pcd/validation_preview.png`，再在终端输入完全一致的
+`APPROVE`。正式产物是每个 RUN 独立的 `approved_scene_graph.json`；未确认时只保留
+草稿，不会覆盖原 `scene_graph.json`。该流程不调用 Qwen 判断房间语义，Box 次数也
+不会写成全局固定参数。后续 `run_real_stage2_task.sh` 会自动优先使用已确认场景图。
+`--room-max-z` 和 `--wall-min-count` 同样是每张地图独立的审核参数；后者也可设为
+`auto`，使用当前 PCD 非空 XY 网格点数的第 95 百分位。
+
+只生成 OccuSG 草案而暂不打开编辑器时，可追加 `--prepare-only`。房间语义确认仍是
+离线地图审核，不代表授权解锁、起飞或执行轨迹。
+
 ### 真机阶段二：自然语言任务与安全预览
 
 完成语义地图并人工验收后，在主机离线生成任务图、观察位姿、三维路径、碰撞检查和
@@ -32,6 +63,11 @@ RViz 只读预览：
 ```bash
 ./real_fly/stage2_offline/scripts/view_real_scene_rviz.sh RUN_ID 1 TASK_ID
 ```
+
+预览会从当前 RUN 的 `voxel_snapshot` 同时显示两种规划空间：绿色半透明体素是经过
+安全膨胀后仍可通行的已观测空间，橙红色体素是原本为空闲、但因净空不足而被安全
+膨胀排除的空间。未知空间仍按不可通行处理但默认不绘制；两层均可在 RViz 左侧单独
+开关。它们只用于离线解释规划结果，不会发布飞控命令。
 
 未传 `--start` 时会复用自动选择的 `planning_start.json`，仅可预览，运行时适配器
 拒绝正式发送目标。当前执行包也只覆盖运动测试；真机在线目标检测、条件分支和
