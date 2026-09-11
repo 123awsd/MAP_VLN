@@ -78,6 +78,7 @@ fi
   --output-dir "$run_dir/execution" \
   --verification-mode "$verification_mode" \
   --max-candidates 3 --planning-horizon-tasks 2 \
+  --planning-strategy rolling_representative --representatives-per-location 1 \
   --owlv2-every 10 --save-every 5
 
 .envs/habitat/bin/python - "$run_dir/run_manifest.json" \

@@ -18,6 +18,8 @@ cd "$root_dir"
   --owlv2-every 5 \
   --owlv2-threshold 0.20 \
   --max-viewpoint-attempts 3 \
+  --planning-strategy rolling_representative \
+  --representatives-per-location 1 \
   --novel-object-min-support 2
 docker compose run --rm falcon \
   python3 /workspace/falcon_ws/src/pre_map_bridge/scripts/build_stage2_bag.py \

@@ -20,6 +20,8 @@ cd "$root_dir"
   --output-dir "$run_dir/habitat_demo" \
   --save-every 1 \
   --verification-mode qwen_vl \
+  --planning-strategy rolling_representative \
+  --representatives-per-location 1 \
   "${extra_args[@]}"
 docker compose run --rm falcon \
   python3 /workspace/falcon_ws/src/pre_map_bridge/scripts/build_stage2_bag.py \

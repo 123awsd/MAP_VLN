@@ -6,6 +6,7 @@ import numpy as np
 
 from stage2.grid_map import OccupancyGrid
 from stage2.lazy_representative_planner import LazyRepresentativePlanner
+from stage2.representative_viewpoints import select_location_representatives
 from stage2.viewpoint_recovery import ViewpointRecovery
 
 
@@ -63,6 +64,37 @@ class LazyRepresentativePlannerTest(unittest.TestCase):
         self.assertEqual(result["visits"][0]["task_id"], "inspect_a")
         self.assertEqual(result["visits"][0]["candidate_id"], "a_backup")
         self.assertEqual(result["lazy"]["mode"], "local_viewpoint_recovery")
+
+    def test_dynamic_geometric_prefilter_changes_the_lazy_representative(self):
+        graph = {
+            "tasks": [
+                {"id": "a", "active_initially": True, "prerequisites": []},
+            ]
+        }
+        current = [1.5, 2.5, 1.0, 0.0]
+        candidates = {
+            "a": [
+                candidate("best_view_but_far", 20.5, terminal=0.0),
+                candidate("slightly_worse_view_but_near", 4.5, terminal=0.25),
+            ]
+        }
+
+        fixed = LazyRepresentativePlanner(self.grid).plan_global(
+            graph, candidates, current,
+        )
+        dynamic_candidates = select_location_representatives(
+            candidates, current, {"a"}, maximum_per_location=1,
+        )
+        dynamic = LazyRepresentativePlanner(self.grid).plan_global(
+            graph, dynamic_candidates, current,
+        )
+
+        self.assertEqual(fixed["visits"][0]["candidate_id"], "best_view_but_far")
+        self.assertEqual(
+            dynamic["visits"][0]["candidate_id"],
+            "slightly_worse_view_but_near",
+        )
+        self.assertLess(dynamic["total_path_length_m"], fixed["total_path_length_m"])
 
     def test_completed_prerequisite_is_allowed(self):
         graph = {

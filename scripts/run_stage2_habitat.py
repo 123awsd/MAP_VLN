@@ -208,6 +208,13 @@ def main() -> None:
         help="maximum currently executable tasks in each rolling joint optimization",
     )
     parser.add_argument(
+        "--representatives-per-location", type=int, default=1,
+        help=(
+            "initial representative viewpoints retained per physical location "
+            "by rolling planning; unreachable plans fall back to two and then all"
+        ),
+    )
+    parser.add_argument(
         "--planning-strategy",
         choices=("rolling_representative", "lazy_representative"),
         default="rolling_representative",
@@ -245,6 +252,12 @@ def main() -> None:
     args = parser.parse_args()
     if (args.grid_prefix is None) == (args.voxel_snapshot is None):
         parser.error("provide exactly one of --grid-prefix or --voxel-snapshot")
+    if args.representatives_per_location < 1:
+        parser.error("--representatives-per-location must be at least 1")
+    representative_limit_sequence = [args.representatives_per_location]
+    if args.representatives_per_location < 2:
+        representative_limit_sequence.append(2)
+    representative_limit_sequence.append(None)
     use_3d = args.voxel_snapshot is not None
     minimum_pixels_by_task = {
         str(key): int(value) for key, value in json.loads(args.minimum_pixels_by_task).items()
@@ -500,7 +513,7 @@ def main() -> None:
                     # entry pose proves unreachable, lazily admit the second-ranked
                     # pose and finally the full pool as a correctness fallback.
                     plan = None
-                    for representative_limit in (1, 2, None):
+                    for representative_limit in representative_limit_sequence:
                         planning_input = (
                             planning_candidates
                             if representative_limit is None
@@ -1030,6 +1043,14 @@ def main() -> None:
         "scene": sim_cfg.scene_id,
         "planning_dimension": "3d" if use_3d else "2d",
         "planning_strategy": args.planning_strategy,
+        "planning_parameters": {
+            "horizon_tasks": args.planning_horizon_tasks,
+            "initial_representatives_per_location": args.representatives_per_location,
+            "representative_limit_sequence": [
+                "all" if value is None else value
+                for value in representative_limit_sequence
+            ],
+        },
         "planning_wall_s": planning_wall_s,
         "motion_cost_oracle": motion_counter(),
         "lazy_representative_planner": (

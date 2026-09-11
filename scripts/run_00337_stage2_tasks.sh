@@ -63,6 +63,8 @@ exec .envs/habitat/bin/python -u scripts/run_stage2_habitat.py \
   --verification-mode "$verification_mode" \
   --max-candidates 3 \
   --planning-horizon-tasks 2 \
+  --planning-strategy rolling_representative \
+  --representatives-per-location 1 \
   --owlv2-every 10 \
   --save-every 5 \
   "${extra_args[@]}" \

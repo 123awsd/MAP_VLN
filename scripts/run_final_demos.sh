@@ -31,6 +31,7 @@ for name in "${names[@]}"; do
     --task-graph "$run_dir/task_graph.json" --candidates "$run_dir/candidates.json" \
     --scene-graph "$scene_graph" --grid-prefix "$grid_prefix" \
     --output-dir "$run_dir/habitat_demo" --verification-mode semantic --save-every 1 \
+    --planning-strategy rolling_representative --representatives-per-location 1 \
     --max-viewpoint-attempts 3 --controlled-stale-object-ids "$stale" \
     --controlled-found-object-ids "$found" "${recovery_args[@]}"
   docker compose run --rm falcon \

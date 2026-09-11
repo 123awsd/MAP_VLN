@@ -31,6 +31,8 @@ mkdir -p "$run_dir"
   --grid-prefix runtime/occusg/hm3d_stage1_complete_v3_grid \
   --output-dir "$run_dir/habitat_demo" \
   --save-every 1 \
+  --planning-strategy rolling_representative \
+  --representatives-per-location 1 \
   --minimum-pixels-by-task '{"observe_living_room_tv":10000}'
 docker compose run --rm falcon \
   python3 /workspace/falcon_ws/src/pre_map_bridge/scripts/build_stage2_bag.py \
