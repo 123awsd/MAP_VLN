@@ -95,6 +95,11 @@ def parse_args() -> argparse.Namespace:
         help="Only render the depth-tested Habitat trajectory tube.",
     )
     parser.add_argument(
+        "--no-frustums",
+        action="store_true",
+        help="Hide observation view-cones while keeping the trajectory and markers.",
+    )
+    parser.add_argument(
         "--no-caption",
         action="store_true",
         help="Render without the title and exploration progress panel.",
@@ -487,7 +492,10 @@ def render(args: argparse.Namespace) -> None:
                     ],
                     dtype=np.float64,
                 ).reshape(-1, 3)
-                visible_frustums = [event["frustum"] for event in reached_events]
+                visible_frustums = (
+                    [] if args.no_frustums
+                    else [event["frustum"] for event in reached_events]
+                )
 
                 angle = 2.0 * math.pi * frame_index / args.frames
                 camera_position = target + np.asarray(
@@ -568,6 +576,7 @@ def render(args: argparse.Namespace) -> None:
         "task_marker_radius_px": args.task_marker_radius,
         "endpoint_marker_radius_px": args.endpoint_marker_radius,
         "observation_frustum_count": len(completion_events),
+        "frustums_hidden": bool(args.no_frustums),
         "frustum_depth_m": args.frustum_depth,
         "frustum_line_width_px": args.frustum_line_width,
         "observation_hfov_deg": args.observation_hfov,
