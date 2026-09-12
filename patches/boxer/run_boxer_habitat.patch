@@ -1,8 +1,208 @@
+diff --git a/owl/grounding_dino_wrapper.py b/owl/grounding_dino_wrapper.py
+new file mode 100644
+index 0000000..38ed8b4
+--- /dev/null
++++ b/owl/grounding_dino_wrapper.py
+@@ -0,0 +1,153 @@
++"""Grounding DINO adapter with the same interface as OwlWrapper.
++
++The Boxer pipeline expects boxes in ``x1, x2, y1, y2`` order and labels as
++strings.  Keeping that interface lets Grounding DINO replace only the 2-D
++proposal stage; BoxerNet and the downstream 3-D fusion remain unchanged.
++"""
++
++from __future__ import annotations
++
++import os
++
++import torch
++from PIL import Image
++from transformers import GroundingDinoForObjectDetection, GroundingDinoProcessor
++from torchvision.ops import nms
++
++
++class GroundingDinoWrapper:
++    def __init__(
++        self,
++        device="cuda",
++        text_prompts=None,
++        min_confidence=0.25,
++        text_threshold=0.20,
++        model_name=None,
++        prompt_batch_size=24,
++        use_sam2=False,
++        sam2_model_name=None,
++        sam2_mask_threshold=0.0,
++    ):
++        self.device = torch.device(device if device != "mps" else "cpu")
++        self.prompts = [str(item).strip().lower().rstrip(".") for item in (text_prompts or [])]
++        self.prompts = [item for item in self.prompts if item]
++        if not self.prompts:
++            raise ValueError("Grounding DINO requires at least one text prompt")
++        self.min_confidence = float(min_confidence)
++        self.text_threshold = float(text_threshold)
++        self.nms_iou = float(os.environ.get("PRE_MAP_VLN_GROUNDING_DINO_NMS_IOU", "0.50"))
++        self.cross_label_nms_iou = float(
++            os.environ.get("PRE_MAP_VLN_GROUNDING_DINO_CROSS_NMS_IOU", "0.90")
++        )
++        self.max_detections = int(
++            os.environ.get("PRE_MAP_VLN_GROUNDING_DINO_MAX_DETECTIONS", "64")
++        )
++        self.last_detections = []
++        self.prompt_batch_size = int(
++            os.environ.get("PRE_MAP_VLN_GROUNDING_DINO_PROMPT_BATCH_SIZE", prompt_batch_size)
++        )
++        if self.prompt_batch_size <= 0:
++            raise ValueError("Grounding DINO prompt batch size must be positive")
++        model_name = model_name or os.environ.get(
++            "PRE_MAP_VLN_GROUNDING_DINO_MODEL",
++            "IDEA-Research/grounding-dino-base",
++        )
++        print(f"==> Loading Grounding DINO: {model_name} on {self.device}", flush=True)
++        self.processor = GroundingDinoProcessor.from_pretrained(model_name)
++        self.model = GroundingDinoForObjectDetection.from_pretrained(model_name).to(self.device)
++        self.model.eval()
++        self.segmenter = None
++        if use_sam2:
++            from sam2_box_segmenter import Sam2BoxSegmenter
++
++            self.segmenter = Sam2BoxSegmenter(
++                device=self.device,
++                model_name=sam2_model_name,
++                mask_threshold=sam2_mask_threshold,
++            )
++
++    @torch.inference_mode()
++    def forward(self, image_torch, resize_to_HW=None):
++        if image_torch.ndim != 4 or image_torch.shape[0] != 1:
++            raise ValueError("input image should have shape [1, 3, H, W]")
++        image = image_torch[0].detach().clamp(0, 255).byte().permute(1, 2, 0).cpu().numpy()
++        pil_image = Image.fromarray(image, mode="RGB")
++        boxes = []
++        scores = []
++        labels = []
++        target_sizes = torch.tensor([pil_image.size[::-1]], device=self.device)
++        for start in range(0, len(self.prompts), self.prompt_batch_size):
++            prompt_batch = self.prompts[start : start + self.prompt_batch_size]
++            inputs = self.processor(
++                images=pil_image,
++                text=[prompt_batch],
++                return_tensors="pt",
++            )
++            inputs = {
++                key: value.to(self.device) if hasattr(value, "to") else value
++                for key, value in inputs.items()
++            }
++            if inputs["input_ids"].shape[-1] > self.model.config.max_text_len:
++                raise ValueError(
++                    "Grounding DINO prompt batch exceeds the model text limit; "
++                    "reduce PRE_MAP_VLN_GROUNDING_DINO_PROMPT_BATCH_SIZE"
++                )
++            outputs = self.model(**inputs)
++            result = self.processor.post_process_grounded_object_detection(
++                outputs,
++                inputs["input_ids"],
++                threshold=self.min_confidence,
++                text_threshold=self.text_threshold,
++                target_sizes=target_sizes,
++            )[0]
++            for box, score, label in zip(result["boxes"], result["scores"], result["text_labels"]):
++                x1, y1, x2, y2 = box.detach().cpu().tolist()
++                width = x2 - x1
++                height = y2 - y1
++                if width <= 0 or height <= 0:
++                    continue
++                if width > 0.95 * pil_image.width or height > 0.95 * pil_image.height:
++                    continue
++                boxes.append([x1, x2, y1, y2])
++                scores.append(float(score))
++                labels.append(str(label).strip().lower().rstrip("."))
++        if not boxes:
++            self.last_detections = []
++            return torch.zeros((0, 4)), torch.zeros(0), torch.zeros(0, dtype=torch.long), None
++        # Suppress repeated proposals produced within and across prompt batches.
++        standard_boxes = torch.tensor(
++            [[box[0], box[2], box[1], box[3]] for box in boxes], dtype=torch.float32
++        )
++        score_tensor = torch.tensor(scores, dtype=torch.float32)
++        kept = []
++        for label in dict.fromkeys(labels):
++            indices = torch.tensor([i for i, item in enumerate(labels) if item == label])
++            local = nms(standard_boxes[indices], score_tensor[indices], self.nms_iou)
++            kept.extend(indices[local].tolist())
++        kept_tensor = torch.tensor(kept, dtype=torch.long)
++        cross_kept = nms(
++            standard_boxes[kept_tensor], score_tensor[kept_tensor], self.cross_label_nms_iou
++        )
++        kept = kept_tensor[cross_kept].tolist()
++        kept.sort(key=lambda index: scores[index], reverse=True)
++        kept = kept[: self.max_detections]
++        boxes = [boxes[index] for index in kept]
++        scores = [scores[index] for index in kept]
++        labels = [labels[index] for index in kept]
++        self.last_detections = [
++            {
++                "label": label,
++                "score": float(score),
++                "bbox_xyxy": [float(box[0]), float(box[2]), float(box[1]), float(box[3])],
++            }
++            for box, score, label in zip(boxes, scores, labels)
++        ]
++        label_indices = torch.tensor(
++            [self.prompts.index(label) if label in self.prompts else 0 for label in labels],
++            dtype=torch.long,
++        )
++        masks = None
++        if self.segmenter is not None:
++            boxes_xyxy = [[box[0], box[2], box[1], box[3]] for box in boxes]
++            masks = self.segmenter.segment(pil_image, boxes_xyxy)
++        return torch.tensor(boxes, dtype=torch.float32), torch.tensor(scores), label_indices, masks
 diff --git a/run_boxer.py b/run_boxer.py
+index 2043760..79bdb4b 100644
 --- a/run_boxer.py
 +++ b/run_boxer.py
-@@ -137,7 +137,10 @@ def main():
- 
+@@ -6,6 +6,8 @@
+
+ # pyre-unsafe
+ import argparse
++import atexit
++import json
+ import os
+ import re
+ import time
+@@ -96,7 +98,11 @@ def main():
+     parser.add_argument("--max_n", type=int, default=99999, help="run for max n frames")
+     parser.add_argument("--pinhole", action="store_true", help="rectify to pinhole")
+     parser.add_argument("--camera", type=str, default="rgb", choices=["rgb", "slaml", "slamr"], help="camera to use (default: rgb)")
+-    parser.add_argument("--detector", type=str, default="owl", choices=["owl"], help="2D detector to use (default: owl)")
++    parser.add_argument("--detector", type=str, default="owl", choices=["owl", "grounding_dino"], help="2D detector to use")
++    parser.add_argument("--sam2", action="store_true", help="use SAM2 box masks to remove background depth before BoxerNet")
++    parser.add_argument("--sam2_model", type=str, default=None, help="Hugging Face SAM2 model (defaults to facebook/sam2.1-hiera-large)")
++    parser.add_argument("--sam2_mask_threshold", type=float, default=0.0, help="SAM2 mask-logit threshold")
++    parser.add_argument("--sam2_depth_dilation", type=int, default=2, help="foreground mask dilation in pixels before depth filtering")
+     parser.add_argument("--thresh2d", type=float, default=0.25, help="detection confidence for 2d detector")
+     parser.add_argument("--thresh3d", type=float, default=0.5, help="detection confidence for boxer")
+     parser.add_argument("--labels", type=comma_separated_list, nargs="?", const=[], default=["lvisplus"], help="Optional comma-separated list of text prompts (e.g. --labels=small or --labels=chair,table,lamp)")
+@@ -114,10 +120,16 @@ def main():
+     parser.add_argument("--ckpt", type=str, default=os.path.join(CKPT_PATH, DEFAULT_BOXERNET_CKPT), help="path to BoxerNet checkpoint")
+     parser.add_argument("--force_precision", type=str, default=None, choices=["float32", "bfloat16"], help="Override auto-detected inference precision")
+     parser.add_argument("--output_dir", type=str, default=EVAL_PATH, help="Output directory for results (default: output/)")
++    parser.add_argument("--resume", action="store_true", help="resume using the per-frame processing manifest")
++    parser.add_argument("--processing_manifest", type=str, default=None, help="optional processing manifest path")
+     args = parser.parse_args()
+
+     if args.fuse and args.track:
+         parser.error("--fuse and --track are mutually exclusive")
++    if args.sam2 and args.detector != "grounding_dino":
++        parser.error("--sam2 currently requires --detector grounding_dino")
++    if args.sam2_depth_dilation < 0:
++        parser.error("--sam2_depth_dilation must be non-negative")
+     if args.cache3d:
+         args.cache2d = True
+     args.viz_headless = not args.skip_viz
+@@ -140,7 +152,10 @@ def main():
+         _t_prev = now
+
      # Determine dataset type and seq_name from input string
 -    if bool(re.search(r"scene\d{4}_\d{2}", args.input)) or "/scannet/" in args.input:
 +    if os.path.isfile(os.path.join(args.input, "manifest.json")):
@@ -11,9 +211,22 @@ diff --git a/run_boxer.py b/run_boxer.py
 +    elif bool(re.search(r"scene\d{4}_\d{2}", args.input)) or "/scannet/" in args.input:
          dataset_type = "scannet"
          seq_name = os.path.basename(args.input.rstrip("/"))
-@@ -205,7 +208,11 @@ def main():
+     elif args.input in OMNI3D_DATASETS:
+@@ -168,6 +183,11 @@ def main():
+     os.makedirs(log_dir, exist_ok=True)
+     csv_path = os.path.join(log_dir, f"{args.write_name}_3dbbs.csv")
+     csv2d_out_path = os.path.join(log_dir, "owl_2dbbs.csv")
++    processing_manifest_path = args.processing_manifest or os.path.join(
++        log_dir, "processing_manifest.json"
++    )
++    if not args.resume and not args.cache2d and os.path.exists(csv2d_out_path):
++        os.remove(csv2d_out_path)
+     print(f"==> Created output folder {log_dir}")
+     _dbg("setup")
+
+@@ -195,7 +215,11 @@ def main():
          return
- 
+
      # Create data loader
 -    if dataset_type == "scannet":
 +    if dataset_type == "habitat":
@@ -22,3 +235,412 @@ diff --git a/run_boxer.py b/run_boxer.py
 +                               skip_frames=args.skip_n, max_frames=args.max_n)
 +    elif dataset_type == "scannet":
          loader = ScanNetLoader(
+             scene_dir=args.input,
+             annotation_path=os.path.join(
+@@ -261,6 +285,145 @@ def main():
+         device = "cpu"
+     print(f"==> Using device {device}")
+
++    if args.resume and os.path.isfile(processing_manifest_path):
++        with open(processing_manifest_path, "r", encoding="utf-8") as stream:
++            processing_manifest = json.load(stream)
++    else:
++        processing_manifest = {
++            "format": "boxer.processing_manifest.v1",
++            "input": os.path.abspath(args.input),
++            "frames": {},
++            "runs": [],
++        }
++    processing_manifest.setdefault("frames", {})
++    processing_manifest.setdefault("runs", [])
++    if args.resume and processing_manifest["frames"]:
++        # Manifests created before detector tracking always used OWLv2.
++        previous_detector = processing_manifest.get("detector", "owl")
++        if previous_detector != args.detector:
++            raise RuntimeError(
++                f"cannot resume {previous_detector} detections with {args.detector}; "
++                "use a fresh output directory"
++            )
++    processed_timestamps = {
++        int(value["time_ns"])
++        for value in processing_manifest["frames"].values()
++        if value.get("status") in ("success", "skipped")
++        and value.get("time_ns") is not None
++    }
++    processing_manifest.update(
++        {
++            "status": "running",
++            "device": device,
++            "cuda_available": bool(torch.cuda.is_available()),
++            "detector": args.detector,
++            "detector_model": (
++                os.environ.get(
++                    "PRE_MAP_VLN_GROUNDING_DINO_MODEL",
++                    "IDEA-Research/grounding-dino-base",
++                )
++                if args.detector == "grounding_dino" else "OWLv2"
++            ),
++            "detection_contract": ["label", "score", "bbox_xyxy"],
++            "sam2_enabled": bool(args.sam2),
++            "sam2_model": args.sam2_model or os.environ.get(
++                "PRE_MAP_VLN_SAM2_MODEL", "facebook/sam2.1-hiera-large"
++            ) if args.sam2 else None,
++            "total_input_frames": len(loader),
++            "updated_unix_sec": time.time(),
++        }
++    )
++    processing_manifest["runs"].append(
++        {"started_unix_sec": time.time(), "resume": bool(args.resume)}
++    )
++
++    def save_processing_manifest():
++        counts = {"success": 0, "failed": 0, "skipped": 0}
++        detection_2d_count = 0
++        detection_3d_count = 0
++        sam2_valid_masks = 0
++        sam2_removed_depth = 0
++        sam2_box_depth = 0
++        sam2_retained_box_depth = 0
++        for value in processing_manifest["frames"].values():
++            status = value.get("status")
++            if status in counts:
++                counts[status] += 1
++            detection_2d_count += int(value.get("detections_2d", 0))
++            detection_3d_count += int(value.get("detections_3d", 0))
++            sam2 = value.get("sam2_depth") or {}
++            sam2_valid_masks += int(sam2.get("valid_masks", 0))
++            sam2_removed_depth += int(sam2.get("removed_background_depth", 0))
++            sam2_box_depth += int(sam2.get("box_depth_pixels", 0))
++            sam2_retained_box_depth += round(
++                float(sam2.get("box_depth_retention", 1.0))
++                * int(sam2.get("box_depth_pixels", 0))
++            )
++        processing_manifest["summary"] = {
++            **counts,
++            "detections_2d": detection_2d_count,
++            "detections_3d": detection_3d_count,
++        }
++        if processing_manifest.get("sam2_enabled"):
++            processing_manifest["summary"]["sam2_depth"] = {
++                "valid_masks": sam2_valid_masks,
++                "removed_background_depth": sam2_removed_depth,
++                "box_depth_pixels": sam2_box_depth,
++                "box_depth_retention": (
++                    1.0 if sam2_box_depth == 0
++                    else sam2_retained_box_depth / sam2_box_depth
++                ),
++            }
++        processing_manifest["updated_unix_sec"] = time.time()
++        temporary = processing_manifest_path + ".tmp"
++        with open(temporary, "w", encoding="utf-8") as stream:
++            json.dump(processing_manifest, stream, indent=2, sort_keys=True)
++            stream.write("\n")
++        os.replace(temporary, processing_manifest_path)
++
++    def record_frame(
++        frame_index,
++        time_ns,
++        status,
++        detections_2d=0,
++        detections_3d=0,
++        reason=None,
++        sam2_depth=None,
++    ):
++        key = str(time_ns) if time_ns is not None else f"index:{frame_index}"
++        value = {
++            "frame_index": int(frame_index),
++            "time_ns": int(time_ns) if time_ns is not None else None,
++            "status": status,
++            "detections_2d": int(detections_2d),
++            "detections_3d": int(detections_3d),
++        }
++        if reason:
++            value["reason"] = reason
++        if sam2_depth is not None:
++            value["sam2_depth"] = sam2_depth
++        processing_manifest["frames"][key] = value
++        save_processing_manifest()
++
++    current_frame = {"index": None, "time_ns": None}
++    run_completed = {"value": False}
++
++    def record_interrupted_run():
++        if run_completed["value"]:
++            return
++        if current_frame["index"] is not None:
++            record_frame(
++                current_frame["index"],
++                current_frame["time_ns"],
++                "failed",
++                reason="process_terminated_before_frame_completion",
++            )
++        processing_manifest["status"] = "interrupted"
++        save_processing_manifest()
++
++    atexit.register(record_interrupted_run)
++    save_processing_manifest()
++
+     # Load text labels if they match special strings.
+     text_labels = load_text_labels(args.labels)
+     # Track taxonomy name for visualization
+@@ -285,15 +448,29 @@ def main():
+     elif args.gt2d:
+         method = "GT2D"
+     else:
+-        from owl.owl_wrapper import OwlWrapper
++        if args.detector == "grounding_dino":
++            from owl.grounding_dino_wrapper import GroundingDinoWrapper
++
++            owl = GroundingDinoWrapper(
++                device,
++                text_prompts=text_labels,
++                min_confidence=args.thresh2d,
++                text_threshold=float(os.environ.get("PRE_MAP_VLN_GROUNDING_DINO_TEXT_THRESHOLD", "0.20")),
++                use_sam2=args.sam2,
++                sam2_model_name=args.sam2_model,
++                sam2_mask_threshold=args.sam2_mask_threshold,
++            )
++            method = "GroundingDINO"
++        else:
++            from owl.owl_wrapper import OwlWrapper
+
+-        owl = OwlWrapper(
+-            device,
+-            text_prompts=text_labels,
+-            min_confidence=args.thresh2d,
+-            precision=args.force_precision,
+-        )
+-        method = "OWLv2"
++            owl = OwlWrapper(
++                device,
++                text_prompts=text_labels,
++                min_confidence=args.thresh2d,
++                precision=args.force_precision,
++            )
++            method = "OWLv2"
+     _dbg("owl")
+
+     boxernet = BoxerNet.load_from_checkpoint(args.ckpt, device=device)
+@@ -317,9 +494,13 @@ def main():
+
+     video_dir = os.path.join(log_dir, f"{args.write_name}_viz")
+     if args.viz_headless:
+-        safe_delete_folder(
+-            video_dir, extensions=[".jpg", ".png"], keep_folder=True, recursive=True
+-        )
++        if not args.resume:
++            safe_delete_folder(
++                video_dir,
++                extensions=[".jpg", ".png"],
++                keep_folder=True,
++                recursive=True,
++            )
+         os.makedirs(video_dir, exist_ok=True)
+         print(
+             f"==> Current frame: {os.path.join(log_dir, f'{args.write_name}_viz_current.jpg')}"
+@@ -341,7 +522,7 @@ def main():
+         sem_name_to_id = {label: i for i, label in enumerate(text_labels)}
+         sem_id_to_name = {v: k for k, v in sem_name_to_id.items()}
+
+-    writer = None if args.no_csv else ObbCsvWriter2(csv_path)
++    writer = None if args.no_csv else ObbCsvWriter2(csv_path, append=args.resume)
+
+     tracker = None
+     if args.track:
+@@ -378,6 +559,10 @@ def main():
+     _dbg("ready")
+
+     for ii in pbar:
++        current_frame["index"] = ii
++        current_frame["time_ns"] = None
++        sam2_depth_stats = None
++        masks2d = None
+         # Data loading
+         timer.start("load")
+         if DEBUG_VIZ:
+@@ -389,6 +574,15 @@ def main():
+
+         if datum is False:
+             pbar.set_postfix_str("Skipped (time misalignment)")
++            record_frame(ii, None, "skipped", reason="loader_time_misalignment")
++            current_frame["index"] = None
++            continue
++
++        time_ns = int(datum["time_ns0"])
++        current_frame["time_ns"] = time_ns
++        if args.resume and time_ns in processed_timestamps:
++            pbar.set_postfix_str("Already complete (resume)")
++            current_frame["index"] = None
+             continue
+
+         if DEBUG_VIZ:
+@@ -451,7 +645,8 @@ def main():
+                 )
+                 if args.viz_headless:
+                     write_empty_frame(img_np, HH, WW, ii)
+-
++                record_frame(ii, time_ns, "success")
++                current_frame["index"] = None
+                 continue
+
+             # Use pre-computed 2D bounding boxes (CA-1M, Omni3D, or SST)
+@@ -473,23 +668,45 @@ def main():
+                 )
+                 if args.viz_headless:
+                     write_empty_frame(img_np, HH, WW, ii)
++                record_frame(ii, time_ns, "success")
++                current_frame["index"] = None
+                 continue
+
+             scores2d = 0.5 * torch.ones(bb2d.shape[0])
+         else:
+             img_torch_255 = img_torch.clone() * 255.0
+-            bb2d, scores2d, label_ints, _ = owl.forward(
++            bb2d, scores2d, label_ints, masks2d = owl.forward(
+                 img_torch_255,
+                 resize_to_HW=(args.detector_hw, args.detector_hw),
+             )
+             labels2d = [text_labels[label_int] for label_int in label_ints]
+
++            sam2_depth_stats = None
++            if masks2d is not None:
++                if "depth0" not in datum or "depth_projection" not in datum:
++                    raise RuntimeError("SAM2 depth filtering currently requires the Habitat RGB-D loader")
++                from sam2_depth_filter import filter_box_background_depth
++
++                filtered_depth, sam2_depth_stats = filter_box_background_depth(
++                    datum["depth0"], bb2d, masks2d,
++                    dilation_pixels=args.sam2_depth_dilation,
++                )
++                projection = datum["depth_projection"]
++                datum["sdp_w"] = loader.sdp_from_depth(
++                    filtered_depth,
++                    projection["fx"], projection["fy"],
++                    projection["cx"], projection["cy"],
++                    projection["rotation"], projection["position"],
++                )
++
+         t_owl = timer.stop("owl")
+
+         if bb2d.shape[0] == 0:
+             pbar.set_postfix_str(f"0 dets | load:{t_load:.0f}ms owl:{t_owl:.0f}ms")
+             if args.viz_headless:
+                 write_empty_frame(img_np, HH, WW, ii)
++            record_frame(ii, time_ns, "success")
++            current_frame["index"] = None
+             continue
+
+         # 3D BoxerNet
+@@ -548,28 +765,28 @@ def main():
+
+         # Visualization (includes writing CSV and images)
+         timer.start("csv")
+-        time_ns = int(datum["time_ns0"])
+         if writer is not None:
+             writer.write(obb_pr_w, time_ns, sem_id_to_name=sem_id_to_name)
+
+             # Convert bb2d from boxer format (x1, x2, y1, y2) to standard (x1, y1, x2, y2)
+             bb2d_xyxy = bb2d[:, [0, 2, 1, 3]]
+-            save_bb2d_csv(
+-                csv2d_out_path,
+-                frame_id=ii,
+-                bb2d=bb2d_xyxy,
+-                scores=scores2d,
+-                labels=labels2d,
+-                sem_name_to_id=sem_name_to_id,
+-                append=(ii > 0),
+-                time_ns=time_ns,
+-                img_width=WW,
+-                img_height=HH,
+-                sensor=loader.camera if hasattr(loader, "camera") else "unknown",
+-                device=loader.device_name
+-                if hasattr(loader, "device_name")
+-                else "unknown",
+-            )
++            if not args.cache2d:
++                save_bb2d_csv(
++                    csv2d_out_path,
++                    frame_id=ii,
++                    bb2d=bb2d_xyxy,
++                    scores=scores2d,
++                    labels=labels2d,
++                    sem_name_to_id=sem_name_to_id,
++                    append=os.path.exists(csv2d_out_path),
++                    time_ns=time_ns,
++                    img_width=WW,
++                    img_height=HH,
++                    sensor=loader.camera if hasattr(loader, "camera") else "unknown",
++                    device=loader.device_name
++                    if hasattr(loader, "device_name")
++                    else "unknown",
++                )
+         t_csv = timer.stop("csv")
+
+         active_tracks = None
+@@ -595,6 +812,16 @@ def main():
+
+             viz_2d = img_np.copy()
+
++            if masks2d is not None:
++                for mask, label in zip(masks2d, labels2d):
++                    mask_bool = np.asarray(mask, dtype=bool)
++                    color = np.asarray(colors[label], dtype=np.float32)
++                    viz_2d[mask_bool] = np.clip(
++                        0.55 * viz_2d[mask_bool].astype(np.float32) + 0.45 * color,
++                        0,
++                        255,
++                    ).astype(np.uint8)
++
+             viz_2d = render_bb2(
+                 viz_2d,
+                 bb2d,
+@@ -760,6 +987,11 @@ def main():
+         if args.viz_headless:
+             timing_str += f" viz:{t_viz:.0f}ms"
+         pbar.set_postfix_str(f"{len(bb2d)} 2D, {obb_pr_w.shape[0]} 3D | " + timing_str)
++        record_frame(
++            ii, time_ns, "success", len(bb2d), obb_pr_w.shape[0],
++            sam2_depth=sam2_depth_stats,
++        )
++        current_frame["index"] = None
+
+     if writer is not None:
+         writer.close()
+@@ -780,13 +1012,18 @@ def main():
+         else:
+             fps = 10  # fallback
+
+-        make_mp4(
+-            video_dir,
+-            fps,
+-            output_dir=log_dir,
+-            image_glob=f"{args.write_name}_viz_*.jpg",
+-            output_name=f"{args.write_name}_viz_final.mp4",
+-        )
++        try:
++            make_mp4(
++                video_dir,
++                fps,
++                output_dir=log_dir,
++                image_glob=f"{args.write_name}_viz_*.jpg",
++                output_name=f"{args.write_name}_viz_final.mp4",
++            )
++        except OSError as error:
++            # Keep completed image artifacts usable on headless hosts without
++            # forcing ffmpeg into the Boxer environment.
++            print(f"==> Warning: skipped MP4 generation: {error}")
+
+     if args.fuse:
+         from utils.fuse_3d_boxes import fuse_obbs_from_csv
+@@ -819,6 +1056,11 @@ def main():
+             track_writer.close()
+             print(f"==> Saved {len(active_tracks)} tracked OBBs to {track_output_path}")
+
++    processing_manifest["status"] = "completed"
++    processing_manifest["runs"][-1]["completed_unix_sec"] = time.time()
++    run_completed["value"] = True
++    save_processing_manifest()
++
+
+ if __name__ == "__main__":
+     main()

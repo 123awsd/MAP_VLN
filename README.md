@@ -328,6 +328,29 @@ BAG=outputs/bags/hm3d_stage1_3d_00337_<run-name>_compact.bag
   indoor_v2
 ~~~
 
+该入口默认使用准确率优先的 `Grounding DINO + SAM2.1 Hiera Large`：DINO
+输出仍保持 `label + score + bbox_xyxy`，SAM2 仅删除检测框内的背景深度，框外
+场景深度保持不变，再由原 BoxerNet 预测 3D OBB 并执行原有跨帧融合。完整位置参数为：
+
+~~~text
+run_boxer_habitat.sh EPISODE OUTPUT VOCAB WRITE_NAME DETECTOR MASK MAX_FRAMES SKIP_FRAMES VISUALIZE THRESHOLD
+~~~
+
+例如均匀抽取 40 帧并保存 mask 叠加诊断图：
+
+~~~bash
+PRE_MAP_VLN_GROUNDING_DINO_MODEL=IDEA-Research/grounding-dino-base \
+./scripts/run_boxer_habitat.sh \
+  "$RUN/episode" outputs/boxer/00337_grounded_sam2 \
+  config/stage1_indoor_v2.txt grounded_sam2 \
+  grounding_dino sam2 40 8 true 0.30
+~~~
+
+兼容旧 OWLv2 的显式配置为 `owl none`。SAM2 mask 为空时采用 fail-open，保留
+原始深度，避免一次分割失败擦除整块目标。`processing_manifest.json` 会记录每帧
+mask 数、删除的背景深度像素和框内深度保留率。宽词表的最佳阈值依赖场景，正式
+实验应在独立验证集标定，不能使用待报告测试场景调阈值。
+
 最后用一个通用入口完成 1–3 层房间准备、纯几何墙提取、跨层通道、Qwen 房间语义、全局 scene graph 和 FALCON voxel 快照：
 
 ~~~bash

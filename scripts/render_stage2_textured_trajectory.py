@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 from pathlib import Path
 
 import cv2
@@ -14,6 +15,9 @@ import imageio.v2 as imageio
 import magnum as mn
 import numpy as np
 from PIL import Image
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from stage2.runtime_objects import add_runtime_objects
 
 
 S_HABITAT_TO_FALCON = np.asarray(
@@ -79,6 +83,7 @@ def parse_args() -> argparse.Namespace:
         help="Show the full trajectory for the entire orbit instead of revealing it.",
     )
     parser.add_argument("--gpu-device-id", type=int, default=0)
+    parser.add_argument("--runtime-objects", type=Path)
     parser.add_argument(
         "--background",
         choices=sorted(BACKGROUND_COLORS),
@@ -408,6 +413,10 @@ def render(args: argparse.Namespace) -> None:
     agent_cfg.sensor_specifications = [sensor_spec]
 
     with habitat_sim.Simulator(habitat_sim.Configuration(sim_cfg, [agent_cfg])) as sim:
+        add_runtime_objects(
+            sim, args.runtime_objects,
+            np.asarray(generated.get("initial_sensor_habitat_xyz", generated["initial_agent_habitat_xyz"]), dtype=np.float64),
+        )
         scene_bb = sim.get_active_scene_graph().get_root_node().cumulative_bb
         scene_center = np.asarray(scene_bb.center(), dtype=np.float64)
         scene_size = np.asarray(scene_bb.size(), dtype=np.float64)

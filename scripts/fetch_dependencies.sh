@@ -28,6 +28,15 @@ clone_at_commit() {
 
 clone_at_commit FALCON https://github.com/HKUST-Aerial-Robotics/FALCON.git 312eb4d32c6c7af1a482f94a0a204aa2bb150cca
 clone_at_commit boxer https://github.com/facebookresearch/boxer.git 1f86542dc342a4b1d474c87c97c5d1d6566d9148
+boxer_patch="$project_root/patches/boxer/run_boxer_habitat.patch"
+if git -C "$third_party_dir/boxer" apply --reverse --check "$boxer_patch" 2>/dev/null; then
+  echo "Boxer project patch already applied"
+elif git -C "$third_party_dir/boxer" apply --check "$boxer_patch"; then
+  git -C "$third_party_dir/boxer" apply "$boxer_patch"
+else
+  echo "Boxer project patch does not apply cleanly" >&2
+  exit 1
+fi
 clone_at_commit OccuSG https://github.com/crcz25/OccuSG.git 2bca2fa06af87fd9dd0542957039be8f580f0dca true
 clone_at_commit habitat-lab https://github.com/facebookresearch/habitat-lab.git cdbb4880519505adf45fba0f0c0c3a3fd18a2a55
 clone_at_commit Open3D https://github.com/isl-org/Open3D.git 0f06a149c4fb9406fd3e432a5cb0c024f38e2f0e

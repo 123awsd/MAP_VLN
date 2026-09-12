@@ -5,12 +5,17 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 from pathlib import Path
 
 import habitat_sim
 import magnum as mn
 import numpy as np
 from PIL import Image
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from stage2.runtime_objects import add_runtime_objects
 
 S_H2F = np.asarray([[0., 0., -1.], [-1., 0., 0.], [0., 1., 0.]])
 F0 = np.asarray([0., 0., 1.])
@@ -22,6 +27,7 @@ DRONE_VISUAL_CENTER_LOCAL = np.asarray([0.00007, -0.05541, -0.13408])
 TASKS = (
     "check_microwave_kitchen_l2", "check_coffee_table_living_l2",
     "check_bag_under_bed_l1", "check_tv_living_l3",
+    "find_backpack_under_table_l2",
 )
 # Per-task framing presets.  All panels remain native Habitat renders; these
 # only choose a safe same-floor camera side so the RGB context and the full
@@ -40,6 +46,11 @@ CAMERA_PROFILES = {
     "check_tv_living_l3": {"anchor": "median", "pullback": 1.75,
                             "height": "floor_mid", "target": "sensor",
                             "target_y_offset": -0.65},
+    "find_backpack_under_table_l2": {
+        "anchor": "first", "pullback": 1.55,
+        "height": "floor_mid", "target": "sensor",
+        "target_y_offset": -0.55,
+    },
 }
 COLORS = {
     "support_surface": mn.Color4(0.96, 0.42, 0.08, 1.0),
@@ -263,7 +274,6 @@ def add_mesh(sim, obj_path, handle, translation, scale=1.0):
     attributes.collision_asset_handle = str(obj_path.resolve())
     attributes.is_collidable = False
     attributes.compute_COM_from_shape = False
-    attributes.shader_type = "flat"
     attributes.scale = mn.Vector3(float(scale), float(scale), float(scale))
     template_id = sim.get_object_template_manager().register_template(attributes, handle)
     obj = sim.get_rigid_object_manager().add_object_by_template_id(template_id)
@@ -314,7 +324,10 @@ def add_native_cylinders(sim, segments, prefix, radius):
 def render_panel(task_id, values, target_obj, anchor_obj, generated, scene, scene_config,
                  output_dir, panel_index, width, height, hfov,
                  show_target_box=True, show_drone_model=False,
-                 drone_model=None, drone_scale=0.035, drone_backoff=0.08):
+                 drone_model=None, drone_scale=0.035, drone_backoff=0.08,
+                 runtime_objects=None, candidate_z_offset_m=0.0,
+                 candidate_style="full", candidate_outcomes=None,
+                 drone_scope="all"):
     # A below-region task may contain hypotheses around several beds.  A panel
     # is meant to explain candidate generation for one target instance, so keep
     # only the hypothesis associated with the best candidate.
@@ -342,6 +355,17 @@ def render_panel(task_id, values, target_obj, anchor_obj, generated, scene, scen
     agent_cfg.sensor_specifications = [sensor]
     with habitat_sim.Simulator(habitat_sim.Configuration(sim_cfg, [agent_cfg])) as sim:
         sim.initialize_agent(0)
+        add_runtime_objects(
+            sim,
+            runtime_objects,
+            np.asarray(
+                generated.get(
+                    "initial_sensor_habitat_xyz",
+                    generated["initial_agent_habitat_xyz"],
+                ),
+                dtype=float,
+            ),
+        )
         family_color = COLORS[candidates[0]["region_type"]]
         # Keep the task/anchor boxes neutral, but use one high-contrast colour
         # for all candidate frustums so they remain legible over both the red
@@ -351,7 +375,7 @@ def render_panel(task_id, values, target_obj, anchor_obj, generated, scene, scen
         # debug colors are useful during development but distract in a paper.
         anchor_color = mn.Color4(0.52, 0.55, 0.60, 0.85)
         target_segments, anchor_segments = [], []
-        frustum_segments = []
+        candidate_segments = []
         candidate_origins_h = []
         # Keep the camera in the validated agent frame, but place the 3-D
         # annotation geometry at the RGB/depth sensor origin where the object
@@ -402,9 +426,36 @@ def render_panel(task_id, values, target_obj, anchor_obj, generated, scene, scen
         camera_h, floor_y = navmesh_camera(sim, target_h, poses_h, box_h, task_id)
         print(f"{task_id}: camera_h={camera_h.round(3).tolist()} floor_y={floor_y:.3f}", flush=True)
         for candidate in candidates:
-            points_h = object_f2h(frustum(candidate["pose"]), generated)
-            frustum_segments.extend((points_h[a], points_h[b]) for a,b in FRUSTUM_EDGES)
+            points_f = frustum(candidate["pose"])
+            # Publication-only display offset. The source candidate poses stay
+            # untouched in candidates_with_recovery.json.
+            points_f[:, 2] += float(candidate_z_offset_m)
+            points_h = object_f2h(points_f, generated)
             candidate_origins_h.append(points_h[0])
+            outcome = (candidate_outcomes or {}).get(candidate["id"])
+            line_color = (
+                mn.Color4(0.05, 0.72, 0.40, 1.0) if outcome == "found" else
+                mn.Color4(0.96, 0.55, 0.04, 1.0) if outcome == "retry" else
+                mn.Color4(0.18, 0.55, 0.88, 1.0)
+            )
+            origin = points_h[0]
+            if candidate_style == "full" or (candidate_style == "selected" and outcome == "found"):
+                candidate_segments.extend((points_h[a], points_h[b], line_color)
+                                          for a,b in FRUSTUM_EDGES)
+            else:
+                yaw = float(candidate["pose"]["yaw"])
+                forward_f = np.asarray([math.cos(yaw), math.sin(yaw), 0.0])
+                left_f = np.asarray([-math.sin(yaw), math.cos(yaw), 0.0])
+                marker_f = np.asarray([
+                    points_f[0] + 0.18 * forward_f,
+                    points_f[0] - 0.10 * forward_f + 0.10 * left_f,
+                    points_f[0] - 0.10 * forward_f - 0.10 * left_f,
+                ])
+                marker_h = object_f2h(marker_f, generated)
+                candidate_segments.extend((marker_h[a], marker_h[b], line_color)
+                                          for a,b in ((0,1),(1,2),(2,0)))
+                if candidate_style == "rays":
+                    candidate_segments.append((origin, box_h.mean(axis=0), line_color))
         if show_drone_model:
             if drone_model is None or not Path(drone_model).is_file():
                 raise FileNotFoundError(f"drone model not found: {drone_model}")
@@ -412,8 +463,14 @@ def render_panel(task_id, values, target_obj, anchor_obj, generated, scene, scen
             # Falcon-to-Habitat transform maps that axis to the frustum's
             # forward direction, so applying the usual +Z-to--Z correction
             # would turn every drone 180 degrees away from its frustum.
+            visible_drones = [
+                (candidate, origin_h)
+                for candidate, origin_h in zip(candidates, candidate_origins_h)
+                if drone_scope == "all" or
+                (candidate_outcomes or {}).get(candidate["id"]) == "found"
+            ]
             for index, (candidate, origin_h) in enumerate(
-                zip(candidates, candidate_origins_h)
+                visible_drones
             ):
                 drone = add_mesh(
                     sim, Path(drone_model), f"candidate_drone_{index}",
@@ -457,11 +514,12 @@ def render_panel(task_id, values, target_obj, anchor_obj, generated, scene, scen
         # visual language while remaining readable on the bright window
         # background.
         debug.set_line_width(2.2)
-        for start, end in frustum_segments:
-            debug.draw_transformed_line(mn.Vector3(*start), mn.Vector3(*end), frustum_color)
+        for start, end, color in candidate_segments:
+            debug.draw_transformed_line(mn.Vector3(*start), mn.Vector3(*end), color)
         sim.step_physics(1.0 / 60.0)
         rgba = np.asarray(sim.get_sensor_observations()["native_gallery_rgb"])
-        return Image.fromarray(np.ascontiguousarray(rgba[..., :3])), candidates
+        rgb = np.ascontiguousarray(rgba[..., :3])
+        return Image.fromarray(rgb), candidates
 
 
 def main():
@@ -482,10 +540,19 @@ def main():
     ap.add_argument("--show-drone-model", action="store_true",
                     help="place a small native drone model at every candidate pose")
     ap.add_argument("--drone-model", type=Path,
-                    default=Path(__file__).resolve().parents[1] / "assets" / "drone" / "drone_surface_band_emissive.glb")
-    ap.add_argument("--drone-scale", type=float, default=0.035)
+                    default=Path(__file__).resolve().parents[1] / "assets" / "drone" / "drone_side_painted_emissive.glb")
+    ap.add_argument("--drone-scale", type=float, default=0.24)
     ap.add_argument("--drone-backoff", type=float, default=0.08,
                     help="move the decorative drone backwards from the frustum apex (metres)")
+    ap.add_argument("--runtime-objects", type=Path,
+                    help="optional runtime object placement JSON")
+    ap.add_argument("--candidate-z-offset-m", type=float, default=0.0,
+                    help="visual-only vertical offset for candidate drones and frustums")
+    ap.add_argument("--candidate-style", choices=("full", "markers", "rays", "selected"),
+                    default="full")
+    ap.add_argument("--drone-scope", choices=("all", "selected"), default="all")
+    ap.add_argument("--execution", type=Path,
+                    help="execution JSON used to color retried/found candidates")
     ap.add_argument("--task", choices=TASKS, help="render one task panel only")
     args = ap.parse_args()
     pool = json.loads(args.candidates.read_text())["by_task"]
@@ -494,6 +561,11 @@ def main():
     scene = Path(generated["scene"]).resolve()
     scene_config = Path(generated["scene_config"]).resolve()
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    outcomes = {}
+    if args.execution:
+        execution = json.loads(args.execution.read_text())
+        for observation in execution.get("observations", []):
+            outcomes[observation.get("candidate_id")] = observation.get("outcome")
     panels, report = [], []
     tasks = (args.task,) if args.task else TASKS
     for i, task in enumerate(tasks):
@@ -507,7 +579,12 @@ def main():
                                     show_drone_model=args.show_drone_model,
                                     drone_model=args.drone_model,
                                     drone_scale=args.drone_scale,
-                                    drone_backoff=args.drone_backoff)
+                                    drone_backoff=args.drone_backoff,
+                                    runtime_objects=args.runtime_objects,
+                                    candidate_z_offset_m=args.candidate_z_offset_m,
+                                    candidate_style=args.candidate_style,
+                                    candidate_outcomes=outcomes,
+                                    drone_scope=args.drone_scope)
         path = args.output_dir / f"{i+1}_{shown[0]['region_type']}_native.png"
         panel.save(path)
         panels.append(panel)
@@ -524,7 +601,11 @@ def main():
     gallery.save(gallery_path)
     (args.output_dir/"native_manifest.json").write_text(json.dumps({
         "format":"pre_map_vln.native_candidate_gallery.v1",
-        "geometry":"Habitat native world-space 3-D debug lines", "panels":report,
+        "geometry":"Habitat native world-space 3-D debug lines",
+        "candidate_z_offset_m": args.candidate_z_offset_m,
+        "candidate_style": args.candidate_style,
+        "drone_scope": args.drone_scope,
+        "panels":report,
         "gallery":str(gallery_path.resolve())}, indent=2)+"\n")
     print(gallery_path)
 

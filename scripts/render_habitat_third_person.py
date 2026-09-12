@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 from pathlib import Path
 
 import habitat_sim
@@ -14,6 +15,9 @@ import magnum as mn
 import numpy as np
 import cv2
 from PIL import Image
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from stage2.runtime_objects import add_runtime_objects
 
 
 S_HABITAT_TO_FALCON = np.asarray(
@@ -85,6 +89,7 @@ def parse_args() -> argparse.Namespace:
         help="Overlay green 3D boxes after target discoveries (disabled by default).",
     )
     parser.add_argument("--gpu-device-id", type=int, default=0)
+    parser.add_argument("--runtime-objects", type=Path)
     parser.add_argument(
         "--start-frame",
         type=int,
@@ -471,6 +476,10 @@ def main() -> None:
 
     with habitat_sim.Simulator(habitat_sim.Configuration(sim_cfg, [agent_cfg])) as sim:
         agent = sim.initialize_agent(0)
+        add_runtime_objects(
+            sim, args.runtime_objects,
+            np.asarray(generated.get("initial_sensor_habitat_xyz", generated["initial_agent_habitat_xyz"]), dtype=np.float64),
+        )
         drone = register_drone(sim, model_path, args.drone_scale)
         # The model is +Y-up/+Z-forward; Habitat is +Y-up/-Z-forward.
         model_forward_correction = mn.Quaternion.rotation(

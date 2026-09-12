@@ -62,6 +62,7 @@ from stage2.vlm_verifier import QwenImageVerifier  # noqa: E402
 from stage2.vocabulary import load_semantic_aliases  # noqa: E402
 from stage2.yaw_motion import blend_yaw, facing_yaw, rotation_steps, step_yaw  # noqa: E402
 from stage2.representative_viewpoints import select_location_representatives  # noqa: E402
+from stage2.runtime_objects import add_runtime_objects  # noqa: E402
 
 
 S_HABITAT_TO_FALCON = np.asarray(
@@ -162,6 +163,7 @@ def main() -> None:
     parser.add_argument("--scene", type=Path, default=ROOT / "data/scene_datasets/hm3d/example/00861-GLAQ4DNUx5U/GLAQ4DNUx5U.basis.glb")
     parser.add_argument("--scene-config", type=Path, default=ROOT / "data/scene_datasets/hm3d/example/hm3d_annotated_example_basis.scene_dataset_config.json")
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--runtime-objects", type=Path, default=None)
     parser.add_argument("--step-m", type=float, default=0.12)
     parser.add_argument(
         "--execution-hz", type=float, default=5.0,
@@ -428,6 +430,11 @@ def main() -> None:
         initial_state.position = initial_agent_h
         initial_state.rotation = quat_from_angle_axis(0.0, np.asarray([0.0, 1.0, 0.0]))
         agent = sim.initialize_agent(0, initial_state)
+        initial_sensor_h = np.asarray(
+            generated.get("initial_sensor_habitat_xyz", initial_agent_h + [0.0, 1.0, 0.0])
+            if generated else initial_agent_h + [0.0, 1.0, 0.0], dtype=np.float64,
+        )
+        runtime_objects = add_runtime_objects(sim, args.runtime_objects, initial_sensor_h)
 
         def record_motion_frame(pose_f, observations) -> None:
             nonlocal frame_index

@@ -40,7 +40,7 @@ def scoped_reference_objects(
 
 def verify_target_reference_relation(
     relation: str | None, target: dict[str, Any], references: list[dict[str, Any]],
-    *, near_distance_m: float = 2.0, support_vertical_tolerance_m: float = 0.45,
+    *, near_distance_m: float = 2.0, support_vertical_tolerance_m: float = 0.50,
 ) -> dict[str, Any]:
     relation = None if relation is None else str(relation).lower()
     if relation is None:
@@ -136,7 +136,14 @@ def effective_relation_context(
         anchor = mapped_objects.get(anchor_id)
         relation = recovery.get("relation") if recovery else task.get("spatial_constraints", {}).get("relation")
         confirmed = [item for item in projected_targets if item.get("confirmed")]
-        projected = max(confirmed, key=lambda item: float(item.get("score", 0.0))) if confirmed else None
+        # A newly introduced runtime object has no pre-map association on its
+        # first observation. Its depth-lifted box is still the correct target
+        # geometry for auditing the requested relation to the known anchor.
+        projected = (
+            max(confirmed, key=lambda item: float(item.get("score", 0.0)))
+            if confirmed else
+            max(projected_targets, key=lambda item: float(item.get("score", 0.0)), default=None)
+        )
         target = None if projected is None else {
             "id": projected.get("associated_object_id") or f"online_{verification_label}",
             "center_xyz_m": projected["center"],

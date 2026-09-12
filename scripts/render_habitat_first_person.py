@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 from pathlib import Path
 
 import habitat_sim
@@ -13,6 +14,9 @@ import cv2
 import imageio.v2 as imageio
 import numpy as np
 from habitat_sim.utils.common import quat_from_angle_axis
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from stage2.runtime_objects import add_runtime_objects
 
 
 S_HABITAT_TO_FALCON = np.asarray(
@@ -36,6 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--show-target-boxes", action="store_true")
     parser.add_argument("--box-lead-frames", type=int, default=30)
     parser.add_argument("--box-hold-frames", type=int, default=15)
+    parser.add_argument("--runtime-objects", type=Path)
     return parser.parse_args()
 
 
@@ -76,16 +81,57 @@ def target_events(execution: dict, scene_graph: dict, candidates: dict) -> list[
         if observation.get("outcome") != "found":
             continue
         candidate = by_candidate.get(observation.get("candidate_id"))
-        obj = None if candidate is None else objects.get(candidate.get("object_id"))
+        projected = (observation.get("verification", {}).get("owlv2") or {}).get("projected_3d", [])
+        detected = max(projected, key=lambda item: float(item.get("score", 0.0)), default=None)
+        obj = (
+            {
+                "center_xyz_m": detected["center"],
+                "size_xyz_m": detected["size"],
+                "orientation_wxyz": [1.0, 0.0, 0.0, 0.0],
+            }
+            if detected is not None else
+            (None if candidate is None else objects.get(candidate.get("object_id")))
+        )
         if obj is None:
             continue
         label = observation.get("verification", {}).get("target_label", obj.get("label", "target"))
+        detections_2d = (observation.get("verification", {}).get("owlv2") or {}).get("detections", [])
+        detection_2d = max(
+            detections_2d, key=lambda item: float(item.get("score", 0.0)), default=None
+        )
         events.append({
             "frame_index": int(observation.get("frame_index", 0)),
             "label": str(label).upper(),
             "corners": object_corners(obj),
+            "bbox_xyxy_normalized": (
+                None if detection_2d is None else [
+                    float(detection_2d["bbox_xyxy"][0]) / 640.0,
+                    float(detection_2d["bbox_xyxy"][1]) / 480.0,
+                    float(detection_2d["bbox_xyxy"][2]) / 640.0,
+                    float(detection_2d["bbox_xyxy"][3]) / 480.0,
+                ]
+            ),
+            "terminal_pose": execution["trajectory_xyz_yaw"][
+                int(observation.get("frame_index", 0))
+            ],
         })
     return events
+
+
+def projected_rect(corners, pose, width, height, hfov_deg):
+    yaw = float(pose[3])
+    forward = np.asarray([math.cos(yaw), math.sin(yaw), 0.0])
+    right = np.asarray([math.sin(yaw), -math.cos(yaw), 0.0])
+    up = np.asarray([0.0, 0.0, 1.0])
+    focal = 0.5 * width / math.tan(math.radians(hfov_deg) * 0.5)
+    relative = corners - np.asarray(pose[:3], dtype=np.float64)
+    depth = relative @ forward
+    if np.count_nonzero(depth > 0.05) < 4:
+        return None
+    valid = depth > 0.05
+    xs = width * 0.5 + (relative[valid] @ right) * focal / depth[valid]
+    ys = height * 0.5 - (relative[valid] @ up) * focal / depth[valid]
+    return np.asarray([xs.min(), ys.min(), xs.max(), ys.max()], dtype=np.float64)
 
 
 def overlay_target_boxes(
@@ -98,26 +144,38 @@ def overlay_target_boxes(
     hold_frames: int,
 ) -> np.ndarray:
     height, width = rgb.shape[:2]
-    yaw = float(pose[3])
-    forward = np.asarray([math.cos(yaw), math.sin(yaw), 0.0])
-    right = np.asarray([math.sin(yaw), -math.cos(yaw), 0.0])
-    up = np.asarray([0.0, 0.0, 1.0])
-    focal = 0.5 * width / math.tan(math.radians(hfov_deg) * 0.5)
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     for event in events:
         if not event["frame_index"] - lead_frames <= frame_index <= event["frame_index"] + hold_frames:
             continue
-        relative = event["corners"] - pose[:3]
-        depth = relative @ forward
-        if np.count_nonzero(depth > 0.05) < 4:
+        rect = projected_rect(event["corners"], pose, width, height, hfov_deg)
+        if rect is None:
             continue
-        valid = depth > 0.05
-        x_values = width * 0.5 + (relative[valid] @ right) * focal / depth[valid]
-        y_values = height * 0.5 - (relative[valid] @ up) * focal / depth[valid]
-        x0 = int(np.clip(math.floor(float(x_values.min())) - 5, 0, width - 1))
-        y0 = int(np.clip(math.floor(float(y_values.min())) - 5, 0, height - 1))
-        x1 = int(np.clip(math.ceil(float(x_values.max())) + 5, 0, width - 1))
-        y1 = int(np.clip(math.ceil(float(y_values.max())) + 5, 0, height - 1))
+        raw = event.get("bbox_xyxy_normalized")
+        reference = projected_rect(
+            event["corners"], event["terminal_pose"], width, height, hfov_deg
+        )
+        if raw is not None and reference is not None:
+            raw = np.asarray(
+                [raw[0] * width, raw[1] * height, raw[2] * width, raw[3] * height],
+                dtype=np.float64,
+            )
+            ref_size = np.maximum(reference[2:] - reference[:2], 1.0)
+            raw_size = raw[2:] - raw[:2]
+            current_size = rect[2:] - rect[:2]
+            current_center = 0.5 * (rect[:2] + rect[2:])
+            reference_center = 0.5 * (reference[:2] + reference[2:])
+            raw_center = 0.5 * (raw[:2] + raw[2:])
+            corrected_size = current_size * raw_size / ref_size
+            corrected_center = current_center + (
+                (raw_center - reference_center) * current_size / ref_size
+            )
+            rect = np.r_[corrected_center - 0.5 * corrected_size,
+                         corrected_center + 0.5 * corrected_size]
+        x0 = int(np.clip(math.floor(float(rect[0])) - 5, 0, width - 1))
+        y0 = int(np.clip(math.floor(float(rect[1])) - 5, 0, height - 1))
+        x1 = int(np.clip(math.ceil(float(rect[2])) + 5, 0, width - 1))
+        y1 = int(np.clip(math.ceil(float(rect[3])) + 5, 0, height - 1))
         if x1 - x0 < 4 or y1 - y0 < 4 or x0 == width - 1 or y0 == height - 1:
             continue
         color = (45, 220, 70)
@@ -184,6 +242,10 @@ def main() -> None:
     try:
         with habitat_sim.Simulator(habitat_sim.Configuration(sim_cfg, [agent_cfg])) as sim:
             agent = sim.initialize_agent(0)
+            add_runtime_objects(
+                sim, args.runtime_objects,
+                np.asarray(generated.get("initial_sensor_habitat_xyz", generated["initial_agent_habitat_xyz"]), dtype=np.float64),
+            )
             for index, pose in enumerate(trajectory):
                 sensor_delta_f = pose[:3] - np.asarray([0.0, 0.0, 1.0])
                 state = agent.get_state()

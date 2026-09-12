@@ -59,6 +59,13 @@ class HabitatLoader(BaseLoader):
         pose_data = torch.from_numpy(np.concatenate([rotation.reshape(-1), position]))
         return {
             "img0": self.img_to_tensor(rgb),
+            # Retained only for optional SAM2 mask-guided re-projection. The
+            # default Boxer path continues to consume ``sdp_w`` unchanged.
+            "depth0": depth,
+            "depth_projection": {
+                "fx": fx, "fy": fy, "cx": cx, "cy": cy,
+                "rotation": rotation, "position": position,
+            },
             "cam0": self.pinhole_from_K(w, h, fx, fy, cx, cy).float(),
             "T_world_rig0": PoseTW(pose_data.float()),
             "sdp_w": self.sdp_from_depth(depth, fx, fy, cx, cy, rotation, position),
