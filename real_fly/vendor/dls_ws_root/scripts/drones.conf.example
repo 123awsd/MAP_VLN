@@ -1,0 +1,22 @@
+# 局域网无人机主机清单（dls_ws 部署机）
+#
+# IP 规则: 1 号机 = 10.1.1.101, 11 号机 = 10.1.1.111, 即 10.1.1.100 + 机号。
+# 格式:  昵称  user@ip  飞机上仓库绝对路径
+# 说明:
+#   - 用户名默认为 nv（Jetson 部署账号）；如实际不同，把每行 nv@ 改成实际用户。
+#   - 本文件为示例模板；实际使用请复制为 drones.conf（已被 .gitignore 忽略，
+#     不会随代码同步覆盖各机配置）:
+#       cp scripts/drones.conf.example scripts/drones.conf
+#   - 机号超过 12 时按同样规则追加行即可。
+drone01  nv@10.1.1.101  /home/nv/dls_ws
+drone02  nv@10.1.1.102  /home/nv/dls_ws
+drone03  nv@10.1.1.103  /home/nv/dls_ws
+drone04  nv@10.1.1.104  /home/nv/dls_ws
+drone05  nv@10.1.1.105  /home/nv/dls_ws
+drone06  nv@10.1.1.106  /home/nv/dls_ws
+drone07  nv@10.1.1.107  /home/nv/dls_ws
+drone08  nv@10.1.1.108  /home/nv/dls_ws
+drone09  nv@10.1.1.109  /home/nv/dls_ws
+drone10  nv@10.1.1.110  /home/nv/dls_ws
+drone11  nv@10.1.1.111  /home/nv/dls_ws
+drone12  nv@10.1.1.112  /home/nv/dls_ws

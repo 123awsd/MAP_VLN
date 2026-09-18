@@ -19,6 +19,12 @@ Included source packages:
 - `rog_map`
 - `super_planner`
 
+The recoverable DLS workspace launch surface is stored separately in
+`../dls_ws_root/`. It includes the root launch/build helpers (`fly.sh`,
+`localization.sh`, `ctrl.sh`, `takeoff.sh`, `land.sh`, `plan.sh`,
+`build_map_scdb.sh`, and the other tracked helpers), plus the small `scripts/`,
+`tests/`, and `docs/` trees needed to understand and rebuild the workspace.
+
 The NX working tree also contained these real-flight modifications, which are
 included in this snapshot:
 
@@ -37,7 +43,9 @@ Intentionally excluded from this source snapshot:
 - FAST-LIO `PCD/*.scdb` generated databases;
 - bags, maps, flight logs, and runtime mission outputs.
 
-To restore the source into a fresh DLS workspace, copy the contents of this
-directory under `DLS_WS/src/`, then install the ROS/system dependencies and
-run the normal Release catkin build. The source snapshot is independent of
-the ignored runtime data under `real_fly/stage2_runtime/`.
+To restore the source into a fresh DLS workspace, run
+`../restore_dls_ws_source.sh /path/to/dls_ws`. This restores both the source
+tree and the recoverable root helpers, while leaving maps, databases, logs,
+and other generated artifacts untouched. Then install the ROS/system
+dependencies and run the normal Release catkin build. The source snapshot is
+independent of the ignored runtime data under `real_fly/stage2_runtime/`.
