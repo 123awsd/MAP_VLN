@@ -1,0 +1,31 @@
+wxx:
+  initial_align:
+    voxelgrid_filter_size:  0.2
+    max_iteration:          5
+    icp_mode:               4   # 4 is best
+    initial_map_size:       30
+
+    # pose | auto. auto searches the whole map via the .scdb descriptor DB
+    # (built by tests/build_map_scdb.cpp); it falls back to the configured
+    # pose below when all candidates are rejected. Default auto: every global
+    # startup self-localizes; set INIT_MODE=pose to force the legacy path.
+    init_mode:              auto
+    scdb_path:              ""      # empty => <map_pcd>.scdb
+    scdb_top_k:             8       # GICP candidates from scdb retrieval; keep near lookalikes in repetitive rooms
+    scdb_accept_fitness:    0.5     # SC-stage strict acceptance (truths<=0.15, lookalikes>=1.15)
+    scdb_pose_fallback:     true
+
+    Init_Body_pos_x: 0.0
+    Init_Body_pos_y: 0.0
+    Init_Body_pos_z: 0.0
+
+zty:
+  advanced_by_scan_context: false
+  init_zone_width:          10.0
+  init_zone_height:         10.0
+  init_resolution:          1.0
+  scancontext:
+    test_PC_NUM_RING:       40
+    test_PC_NUM_SECTOR:     120
+    test_PC_MAX_RADIUS:     20
+    print_detail_score:     false

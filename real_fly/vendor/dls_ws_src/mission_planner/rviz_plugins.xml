@@ -1,0 +1,7 @@
+<library path="lib/libwaypoint_recorder_panel">
+  <class name="mission_planner/WaypointRecorderPanel"
+         type="mission_planner::WaypointRecorderPanel"
+         base_class_type="rviz::Panel">
+    <description>Fixed RViz buttons for recording full-smooth route points.</description>
+  </class>
+</library>

@@ -1,0 +1,213 @@
+fsm:
+  click_goal_en: true
+  click_goal_topic: "/planning/click_goal"
+  pause_topic: "/planning/super_pause"
+  # <= -5 keeps the Z value supplied by each preset waypoint.
+  click_height: -10.0
+  click_yaw_en: true
+  # Conservative real-flight profile: leave enough CPU time for each replan.
+  replan_rate: 10.0
+  # Routed through competition_command_mux before reaching PX4Ctrl.
+  cmd_topic: "/planning/super_pos_cmd"
+  mpc_cmd_topic: "/planning_cmd/poly_traj"
+  timer_en: true
+
+super_planner:
+  backup_traj_en: true
+  detailed_log_en: false
+  visualization_en: true
+  use_fov_cut: false
+  print_log: false
+  visual_process: false
+  frontend_in_known_free: false
+  goal_yaw_en: true
+  goal_vel_en: false
+  corridor_bound_dis: 1.0
+  corridor_line_max_length: 1.2
+  safe_corridor_line_max_length: 5.0
+  iris_iter_num: 2
+  obs_skip_num: 2
+  # Connect the new trajectory 0.15 s ahead of the current command state.
+  replan_forward_dt: 0.15
+  planning_horizon: 7.0
+  sensing_horizon: -1
+  receding_dis: 4.0
+  # Physical 0.18 m radius plus 0.12 m allowance for localization, mapping
+  # and tracking error. This matches the 0.30 m full-smooth clearance gate.
+  robot_r: 0.30
+  # Limit heading changes to about 86 deg/s during initial real flights.
+  yaw_dot_max: 1.5
+  # Yaw mode: 1 heading to velocity, 2 heading to goal
+  yaw_mode: 1
+  mpc_horizon: 15
+
+
+traj_opt:
+  switch:
+    save_log_en: false
+    print_optimizer_log: false
+
+  boundary:
+    # The competition rules specify no flight-speed cap. Validate tracking on
+    # the real aircraft before raising this value further.
+    # Single full-smooth velocity authority: both recorder generation and
+    # saved-trajectory execution read this value.
+    max_vel: 3.0
+    # Planner-side acceleration limit.  The execution node independently
+    # validates the saved trajectory against its 6.0 m/s^2 hard limit.
+    max_acc: 6.0
+    max_jerk: 120.0
+    max_omg: 2.0
+    max_acc_thr: 20.0
+    min_acc_thr: 6.0
+    penna_margin: 0.05
+
+  exp_traj:
+    # 1 for xi 2 for pos
+    pos_constraint_type: 1
+    energy_cost_type: 4
+    block_energy_cost: false
+    opt_accuracy: 5.0e-6
+    scale_factor: 1.0
+    integral_reso: 15
+    smooth_eps: 0.01
+    penna_t: 12000.0
+    penna_pos: 5.0e+6
+    penna_vel: 5.0e+5
+    penna_acc: 5.0e+5
+    penna_jerk: -5.0e+5
+    penna_attract: 1.0e+3
+    penna_omg:  5.0e+5
+    penna_thr: 1.0e+5
+
+  backup_traj:
+    uniform_time_en: true
+    pos_constraint_type: 1
+    piece_num: 2
+    energy_cost_type: 4
+    block_energy_cost: true
+    opt_accuracy: 1.0e-6
+    scale_factor: 1.0
+    integral_reso: 12
+    smooth_eps: 0.01
+    penna_t: 1200.0
+    penna_ts: 1.0e+5
+    penna_pos: 1.0e+6
+    penna_vel: 1.0e+5
+    penna_acc: 1.0e+5
+    penna_jerk: -1.0e+5
+    # Match the project's static_dense backup mode: avoid a flatness
+    # singularity in emergency-stop candidates while retaining P/V/A limits.
+    penna_omg: -1
+    penna_thr: -1
+
+  flatness:
+    # Measured takeoff mass of the real competition aircraft.
+    mass: 0.985
+    dh: 0.35
+    dv: 0.35
+    cp: 0.001
+    v_eps: 0.0001
+    grav: 9.81
+
+
+astar:
+  map_voxel_num: [ 500, 500, 100 ]
+  visual_process: false
+  allow_diag: true
+  # 0 DIAG; 1 MANHATTAN; 2 EUCLIDEAN
+  heu_type: 2
+  debug_visualization_en: false
+
+
+rog_map:
+  resolution: 0.1
+  # Nominal occupied-space inflation: 0.1 m/cell * 3 cells = 0.30 m.
+  # CIRI applies the 0.30 m physical-plus-error radius when constructing the
+  # final safe corridor; this layer keeps the A* guide away from raw surfaces.
+  inflation_resolution: 0.1
+  inflation_step: 3
+  unk_inflation_en: false
+  unk_inflation_step: 1
+  map_size: [ 50,50,6 ]
+  # If the map rolling is disable, the map origin [m] should be set.
+  fix_map_origin: [ 0,0,1.5 ]
+  frontier_extraction_en: false
+
+  # Virtual ceil and ground
+  virtual_ceil_height: 3.5
+  virtual_ground_height: -0.1
+
+  load_pcd_en: false
+
+  map_sliding:
+    enable: true
+    # The minimum distance [m] to slide the map.
+    threshold: 0.3
+
+  esdf:
+    enable: false
+    resolution: 0.1
+    # The range of esdf around the odom [m].
+    local_update_box: [ 5,5,3 ]
+
+  # If [enable = true], the ROG-Map will actively take ros topic as input.
+  #  else user should call function [updateMap] to update the map.
+  ros_callback:
+    enable: true
+    # Frame-validated FAST-LIO live scan used for hit/miss raycasting.
+    cloud_topic: "/competition/planning_cloud"
+    # Regional virtual ceilings are occupied-only constraints, not lidar returns.
+    occupied_cloud_topic: "/competition/static_constraint_cloud"
+    # Use the same high-rate EKF odometry as px4ctrl.
+    odom_topic: "/ekf_quat/ekf_odom"
+    # FAST-LIO/EKF should be high-rate; reject a map input stale for 0.5 s.
+    odom_timeout: 0.5
+
+
+  visualization:
+    enable: true
+    # when enabled, use rqt_reconfigure to change the visualization parameters.
+    use_dynamic_reconfigure: false
+    # The rate of visualization [Hz], if set to 0, the visualization will not be triggered by frame.
+    time_rate: 2
+    # The frame rate of visualization [Hz], if set to 0, the visualization will not be triggered by frame.
+    frame_rate: 0
+    # visualization range along the odom [m].
+    range: [ 15, 15,4 ]
+    frame_id: "world"
+    pub_unknown_map_en: false
+
+  # Intensity filter for input point cloud. If the point intensity is less than this value,
+  # it will be ignored (to avoid noise like dusk).
+  intensity_thresh: -10
+  # The temporal downsample rate for input point cloud.
+  #  e.g. if set to k, the point cloud will be downsampled to 1/k.
+  point_filt_num: 1
+
+  # Probabilistc update
+  raycasting:
+    # if disable, the map will only maintain occupied information, and all other grid
+    # will be considered as unknown.
+    enable: true
+    batch_update_size: 1
+    local_update_box: [ 100,100,5 ]
+    # The range of raycasting [m].
+    ray_range: [0.5, 100 ]
+
+    p_min: 0.12
+    # Clear stale dynamic-object voxels after repeated free-space observations.
+    p_miss: 0.47
+    p_free: 0.499
+    p_occ: 0.85
+    p_hit: 0.9
+    p_max: 0.98
+    # The threshold of a non-occupied inf map grid to be considered as free. [0.0-1.0]
+    # for counter map, if each cell contains N cells in prob map, then only when
+    # N_unk > N * unk_thresh cells are unknown, the cell will be considered as unknown.
+    # example: 1) if unk_thresh is set 0.0, then once at least one cell in prob map is unknown,
+    #             the cell will be considered as unknown.
+    #         2) if unk_thresh is set to 1.0, then only all cells in prob map are unknown,
+    #             the cell will be considered as unknown.
+    # in all, 1.0 is more aggressive while 0.0 is more conservative.
+    unk_thresh: 1.0

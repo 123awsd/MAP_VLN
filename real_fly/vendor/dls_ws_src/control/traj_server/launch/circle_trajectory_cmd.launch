@@ -1,0 +1,51 @@
+<launch>
+    <!-- Standalone PX4Ctrl test: publish a circle PositionCommand. Unlike the
+         eight node this one auto-stops after `laps` (default 3) and shuts down
+         when shutdown_after_finish is true. -->
+    <arg name="odom_topic" default="/ekf_quat/ekf_odom" />
+    <arg name="cmd_topic" default="/planning/pos_cmd" />
+    <arg name="radius" default="1.5" />
+    <arg name="speed" default="1.5" />
+    <arg name="start_angle" default="0.0" />
+    <arg name="clockwise" default="false" />
+    <arg name="publish_rate" default="100.0" />
+    <arg name="prestart_hold_time" default="1.0" />
+    <arg name="ramp_time" default="4.0" />
+    <arg name="stop_ramp_time" default="3.0" />
+    <arg name="poststop_hold_time" default="3.0" />
+    <arg name="laps" default="3.0" />
+    <arg name="duration" default="0.0" />
+    <arg name="shutdown_after_finish" default="true" />
+    <arg name="control_yaw" default="true" />
+    <arg name="face_velocity" default="false" />
+    <arg name="wait_for_trigger" default="false" />
+    <!-- systemd services may not provide HOME; keep the test trajectory
+         launchable in that environment and fall back to a writable temp path. -->
+    <arg name="log_dir" default="$(optenv HOME /tmp)/traj_server_logs/circle_tracking" />
+
+    <node pkg="traj_server" type="circle_trajectory_cmd_node" name="circle_trajectory_cmd" output="screen">
+        <remap from="~position_command" to="$(arg cmd_topic)" />
+        <remap from="~odometry" to="$(arg odom_topic)" />
+
+        <param name="auto_start" value="true" />
+        <param name="wait_for_trigger" value="$(arg wait_for_trigger)" />
+        <param name="center_from_odom" value="true" />
+        <param name="radius" value="$(arg radius)" />
+        <param name="speed" value="$(arg speed)" />
+        <param name="start_angle" value="$(arg start_angle)" />
+        <param name="clockwise" value="$(arg clockwise)" />
+        <param name="publish_rate" value="$(arg publish_rate)" />
+        <param name="prestart_hold_time" value="$(arg prestart_hold_time)" />
+        <param name="ramp_time" value="$(arg ramp_time)" />
+        <param name="stop_ramp_time" value="$(arg stop_ramp_time)" />
+        <param name="poststop_hold_time" value="$(arg poststop_hold_time)" />
+        <param name="laps" value="$(arg laps)" />
+        <param name="duration" value="$(arg duration)" />
+        <param name="shutdown_after_finish" value="$(arg shutdown_after_finish)" />
+        <param name="control_yaw" value="$(arg control_yaw)" />
+        <param name="face_velocity" value="$(arg face_velocity)" />
+        <param name="write_csv" value="true" />
+        <param name="publish_visualization" value="true" />
+        <param name="log_dir" value="$(arg log_dir)" />
+    </node>
+</launch>

@@ -1,0 +1,30 @@
+# 2026 competition real-flight preset mission
+# This file is used only by competition_2026_planner.launch.
+# Keep real-flight tuning independent from competition_2026_waypoints.txt.
+#
+# x[m] y[m] z[m] yaw[deg|nan=velocity heading] switch_distance[m] dwell[s] yaw_tolerance[deg]
+# X/Y are relative to the takeoff point; Z remains relative to floor z=0.
+
+# Takeoff target: retain a small horizontal component.
+ 0.30 -0.30  1.00  -90   0.25  0.3  15
+
+# Region A and A-B passage.
+ 2.50 -7.75  1.10  nan   0.65  0.0  25
+
+# Region B inspection poses.
+ 0.70  -9.95  1.10  nan   0.65  0.0  25
+ 1.50 -11.00  1.20    0   0.15  2.0   8
+ 2.75 -12.45  1.20  nan   0.65  0.0  25
+ 4.30 -10.80  1.20  180   0.15  2.0   8
+
+# Region C exit.
+11.55 -6.25  1.20  nan   0.70  0.0  25
+
+# Region D door approach, opening centre, height transition and exit.
+12.75 -3.75  1.50   90   0.45  0.0  15
+12.75 -2.75  1.50   90   0.20  0.0  10
+12.75 -2.75  0.50   90   0.20  0.0  10
+12.75 -1.55  0.50   90   0.45  0.0  15
+
+# Landing-area target. PX4Ctrl performs the final landing procedure.
+13.50  0.00  0.55   90   0.08  0.2  10

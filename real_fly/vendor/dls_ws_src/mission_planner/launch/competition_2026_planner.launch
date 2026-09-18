@@ -1,0 +1,123 @@
+<launch>
+    <!-- 实机分步启动中的规划器部分：定位和 PX4Ctrl 必须提前单独启动。 -->
+    <arg name="preset_mission" default="true"/>
+    <arg name="waypoint_file" default="competition_2026_waypoints_real.txt"/>
+    <arg name="mission_mode" default="super"/>
+    <arg name="d_gate_mode"
+         default="$(eval 'super' if arg('mission_mode') == 'super' else 'smooth')"/>
+    <!-- Legacy route/map arguments remain available for manual replanning, but
+         the real full_smooth mission loads the latest recorder output by default. -->
+    <arg name="known_map_pcd" default=""/>
+    <arg name="full_smooth_route"
+         default="$(find mission_planner)/data/competition_2026_full_smooth_real.txt"/>
+    <arg name="full_smooth_trajectory" default=""/>
+    <!-- RViz and its display-only filters are disabled for normal flight. -->
+    <arg name="rviz" default="false"/>
+    <arg name="visualization_min_z" default="-0.05"/>
+    <arg name="visualization_max_z" default="2.35"/>
+    <arg name="inflated_visualization_max_z" default="2.05"/>
+
+    <node pkg="mission_planner" name="competition_cloud_guard"
+          type="competition_cloud_guard" output="screen">
+        <rosparam command="load"
+                  file="$(find mission_planner)/config/competition_2026_cloud_guard_real.yaml"/>
+    </node>
+
+    <node pkg="mission_planner" name="competition_command_mux"
+          type="competition_command_mux" output="screen"/>
+
+    <node unless="$(eval arg('mission_mode') == 'full_smooth')"
+          pkg="super_planner" name="fsm_node" type="fsm_node" output="screen">
+        <param name="config_name" value="competition_2026_real.yaml" type="string"/>
+    </node>
+
+    <node if="$(eval arg('preset_mission') and arg('mission_mode') != 'full_smooth')"
+          pkg="mission_planner" name="waypoint_mission" type="waypoint_mission" output="screen">
+        <param name="config_name" value="competition_2026_waypoint_real.yaml" type="string"/>
+        <param name="data_name" value="$(arg waypoint_file)" type="string"/>
+        <param name="d_gate_mode" value="$(arg d_gate_mode)" type="string"/>
+    </node>
+
+    <node if="$(eval arg('preset_mission') and arg('mission_mode') == 'full_smooth')"
+          pkg="mission_planner" name="full_smooth_mission" type="full_smooth_mission" output="screen">
+        <param name="route_path" value="$(arg full_smooth_route)"/>
+        <param name="known_map_pcd" value="$(arg known_map_pcd)"/>
+        <!-- Use the exact polynomial and yaw profile saved by FINISH.  Empty
+             selects recorded_full_smooth_trajectory.txt in the workspace. -->
+        <param name="execute_saved_trajectory" value="true"/>
+        <param name="saved_trajectory_path" value="$(arg full_smooth_trajectory)"/>
+        <param name="start_position_tolerance" value="0.30"/>
+        <param name="start_yaw_tolerance" value="0.785398"/>
+        <param name="odom_topic" value="/ekf_quat/ekf_odom"/>
+        <param name="start_trigger_type" value="3"/>
+        <param name="start_delay" value="0.0"/>
+        <param name="auto_land" value="true"/>
+        <param name="min_segment_time" value="0.60"/>
+        <!-- Real flight: require 0.30 m centre-to-obstacle clearance. -->
+        <param name="collision_clearance" value="0.30"/>
+        <param name="use_super_safe_corridor" value="true"/>
+        <param name="super_config_path"
+               value="$(find super_planner)/config/competition_2026_real.yaml"/>
+        <!-- The saved trajectory and this execution check both read the single
+             velocity authority: super_config_path/traj_opt.boundary.max_vel. -->
+        <rosparam command="load" ns="regional_ceiling"
+                  file="$(find mission_planner)/config/competition_2026_cloud_guard_real.yaml"/>
+        <param name="max_acceleration" value="6.0"/>
+        <param name="max_jerk" value="90.0"/>
+        <param name="max_snap" value="350.0"/>
+        <param name="max_jerk_discontinuity" value="0.0001"/>
+        <param name="yaw_start_blend_duration" value="1.5"/>
+        <param name="yaw_terminal_blend_duration" value="2.0"/>
+        <param name="yaw_velocity_threshold" value="0.08"/>
+        <param name="yaw_lookahead_time" value="0.40"/>
+        <param name="max_yaw_rate" value="1.5"/>
+        <param name="max_yaw_lock_variation" value="1.0"/>
+    </node>
+
+    <!-- These filters exist solely to reduce RViz load. They never feed the
+         planner, which continues to consume the unfiltered real-flight topics. -->
+    <group if="$(arg rviz)">
+        <node pkg="nodelet" type="nodelet" name="planning_cloud_visualization_filter"
+              args="standalone pcl/PassThrough" output="log">
+            <remap from="~input" to="/competition/planning_cloud"/>
+            <remap from="~output" to="/competition/planning_cloud_vis"/>
+            <param name="filter_field_name" value="z"/>
+            <param name="filter_limit_min" value="$(arg visualization_min_z)" type="double"/>
+            <param name="filter_limit_max" value="$(arg visualization_max_z)" type="double"/>
+            <param name="filter_limit_negative" value="false"/>
+        </node>
+
+        <node pkg="nodelet" type="nodelet" name="local_cloud_visualization_filter"
+              args="standalone pcl/PassThrough" output="log">
+            <remap from="~input" to="/cloud_registered"/>
+            <remap from="~output" to="/competition/cloud_registered_vis"/>
+            <param name="filter_field_name" value="z"/>
+            <param name="filter_limit_min" value="$(arg visualization_min_z)" type="double"/>
+            <param name="filter_limit_max" value="$(arg visualization_max_z)" type="double"/>
+            <param name="filter_limit_negative" value="false"/>
+        </node>
+
+        <node pkg="nodelet" type="nodelet" name="occupancy_visualization_filter"
+              args="standalone pcl/PassThrough" output="log">
+            <remap from="~input" to="/fsm_node/rog_map/occ"/>
+            <remap from="~output" to="/competition/occ_vis"/>
+            <param name="filter_field_name" value="z"/>
+            <param name="filter_limit_min" value="$(arg visualization_min_z)" type="double"/>
+            <param name="filter_limit_max" value="$(arg visualization_max_z)" type="double"/>
+            <param name="filter_limit_negative" value="false"/>
+        </node>
+
+        <node pkg="nodelet" type="nodelet" name="inflated_occupancy_visualization_filter"
+              args="standalone pcl/PassThrough" output="log">
+            <remap from="~input" to="/fsm_node/rog_map/inf_occ"/>
+            <remap from="~output" to="/competition/inf_occ_vis"/>
+            <param name="filter_field_name" value="z"/>
+            <param name="filter_limit_min" value="$(arg visualization_min_z)" type="double"/>
+            <param name="filter_limit_max" value="$(arg inflated_visualization_max_z)" type="double"/>
+            <param name="filter_limit_negative" value="false"/>
+        </node>
+
+        <node pkg="rviz" type="rviz" name="competition_2026_real_rviz"
+              args="-d $(find mission_planner)/rviz/competition_2026_real.rviz" output="log"/>
+    </group>
+</launch>

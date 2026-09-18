@@ -1,0 +1,139 @@
+<launch>
+    <!-- Standalone recorder: it never publishes flight commands. -->
+    <arg name="odom_topic" default="/ekf_quat/ekf_odom"/>
+    <!-- Empty paths are resolved by the recorder to the workspace root. -->
+    <arg name="output_file" default=""/>
+    <arg name="smooth_output_file" default=""/>
+    <arg name="map_output_file" default=""/>
+    <arg name="saved_trajectory_path" default=""/>
+    <!-- A recorder session represents the current flight; overwrite its three
+         outputs by default. Set false only when an archived copy is desired. -->
+    <arg name="overwrite_existing" default="true"/>
+    <!-- Load the fixed recorded_waypoints.txt file instead of starting with an
+         empty point list; useful after restarting localization for validation. -->
+    <arg name="load_existing_waypoints" default="false"/>
+    <!-- Load a previously saved validation PCD. Capture is automatically
+         paused after loading, so FINISH can safely regenerate from it. -->
+    <arg name="load_existing_map" default="false"/>
+    <arg name="existing_map_file" default=""/>
+    <!-- Display the last saved polynomial in RViz. It remains preview-only;
+         FINISH still regenerates a trajectory from the loaded PCD and route. -->
+    <arg name="load_existing_trajectory" default="false"/>
+    <arg name="record_yaw" default="true"/>
+    <arg name="use_relative_origin" default="false"/>
+    <arg name="default_switch_distance" default="0.65"/>
+    <arg name="default_stop_dwell_time" default="1.0"/>
+    <!-- Requested route speed. MINCO may accelerate above this value, up to
+         traj_opt.boundary.max_vel in super_config_path, while preserving the
+         corridor and dynamics limits. -->
+    <arg name="default_smooth_speed" default="1.5"/>
+    <arg name="cloud_topic" default="/cloud_registered"/>
+    <arg name="expected_map_frame" default="world"/>
+    <arg name="map_voxel_size" default="0.08"/>
+    <!-- Coarser display-only map; the saved collision-check PCD remains 0.08 m. -->
+    <arg name="map_visualization_voxel_size" default="0.16"/>
+    <!-- Competition-world ROI around origin (0, 0, 0). Points outside this
+         volume are never accumulated or written to the validation PCD. -->
+    <arg name="map_min_x" default="-3.0"/>
+    <arg name="map_max_x" default="18.0"/>
+    <arg name="map_min_y" default="-3.0"/>
+    <arg name="map_max_y" default="18.0"/>
+    <arg name="map_min_z" default="-0.2"/>
+    <arg name="map_max_z" default="2.2"/>
+    <!-- Keep only voxels observed repeatedly over time. This rejects a person
+         walking through the scan; a stationary person remains an obstacle. -->
+    <arg name="map_min_observations" default="3"/>
+    <arg name="map_observation_interval" default="0.20"/>
+    <arg name="map_min_persistence_time" default="1.0"/>
+    <!-- Near-UAV blind sphere: removes the aircraft/operator's near-field
+         returns while recording.  0.6 m is within the non-flyable envelope;
+         set 0 only for diagnostic raw-cloud recording. -->
+    <arg name="map_self_exclusion_radius" default="0.60"/>
+    <arg name="map_capture_enabled" default="true"/>
+    <arg name="max_capture_speed" default="0.15"/>
+    <!-- Ignore duplicate FINISH feedback from RViz while the preview request is
+         being delivered. Editing/capturing a point clears this cooldown. -->
+    <arg name="finalize_cooldown" default="3.0"/>
+    <!-- This is the executable trajectory's hard PCD gate.  Keep the default
+         at the real-aircraft value; simulations may override it explicitly. -->
+    <arg name="collision_clearance" default="0.30"/>
+    <!-- If the final continuous PCD test is too close, add one temporary
+         avoidance guide and rerun the existing SUPER A* + SFC + MINCO chain.
+         The rerun is still rejected unless it meets collision_clearance. -->
+    <arg name="local_collision_replan_enabled" default="true"/>
+    <arg name="local_collision_replan_margin" default="0.15"/>
+    <!-- Recorder is primarily an on-aircraft workflow. Simulation explicitly
+         overrides this with competition_2026.yaml. -->
+    <arg name="super_config_path" default="$(find super_planner)/config/competition_2026_real.yaml"/>
+    <arg name="rviz" default="true"/>
+
+    <node pkg="mission_planner" type="waypoint_recorder" name="waypoint_recorder" output="screen">
+        <param name="odom_topic" value="$(arg odom_topic)"/>
+        <param name="output_file" value="$(arg output_file)"/>
+        <param name="smooth_output_file" value="$(arg smooth_output_file)"/>
+        <param name="map_output_file" value="$(arg map_output_file)"/>
+        <param name="overwrite_existing" value="$(arg overwrite_existing)"/>
+        <param name="load_existing_waypoints" value="$(arg load_existing_waypoints)"/>
+        <param name="load_existing_map" value="$(arg load_existing_map)"/>
+        <param name="existing_map_file" value="$(arg existing_map_file)"/>
+        <param name="record_yaw" value="$(arg record_yaw)"/>
+        <param name="use_relative_origin" value="$(arg use_relative_origin)"/>
+        <param name="default_switch_distance" value="$(arg default_switch_distance)"/>
+        <param name="default_stop_dwell_time" value="$(arg default_stop_dwell_time)"/>
+        <param name="default_smooth_speed" value="$(arg default_smooth_speed)"/>
+        <param name="cloud_topic" value="$(arg cloud_topic)"/>
+        <param name="expected_map_frame" value="$(arg expected_map_frame)"/>
+        <param name="map_voxel_size" value="$(arg map_voxel_size)"/>
+        <param name="map_visualization_voxel_size" value="$(arg map_visualization_voxel_size)"/>
+        <param name="map_min_x" value="$(arg map_min_x)"/>
+        <param name="map_max_x" value="$(arg map_max_x)"/>
+        <param name="map_min_y" value="$(arg map_min_y)"/>
+        <param name="map_max_y" value="$(arg map_max_y)"/>
+        <param name="map_min_z" value="$(arg map_min_z)"/>
+        <param name="map_max_z" value="$(arg map_max_z)"/>
+        <param name="map_min_observations" value="$(arg map_min_observations)"/>
+        <param name="map_observation_interval" value="$(arg map_observation_interval)"/>
+        <param name="map_min_persistence_time" value="$(arg map_min_persistence_time)"/>
+        <param name="map_self_exclusion_radius" value="$(arg map_self_exclusion_radius)"/>
+        <param name="map_capture_enabled" value="$(arg map_capture_enabled)"/>
+        <param name="max_capture_speed" value="$(arg max_capture_speed)"/>
+        <param name="finalize_cooldown" value="$(arg finalize_cooldown)"/>
+    </node>
+
+    <!-- Safe companion node: it waits for FINISH, then only builds and
+         visualizes the global trajectory. preview_only prevents any command
+         publication to the simulator or aircraft. -->
+    <node pkg="mission_planner" type="full_smooth_mission"
+          name="waypoint_full_smooth_preview" output="screen">
+        <param name="odom_topic" value="$(arg odom_topic)"/>
+        <param name="wait_for_reload" value="true"/>
+        <param name="preview_only" value="true"/>
+        <param name="preview_start_at_first_route_point" value="true"/>
+        <param name="save_generated_trajectory" value="true"/>
+        <param name="saved_trajectory_path" value="$(arg saved_trajectory_path)"/>
+        <param name="load_saved_trajectory_for_preview"
+               value="$(arg load_existing_trajectory)"/>
+        <param name="use_super_safe_corridor" value="true"/>
+        <!-- The recorder PCD is the only validation-map input. Do not start a
+             second live ROG-Map callback/visualization pipeline on the UAV. -->
+        <param name="super_static_map_only" value="true"/>
+        <param name="super_config_path" value="$(arg super_config_path)"/>
+        <param name="collision_clearance" value="$(arg collision_clearance)"/>
+        <!-- Reuse the real A/B/C ceiling definition while generating the saved
+             polynomial. At z=2.0 with 0.30 m clearance, the hard vehicle
+             reference-point limit is z<=1.70 m. -->
+        <rosparam command="load" ns="regional_ceiling"
+                  file="$(find mission_planner)/config/competition_2026_cloud_guard_real.yaml"/>
+        <param name="local_collision_replan_enabled" value="$(arg local_collision_replan_enabled)"/>
+        <param name="local_collision_replan_max_attempts" value="1"/>
+        <param name="local_collision_replan_inflation_radius" value="$(arg local_collision_replan_margin)"/>
+        <param name="reload_topic" value="/waypoint_recorder/full_smooth_preview"/>
+        <param name="route_param" value="/waypoint_recorder/generated_route_path"/>
+        <param name="map_param" value="/waypoint_recorder/generated_map_path"/>
+    </node>
+
+    <!-- RViz accumulates the world-frame scans for 30 seconds. It is display-only
+         and does not alter FAST-LIO, EKF, or the planner input. -->
+    <node if="$(arg rviz)" pkg="rviz" type="rviz" name="waypoint_recorder_rviz"
+          args="-d $(find mission_planner)/rviz/waypoint_recorder.rviz" output="log"/>
+</launch>

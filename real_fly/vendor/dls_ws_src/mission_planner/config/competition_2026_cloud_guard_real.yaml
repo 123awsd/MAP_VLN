@@ -1,0 +1,18 @@
+# X/Y use the FAST-LIO takeoff-relative world frame; Z uses floor z=0.
+# D is intentionally omitted so its upper gate opening remains unconstrained.
+enabled: true
+input_topic: "/cloud_registered"
+output_topic: "/competition/planning_cloud"
+constraint_topic: "/competition/static_constraint_cloud"
+expected_frame: "world"
+ceiling_z: 2.0
+grid_resolution: 0.2
+virtual_point_intensity: 0.0
+
+# These values match the current recorder/FAST-LIO frame: the route first
+# travels along +X through A/B, then along +Y through C toward D.
+# Parallel arrays, in order: A, B, C. D is intentionally unconstrained.
+region_x_min: [-0.75,  6.25,  6.25]
+region_x_max: [ 6.25, 13.25, 13.25]
+region_y_min: [-0.75, -0.75,  6.75]
+region_y_max: [ 6.75,  6.75, 14.25]

@@ -1,0 +1,60 @@
+goal_pub_topic: "/planning/click_goal"
+path_pub_topic: "/planning/waypoint_path"
+odom_topic: "/ekf_quat/ekf_odom"
+
+# 0: RViz trigger; 1: MAVROS RC; 2: automatically start after delay;
+# 3: PX4Ctrl /traj_start_trigger (recommended for real flight).
+start_trigger_type: 3
+start_program_delay: 0.0
+start_trigger_topic: "/traj_start_trigger"
+
+# Start only after PX4Ctrl enters AUTO_HOVER and emits /traj_start_trigger.
+# After the last waypoint, request landing only after SUPER stops publishing
+# commands and PX4Ctrl has had time to fall back to AUTO_HOVER.
+auto_land: true
+position_cmd_topic: "/planning/pos_cmd"
+super_position_cmd_topic: "/planning/super_pos_cmd"
+land_topic: "/px4ctrl/takeoff_land"
+land_after_cmd_silence: 0.2
+
+# 0: path; 1: sequential waypoint goals.
+cmd_type: 1
+switch_dis: 0.25
+odom_timeout: 0.5
+# Publish once per waypoint. Re-publishing the same pose every second makes the
+# FSM treat it as a new goal and can repeatedly restart trajectory generation.
+publish_dt: 99999.0
+
+# Keep SUPER as the real-flight default until the visualized smooth trajectory
+# and its green safety envelope have been checked against the surveyed gate.
+d_gate:
+  mode: "super"
+  cmd_topic: "/planning/gate_pos_cmd"
+  select_topic: "/planning/gate_active"
+  super_pause_topic: "/planning/super_pause"
+  collision_cloud_topic: "/competition/planning_cloud"
+  path_topic: "/planning/d_gate_smooth_path"
+  marker_topic: "/planning/d_gate_smooth_markers"
+  start_waypoint: 6
+  end_waypoint: 11
+  speed: 1.30
+  min_segment_time: 0.60
+  start_tolerance: 0.65
+  start_max_speed: 2.00
+  start_dwell: 0.0
+  start_require_yaw: false
+  handoff_min_hold: 0.30
+  handoff_timeout: 2.5
+  yaw_deg: 90.0
+  finishes_mission: true
+  final_dwell: 0.2
+  collision_check_required: true
+  collision_clearance: 0.21
+  collision_coverage_max_distance: 0.80
+  collision_cloud_timeout: 0.50
+  collision_min_points: 100
+  sample_dt: 0.03
+  guide_x: [11.55, 12.05, 12.45, 12.70, 12.75, 12.75, 12.75, 12.75, 12.75, 12.75, 13.00, 13.50]
+  guide_y: [-6.25, -5.20, -4.30, -3.50, -3.20, -2.88, -2.72, -2.60, -2.25, -1.70, -0.90,  0.00]
+  guide_z: [ 1.20,  1.35,  1.50,  1.50,  1.50,  1.46,  1.05,  0.55,  0.50,  0.50,  0.52,  0.55]
+  guide_speed: [1.20, 1.30, 1.20, 0.90, 0.55, 0.40, 0.35, 0.32, 0.40, 0.70, 1.10, 0.60]

@@ -1,0 +1,50 @@
+<launch>
+  <!-- Shared PCD global localization: mapping waits for initial_align odometry. -->
+  <arg name="rviz" default="false" />
+  <arg name="map_pcd" default="$(eval optenv('GLOBAL_MAP_PCD', 'origin.pcd'))" />
+  <arg name="init_x" default="$(eval optenv('INIT_BODY_X', '0.0'))" />
+  <arg name="init_y" default="$(eval optenv('INIT_BODY_Y', '0.0'))" />
+  <arg name="init_z" default="$(eval optenv('INIT_BODY_Z', '0.0'))" />
+  <arg name="init_yaw_deg" default="$(eval optenv('INIT_BODY_YAW_DEG', '0.0'))" />
+  <arg name="map_incremental" default="false" />
+  <arg name="save_new_map_to_pcd" default="false" />
+  <arg name="max_fitness_score" default="$(eval optenv('FAST_LIO_MAX_FITNESS_SCORE', '2.0'))" />
+  <arg name="initial_odom_timeout" default="$(eval optenv('FAST_LIO_ODOM_TIMEOUT', '90.0'))" />
+  <arg name="init_mode" default="$(eval optenv('INIT_MODE', 'auto'))" />
+  <arg name="scdb_path" default="$(eval optenv('GCS_SCDB', ''))" />
+  <arg name="scdb_top_k" default="$(eval optenv('FAST_LIO_SCDB_TOP_K', '8'))" />
+  <arg name="scdb_pose_fallback" default="$(eval optenv('FAST_LIO_SCDB_POSE_FALLBACK', 'true'))" />
+  <arg name="scdb_accept_fitness" default="$(eval optenv('FAST_LIO_SCDB_ACCEPT_FITNESS', '0.5'))" />
+
+  <include file="$(find fast_lio)/launch/initial_align.launch">
+    <arg name="rviz" value="$(arg rviz)" />
+    <arg name="map_pcd" value="$(arg map_pcd)" />
+    <arg name="init_x" value="$(arg init_x)" />
+    <arg name="init_y" value="$(arg init_y)" />
+    <arg name="init_z" value="$(arg init_z)" />
+    <arg name="init_yaw_deg" value="$(arg init_yaw_deg)" />
+    <arg name="max_fitness_score" value="$(arg max_fitness_score)" />
+    <arg name="init_mode" value="$(arg init_mode)" />
+    <arg name="scdb_path" value="$(arg scdb_path)" />
+    <arg name="scdb_top_k" value="$(arg scdb_top_k)" />
+    <arg name="scdb_accept_fitness" value="$(arg scdb_accept_fitness)" />
+    <arg name="scdb_pose_fallback" value="$(arg scdb_pose_fallback)" />
+  </include>
+
+  <rosparam command="load" file="$(find fast_lio)/config/mid360.yaml" />
+  <param name="wxx/initial_map_from_pcd" type="bool" value="true" />
+  <param name="wxx/initial_map_pcd_name" value="$(arg map_pcd)" />
+  <param name="wxx/map_incremental" type="bool" value="$(arg map_incremental)" />
+  <param name="wxx/save_new_map_to_pcd" type="bool" value="$(arg save_new_map_to_pcd)" />
+  <param name="wxx/initial_odom_timeout_sec" type="double" value="$(arg initial_odom_timeout)" />
+  <param name="feature_extract_enable" type="bool" value="false" />
+  <param name="point_filter_num" type="int" value="6" />
+  <param name="max_icp_times" type="int" value="2" />
+  <param name="max_iteration" type="int" value="4" />
+  <param name="filter_size_surf" type="double" value="0.25" />
+  <param name="filter_size_map" type="double" value="0.25" />
+  <param name="cube_side_length" type="double" value="1000" />
+  <param name="runtime_pos_log_enable" type="bool" value="false" />
+  <node pkg="fast_lio" type="fastlio_mapping" name="laserMapping" output="screen" />
+  <node pkg="fast_lio" type="cpu_monitor" name="cpu_monitor" output="screen" />
+</launch>

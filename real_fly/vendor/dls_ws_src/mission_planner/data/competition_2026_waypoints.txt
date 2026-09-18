@@ -1,0 +1,36 @@
+# 2026 competition preset mission
+# Extended format:
+# x[m] y[m] z[m] yaw[deg|nan=velocity heading] switch_distance[m] dwell[s] yaw_tolerance[deg]
+#
+# Take off with a small horizontal component to avoid the flat-output
+# singularity of a zero-horizontal-speed, single-piece trajectory.
+ 0.30 -0.30  1.00  -90   0.25  0.3  15
+
+# Region A: only retain the two obstacle-side guides and the A-B passage.
+# Transit-point yaw is automatic and the larger switch radius enables fly-through.
+# 1.25 -1.75  1.00  nan   0.55  0.0  25
+# 1.25 -3.75  1.00  nan   0.55  0.0  25
+ 2.50 -7.45  1.10  nan   0.70  0.0  25
+
+# Region B: the planner routes around the cross wall; only the two mandatory
+# inspection poses remain. These retain their exact yaw and half-second dwell.
+ 0.30  -9.95  1.10  nan   0.70  0.0  25
+ 1.50 -11.00  1.20    0   0.15  0.5   8
+ 2.75 -12.65  1.20  nan   0.70  0.0  25
+ 4.30 -10.80  1.20  180   0.15  0.5   8
+
+# Region C: retain its passage and exit only; SUPER plans through the trees.
+# 7.45 -9.75  1.20  nan   0.65  0.0  25
+11.55 -6.25  1.20  nan   0.80  0.0  25
+
+# Region D: smooth mode uses the first point only as a stopped staging pose and
+# replaces the next three points with one C2 trajectory. Super mode uses all four.
+12.75 -3.75  1.50   90   0.45  0.0  15
+12.75 -2.75  1.50   90   0.20  0.0  10
+12.75 -2.75  0.50   90   0.20  0.0  10
+12.75 -1.55  0.50   90   0.45  0.0  15
+
+# Landing: first center over the H area, then descend to the lowest free
+# UAV-centre voxel after the 0.20 m floor inflation.
+#13.50  0.00  1.00   90   0.35  0.0  15
+13.50  0.00  0.55   90   0.08  2.0  10
