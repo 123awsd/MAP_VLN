@@ -919,6 +919,19 @@ private:
                      position_error, yaw_error * 180.0 / M_PI);
             return;
         }
+        if (route_loaded_ && !route_.empty()) {
+            const double position_error =
+                (position_ - route_.front().position).norm();
+            if (position_error > start_position_tolerance_) {
+                trajectory_safe_ = false;
+                state_ = State::BLOCKED;
+                ROS_ERROR("[FULL_SMOOTH] route start mismatch: position %.3f m (limit %.3f); no trajectory started",
+                          position_error, start_position_tolerance_);
+                return;
+            }
+            ROS_INFO("[FULL_SMOOTH] route start matched: position %.3f m (limit %.3f)",
+                     position_error, start_position_tolerance_);
+        }
         trigger_received_ = true;
         if (!wait_for_reload_ && route_loaded_ && have_odom_ && !preview_built_) {
             try {

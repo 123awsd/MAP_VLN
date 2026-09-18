@@ -159,6 +159,31 @@ speed, per-goal arrival checks and bounded timeouts. It never arms, takes off,
 lands, or publishes `PositionCommand`. Validate preview and a restrained test
 with the aircraft secured before enabling free flight.
 
+## Direct full-smooth execution
+
+For a static, pre-approved demo, `run_real_stage2_task.sh` also exports the
+continuous validated route as `full_smooth_route.txt`. This path uses the
+senior `full_smooth_mission` executor rather than the PoseStamped goal adapter:
+the node builds one continuous MINCO command stream from the route and sends it
+through `competition_command_mux` to PX4Ctrl. It does not start `/fsm_node`, and
+the direct launch keeps automatic landing disabled.
+
+After copying the task directory to the NX, start the direct executor with:
+
+```bash
+./real_fly/stage2_runtime/scripts/start_full_smooth_mission.sh \
+  "/home/nv/dls_ws/${RUN_ID}.pcd" \
+  --route \
+  "real_fly/stage2_runtime/missions/${RUN_ID}/${TASK_ID}/full_smooth_route.txt" \
+  --bundle \
+  "real_fly/stage2_runtime/missions/${RUN_ID}/${TASK_ID}/execution_bundle.json"
+```
+
+Start PX4Ctrl separately. After takeoff and stable hover, switching PX4Ctrl to
+command-control mode emits `/traj_start_trigger`; `full_smooth_mission` then
+checks the current odometry and starts the continuous route. Landing remains a
+manual pilot action.
+
 ## NX planning from the localized takeoff point
 
 After host-side room and semantic approval, export the compact per-run planning

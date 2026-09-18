@@ -51,7 +51,8 @@
         <param name="odom_topic" value="/ekf_quat/ekf_odom"/>
         <param name="start_trigger_type" value="3"/>
         <param name="start_delay" value="0.0"/>
-        <param name="auto_land" value="true"/>
+        <!-- Landing stays under the pilot's explicit control. -->
+        <param name="auto_land" value="false"/>
         <param name="min_segment_time" value="0.60"/>
         <!-- Real flight: require 0.30 m centre-to-obstacle clearance. -->
         <param name="collision_clearance" value="0.30"/>

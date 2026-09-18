@@ -99,6 +99,8 @@ topics=(
   /ekf_quat/ekf_odom /Odometry /DebugOdometry /LioDebug
   /tf /tf_static
   /planning/click_goal /planning/pos_cmd /planning/super_pos_cmd
+  /planning/gate_pos_cmd /planning/gate_active
+  /planning/full_smooth_path /planning/full_smooth_markers
   /planning/super_pause /planning_cmd/poly_traj /traj_start_trigger
   /px4ctrl/takeoff_land /debugPx4ctrl
   /pre_map_vln/runtime_status /pre_map_vln/approved_route /pre_map_vln/approved_goals

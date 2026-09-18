@@ -2,8 +2,9 @@
 """Collision-check and freeze an offline mission for real-machine preview.
 
 This program is deliberately ROS-free.  It never starts hardware and never
-publishes a command.  SUPER remains the authoritative live trajectory planner;
-the B-spline stored here is an auditable reference route for preview/bundling.
+publishes a command.  The validated B-spline is exported as a continuous
+full_smooth route; the senior full_smooth_mission node is the runtime MINCO
+executor for that route.
 """
 
 from __future__ import annotations
@@ -180,7 +181,7 @@ def main() -> None:
             "piece_count": pieces,
             "minimum_clearance_m": clearance,
             "offline_reference_only": True,
-            "authoritative_runtime_planner": "SUPER",
+            "authoritative_runtime_planner": "full_smooth_mission",
         }
         minimum_clearance = min(minimum_clearance, clearance)
         modes.append(mode)
@@ -210,15 +211,16 @@ def main() -> None:
         "autonomous_semantic_execution_eligible": False,
         "online_execution_limitations": online_limitations,
         "safety_note": (
-            "Passing this audit does not authorize flight. SUPER must replan against "
-            "live LiDAR occupancy before PX4Ctrl receives PositionCommand."
+            "Passing this audit does not authorize flight. full_smooth_mission must "
+            "load the exported route, validate the current start pose, and pass "
+            "continuous PositionCommand output through the command mux to PX4Ctrl."
         ),
     }
     mission["offline_trajectory_validation"] = {
         "status": "pass",
         "reference_only": True,
         "minimum_clearance_m": minimum_clearance,
-        "authoritative_runtime_planner": "SUPER",
+        "authoritative_runtime_planner": "full_smooth_mission",
     }
     mission["real_start_source"] = args.start_source
     mission["start_pose_explicitly_approved"] = args.start_source == "explicit_approved_pose"

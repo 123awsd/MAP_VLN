@@ -87,6 +87,7 @@ planning_dir="$task_dir/planning"
 raw_mission="$planning_dir/mission_plan_astar.json"
 mission="$planning_dir/mission_plan.json"
 audit="$task_dir/mission_audit.json"
+full_smooth_route="$planning_dir/full_smooth_route.txt"
 runtime_bundle="$root/real_fly/stage2_runtime/missions/$run_id/$task_id/execution_bundle.json"
 
 failed_backup_root="$run_data/tasks/.failed"
@@ -184,21 +185,29 @@ mv "$planning_dir/mission_plan.json" "$raw_mission"
 
 bundle_eligible="$("$python" -c 'import json,sys; print("true" if json.load(open(sys.argv[1]))["motion_preview_bundle_eligible"] else "false")' "$audit")"
 if [[ "$bundle_eligible" == "true" ]]; then
+  "$python" "$script_dir/export_full_smooth_route.py" \
+    --mission "$mission" \
+    --output "$full_smooth_route" \
+    --path-source validated
   "$root/real_fly/stage2_runtime/scripts/prepare_real_execution.sh" \
     "$run_id" "$mission" "$task_id"
+  runtime_mission_dir="$(dirname "$runtime_bundle")"
+  cp -a "$full_smooth_route" "$runtime_mission_dir/full_smooth_route.txt"
 else
   echo "Dynamic task preserved for preview, but no execution bundle was generated."
   echo "Reason: conditional/recovery motion requires the online perception/outcome executor."
 fi
 
 "$python" - "$task_dir/run_manifest.json" "$run_id" "$task_id" "$start_source" \
-  "$task_graph" "$mission" "$audit" "$runtime_bundle" "$bundle_eligible" "$scene_graph" <<'PY'
+  "$task_graph" "$mission" "$audit" "$runtime_bundle" "$bundle_eligible" \
+  "$full_smooth_route" "$scene_graph" <<'PY'
 import json
 import pathlib
 import sys
 
 target = pathlib.Path(sys.argv[1])
 bundle = pathlib.Path(sys.argv[8])
+full_smooth_route = pathlib.Path(sys.argv[10])
 document = {
     "format": "pre_map_vln.real_stage2_task_run.v1",
     "run_id": sys.argv[2],
@@ -209,7 +218,10 @@ document = {
     "mission_audit": str(pathlib.Path(sys.argv[7]).resolve()),
     "execution_bundle": str(bundle.resolve()) if bundle.is_file() else None,
     "motion_preview_bundle_eligible": sys.argv[9] == "true",
-    "scene_graph": str(pathlib.Path(sys.argv[10]).resolve()),
+    "full_smooth_route": (
+        str(full_smooth_route.resolve()) if full_smooth_route.is_file() else None
+    ),
+    "scene_graph": str(pathlib.Path(sys.argv[11]).resolve()),
     "autonomous_semantic_execution_eligible": False,
     "safety_scope": "offline_preview_only",
 }
@@ -220,4 +232,8 @@ echo "Real Stage2 task prepared: $task_dir"
 echo "RViz preview: $script_dir/view_real_scene_rviz.sh $run_id 1 $task_id"
 if [[ -s "$runtime_bundle" ]]; then
   echo "Preview-only execution bundle: $runtime_bundle"
+fi
+if [[ -s "$full_smooth_route" ]]; then
+  echo "Full-smooth route: $full_smooth_route"
+  echo "NX runtime route: $(dirname "$runtime_bundle")/full_smooth_route.txt"
 fi

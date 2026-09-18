@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Export a real-flight Stage-2 mission as a full_smooth_mission route.
+"""Export a validated Stage-2 mission as a full_smooth_mission route.
 
-The real-flight route must be an offline A* guide.  The installed SUPER
-planner rebuilds local safe corridors and the MINCO trajectory from that
-guide; the old recorded-trajectory guide is intentionally not supported.
+The route keeps the continuous offline validated trajectory samples as soft
+guide points.  The senior full_smooth_mission node consumes this route and
+generates the continuous MINCO command stream; it is not converted into a
+goal-by-goal PoseStamped mission.
 """
 
 import argparse
@@ -27,11 +28,10 @@ def main():
     parser.add_argument("--dwell", type=float, default=3.0)
     parser.add_argument(
         "--path-source",
-        choices=("astar", "sparse", "sparse_astar"),
-        default="astar",
+        choices=("validated", "astar", "sparse", "sparse_astar"),
+        default="validated",
         help=(
-            "Guide source for the real-flight SUPER planner "
-            "(default: astar)."
+            "Guide source for full_smooth_mission (default: validated)."
         ),
     )
     parser.add_argument("--guide-spacing", type=float, default=0.8,
@@ -57,14 +57,17 @@ def main():
 
     rows = []
     previous = None
-    if args.path_source in ("astar", "sparse", "sparse_astar"):
+    if args.path_source in ("validated", "astar", "sparse", "sparse_astar"):
         start = mission.get("start_xyz_yaw", [])
         if len(start) != 4 or not all(math.isfinite(float(value)) for value in start):
             raise SystemExit("mission has invalid start_xyz_yaw")
         previous = finite_xyz(start[:3], "mission start")
         rows.append((*previous, args.speed, float("nan"), 0.0, "pass"))
     for index, (visit, segment) in enumerate(zip(visits, segments)):
-        if args.path_source == "sparse":
+        if args.path_source == "validated":
+            validated = segment.get("validated_trajectory") or {}
+            points = validated.get("points_xyz_m") or segment.get("points_xyz_m") or []
+        elif args.path_source == "sparse":
             points = []
         else:
             points = segment.get("points_xyz_m") or []

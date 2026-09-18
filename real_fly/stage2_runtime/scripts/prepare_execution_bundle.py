@@ -125,7 +125,7 @@ def main():
         "route_source": "offline_collision_checked_bspline_when_available",
         "goals": goals,
         "safety": {
-            "controller": "senior SUPER -> /planning/pos_cmd -> px4ctrl",
+            "controller": "full_smooth_mission -> command_mux -> /planning/pos_cmd -> px4ctrl",
             "adapter_publishes_position_command": False,
             "automatic_arming": False,
             "automatic_takeoff": False,
