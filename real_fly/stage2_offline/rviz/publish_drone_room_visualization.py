@@ -18,6 +18,21 @@ from sensor_msgs import point_cloud2
 from std_msgs.msg import Header
 from visualization_msgs.msg import Marker, MarkerArray
 
+LABEL_ZH = {
+    "bed": "床", "chair": "椅子", "sofa": "沙发", "table": "桌子",
+    "coffee table": "茶几", "desk": "书桌", "cabinet": "柜子",
+    "television": "电视", "television stand": "电视柜", "refrigerator": "冰箱",
+    "microwave": "微波炉", "pot": "锅", "cup": "水杯", "bottle": "水瓶",
+    "toilet": "马桶", "sink": "洗手台", "toilet paper": "卫生纸",
+    "laptop": "笔记本电脑", "mobile phone": "手机", "speaker": "音箱",
+    "fire extinguisher": "灭火器", "dumbbell": "哑铃", "pool table": "台球桌",
+    "door": "门", "window": "窗户", "bedside table": "床头柜",
+}
+
+def display_label(label):
+    original = str(label).strip()
+    return original
+
 
 def read_binary_pcd(path):
     raw = path.read_bytes()
@@ -173,7 +188,7 @@ def add_observation_frustums(marker_array, mission, mission_path, frame):
 
 
 def add_clearance_markers(marker_array, mission, voxel_snapshot, frame):
-    """Mark the minimum-ESDF point of each validated trajectory segment."""
+    """Mark each segment's minimum-ESDF point and its nearest occupied voxel."""
     if voxel_snapshot is None:
         return 0
     metadata_path = voxel_snapshot / "metadata.json"
@@ -183,9 +198,16 @@ def add_clearance_markers(marker_array, mission, voxel_snapshot, frame):
     metadata = json.loads(metadata_path.read_text())
     arrays = np.load(arrays_path)
     esdf = arrays["esdf_zyx_m"]
+    raw_occupancy = arrays["raw_occupancy_zyx"]
     origin = np.asarray(metadata["origin_xyz_m"], dtype=float)
     resolution = float(metadata["resolution_m"])
     threshold = float(metadata.get("minimum_esdf_distance_m", 0.0))
+
+    # np.argwhere is z/y/x. Convert occupied voxel indices to world x/y/z
+    # centers once, then use the small local neighbourhood around each
+    # bottleneck for an exact nearest-voxel marker.
+    occupied_zyx = np.argwhere(raw_occupancy > 0)
+    occupied_xyz = origin + (occupied_zyx[:, ::-1].astype(float) + 0.5) * resolution
 
     def clearance(point):
         index = np.floor((np.asarray(point, dtype=float) - origin) / resolution).astype(int)
@@ -195,6 +217,7 @@ def add_clearance_markers(marker_array, mission, voxel_snapshot, frame):
         return float(esdf[z, y, x])
 
     count = 0
+    global_bottleneck = None
     for segment_index, segment in enumerate(mission.get("segments", [])):
         validated = segment.get("validated_trajectory") or {}
         points = validated.get("points_xyz_m") or segment.get("points_xyz_m", [])
@@ -202,6 +225,8 @@ def add_clearance_markers(marker_array, mission, voxel_snapshot, frame):
             continue
         values = [(clearance(point), point) for point in points]
         minimum, point = min(values, key=lambda item: item[0])
+        if global_bottleneck is None or minimum < global_bottleneck[0]:
+            global_bottleneck = (minimum, segment_index, np.asarray(point, dtype=float))
 
         sphere = Marker()
         sphere.header.frame_id = frame
@@ -232,18 +257,137 @@ def add_clearance_markers(marker_array, mission, voxel_snapshot, frame):
         label.color.r = label.color.g = label.color.b = label.color.a = 1.0
         label.text = f"seg {segment_index + 1}: clearance={minimum:.2f}m"
         marker_array.markers.append(label)
+
+        path_point = np.asarray(point, dtype=float)
+        local_mask = np.all(np.abs(occupied_xyz - path_point) <= max(1.0, minimum + resolution), axis=1)
+        local_occupied = occupied_xyz[local_mask]
+        if len(local_occupied):
+            distances = np.linalg.norm(local_occupied - path_point, axis=1)
+            obstacle_point = local_occupied[int(np.argmin(distances))]
+
+            obstacle = Marker()
+            obstacle.header.frame_id = frame
+            obstacle.ns = "trajectory_nearest_obstacles"
+            obstacle.id = segment_index
+            obstacle.type = Marker.CUBE
+            obstacle.action = Marker.ADD
+            obstacle.pose.position.x, obstacle.pose.position.y, obstacle.pose.position.z = map(float, obstacle_point)
+            obstacle.pose.orientation.w = 1.0
+            obstacle.scale.x = obstacle.scale.y = obstacle.scale.z = max(0.14, resolution)
+            obstacle.color.r = 1.0
+            obstacle.color.g = 0.0
+            obstacle.color.b = 1.0
+            obstacle.color.a = 1.0
+            marker_array.markers.append(obstacle)
+
+            connector = Marker()
+            connector.header.frame_id = frame
+            connector.ns = "trajectory_clearance_vectors"
+            connector.id = segment_index
+            connector.type = Marker.LINE_LIST
+            connector.action = Marker.ADD
+            connector.pose.orientation.w = 1.0
+            connector.scale.x = 0.045
+            connector.color.r = 0.0
+            connector.color.g = 1.0
+            connector.color.b = 1.0
+            connector.color.a = 1.0
+            connector.points = [Point(x=float(path_point[0]), y=float(path_point[1]), z=float(path_point[2])),
+                                Point(x=float(obstacle_point[0]), y=float(obstacle_point[1]), z=float(obstacle_point[2]))]
+            marker_array.markers.append(connector)
         count += 1
+
+    if global_bottleneck is not None:
+        minimum, segment_index, point = global_bottleneck
+
+        highlight = Marker()
+        highlight.header.frame_id = frame
+        highlight.ns = "global_bottleneck_highlight"
+        highlight.id = 0
+        highlight.type = Marker.SPHERE
+        highlight.action = Marker.ADD
+        highlight.pose.position.x, highlight.pose.position.y, highlight.pose.position.z = map(float, point)
+        highlight.pose.orientation.w = 1.0
+        highlight.scale.x = highlight.scale.y = highlight.scale.z = 0.46
+        highlight.color.r = 1.0
+        highlight.color.g = 0.0
+        highlight.color.b = 0.0
+        highlight.color.a = 0.88
+        marker_array.markers.append(highlight)
+
+        arrow = Marker()
+        arrow.header.frame_id = frame
+        arrow.ns = "global_bottleneck_arrow"
+        arrow.id = 0
+        arrow.type = Marker.ARROW
+        arrow.action = Marker.ADD
+        arrow.pose.orientation.w = 1.0
+        arrow.scale.x = 0.10
+        arrow.scale.y = 0.22
+        arrow.scale.z = 0.28
+        arrow.color.r = 1.0
+        arrow.color.g = 0.05
+        arrow.color.b = 0.05
+        arrow.color.a = 1.0
+        arrow.points = [Point(x=float(point[0]), y=float(point[1]), z=float(point[2]) + 1.35),
+                        Point(x=float(point[0]), y=float(point[1]), z=float(point[2]) + 0.25)]
+        marker_array.markers.append(arrow)
+
+        warning = Marker()
+        warning.header.frame_id = frame
+        warning.ns = "global_bottleneck_label"
+        warning.id = 0
+        warning.type = Marker.TEXT_VIEW_FACING
+        warning.action = Marker.ADD
+        warning.pose.position.x = float(point[0])
+        warning.pose.position.y = float(point[1])
+        warning.pose.position.z = float(point[2]) + 1.55
+        warning.pose.orientation.w = 1.0
+        warning.scale.z = 0.30
+        warning.color.r = 1.0
+        warning.color.g = 0.12
+        warning.color.b = 0.12
+        warning.color.a = 1.0
+        warning.text = (f"BOTTLENECK  SEG {segment_index + 1}  {minimum:.2f} m\n"
+                        f"({point[0]:.2f}, {point[1]:.2f}, {point[2]:.2f})")
+        marker_array.markers.append(warning)
     return count
 
 
+def add_round_planned_path(marker_array, mission, frame):
+    """Render the planned route as round samples instead of an RViz billboard ribbon."""
+    points = []
+    for segment in mission.get("segments", []):
+        validated = segment.get("validated_trajectory") or {}
+        points.extend(validated.get("points_xyz_m") or segment.get("points_xyz_m", []))
+    if not points:
+        return 0
+
+    marker = Marker()
+    marker.header.frame_id = frame
+    marker.ns = "round_planned_path"
+    marker.id = 0
+    marker.type = Marker.SPHERE_LIST
+    marker.action = Marker.ADD
+    marker.pose.orientation.w = 1.0
+    marker.scale.x = marker.scale.y = marker.scale.z = 0.11
+    marker.color.r = 0.10
+    marker.color.g = 0.85
+    marker.color.b = 1.0
+    marker.color.a = 1.0
+    marker.points = [Point(x=float(xyz[0]), y=float(xyz[1]), z=float(xyz[2])) for xyz in points]
+    marker_array.markers.append(marker)
+    return len(points)
+
+
 def publish_traversability(voxel_snapshot, frame):
-    """Publish inflated-free and inflation-excluded voxel centers for RViz."""
+    """Publish filtered occupancy and traversability voxel centers for RViz."""
     if voxel_snapshot is None:
-        return [], 0, 0, 0.0
+        return [], 0, 0, 0, 0.0
     metadata_path = voxel_snapshot / "metadata.json"
     arrays_path = voxel_snapshot / "voxel_map.npz"
     if not metadata_path.is_file() or not arrays_path.is_file():
-        return [], 0, 0, 0.0
+        return [], 0, 0, 0, 0.0
 
     metadata = json.loads(metadata_path.read_text())
     arrays = np.load(arrays_path)
@@ -254,6 +398,7 @@ def publish_traversability(voxel_snapshot, frame):
     threshold = float(metadata["minimum_esdf_distance_m"])
 
     observed_free = raw == 0
+    filtered_occupied = raw > 0
     inflated_free = observed_free & (esdf + 1e-6 >= threshold)
     inflation_excluded = observed_free & ~inflated_free
     header = Header(frame_id=frame, stamp=rospy.Time.now())
@@ -270,9 +415,10 @@ def publish_traversability(voxel_snapshot, frame):
         publishers.append(publisher)
         return len(xyz)
 
+    occupied_count = publish_mask(filtered_occupied, "/drone_room/filtered_occupied")
     free_count = publish_mask(inflated_free, "/drone_room/inflated_free")
     excluded_count = publish_mask(inflation_excluded, "/drone_room/inflation_excluded")
-    return publishers, free_count, excluded_count, threshold
+    return publishers, occupied_count, free_count, excluded_count, threshold
 
 
 def setup_clicked_point_display(frame):
@@ -337,12 +483,12 @@ def main():
     cloud = point_cloud2.create_cloud(cloud_header, fields, read_binary_pcd(map_path))
     cloud_pub = rospy.Publisher("/drone_room/map", PointCloud2, queue_size=1, latch=True)
     cloud_pub.publish(cloud)
-    traversability_pubs, free_count, excluded_count, inflation_threshold = (
+    traversability_pubs, occupied_count, free_count, excluded_count, inflation_threshold = (
         publish_traversability(voxel_snapshot, frame)
     )
     clicked_point_pub, clicked_point_sub = setup_clicked_point_display(frame)
 
-    marker_array = MarkerArray()
+    semantic_markers = MarkerArray()
     boxes = load_box_geometry(clusters_path, raw_targets_path, boxer_3d_path, min_observations)
     for item, geometry in boxes:
         marker = Marker()
@@ -368,7 +514,7 @@ def main():
         marker.color.r, marker.color.g, marker.color.b = semantic_color(item["label"])
         marker.color.a = 0.34
         marker.lifetime = rospy.Duration(0)
-        marker_array.markers.append(marker)
+        semantic_markers.markers.append(marker)
         text = Marker()
         text.header.frame_id = frame
         text.ns = "semantic_labels"
@@ -382,15 +528,22 @@ def main():
         text.scale.z = 0.18
         text.color.r = text.color.g = text.color.b = 1.0
         text.color.a = 1.0
-        text.text = "%s #%d  obs=%d  conf=%.2f" % (
-            item["label"], item["cluster_id"], item["observations"], item["confidence_max"])
-        marker_array.markers.append(text)
+        text.text = display_label(item["label"])
+        semantic_markers.markers.append(text)
     trajectory_pub = load_path(trajectory_path, "/drone_room/trajectory")
     mission = json.loads(mission_path.read_text())
-    frustum_count = add_observation_frustums(marker_array, mission, mission_path, frame)
-    clearance_count = add_clearance_markers(marker_array, mission, voxel_snapshot, frame)
-    marker_pub = rospy.Publisher("/drone_room/targets", MarkerArray, queue_size=1, latch=True)
-    marker_pub.publish(marker_array)
+    planning_markers = MarkerArray()
+    frustum_count = add_observation_frustums(planning_markers, mission, mission_path, frame)
+    clearance_count = add_clearance_markers(planning_markers, mission, voxel_snapshot, frame)
+    round_path_count = add_round_planned_path(planning_markers, mission, frame)
+    semantic_marker_pub = rospy.Publisher(
+        "/drone_room/semantic_markers", MarkerArray, queue_size=1, latch=True
+    )
+    planning_marker_pub = rospy.Publisher(
+        "/drone_room/planning_markers", MarkerArray, queue_size=1, latch=True
+    )
+    semantic_marker_pub.publish(semantic_markers)
+    planning_marker_pub.publish(planning_markers)
 
     plan = RosPath()
     plan.header.frame_id = frame
@@ -405,12 +558,12 @@ def main():
             plan.poses.append(pose)
     plan_pub = rospy.Publisher("/drone_room/planned_path", RosPath, queue_size=1, latch=True)
     plan_pub.publish(plan)
-    rospy.loginfo("Published map (%d points), inflated-free=%d, inflation-excluded=%d "
+    rospy.loginfo("Published map (%d points), filtered-occupied=%d, inflated-free=%d, inflation-excluded=%d "
                   "(minimum clearance %.2fm), %d semantic 3D boxes, %d observation frustums, "
-                  "%d clearance markers, trajectory and validated plan (%d poses)",
-                  len(cloud.data) // cloud.point_step, free_count, excluded_count,
+                  "%d clearance markers, round plan (%d samples), trajectory and validated plan (%d poses)",
+                  len(cloud.data) // cloud.point_step, occupied_count, free_count, excluded_count,
                   inflation_threshold, len(boxes), frustum_count,
-                  clearance_count, len(plan.poses))
+                  clearance_count, round_path_count, len(plan.poses))
     rospy.spin()
 
 

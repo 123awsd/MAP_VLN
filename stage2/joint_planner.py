@@ -236,3 +236,95 @@ def plan_fixed_order_baseline(
         completed.add(eligible["id"])
         pending.remove(eligible)
     return {"format": "pre_map_vln.mission_plan.v1", "planner": "fixed_instruction_order", "visits": visits, "segments": segments, "total_path_length_m": total, "objective_cost": total, "estimated_time_s": total}
+
+
+def plan_all_candidates_in_task_order(
+    grid: Any,
+    task_graph: dict[str, Any],
+    candidates_by_task: dict[str, list[dict[str, Any]]],
+    start_xyz_yaw: list[float],
+) -> dict[str, Any]:
+    """Exhaust every candidate of each task before moving to the next task."""
+    completed: set[str] = set()
+    pending = [task for task in task_graph["tasks"] if task["active_initially"]]
+    ordered_tasks = []
+    while pending:
+        eligible = next(
+            (task for task in pending if set(task["prerequisites"]) <= completed), None
+        )
+        if eligible is None:
+            raise PlanningError("all-candidate replay cannot satisfy prerequisites")
+        ordered_tasks.append(eligible)
+        completed.add(eligible["id"])
+        pending.remove(eligible)
+
+    current = list(start_xyz_yaw)
+    visits, segments = [], []
+    total_length = 0.0
+    total_terminal = 0.0
+    total_time = 0.0
+    for task in ordered_tasks:
+        remaining = list(candidates_by_task.get(task["id"], []))
+        if not remaining:
+            raise PlanningError(f"no feasible terminal pose for task {task['id']}")
+        visit_policy = str(task.get("candidate_visit_policy", "all")).strip().lower()
+        if visit_policy not in {"all", "first"}:
+            raise PlanningError(
+                f"unsupported candidate_visit_policy for task {task['id']}: {visit_policy}"
+            )
+        visit_limit = len(remaining) if visit_policy == "all" else 1
+        task_visit_count = 0
+        while remaining and task_visit_count < visit_limit:
+            options = []
+            for candidate in remaining:
+                path = _motion_path(grid, current, candidate)
+                if path is not None:
+                    options.append((
+                        path.length_m, float(candidate["terminal_cost"]),
+                        candidate["id"], candidate, path,
+                    ))
+            if not options:
+                raise PlanningError(
+                    f"cannot visit every candidate for task {task['id']}"
+                )
+            _, terminal, _, candidate, path = min(options, key=lambda item: item[:3])
+            visits.append({
+                "sequence": len(visits), "task_id": task["id"],
+                "candidate_id": candidate["id"], "object_id": candidate["object_id"],
+                "pose": candidate["pose"], "terminal_cost": terminal,
+            })
+            segments.append(_segment_payload(path, current, task["id"]))
+            total_length += path.length_m
+            total_terminal += terminal
+            total_time += _motion_time(
+                current, candidate["pose"], path.length_m, 1.0, 0.5, 1.0,
+            )
+            pose = candidate["pose"]
+            current = [pose["x"], pose["y"], pose["z"], pose["yaw"]]
+            remaining.remove(candidate)
+            task_visit_count += 1
+
+    result = {
+        "format": "pre_map_vln.mission_plan.v1",
+        "planner": "all_candidates_task_order_astar_3d",
+        "visits": visits,
+        "segments": segments,
+        "total_path_length_m": total_length,
+        "total_terminal_cost": total_terminal,
+        "objective_cost": total_length + total_terminal,
+        "estimated_time_s": total_time,
+        "weights": {"path_length": 1.0, "flight_time": 0.0, "terminal_quality": 1.0},
+        "motion_limits": {
+            "horizontal_speed_mps": 1.0, "climb_speed_mps": 0.5,
+            "yaw_rate_rps": 1.0,
+        },
+        "candidate_execution_policy": "task_order_with_per_task_visit_policy",
+    }
+    if segments and "map_epoch_uuid" in segments[0]:
+        result.update({
+            "start_xyz_yaw": list(start_xyz_yaw),
+            "map_epoch_uuid": segments[0]["map_epoch_uuid"],
+            "geometry_map_version": segments[0]["geometry_map_version"],
+            "planner_profile_hash": segments[0]["planner_profile_hash"],
+        })
+    return result

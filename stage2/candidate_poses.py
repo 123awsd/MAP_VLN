@@ -340,6 +340,7 @@ def matching_objects(
     target_is_search_anchor = verification_label not in ALIASES.get(label, {label})
     room_name = task["target"].get("room")
     requested_room_id = task["target"].get("room_id")
+    requested_object_id = task["target"].get("object_id")
     floor_id = task["target"].get("floor_id")
     accepted = ALIASES.get(label, {label})
     all_matches = []
@@ -350,6 +351,8 @@ def matching_objects(
         if floor_id is not None and int(room.get("floor_id", -1)) != int(floor_id):
             continue
         for obj in room.get("objects", []):
+            if requested_object_id is not None and str(obj.get("id")) != str(requested_object_id):
+                continue
             if str(obj.get("label", "")).lower() not in accepted:
                 continue
             item = (room, obj)
@@ -382,9 +385,11 @@ def generate_candidates(
     max_candidates: int = 8,
     allowed_object_ids: set[str] | None = None,
     prefer_room: bool = True,
+    distance_scale: float = 1.0,
 ) -> list[dict[str, Any]]:
     constraints = task["spatial_constraints"]
     candidates = []
+    distance_scale = max(1.0, float(distance_scale))
     vertical_fov = float(constraints.get("vertical_fov_deg", DEFAULT_VERTICAL_FOV_DEG))
     horizontal_fov = float(constraints.get("horizontal_fov_deg", DEFAULT_HORIZONTAL_FOV_DEG))
     yaw_tolerance = float(constraints.get("yaw_tolerance_deg", 55.0))
@@ -428,6 +433,8 @@ def generate_candidates(
             )
             distance_source = "user_constraint"
         radii = sorted(set([minimum, preferred_distance, maximum]))
+        if distance_scale != 1.0:
+            radii = [value * distance_scale for value in radii]
         region_samples = _region_samples(
             region_center, region_size, region_yaw, constraints_region
         )
@@ -487,7 +494,7 @@ def generate_candidates(
                         + 0.15 * between_distance
                     )
                     candidates.append({
-                        "id": f"{task['id']}__{obj['id']}__{len(candidates):03d}",
+                        "id": f"{task['id']}__{obj['id']}__r{distance_scale:.2f}__{len(candidates):03d}",
                         "task_id": task["id"],
                         "object_id": obj["id"],
                         "object_label": obj["label"],
@@ -504,7 +511,10 @@ def generate_candidates(
                         "location_hypothesis_id": region_object["id"],
                         "distance_to_box_surface_m": radius,
                         "preferred_observation_distance_m": preferred_distance,
-                        "observation_distance_source": distance_source,
+                        "observation_distance_source": (
+                            f"{distance_source}_fallback_ring_{distance_scale:.2f}"
+                            if distance_scale != 1.0 else distance_source
+                        ),
                         "line_of_sight": visible,
                         "candidate_angle_rad": angle % (2.0 * math.pi),
                         "region_type": constraints_region,
@@ -767,6 +777,7 @@ def generate_all_candidates(
     task_graph: dict[str, Any],
     max_candidates: int = 8,
     selected_objects: dict[str, str] | None = None,
+    distance_scale: float = 1.0,
 ) -> dict[str, list[dict[str, Any]]]:
     result = {}
     for task in task_graph["tasks"]:
@@ -774,10 +785,12 @@ def generate_all_candidates(
         values = generate_candidates(
             grid, scene_graph, task, max_candidates=max_candidates,
             allowed_object_ids=None if object_id is None else {object_id},
+            distance_scale=distance_scale,
         )
         if not values and object_id is not None:
             values = generate_candidates(
                 grid, scene_graph, task, max_candidates=max_candidates, prefer_room=False,
+                distance_scale=distance_scale,
             )
         # Language models identify task semantics, not scene-specific camera
         # tuning. If the requested semantic target is grounded but the nominal
@@ -791,6 +804,7 @@ def generate_all_candidates(
                 values = generate_candidates(
                     grid, scene_graph, relaxed, max_candidates=max_candidates,
                     allowed_object_ids=None if object_id is None else {object_id},
+                    distance_scale=distance_scale,
                 )
                 for candidate in values:
                     candidate["observation_profile_fallback"] = {

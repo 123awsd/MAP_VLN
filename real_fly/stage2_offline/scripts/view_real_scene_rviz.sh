@@ -38,6 +38,13 @@ if [[ -n "$task_id" ]]; then
   mission="$run_data/tasks/$task_id/planning/mission_plan.json"
   [[ -f "$mission" ]] || { echo "Missing task mission: $mission" >&2; exit 2; }
 fi
+# Optional diagnostic override. This is useful for comparing the raw A* route
+# against the validated/smoothed mission without changing any planning output.
+if [[ -n "${RVIZ_MISSION_JSON:-}" ]]; then
+  mission="$RVIZ_MISSION_JSON"
+  [[ "$mission" = /* ]] || mission="$root/$mission"
+  [[ -f "$mission" ]] || { echo "Missing RVIZ_MISSION_JSON: $mission" >&2; exit 2; }
+fi
 if [[ ! -f "$mission" ]]; then
   # A semantic-only run has no planned mission yet; planning_start.json is
   # still a valid JSON input and simply leaves the planned-path display empty.
@@ -63,11 +70,27 @@ fi
 mission_rel="${mission#"$root/"}"
 voxel_snapshot="$run_data/voxel_snapshot"
 
+# CDI supplies the host-matched NVIDIA graphics libraries and devices only
+# to this viewer. Keep CPU rendering available as an explicit compatibility mode.
+render_args=()
+case "${RVIZ_RENDERER:-nvidia}" in
+  nvidia)
+    render_args=(--device nvidia.com/gpu=all -e __GLX_VENDOR_LIBRARY_NAME=nvidia)
+    echo "RViz renderer: NVIDIA GPU (CDI)"
+    ;;
+  softpipe)
+    render_args=(-e LIBGL_ALWAYS_SOFTWARE=1 -e GALLIUM_DRIVER=softpipe)
+    echo "RViz renderer: CPU softpipe (slow compatibility mode)"
+    ;;
+  *) echo "RVIZ_RENDERER must be nvidia or softpipe" >&2; exit 2 ;;
+esac
+
 exec "${docker_cmd[@]}" run --rm --init --net host \
+  "${render_args[@]}" \
   -e DISPLAY="${DISPLAY:-:0}" \
   -e XAUTHORITY=/root/.Xauthority \
   -e XDG_RUNTIME_DIR=/tmp/runtime-root \
-  -e LIBGL_ALWAYS_SOFTWARE=1 \
+  -e DISABLE_ROS1_EOL_WARNINGS=1 \
   -e QT_X11_NO_MITSHM=1 \
   -e RVIZ_RUN_ID="$run_id" \
   -e RVIZ_MISSION="/workspace/project/$mission_rel" \

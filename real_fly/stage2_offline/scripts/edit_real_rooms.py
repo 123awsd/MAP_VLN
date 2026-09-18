@@ -150,6 +150,8 @@ class RoomEditor:
         return rooms
 
     def draw_clusters(self):
+        if self.args.hide_boxes:
+            return
         if not self.args.clusters.is_file():
             return
         clusters = json.loads(self.args.clusters.read_text(encoding="utf-8"))
@@ -399,6 +401,8 @@ def main():
     parser.add_argument("--metadata", type=Path, required=True)
     parser.add_argument("--regions", type=Path, required=True)
     parser.add_argument("--clusters", type=Path, required=True)
+    parser.add_argument("--hide-boxes", action="store_true",
+                        help="Hide Box cluster markers in the room editor.")
     parser.add_argument("--voxel-metadata", type=Path, required=True)
     parser.add_argument("--planning-start", type=Path, required=True)
     parser.add_argument("--draft", type=Path, required=True)

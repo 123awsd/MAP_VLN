@@ -13,7 +13,7 @@ import argparse
 import csv
 import json
 import math
-from collections import Counter
+from collections import Counter, defaultdict, deque
 from pathlib import Path
 
 import cv2
@@ -103,6 +103,69 @@ def select_depth_cluster(points_camera: np.ndarray, indices: np.ndarray,
     return indices[np.abs(z-center) <= bin_width]
 
 
+def connected_components(points: np.ndarray, radius: float) -> list[list[int]]:
+    if not len(points):
+        return []
+    adjacency = np.linalg.norm(points[:, None, :] - points[None, :, :], axis=2) <= radius
+    unseen = set(range(len(points)))
+    components = []
+    while unseen:
+        start = unseen.pop()
+        queue, component = deque([start]), [start]
+        while queue:
+            current = queue.popleft()
+            for index in np.flatnonzero(adjacency[current]):
+                index = int(index)
+                if index in unseen:
+                    unseen.remove(index); queue.append(index); component.append(index)
+        components.append(component)
+    return components
+
+
+def write_lidar_semantic_preview(rows: list[dict], output: Path, radius_m: float,
+                                 minimum_observations: int) -> int:
+    raw = [{
+        "detection_id": row["detection_id"], "time_ns": row["time_ns"],
+        "frame_index": row["frame_index"], "label": row["label"],
+        "confidence": row["confidence"],
+        "depth_valid_ratio": min(1.0, row["lidar_points_selected"] / 10.0),
+        "world_x_m": row["lidar_world_x_m"], "world_y_m": row["lidar_world_y_m"],
+        "world_z_m": row["lidar_world_z_m"], "localization_source": "registered_lidar",
+    } for row in rows]
+    (output / "target_points_raw.json").write_text(
+        json.dumps(raw, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    grouped = defaultdict(list)
+    for row in raw:
+        grouped[row["label"]].append(row)
+    clusters = []
+    for label in sorted(grouped):
+        items = grouped[label]
+        points = np.asarray([[row[k] for k in ("world_x_m", "world_y_m", "world_z_m")]
+                             for row in items], dtype=float)
+        for component in connected_components(points, radius_m):
+            selected = [items[index] for index in component]
+            weights = np.asarray([max(1e-6, row["confidence"] * row["depth_valid_ratio"])
+                                  for row in selected])
+            center = np.average(points[component], axis=0, weights=weights)
+            distances = np.linalg.norm(points[component] - center, axis=1)
+            clusters.append({
+                "cluster_id": len(clusters), "label": label,
+                "world_x_m": float(center[0]), "world_y_m": float(center[1]),
+                "world_z_m": float(center[2]), "observations": len(selected),
+                "unique_frames": len({row["frame_index"] for row in selected}),
+                "confidence_mean": float(np.mean([row["confidence"] for row in selected])),
+                "confidence_max": float(np.max([row["confidence"] for row in selected])),
+                "depth_valid_ratio_mean": float(np.mean([row["depth_valid_ratio"] for row in selected])),
+                "position_spread_p90_m": float(np.percentile(distances, 90)),
+                "planning_eligible": len(selected) >= minimum_observations,
+                "extrinsic_status": "diagnostic_lidar_projection",
+                "localization_source": "registered_lidar",
+            })
+    (output / "target_points_clustered.json").write_text(
+        json.dumps(clusters, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return len(clusters)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--episode", type=Path, required=True)
@@ -116,6 +179,8 @@ def main() -> None:
     parser.add_argument("--inner-box-scale", type=float, default=0.70)
     parser.add_argument("--min-lidar-points", type=int, default=3)
     parser.add_argument("--depth-bin-m", type=float, default=0.30)
+    parser.add_argument("--cluster-radius-m", type=float, default=0.80)
+    parser.add_argument("--min-cluster-observations", type=int, default=2)
     parser.add_argument("--visualizations", type=int, default=18)
     args = parser.parse_args()
     if args.output.exists():
@@ -227,6 +292,8 @@ def main() -> None:
     (args.output / "lidar_localization.json").write_text(json.dumps(rows, indent=2)+"\n")
 
     comparable = [row for row in rows if row["rgbd_lidar_delta_m"] is not None]
+    lidar_clusters = write_lidar_semantic_preview(
+        rows, args.output, args.cluster_radius_m, args.min_cluster_observations)
 
     # Direct registration audit: compare RGB-D and LiDAR depth at the same
     # projected pixel, independent of semantic detections and box sampling.
@@ -299,6 +366,7 @@ def main() -> None:
     summary = {
         "format": "pre_map_vln.lidar_depth_localization_comparison.v1",
         "detections_total": len(detections), "lidar_localized": len(rows),
+        "lidar_semantic_clusters": lidar_clusters,
         "comparable_with_rgbd": len(comparable), "rejected": dict(rejected),
         "rgbd_lidar_delta_m": ({"median": float(np.median(deltas)), "p90": float(np.percentile(deltas, 90)),
                                   "max": float(np.max(deltas))} if len(deltas) else None),

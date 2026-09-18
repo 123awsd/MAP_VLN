@@ -95,7 +95,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("input", type=Path)
     parser.add_argument("output", type=Path)
-    parser.add_argument("--voxel", type=float, default=0.15)
+    parser.add_argument("--voxel", type=float, default=0.10)
+    parser.add_argument("--min-points-per-voxel", type=int, default=100)
     parser.add_argument("--bundle", type=Path,
                         help="approved execution bundle defining the launch hover pose")
     parser.add_argument("--launch-clearance-radius", type=float, default=0.60)
@@ -103,6 +104,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.voxel < 0.1:
         raise SystemExit("--voxel must be at least the 0.10 m ROG resolution")
+    if args.min_points_per_voxel < 1:
+        raise SystemExit("--min-points-per-voxel must be positive")
     if not 0.35 <= args.launch_clearance_radius <= 0.60:
         raise SystemExit("--launch-clearance-radius must be in [0.35, 0.60] m")
     if not 1 <= args.max_removed_voxels <= 500:
@@ -120,6 +123,7 @@ def main() -> None:
         "format": "pre_map_vln.super_collision_pcd.v2",
         "source_sha256": source_hash,
         "voxel_m": args.voxel,
+        "min_points_per_voxel": args.min_points_per_voxel,
         "launch_clearance_bundle_sha256": bundle_hash,
         "launch_clearance_center_xyz_m": approved_start[:3] if approved_start else None,
         "launch_clearance_radius_m": (
@@ -136,8 +140,12 @@ def main() -> None:
     xyz = xyz[np.isfinite(xyz).all(axis=1)]
     source_points = len(xyz)
     cells = np.floor(xyz / args.voxel).astype(np.int32)
-    _, first = np.unique(cells, axis=0, return_index=True)
-    reduced = xyz[np.sort(first)]
+    _, first, voxel_counts = np.unique(
+        cells, axis=0, return_index=True, return_counts=True
+    )
+    keep = voxel_counts >= args.min_points_per_voxel
+    reduced = xyz[np.sort(first[keep])]
+    low_support_voxels_removed = int(np.count_nonzero(~keep))
     removed_voxels = 0
     if approved_start is not None:
         center = np.asarray(approved_start[:3], dtype=np.float32)
@@ -160,12 +168,14 @@ def main() -> None:
         "source": str(args.input.resolve()),
         "source_points": source_points,
         "output_points": len(reduced),
+        "low_support_voxels_removed": low_support_voxels_removed,
         "launch_clearance_removed_voxels": removed_voxels,
         "max_removed_voxels": args.max_removed_voxels,
     }
     metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     print(f"SUPER collision map: {source_points} -> {len(reduced)} points "
-          f"({args.voxel:.2f} m voxel)")
+          f"({args.voxel:.2f} m voxel, minimum {args.min_points_per_voxel} points, "
+          f"removed {low_support_voxels_removed} low-support voxels)")
     if approved_start is not None:
         print(f"Approved launch clearance: removed {removed_voxels} static voxels "
               f"inside {args.launch_clearance_radius:.2f} m of {approved_start[:3]}")

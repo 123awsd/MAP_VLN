@@ -17,11 +17,12 @@ dls_ws="${DLS_WS:-/home/nv/dls_ws}"
 config="$runtime_root/config/super_indoor_stage2.yaml"
 launch="$runtime_root/launch/super_indoor_stage2.launch"
 collision_builder="$runtime_root/scripts/build_super_collision_pcd.py"
-collision_voxel="${PRE_MAP_VLN_SUPER_STATIC_VOXEL:-0.15}"
+collision_voxel="${PRE_MAP_VLN_SUPER_STATIC_VOXEL:-0.10}"
+collision_min_points="${PRE_MAP_VLN_SUPER_STATIC_MIN_POINTS:-100}"
 collision_cache="${PRE_MAP_VLN_SUPER_CACHE:-$HOME/.cache/pre_map_vln/super_collision}"
 map_name="$(basename "${map_pcd%.pcd}")"
 bundle_hash="$(sha256sum "$bundle" | awk '{print $1}')"
-collision_pcd="$collision_cache/${map_name}_voxel_${collision_voxel}_launch_${bundle_hash:0:12}.pcd"
+collision_pcd="$collision_cache/${map_name}_voxel_${collision_voxel}_min_${collision_min_points}_launch_${bundle_hash:0:12}.pcd"
 collision_metadata="${collision_pcd}.json"
 
 [[ -r "$config" && -r "$launch" && -r "$collision_builder" ]] || { echo "Missing Stage-2 SUPER files." >&2; exit 2; }
@@ -51,7 +52,8 @@ fi
 
 echo "Preparing cached occupied prior for SUPER (original map remains unchanged)."
 python3 "$collision_builder" "$map_pcd" "$collision_pcd" \
-  --voxel "$collision_voxel" --bundle "$bundle"
+  --voxel "$collision_voxel" --min-points-per-voxel "$collision_min_points" \
+  --bundle "$bundle"
 [[ -s "$collision_metadata" ]] || { echo "Missing collision metadata: $collision_metadata" >&2; exit 1; }
 
 echo "Starting senior SUPER with the PRE_MAP_VLN low-speed indoor profile."

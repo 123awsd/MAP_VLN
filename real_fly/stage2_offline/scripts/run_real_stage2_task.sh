@@ -14,6 +14,8 @@ Options:
                           reuse planning_start.json for preview only.
   --budget-cny VALUE      Qwen parsing budget ceiling (default: 20).
   --max-candidates N      Maximum candidates retained per task (default: 6).
+  --static-demo           Freeze conditional tasks for a controlled fixed-layout demo.
+  --visit-all-candidates  Exhaust all candidates of each task before the next task.
   --no-cache              Do not reuse the Qwen parser cache.
   -h, --help              Show this help.
 
@@ -28,6 +30,8 @@ instruction=""
 task_graph_source=""
 budget_cny="20"
 max_candidates="6"
+static_demo=0
+visit_all_candidates=0
 no_cache=0
 start_values=()
 
@@ -44,6 +48,8 @@ while [[ $# -gt 0 ]]; do
       ;;
     --budget-cny) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; budget_cny="$2"; shift 2 ;;
     --max-candidates) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; max_candidates="$2"; shift 2 ;;
+    --static-demo) static_demo=1; shift ;;
+    --visit-all-candidates) visit_all_candidates=1; shift ;;
     --no-cache) no_cache=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
@@ -83,12 +89,42 @@ mission="$planning_dir/mission_plan.json"
 audit="$task_dir/mission_audit.json"
 runtime_bundle="$root/real_fly/stage2_runtime/missions/$run_id/$task_id/execution_bundle.json"
 
+failed_backup_root="$run_data/tasks/.failed"
+runtime_failed_backup_root="$root/real_fly/stage2_runtime/missions/.failed"
+
 for path in "$python" "$scene_graph" "$voxel_snapshot/metadata.json" \
   "$voxel_snapshot/voxel_map.npz" "$planning_config" "$planning_start" "$map_pcd"; do
   [[ -s "$path" ]] || { echo "Missing Stage2 input: $path" >&2; exit 2; }
 done
-[[ ! -e "$task_dir" ]] || { echo "Task output already exists; refusing to overwrite: $task_dir" >&2; exit 2; }
-[[ ! -e "$runtime_bundle" ]] || { echo "Runtime bundle already exists; refusing to overwrite: $runtime_bundle" >&2; exit 2; }
+
+# A failed parser/planner run leaves a partial task directory.  Preserve that
+# diagnostic output, but allow the same TASK_ID to be retried.  A completed
+# run still remains immutable and must use a new TASK_ID.
+task_was_incomplete=0
+if [[ -e "$task_dir" ]]; then
+  if [[ -s "$task_dir/run_manifest.json" ]]; then
+    echo "Completed task output exists; refusing to overwrite: $task_dir" >&2
+    exit 2
+  fi
+  failed_stamp="$(date +%Y%m%d_%H%M%S)"
+  failed_backup="$failed_backup_root/${task_id}.${failed_stamp}"
+  mkdir -p "$failed_backup_root"
+  mv "$task_dir" "$failed_backup"
+  task_was_incomplete=1
+  echo "Preserved incomplete task output: $failed_backup"
+fi
+if [[ -e "$runtime_bundle" ]]; then
+  runtime_mission_dir="$(dirname "$runtime_bundle")"
+  if [[ "$task_was_incomplete" -eq 0 ]]; then
+    echo "Completed runtime mission exists; refusing to overwrite: $runtime_mission_dir" >&2
+    exit 2
+  fi
+  failed_stamp="${failed_stamp:-$(date +%Y%m%d_%H%M%S)}"
+  runtime_failed_backup="$runtime_failed_backup_root/$run_id/${task_id}.${failed_stamp}"
+  mkdir -p "$runtime_failed_backup_root/$run_id"
+  mv "$runtime_mission_dir" "$runtime_failed_backup"
+  echo "Preserved incomplete runtime mission: $runtime_failed_backup"
+fi
 
 mkdir -p "$task_dir" "$planning_dir"
 echo "Safety scope: offline task parsing/planning only; no ROS or flight process is started."
@@ -106,6 +142,13 @@ else
   "$python" "${parser_args[@]}"
 fi
 
+if [[ "$static_demo" -eq 1 ]]; then
+  "$python" "$root/scripts/make_static_demo_task_graph.py" \
+    --input "$task_graph" --output "$task_graph.static"
+  mv "$task_graph.static" "$task_graph"
+  echo "Static demo mode: conditional branch removed; cup is assumed to be on the refrigerator."
+fi
+
 if [[ ${#start_values[@]} -eq 0 ]]; then
   read -r sx sy sz syaw < <(
     "$python" -c 'import json,sys; print(*json.load(open(sys.argv[1]))["start_xyz_yaw"])' "$planning_start"
@@ -116,7 +159,8 @@ else
   start_source="explicit_approved_pose"
 fi
 
-"$python" "$root/scripts/plan_stage2_mission.py" \
+planner_args=(
+  "$root/scripts/plan_stage2_mission.py"
   --task-graph "$task_graph" \
   --scene-graph "$scene_graph" \
   --voxel-snapshot "$voxel_snapshot" \
@@ -125,6 +169,11 @@ fi
   --start "${start_values[@]}" \
   --max-candidates "$max_candidates" \
   --output-dir "$planning_dir"
+)
+if [[ "$visit_all_candidates" -eq 1 ]]; then
+  planner_args+=(--visit-all-candidates)
+fi
+"$python" "${planner_args[@]}"
 mv "$planning_dir/mission_plan.json" "$raw_mission"
 
 "$python" "$script_dir/finalize_real_mission.py" \

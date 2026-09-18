@@ -56,6 +56,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--trajectory-radius", type=float, default=0.015)
     parser.add_argument("--trajectory-line-width", type=int, default=2)
     parser.add_argument("--trajectory-outline-width", type=int, default=4)
+    parser.add_argument("--trajectory-halo-width", type=int, default=0)
     parser.add_argument("--task-marker-radius", type=int, default=4)
     parser.add_argument("--endpoint-marker-radius", type=int, default=4)
     parser.add_argument("--frustum-depth", type=float, default=1.0)
@@ -79,6 +80,8 @@ def parse_args() -> argparse.Namespace:
         help="Show the full trajectory for the entire orbit instead of revealing it.",
     )
     parser.add_argument("--gpu-device-id", type=int, default=0)
+    parser.add_argument("--orbit-start-deg", type=float, default=0.0)
+    parser.add_argument("--scene-saturation", type=float, default=1.0)
     parser.add_argument(
         "--background",
         choices=sorted(BACKGROUND_COLORS),
@@ -88,6 +91,11 @@ def parse_args() -> argparse.Namespace:
         "--no-xray-overlay",
         action="store_true",
         help="Only render the depth-tested Habitat trajectory tube.",
+    )
+    parser.add_argument(
+        "--no-frustums",
+        action="store_true",
+        help="Hide observation view-cones while keeping trajectory markers.",
     )
     parser.add_argument(
         "--no-caption",
@@ -219,6 +227,7 @@ def draw_xray_trajectory(
     hfov_deg: float,
     line_width: int,
     outline_width: int,
+    halo_width: int,
     completion_points: np.ndarray,
     task_marker_radius: int,
     endpoint_marker_radius: int,
@@ -240,6 +249,14 @@ def draw_xray_trajectory(
         start = tuple(np.rint(pixels[index]).astype(int))
         end = tuple(np.rint(pixels[index + 1]).astype(int))
         visible_segments.append((index, start, end))
+
+    # Draw each visual layer for the complete path before the next one. This
+    # prevents dense, later segments from painting their halo over an earlier
+    # segment's dark outline.
+    if halo_width > 0:
+        for _, start, end in visible_segments:
+            cv2.line(overlay, start, end, (248, 248, 248), halo_width, cv2.LINE_AA)
+    for _, start, end in visible_segments:
         cv2.line(overlay, start, end, (20, 20, 20), outline_width, cv2.LINE_AA)
 
     # Draw the colored cores in a separate pass. Otherwise the outline of a
@@ -360,6 +377,10 @@ def render(args: argparse.Namespace) -> None:
         raise ValueError("trajectory line width must be positive")
     if args.trajectory_outline_width < args.trajectory_line_width:
         raise ValueError("trajectory outline width must not be thinner than the line")
+    if args.trajectory_halo_width and args.trajectory_halo_width < args.trajectory_outline_width:
+        raise ValueError("trajectory halo width must not be thinner than the outline")
+    if args.scene_saturation < 0:
+        raise ValueError("scene saturation must be non-negative")
     if args.task_marker_radius <= 0:
         raise ValueError("task marker radius must be positive")
     if args.endpoint_marker_radius <= 0:
@@ -478,9 +499,12 @@ def render(args: argparse.Namespace) -> None:
                     ],
                     dtype=np.float64,
                 ).reshape(-1, 3)
-                visible_frustums = [event["frustum"] for event in reached_events]
+                visible_frustums = (
+                    [] if args.no_frustums
+                    else [event["frustum"] for event in reached_events]
+                )
 
-                angle = 2.0 * math.pi * frame_index / args.frames
+                angle = math.radians(args.orbit_start_deg) + 2.0 * math.pi * frame_index / args.frames
                 camera_position = target + np.asarray(
                     [
                         horizontal_radius * math.cos(angle),
@@ -501,6 +525,12 @@ def render(args: argparse.Namespace) -> None:
 
                 rgba = np.asarray(sim.get_sensor_observations()["orbit_rgb"])
                 rgb = np.ascontiguousarray(rgba[..., :3].astype(np.uint8))
+                if args.scene_saturation != 1.0:
+                    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+                    hsv[..., 1] = np.clip(
+                        hsv[..., 1].astype(np.float32) * args.scene_saturation, 0, 255
+                    ).astype(np.uint8)
+                    rgb = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
                 if not args.no_xray_overlay:
                     rgb = draw_xray_trajectory(
                         rgb,
@@ -510,6 +540,7 @@ def render(args: argparse.Namespace) -> None:
                         args.hfov,
                         args.trajectory_line_width,
                         args.trajectory_outline_width,
+                        args.trajectory_halo_width,
                         visible_task_points,
                         args.task_marker_radius,
                         args.endpoint_marker_radius,
@@ -555,10 +586,14 @@ def render(args: argparse.Namespace) -> None:
         "trajectory_radius_m": args.trajectory_radius,
         "trajectory_line_width_px": args.trajectory_line_width,
         "trajectory_outline_width_px": args.trajectory_outline_width,
+        "trajectory_halo_width_px": args.trajectory_halo_width,
+        "orbit_start_deg": args.orbit_start_deg,
+        "scene_saturation": args.scene_saturation,
         "task_completion_marker_count": completion_marker_count,
         "task_marker_radius_px": args.task_marker_radius,
         "endpoint_marker_radius_px": args.endpoint_marker_radius,
         "observation_frustum_count": len(completion_events),
+        "frustums_hidden": bool(args.no_frustums),
         "frustum_depth_m": args.frustum_depth,
         "frustum_line_width_px": args.frustum_line_width,
         "observation_hfov_deg": args.observation_hfov,

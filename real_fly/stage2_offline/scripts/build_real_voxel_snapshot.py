@@ -51,11 +51,14 @@ def main() -> None:
     parser.add_argument("map_pcd", type=Path)
     parser.add_argument("planning_config", type=Path)
     parser.add_argument("output", type=Path)
-    parser.add_argument("--resolution", type=float, default=0.25)
+    parser.add_argument("--resolution", type=float, default=0.10)
+    parser.add_argument("--min-occupied-points", type=int, default=100)
     parser.add_argument("--scan-period", type=float, default=2.0)
     parser.add_argument("--max-ray-m", type=float, default=25.0)
     args = parser.parse_args()
     if args.output.exists(): raise SystemExit(f"refusing to overwrite: {args.output}")
+    if args.min_occupied_points < 1:
+        raise SystemExit("--min-occupied-points must be positive")
     profile = PlannerProfile.load(args.planning_config)
     if not math.isclose(profile.coarse_resolution_m / args.resolution, round(profile.coarse_resolution_m / args.resolution), abs_tol=1e-6):
         raise SystemExit("coarse resolution must be a multiple of voxel resolution")
@@ -74,6 +77,17 @@ def main() -> None:
         idx = np.floor((points - origin) / args.resolution).astype(np.int64)
         good = np.all((idx >= 0) & (idx < shape_xyz), axis=1)
         return idx[good]
+
+    # Preserve raw PCD support per voxel for visualization. Planning still uses
+    # the binary occupancy state below; density must never silently change the
+    # collision contract.
+    all_occupied_idx = indices(occupied_points)
+    flat_idx = np.ravel_multi_index(
+        (all_occupied_idx[:, 2], all_occupied_idx[:, 1], all_occupied_idx[:, 0]),
+        raw.shape,
+    )
+    occupied_point_count = np.bincount(flat_idx, minlength=raw.size).reshape(raw.shape)
+    occupied_point_count = np.minimum(occupied_point_count, np.iinfo(np.uint32).max).astype(np.uint32)
 
     odom_times, odom_positions = [], []
     with rosbag.Bag(str(args.bag), "r") as bag:
@@ -103,12 +117,18 @@ def main() -> None:
             scans += 1
             if scans % 10 == 0: print(f"ray-integrated scans={scans}", flush=True)
 
-    occupied_points = voxel_downsample(occupied_points, args.resolution * 0.7)
-    occupied_idx = indices(occupied_points)
-    raw[occupied_idx[:, 2], occupied_idx[:, 1], occupied_idx[:, 0]] = int(OccupancyState.OCCUPIED)
+    # A voxel needs several supporting raw PCD points before it becomes a hard
+    # obstacle. The source PCD is untouched; this only affects planning occupancy.
+    supported_occupied = occupied_point_count >= args.min_occupied_points
+    raw[supported_occupied] = int(OccupancyState.OCCUPIED)
     esdf = distance_transform_edt(raw != int(OccupancyState.OCCUPIED), sampling=args.resolution).astype(np.float32)
     args.output.mkdir(parents=True, exist_ok=False)
-    np.savez_compressed(args.output / "voxel_map.npz", raw_occupancy_zyx=raw, esdf_zyx_m=esdf)
+    np.savez_compressed(
+        args.output / "voxel_map.npz",
+        raw_occupancy_zyx=raw,
+        esdf_zyx_m=esdf,
+        occupied_point_count_zyx=occupied_point_count,
+    )
     counts = {name: int(np.count_nonzero(raw == value)) for name, value in (("unknown", -1), ("free", 0), ("occupied", 100))}
     provisional = {
         "format": "pre_map_vln.real_voxel_snapshot.v1", "frame_id": "world",
@@ -118,8 +138,16 @@ def main() -> None:
         "minimum_esdf_distance_m": profile.minimum_esdf_distance_m,
         "preferred_esdf_distance_m": profile.preferred_esdf_distance_m,
         "planning_config": str(args.planning_config.resolve()),
+        "min_occupied_points_per_voxel": args.min_occupied_points,
+        "occupied_point_count": {
+            "maximum": int(occupied_point_count.max()),
+            "nonzero_voxels": int(np.count_nonzero(occupied_point_count)),
+        },
     }
-    content = hashlib.sha256(raw.tobytes() + esdf.tobytes() + json.dumps(provisional, sort_keys=True).encode()).hexdigest()
+    content = hashlib.sha256(
+        raw.tobytes() + esdf.tobytes() + occupied_point_count.tobytes()
+        + json.dumps(provisional, sort_keys=True).encode()
+    ).hexdigest()
     provisional["identity"] = {
         "map_epoch_uuid": str(uuid.uuid4()), "geometry_map_version": 1, "semantic_map_version": 1,
         "snapshot_content_hash": content, "occupancy_semantics_hash": OCCUPANCY_SEMANTICS_HASH,
