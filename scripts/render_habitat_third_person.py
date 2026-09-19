@@ -30,6 +30,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--execution", required=True, type=Path)
     parser.add_argument("--generated-config", required=True, type=Path)
     parser.add_argument(
+        "--scene-graph",
+        type=Path,
+        default=None,
+        help=(
+            "Stage-2 Falcon-world scene graph. When provided, found boxes use "
+            "the object's measured center, size, and orientation instead of "
+            "the approximate 2D-to-3D detection box."
+        ),
+    )
+    parser.add_argument(
+        "--runtime-objects",
+        type=Path,
+        default=None,
+        help="Runtime object manifest for props inserted into the Habitat scene.",
+    )
+    parser.add_argument(
+        "--backpack-model",
+        type=Path,
+        default=None,
+        help="Local backpack GLB used to resolve a backpack runtime-object entry.",
+    )
+    parser.add_argument(
         "--drone-model",
         type=Path,
         default=Path(__file__).resolve().parents[1] / "assets" / "drone" / "drone.glb",
@@ -136,6 +158,17 @@ def falcon_points_in_habitat(points_f: np.ndarray, generated: dict) -> np.ndarra
     ).T
 
 
+def habitat_points_in_falcon(points_h: np.ndarray, generated: dict) -> np.ndarray:
+    points_h = np.asarray(points_h, dtype=np.float64).reshape(-1, 3)
+    initial_h = np.asarray(
+        generated.get("initial_sensor_habitat_xyz", generated["initial_agent_habitat_xyz"]),
+        dtype=np.float64,
+    )
+    return FALCON_INITIAL_POSITION + (
+        S_HABITAT_TO_FALCON @ (points_h - initial_h).T
+    ).T
+
+
 def forward_in_habitat(yaw: float) -> np.ndarray:
     forward_f = np.asarray([math.cos(yaw), math.sin(yaw), 0.0], dtype=np.float64)
     return S_HABITAT_TO_FALCON.T @ forward_f
@@ -171,32 +204,141 @@ BOX_EDGES = (
 )
 
 
-def found_boxes(execution, generated):
+def quaternion_matrix_wxyz(quaternion) -> np.ndarray:
+    """Return a 3x3 rotation matrix for a w,x,y,z quaternion."""
+    values = np.asarray(quaternion, dtype=np.float64)
+    if values.shape != (4,):
+        return np.eye(3, dtype=np.float64)
+    norm = float(np.linalg.norm(values))
+    if norm < 1e-9:
+        return np.eye(3, dtype=np.float64)
+    w, x, y, z = values / norm
+    return np.asarray(
+        [
+            [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - z * w), 2.0 * (x * z + y * w)],
+            [2.0 * (x * y + z * w), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - x * w)],
+            [2.0 * (x * z - y * w), 2.0 * (y * z + x * w), 1.0 - 2.0 * (x * x + y * y)],
+        ],
+        dtype=np.float64,
+    )
+
+
+def scene_object_corners(scene_object) -> np.ndarray | None:
+    """Build oriented Falcon-world box corners from scene-graph geometry."""
+    center = np.asarray(scene_object.get("center_xyz_m", []), dtype=np.float64)
+    size = np.asarray(scene_object.get("size_xyz_m", []), dtype=np.float64)
+    if center.shape != (3,) or size.shape != (3,) or np.any(size <= 0.0):
+        return None
+    rotation = quaternion_matrix_wxyz(scene_object.get("orientation_wxyz", [1.0, 0.0, 0.0, 0.0]))
+    signs = np.asarray(
+        [
+            (-1, -1, -1), (-1, -1, 1), (-1, 1, 1), (-1, 1, -1),
+            (1, -1, -1), (1, -1, 1), (1, 1, 1), (1, 1, -1),
+        ],
+        dtype=np.float64,
+    )
+    return center + (rotation @ (signs * size * 0.5).T).T
+
+
+def fused_detection_for_observation(execution, observation, label):
+    """Use the temporally fused novel-object estimate when no map box exists."""
+    frame = int(observation.get("frame_index", 0))
+    candidates = []
+    for item in execution.get("open_vocab_observations", []):
+        delta = abs(int(item.get("frame_index", frame)) - frame)
+        if delta > 20:
+            continue
+        for fused in item.get("fused_objects_3d", []):
+            if str(fused.get("label", "")).lower() != label.lower():
+                continue
+            center = np.asarray(fused.get("center", []), dtype=np.float64)
+            size = np.asarray(fused.get("size", []), dtype=np.float64)
+            if center.shape != (3,) or size.shape != (3,) or np.any(size <= 0.0):
+                continue
+            candidates.append((delta, -float(fused.get("score", 0.0)), fused))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    return candidates[0][2]
+
+
+def found_boxes(execution, generated, scene_graph=None, runtime_box_overrides=None):
+    scene_objects = {}
+    if scene_graph:
+        scene_objects = {
+            str(item.get("id")): item
+            for item in scene_graph.get("objects", [])
+            if item.get("id")
+        }
     boxes = []
     for observation in execution.get("observations", []):
         if observation.get("outcome") != "found":
             continue
         verification = observation.get("verification", {})
         projected = verification.get("owlv2", {}).get("projected_3d", [])
-        confirmed = [item for item in projected if item.get("confirmed", False)]
-        if not confirmed:
-            confirmed = projected[:1]
+        confirmed = [item for item in projected if item.get("confirmed", False)] or projected[:1]
+
+        # A single observation may contain duplicate detections of the same
+        # object (the microwave frame has one high- and one low-score box).
+        # Keep the highest-scoring item for each associated object/label.
+        best_by_key = {}
         for item in confirmed:
+            label = str(item.get("label", verification.get("target_label", "target")))
+            object_id = str(item.get("associated_object_id") or "")
+            key = (object_id or f"label:{label.lower()}")
+            score = float(item.get("score", 0.0))
+            previous = best_by_key.get(key)
+            if previous is None or score > float(previous.get("score", 0.0)):
+                best_by_key[key] = item
+
+        target_relation = verification.get("target_reference_relation", {})
+        relation_target_id = str(target_relation.get("target_object_id") or "")
+        for item in confirmed:
+            label = str(item.get("label", verification.get("target_label", "target")))
+            object_id = str(item.get("associated_object_id") or "")
+            key = object_id or f"label:{label.lower()}"
+            if best_by_key.get(key) is not item:
+                continue
             center_f = np.asarray(item.get("center", []), dtype=np.float64)
             size_f = np.asarray(item.get("size", []), dtype=np.float64)
             if center_f.shape != (3,) or size_f.shape != (3,):
                 continue
-            corners_f = np.asarray([
+            scene_object = scene_objects.get(object_id)
+            if scene_object is None and relation_target_id in scene_objects:
+                scene_object = scene_objects[relation_target_id]
+            exact_corners = scene_object_corners(scene_object) if scene_object else None
+            runtime_corners = (runtime_box_overrides or {}).get(label.lower())
+            fused = None if (exact_corners is not None or runtime_corners is not None) else fused_detection_for_observation(
+                execution, observation, label
+            )
+            if runtime_corners is not None:
+                corners_f = runtime_corners
+                geometry_source = "runtime_model"
+            elif fused is not None:
+                fused_center = np.asarray(fused["center"], dtype=np.float64)
+                fused_size = np.asarray(fused["size"], dtype=np.float64)
+                corners_f = np.asarray([
+                    fused_center + np.asarray([sx, sy, sz]) * fused_size * 0.5
+                    for sx, sy, sz in (
+                        (-1, -1, -1), (-1, -1, 1), (-1, 1, 1), (-1, 1, -1),
+                        (1, -1, -1), (1, -1, 1), (1, 1, 1), (1, 1, -1),
+                    )
+                ])
+                geometry_source = "fused_3d"
+            else:
+                corners_f = exact_corners if exact_corners is not None else np.asarray([
                 center_f + np.asarray([sx, sy, sz]) * size_f * 0.5
                 for sx, sy, sz in (
                     (-1, -1, -1), (-1, -1, 1), (-1, 1, 1), (-1, 1, -1),
                     (1, -1, -1), (1, -1, 1), (1, 1, 1), (1, 1, -1),
                 )
-            ])
+                ])
+                geometry_source = "scene_graph" if exact_corners is not None else "projected_3d"
             boxes.append({
                 "frame": int(observation.get("frame_index", 0)),
-                "label": str(item.get("label", verification.get("target_label", "target"))),
+                "label": label,
                 "corners": falcon_points_in_habitat(corners_f, generated),
+                "geometry_source": geometry_source,
             })
     return boxes
 
@@ -418,6 +560,85 @@ def register_drone(sim: habitat_sim.Simulator, model_path: Path, scale: float):
     return drone
 
 
+def resolve_runtime_asset(asset, manifest_path: Path, backpack_model: Path | None, label: str) -> Path:
+    if backpack_model is not None and label.lower() == "backpack":
+        return backpack_model.resolve()
+    candidate = Path(str(asset))
+    if not candidate.is_absolute():
+        candidate = (manifest_path.parent / candidate).resolve()
+    return candidate
+
+
+def register_runtime_objects(
+    sim: habitat_sim.Simulator,
+    manifest: dict,
+    manifest_path: Path,
+    generated: dict,
+    backpack_model: Path | None,
+):
+    """Insert static runtime props using Falcon-world placement parameters."""
+    objects = []
+    for index, item in enumerate(manifest.get("objects", [])):
+        label = str(item.get("label", "runtime_object"))
+        asset = resolve_runtime_asset(
+            item.get("asset", ""), manifest_path, backpack_model, label
+        )
+        if not asset.is_file():
+            raise FileNotFoundError(f"runtime object asset not found: {asset}")
+        position_f = np.asarray(item.get("position_xyz_f", []), dtype=np.float64)
+        if position_f.shape != (3,):
+            raise ValueError(f"runtime object position must be xyz: {item}")
+        scale = float(item.get("scale", 1.0))
+        attributes = habitat_sim.attributes.ObjectAttributes()
+        attributes.render_asset_handle = str(asset)
+        attributes.collision_asset_handle = str(asset)
+        attributes.scale = mn.Vector3(scale, scale, scale)
+        attributes.is_collidable = bool(item.get("collidable", False))
+        template_manager = sim.get_object_template_manager()
+        template_id = template_manager.register_template(
+            attributes, f"runtime_object_{index}_{label}"
+        )
+        if template_id < 0:
+            raise RuntimeError(f"Habitat could not register runtime object: {asset}")
+        runtime_object = sim.get_rigid_object_manager().add_object_by_template_id(template_id)
+        if runtime_object is None:
+            raise RuntimeError(f"Habitat could not instantiate runtime object: {asset}")
+        runtime_object.motion_type = habitat_sim.physics.MotionType.KINEMATIC
+        position_h = falcon_points_in_habitat(position_f, generated)[0]
+        runtime_object.translation = mn.Vector3(*position_h)
+        # The current runtime manifest uses yaw=0. Keep the model's authored
+        # orientation for that case; nonzero Falcon yaw is handled around the
+        # Habitat vertical axis as a practical visual approximation.
+        yaw = float(item.get("yaw_rad", 0.0))
+        runtime_object.rotation = mn.Quaternion.rotation(
+            mn.Rad(-yaw), mn.Vector3.y_axis()
+        )
+        aabb = runtime_object.aabb
+        local_min = np.asarray(aabb.min, dtype=np.float64)
+        local_max = np.asarray(aabb.max, dtype=np.float64)
+        local_corners = np.asarray([
+            [
+                local_min[0] if sx < 0 else local_max[0],
+                local_min[1] if sy < 0 else local_max[1],
+                local_min[2] if sz < 0 else local_max[2],
+            ]
+            for sx, sy, sz in (
+                (-1, -1, -1), (-1, -1, 1), (-1, 1, 1), (-1, 1, -1),
+                (1, -1, -1), (1, -1, 1), (1, 1, 1), (1, 1, -1),
+            )
+        ])
+        world_h = np.asarray([
+            runtime_object.transformation.transform_point(mn.Vector3(*corner))
+            for corner in local_corners
+        ], dtype=np.float64)
+        objects.append({
+            "id": str(item.get("id", f"runtime_{index}")),
+            "label": label,
+            "corners_f": habitat_points_in_falcon(world_h, generated),
+        })
+    return objects
+
+
 def main() -> None:
     args = parse_args()
     if args.source_hz <= 0.0 or args.playback_rate <= 0.0:
@@ -433,6 +654,8 @@ def main() -> None:
 
     execution = load_json(args.execution.resolve())
     generated = load_json(args.generated_config.resolve())
+    scene_graph = load_json(args.scene_graph.resolve()) if args.scene_graph else None
+    runtime_manifest = load_json(args.runtime_objects.resolve()) if args.runtime_objects else None
     scene_path = Path(generated["scene"]).resolve()
     scene_config = Path(generated["scene_config"]).resolve()
     model_path = args.drone_model.resolve()
@@ -441,7 +664,7 @@ def main() -> None:
             raise FileNotFoundError(required)
 
     positions_h, yaws = trajectory_in_habitat(execution, generated)
-    discovered_boxes = found_boxes(execution, generated) if args.show_found_boxes else []
+    discovered_boxes = []
     if args.start_frame < 0 or args.start_frame >= len(positions_h):
         raise ValueError("start-frame is outside the trajectory")
     positions_h = positions_h[args.start_frame :]
@@ -472,6 +695,23 @@ def main() -> None:
     with habitat_sim.Simulator(habitat_sim.Configuration(sim_cfg, [agent_cfg])) as sim:
         agent = sim.initialize_agent(0)
         drone = register_drone(sim, model_path, args.drone_scale)
+        runtime_instances = []
+        if runtime_manifest is not None:
+            runtime_instances = register_runtime_objects(
+                sim,
+                runtime_manifest,
+                args.runtime_objects.resolve(),
+                generated,
+                args.backpack_model,
+            )
+        runtime_box_overrides = {
+            str(item["label"]).lower(): item["corners_f"]
+            for item in runtime_instances
+        }
+        if args.show_found_boxes:
+            discovered_boxes = found_boxes(
+                execution, generated, scene_graph, runtime_box_overrides
+            )
         # The model is +Y-up/+Z-forward; Habitat is +Y-up/-Z-forward.
         model_forward_correction = mn.Quaternion.rotation(
             mn.Rad(math.pi), mn.Vector3.y_axis()
@@ -576,6 +816,9 @@ def main() -> None:
         "format": "pre_map_vln.habitat_third_person_video.v1",
         "execution": str(args.execution.resolve()),
         "generated_config": str(args.generated_config.resolve()),
+        "scene_graph": str(args.scene_graph.resolve()) if args.scene_graph else None,
+        "runtime_objects": str(args.runtime_objects.resolve()) if args.runtime_objects else None,
+        "runtime_object_count": len(runtime_instances) if args.runtime_objects else 0,
         "scene": str(scene_path),
         "drone_model": str(model_path),
         "source_pose_count": len(positions_h),

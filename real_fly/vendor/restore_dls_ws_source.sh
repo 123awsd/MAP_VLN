@@ -21,7 +21,10 @@ dls_ws="${1:-$HOME/dls_ws}"
 }
 
 mkdir -p "$dls_ws/src"
-rsync -a "$source_root/" "$dls_ws/src/"
+rsync -a --exclude=/quadrotor_msgs/ "$source_root/" "$dls_ws/src/"
+# Preserve the senior workspace package location; avoid duplicate ROS packages.
+mkdir -p "$dls_ws/src/mars_uav_sim/mars_quadrotor_msgs"
+rsync -a "$source_root/quadrotor_msgs/" "$dls_ws/src/mars_uav_sim/mars_quadrotor_msgs/"
 rsync -a "$root_snapshot/" "$dls_ws/"
 
 echo "Vendored real-flight DLS sources restored under: $dls_ws/src"

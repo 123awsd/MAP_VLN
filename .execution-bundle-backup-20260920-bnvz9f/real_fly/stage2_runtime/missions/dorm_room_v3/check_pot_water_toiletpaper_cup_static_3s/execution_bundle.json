@@ -1,0 +1,340 @@
+{
+  "format": "pre_map_vln.real_execution_bundle.v1",
+  "status": "preview_only",
+  "frame_id": "world",
+  "source_mission": "/home/uav/map_VLN/PRE_MAP_VLN/real_fly/stage2_offline/data/dorm_room_v3/tasks/check_pot_water_toiletpaper_cup_static_3s/planning/mission_plan.json",
+  "source_mission_sha256": "3586fb03e64dd536816917a290acb3222d17baf3b6386984e61fb7ee8e7dd46f",
+  "map_file_name": "handheld_map_dorm_room_v3_complete.pcd",
+  "map_sha256": "0e945332b4458a73430aa3e626f30c99eb892ef735206f145348193fd7779b9b",
+  "voxel_metadata_sha256": "2a4375e9ff553663d4cb9450f69205d9f023f939badd24770ae0ff076658b00e",
+  "map_identity": {
+    "map_epoch_uuid": "9dbc803f-be01-45c7-a12b-86c186c2f7db",
+    "geometry_map_version": 1,
+    "semantic_map_version": 1,
+    "snapshot_content_hash": "33f26a76a24d1b6d183c766ce2fe8fb0cb4537d919098de424dcfde680099a73",
+    "occupancy_semantics_hash": "a1ffa7f2932b14ca508309ac9676fdf6369a516f42d6693137879707c5126399",
+    "planner_profile_hash": "b3ea23a5e4b10e3292effc29e275ef6401ba9b6f3998b497b99df00e11de60db"
+  },
+  "start_xyz_yaw": [
+    0.0,
+    0.0,
+    0.8,
+    0.0
+  ],
+  "mission_start_source": "explicit_approved_pose",
+  "goal_spacing_limit_m": 1.0,
+  "route_source": "offline_collision_checked_bspline_when_available",
+  "goals": [
+    {
+      "kind": "transit",
+      "xyz": [
+        -0.15302374248892167,
+        -0.6770994440034935,
+        0.8499914466514581
+      ],
+      "yaw": null,
+      "visit_index": 0,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        -0.18069686044362943,
+        -1.2457359468858602,
+        0.8501783873037798
+      ],
+      "yaw": null,
+      "visit_index": 0,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        -0.5772833824934934,
+        -1.7932755968978178,
+        0.7158459592488956
+      ],
+      "yaw": null,
+      "visit_index": 0,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "observation",
+      "xyz": [
+        -0.7793098230631875,
+        -1.9730921074706154,
+        0.68616
+      ],
+      "yaw": -1.832595714594046,
+      "visit_index": 0,
+      "task_id": "check_rice_cooker_kitchen",
+      "candidate_id": "check_rice_cooker_kitchen__L1_boxer_reviewed_041__r1.00__007"
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        -0.35201312958390163,
+        -1.4515172966130914,
+        0.7500140421145319
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        -0.15252698933787845,
+        -1.0933071055971608,
+        0.7499996347586754
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        -0.08209050748775137,
+        -0.6777661699873359,
+        0.7499999980368726
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        0.2678013762478037,
+        -0.5497214144814798,
+        0.7499999992139985
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        0.9651317817721085,
+        -0.5500238051338109,
+        0.7500064959209002
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "observation",
+      "xyz": [
+        1.5287044208931406,
+        -0.7094410082982444,
+        0.637332
+      ],
+      "yaw": 0.7853981633974477,
+      "visit_index": 1,
+      "task_id": "check_cup_on_fridge",
+      "candidate_id": "check_cup_on_fridge__L1_boxer_reviewed_040__r1.00__011"
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        1.8502719424560672,
+        -1.3206003207076553,
+        0.6499379393185832
+      ],
+      "yaw": null,
+      "visit_index": 2,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        2.0521777787803286,
+        -1.9152534407956585,
+        0.44782212100781743
+      ],
+      "yaw": null,
+      "visit_index": 2,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        2.051769684187553,
+        -2.609138682873096,
+        0.45000025918718256
+      ],
+      "yaw": null,
+      "visit_index": 2,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        2.1497376225633964,
+        -3.2613504935728956,
+        0.4499986072184115
+      ],
+      "yaw": null,
+      "visit_index": 2,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        2.036848785793374,
+        -3.56105545542247,
+        0.45012536828707056
+      ],
+      "yaw": null,
+      "visit_index": 2,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "observation",
+      "xyz": [
+        1.69625797926179,
+        -3.907796363491772,
+        0.35
+      ],
+      "yaw": -1.832595714594046,
+      "visit_index": 2,
+      "task_id": "check_toilet_paper_bathroom",
+      "candidate_id": "check_toilet_paper_bathroom__L1_boxer_reviewed_053__r1.00__000"
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        2.121278026514005,
+        -3.492804734852225,
+        0.4498862643132827
+      ],
+      "yaw": null,
+      "visit_index": 3,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        2.150002240278736,
+        -2.8075745543916972,
+        0.4500000090593424
+      ],
+      "yaw": null,
+      "visit_index": 3,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        2.146090725491432,
+        -2.108862670475754,
+        0.450000024745737
+      ],
+      "yaw": null,
+      "visit_index": 3,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        2.6708152882330665,
+        -1.6503522530944408,
+        0.4500358247139465
+      ],
+      "yaw": null,
+      "visit_index": 3,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        3.2584462448697353,
+        -1.3419321902809922,
+        0.5490625830427223
+      ],
+      "yaw": null,
+      "visit_index": 3,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        3.884128164049412,
+        -1.0500950976542174,
+        0.549999512175637
+      ],
+      "yaw": null,
+      "visit_index": 3,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        4.581135008944283,
+        -1.0499408666854906,
+        0.5499971333601458
+      ],
+      "yaw": null,
+      "visit_index": 3,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        5.208766279775233,
+        -0.7948812769577472,
+        0.5059986722995701
+      ],
+      "yaw": null,
+      "visit_index": 3,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "observation",
+      "xyz": [
+        5.393340624431111,
+        -0.6305249463786406,
+        0.35
+      ],
+      "yaw": 1.8325957145940455,
+      "visit_index": 3,
+      "task_id": "check_water_bottle_bedroom",
+      "candidate_id": "check_water_bottle_bedroom__L1_boxer_reviewed_006__r1.00__005"
+    }
+  ],
+  "safety": {
+    "controller": "senior SUPER -> /planning/pos_cmd -> px4ctrl",
+    "adapter_publishes_position_command": false,
+    "automatic_arming": false,
+    "automatic_takeoff": false,
+    "automatic_landing": false,
+    "start_pose_explicitly_approved": true,
+    "autonomous_semantic_execution": false,
+    "motion_only_test_requires_explicit_acknowledgement": true,
+    "execution_requires_explicit_runtime_confirmation": true
+  }
+}

@@ -3,28 +3,30 @@
        This launch deliberately does not start SUPER's /fsm_node and never
        requests PX4Ctrl landing. PX4Ctrl is started separately. -->
   <arg name="map_pcd"/>
-  <arg name="route_path"/>
-  <arg name="collision_clearance" default="0.30"/>
+  <arg name="trajectory_path"/>
+  <arg name="config_path"/>
+  <arg name="collision_clearance"/>
 
   <node pkg="mission_planner" name="competition_command_mux"
         type="competition_command_mux" output="screen"/>
 
   <node pkg="mission_planner" name="full_smooth_mission"
         type="full_smooth_mission" output="screen">
-    <param name="route_path" value="$(arg route_path)"/>
+    <param name="saved_trajectory_path" value="$(arg trajectory_path)"/>
     <param name="known_map_pcd" value="$(arg map_pcd)"/>
     <param name="odom_topic" value="/ekf_quat/ekf_odom"/>
     <param name="command_topic" value="/planning/gate_pos_cmd"/>
     <param name="select_topic" value="/planning/gate_active"/>
-    <param name="trigger_topic" value="/traj_start_trigger"/>
+    <!-- Deliberate manual start; PX4Ctrl's automatic post-takeoff trigger is ignored. -->
+    <param name="trigger_topic" value="/pre_map_vln/start_saved_minco"/>
 
-    <!-- Start only when PX4Ctrl emits its post-takeoff trigger. -->
+    <!-- Start only after the explicit manual trigger command is received. -->
     <param name="start_trigger_type" value="3"/>
     <param name="start_delay" value="0.0"/>
     <param name="start_position_tolerance" value="0.15"/>
 
     <!-- Direct continuous MINCO execution; automatic landing is disabled. -->
-    <param name="execute_saved_trajectory" value="false"/>
+    <param name="execute_saved_trajectory" value="true"/>
     <param name="auto_land" value="false"/>
     <param name="use_super_safe_corridor" value="true"/>
     <param name="super_use_recorded_guide_without_astar" value="true"/>
@@ -32,7 +34,7 @@
     <param name="local_collision_replan_enabled" value="false"/>
     <param name="collision_clearance" value="$(arg collision_clearance)"/>
     <param name="super_config_path"
-           value="$(find super_planner)/config/competition_2026_real.yaml"/>
+           value="$(arg config_path)"/>
 
     <param name="min_segment_time" value="0.60"/>
     <param name="max_acceleration" value="6.0"/>

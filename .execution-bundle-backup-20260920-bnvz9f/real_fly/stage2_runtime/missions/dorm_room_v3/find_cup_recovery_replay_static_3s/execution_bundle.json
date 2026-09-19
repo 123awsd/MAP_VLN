@@ -1,0 +1,256 @@
+{
+  "format": "pre_map_vln.real_execution_bundle.v1",
+  "status": "preview_only",
+  "frame_id": "world",
+  "source_mission": "/home/uav/map_VLN/PRE_MAP_VLN/real_fly/stage2_offline/data/dorm_room_v3/tasks/find_cup_recovery_replay_static_3s/planning/mission_plan.json",
+  "source_mission_sha256": "0af975d93415e43aa921c10387ea73f25b3da51482be64d9cf15034f4b8918c8",
+  "map_file_name": "handheld_map_dorm_room_v3_complete.pcd",
+  "map_sha256": "0e945332b4458a73430aa3e626f30c99eb892ef735206f145348193fd7779b9b",
+  "voxel_metadata_sha256": "2a4375e9ff553663d4cb9450f69205d9f023f939badd24770ae0ff076658b00e",
+  "map_identity": {
+    "map_epoch_uuid": "9dbc803f-be01-45c7-a12b-86c186c2f7db",
+    "geometry_map_version": 1,
+    "semantic_map_version": 1,
+    "snapshot_content_hash": "33f26a76a24d1b6d183c766ce2fe8fb0cb4537d919098de424dcfde680099a73",
+    "occupancy_semantics_hash": "a1ffa7f2932b14ca508309ac9676fdf6369a516f42d6693137879707c5126399",
+    "planner_profile_hash": "b3ea23a5e4b10e3292effc29e275ef6401ba9b6f3998b497b99df00e11de60db"
+  },
+  "start_xyz_yaw": [
+    0.0,
+    0.0,
+    0.8,
+    0.0
+  ],
+  "mission_start_source": "explicit_approved_pose",
+  "goal_spacing_limit_m": 1.0,
+  "route_source": "offline_collision_checked_bspline_when_available",
+  "goals": [
+    {
+      "kind": "transit",
+      "xyz": [
+        0.6840628125626314,
+        -0.1366434465434333,
+        0.8508819159554875
+      ],
+      "yaw": null,
+      "visit_index": 0,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        1.2235908345813278,
+        -0.5201690364301155,
+        0.8508699254943694
+      ],
+      "yaw": null,
+      "visit_index": 0,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        1.7061214063759305,
+        -1.00500508849867,
+        0.803764936097743
+      ],
+      "yaw": null,
+      "visit_index": 0,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        2.142185419139734,
+        -1.447030613196645,
+        0.554341092915264
+      ],
+      "yaw": null,
+      "visit_index": 0,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        2.7975005442322685,
+        -1.5529017004842003,
+        0.5499368892981209
+      ],
+      "yaw": null,
+      "visit_index": 0,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        3.3655061632975682,
+        -1.2302805261624672,
+        0.555786209243769
+      ],
+      "yaw": null,
+      "visit_index": 0,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "observation",
+      "xyz": [
+        3.8097381843970823,
+        -1.0579466499992172,
+        0.414575
+      ],
+      "yaw": 0.7853981633974477,
+      "visit_index": 0,
+      "task_id": "check_cup_on_primary_bedroom_table",
+      "candidate_id": "check_cup_on_primary_bedroom_table__L1_boxer_reviewed_051__r1.00__005"
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        4.496279581515823,
+        -1.0623593371039768,
+        0.45395462434432665
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "observation",
+      "xyz": [
+        5.1490108859244685,
+        -0.8126915666879153,
+        0.414575
+      ],
+      "yaw": 1.5707963267948966,
+      "visit_index": 1,
+      "task_id": "check_cup_on_primary_bedroom_table",
+      "candidate_id": "check_cup_on_primary_bedroom_table__L1_boxer_reviewed_051__r1.00__004"
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        5.594334039962805,
+        -0.3137139876738233,
+        0.45680257639203325
+      ],
+      "yaw": null,
+      "visit_index": 2,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "observation",
+      "xyz": [
+        5.639755450027997,
+        -0.20941851257536115,
+        0.414575
+      ],
+      "yaw": 2.356194490192345,
+      "visit_index": 2,
+      "task_id": "check_cup_on_primary_bedroom_table",
+      "candidate_id": "check_cup_on_primary_bedroom_table__L1_boxer_reviewed_051__r1.00__003"
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        5.178202357386591,
+        -0.7113978877613035,
+        0.549512107845546
+      ],
+      "yaw": null,
+      "visit_index": 3,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        4.569184472789311,
+        -1.0515025310711388,
+        0.5490315395721452
+      ],
+      "yaw": null,
+      "visit_index": 3,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        3.9185231420855215,
+        -1.048339088742521,
+        0.5501720889999985
+      ],
+      "yaw": null,
+      "visit_index": 3,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        3.282564182890837,
+        -1.3230075189022028,
+        0.5499676549558401
+      ],
+      "yaw": null,
+      "visit_index": 3,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        2.780534119644582,
+        -1.5591000323415976,
+        0.5500052908715645
+      ],
+      "yaw": null,
+      "visit_index": 3,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        2.126931374940864,
+        -1.5565812269477646,
+        0.5500018634249333
+      ],
+      "yaw": null,
+      "visit_index": 3,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "observation",
+      "xyz": [
+        1.6970297614423364,
+        -1.2403982111952143,
+        0.55
+      ],
+      "yaw": 3.141592653589793,
+      "visit_index": 3,
+      "task_id": "recover_cup_on_living_room_table",
+      "candidate_id": "recover_cup_on_living_room_table__L1_boxer_reviewed_038__r1.00__017"
+    }
+  ],
+  "safety": {
+    "controller": "senior SUPER -> /planning/pos_cmd -> px4ctrl",
+    "adapter_publishes_position_command": false,
+    "automatic_arming": false,
+    "automatic_takeoff": false,
+    "automatic_landing": false,
+    "start_pose_explicitly_approved": true,
+    "autonomous_semantic_execution": false,
+    "motion_only_test_requires_explicit_acknowledgement": true,
+    "execution_requires_explicit_runtime_confirmation": true
+  }
+}

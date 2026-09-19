@@ -30,6 +30,7 @@ raw_targets="$run_data/localization/target_points_raw.json"
 boxer_csv="$run_data/boxer_complete/episode/boxer_3dbbs.csv"
 trajectory="$run_data/fastlio_complete/trajectory.csv"
 mission="$run_data/planning/mission_plan.json"
+candidates_json=""
 if [[ -n "$task_id" ]]; then
   [[ "$task_id" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || {
     echo "Invalid TASK_ID: $task_id" >&2
@@ -37,6 +38,18 @@ if [[ -n "$task_id" ]]; then
   }
   mission="$run_data/tasks/$task_id/planning/mission_plan.json"
   [[ -f "$mission" ]] || { echo "Missing task mission: $mission" >&2; exit 2; }
+  candidates_json="$run_data/tasks/$task_id/planning/candidates.json"
+  [[ -f "$candidates_json" ]] || { echo "Missing task candidates: $candidates_json" >&2; exit 2; }
+  final_dir="$root/real_fly/stage2_runtime/missions/$run_id/$task_id"
+  if [[ -f "$final_dir/final_minco_manifest.json" ]]; then
+    python3 "$root/real_fly/stage2_runtime/scripts/saved_minco_artifact.py" verify \
+      --directory "$final_dir" \
+      --map "$run_data/fastlio_complete/handheld_map_${run_id}_complete.pcd"
+    mission="$final_dir/final_minco_preview.json"
+    echo "Preview source: final saved MINCO coefficients (same artifact as NX)"
+  else
+    echo "No certified final MINCO exists; showing Stage2 geometric preview only."
+  fi
 fi
 # Optional diagnostic override. This is useful for comparing the raw A* route
 # against the validated/smoothed mission without changing any planning output.
@@ -94,6 +107,7 @@ exec "${docker_cmd[@]}" run --rm --init --net host \
   -e QT_X11_NO_MITSHM=1 \
   -e RVIZ_RUN_ID="$run_id" \
   -e RVIZ_MISSION="/workspace/project/$mission_rel" \
+  -e RVIZ_CANDIDATES_JSON="/workspace/project/${candidates_json#"$root/"}" \
   -e RVIZ_VOXEL_SNAPSHOT="/workspace/project/${voxel_snapshot#"$root/"}" \
   -e RVIZ_MIN_OBSERVATIONS="$min_observations" \
   -e RVIZ_MAP_PCD="/workspace/project/${map_pcd#"$root/"}" \

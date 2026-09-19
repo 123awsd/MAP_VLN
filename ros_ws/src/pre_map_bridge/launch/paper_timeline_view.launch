@@ -3,6 +3,9 @@
   <arg name="initial_percent" default="35"/>
   <arg name="trajectory_lift" default="0.18"/>
   <arg name="trajectory_width" default="0.10"/>
+  <arg name="rviz_config" default="paper_timeline.rviz"/>
+  <arg name="max_points" default="0"/>
+  <arg name="playback_stride" default="2"/>
   <param name="/use_sim_time" value="false"/>
   <node pkg="pre_map_bridge" type="paper_timeline_visualization_node.py"
         name="paper_timeline_visualization" output="screen">
@@ -10,7 +13,9 @@
     <param name="initial_percent" value="$(arg initial_percent)"/>
     <param name="trajectory_lift" value="$(arg trajectory_lift)"/>
     <param name="trajectory_width" value="$(arg trajectory_width)"/>
+    <param name="max_points" value="$(arg max_points)"/>
+    <param name="playback_stride" value="$(arg playback_stride)"/>
   </node>
   <node pkg="rviz" type="rviz" name="paper_timeline_rviz" output="screen"
-        args="-d $(find pre_map_bridge)/config/paper_timeline.rviz"/>
+        args="-d $(find pre_map_bridge)/config/$(arg rviz_config)"/>
 </launch>

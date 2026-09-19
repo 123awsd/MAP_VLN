@@ -7,8 +7,7 @@ usage() {
   cat <<'EOF'
 Usage:
   start_full_smooth_mission.sh /absolute/path/to/map.pcd \
-    --route /absolute/path/to/full_smooth_route.txt \
-    [--bundle /absolute/path/to/execution_bundle.json]
+    --bundle /absolute/path/to/execution_bundle.json
 
 The route is executed as a continuous MINCO command stream. Do not start the
 old /fsm_node SUPER planner alongside it.
@@ -18,14 +17,11 @@ EOF
 [[ $# -ge 3 ]] || { usage >&2; exit 2; }
 map_pcd="$1"
 shift
-route=""
 bundle=""
-clearance="0.30"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --route) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; route="$2"; shift 2 ;;
+    --route|--clearance) echo "Route replanning/clearance overrides are disabled. Use the certified saved MINCO bundle." >&2; exit 2 ;;
     --bundle) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; bundle="$2"; shift 2 ;;
-    --clearance) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; clearance="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -34,12 +30,10 @@ done
 [[ "$map_pcd" = /* && -s "$map_pcd" ]] || {
   echo "Missing absolute map PCD: $map_pcd" >&2; exit 2;
 }
-[[ "$route" = /* && -s "$route" ]] || {
-  echo "Missing absolute full-smooth route: $route" >&2; exit 2;
-}
-[[ "$clearance" =~ ^[0-9]+([.][0-9]+)?$ ]] || {
-  echo "Clearance must be a non-negative number: $clearance" >&2; exit 2;
-}
+[[ -s "$bundle" ]] || { echo "Missing execution bundle" >&2; exit 2; }
+mission_dir="$(cd "$(dirname "$bundle")" && pwd)"
+python3 "$(dirname "$0")/saved_minco_artifact.py" verify --directory "$mission_dir" --map "$map_pcd"
+clearance="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["collision_clearance"])' "$mission_dir/final_minco_manifest.json")"
 
 if [[ -n "$bundle" ]]; then
   [[ -s "$bundle" ]] || { echo "Missing execution bundle: $bundle" >&2; exit 2; }
@@ -83,12 +77,13 @@ rostopic info /ekf_quat/ekf_odom >/dev/null 2>&1 || {
 
 echo "Starting direct full_smooth_mission (continuous MINCO; no /fsm_node)."
 echo "Map: $map_pcd"
-echo "Route: $route"
+echo "Saved MINCO: $mission_dir/final_minco.txt (no replanning)"
 echo "Clearance: ${clearance} m"
 echo "Automatic landing: disabled"
 echo "PX4Ctrl, takeoff, and flight trigger remain separate."
 
 exec roslaunch "$launch" \
-  "map_pcd:=$map_pcd" \
-  "route_path:=$route" \
+  "map_pcd:=$mission_dir/collision.pcd" \
+  "trajectory_path:=$mission_dir/final_minco.txt" \
+  "config_path:=$mission_dir/planner.yaml" \
   "collision_clearance:=$clearance"

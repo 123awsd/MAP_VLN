@@ -62,7 +62,8 @@ def main():
         if len(start) != 4 or not all(math.isfinite(float(value)) for value in start):
             raise SystemExit("mission has invalid start_xyz_yaw")
         previous = finite_xyz(start[:3], "mission start")
-        rows.append((*previous, args.speed, float("nan"), 0.0, "pass"))
+        # Six-column start anchor preserves approved yaw; pass rows require NaN.
+        rows.append((*previous, args.speed, math.degrees(float(start[3])), 0.0, ""))
     for index, (visit, segment) in enumerate(zip(visits, segments)):
         if args.path_source == "validated":
             validated = segment.get("validated_trajectory") or {}

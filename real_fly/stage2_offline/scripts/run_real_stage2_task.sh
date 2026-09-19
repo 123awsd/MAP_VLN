@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Natural-language task -> 3-D mission -> collision-checked preview bundle.
-# Offline only: this script never starts ROS, hardware, SUPER, or PX4Ctrl.
+# Offline only: final MINCO uses an isolated container ROS master, no hardware.
 set -euo pipefail
 
 usage() {
@@ -193,6 +193,7 @@ if [[ "$bundle_eligible" == "true" ]]; then
     "$run_id" "$mission" "$task_id"
   runtime_mission_dir="$(dirname "$runtime_bundle")"
   cp -a "$full_smooth_route" "$runtime_mission_dir/full_smooth_route.txt"
+  bash "$script_dir/generate_final_minco.sh" "$run_id" "$task_id"
 else
   echo "Dynamic task preserved for preview, but no execution bundle was generated."
   echo "Reason: conditional/recovery motion requires the online perception/outcome executor."

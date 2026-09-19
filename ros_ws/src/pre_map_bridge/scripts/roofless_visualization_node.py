@@ -28,6 +28,7 @@ class RooflessVisualization:
         self.box_color_scale = float(rospy.get_param("~box_color_scale", 0.72))
         self.box_alpha = float(rospy.get_param("~box_alpha", 0.62))
         self.floor_z = self.fallback_floor_z
+        self.track_floor_from_odom = bool(rospy.get_param("~track_floor_from_odom", True))
         self.plan_samples = max(8, int(rospy.get_param("~plan_samples", 64)))
         self.cloud_pub = rospy.Publisher(
             "/pre_map_vln/roofless_map", PointCloud2, queue_size=1
@@ -84,7 +85,8 @@ class RooflessVisualization:
         self.box_pub.publish(output)
 
     def odom_callback(self, message):
-        self.floor_z = float(message.pose.pose.position.z) - self.sensor_height
+        if self.track_floor_from_odom:
+            self.floor_z = float(message.pose.pose.position.z) - self.sensor_height
 
     @staticmethod
     def rotate_vector(vector, quaternion):

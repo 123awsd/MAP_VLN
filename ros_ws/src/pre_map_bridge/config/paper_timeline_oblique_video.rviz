@@ -1,0 +1,60 @@
+Panels: []
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.92
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: AxisColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: Explored Map
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.03
+      Style: Points
+      Topic: /pre_map_vln/timeline_explored
+      Unreliable: false
+      Use Fixed Frame: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /pre_map_vln/timeline_trajectory
+      Name: Executed Trajectory
+      Namespaces: {}
+      Queue Size: 5
+  Enabled: true
+  Global Options:
+    Background Color: 250; 250; 250
+    Default Light: true
+    Fixed Frame: world
+    Frame Rate: 15
+  Name: root
+  Tools:
+    - Class: rviz/MoveCamera
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 31
+      Enable Stereo Rendering: false
+      Focal Point: {X: 0.4, Y: 7.5, Z: 5.3}
+      Name: Oblique Three-floor View
+      Near Clip Distance: 0.01
+      Pitch: 0.66
+      Target Frame: world
+      Yaw: 4.08
+Window Geometry:
+  Height: 900
+  Width: 1200
+  X: 40
+  Y: 80
+  Hide Left Dock: true
+  Hide Right Dock: true

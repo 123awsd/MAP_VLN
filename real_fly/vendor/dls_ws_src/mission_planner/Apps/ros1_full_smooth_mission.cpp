@@ -177,6 +177,14 @@ public:
             land_pub_ = nh_.advertise<quadrotor_msgs::TakeoffLand>(land_topic_, 1);
         }
         odom_sub_ = nh_.subscribe(odom_topic_, 20, &FullSmoothMission::odomCallback, this);
+        if (execute_saved_trajectory_ || load_saved_trajectory_for_preview_) {
+            known_map_.reset(new pcl::PointCloud<pcl::PointXYZ>);
+            if (known_map_pcd_.empty() ||
+                pcl::io::loadPCDFile(known_map_pcd_, *known_map_) < 0 || known_map_->empty()) {
+                throw std::runtime_error("saved execution requires its certified collision PCD");
+            }
+            map_tree_.setInputCloud(known_map_);
+        }
         if (execute_saved_trajectory_) {
             loadSavedTrajectory(saved_trajectory_path_);
         } else {
@@ -208,6 +216,14 @@ public:
         timer_ = nh_.createTimer(ros::Duration(0.01), &FullSmoothMission::timerCallback, this);
         start_time_ = ros::Time::now().toSec();
         publishSelection(false);
+        bool exit_after_preview = false;
+        private_nh_.param("exit_after_preview", exit_after_preview, false);
+        if (exit_after_preview) {
+            if (!preview_only_ || !preview_built_ || !trajectory_safe_) {
+                throw std::runtime_error("offline final MINCO generation/validation failed");
+            }
+            ros::shutdown();
+        }
     }
 
 private:
@@ -540,7 +556,7 @@ private:
         }
     }
 
-    void validateSavedTrajectoryForExecution() const {
+    void validateSavedTrajectoryForExecution() {
         for (std::size_t phase_index = 0; phase_index < phases_.size(); ++phase_index) {
             const auto& phase = phases_[phase_index];
             const double exact_max_speed =
@@ -562,6 +578,15 @@ private:
             for (int i = 0; i <= count; ++i) {
                 const double t = phase.trajectory.duration() * i / count;
                 const auto sample = phase.trajectory.sample(t);
+                Eigen::Vector3d obstacle;
+                double distance;
+                if (!nearestObstacle(sample.position, obstacle, distance) ||
+                    distance - motion_reserve < collision_clearance_) {
+                    throw std::runtime_error("saved MINCO violates certified PCD clearance");
+                }
+                if (std::abs(commandYaw(phase, t).rate) > max_yaw_rate_ + 1e-6) {
+                    throw std::runtime_error("saved MINCO exceeds execution yaw-rate limit");
+                }
                 if (!regionalHeightIsSafe(sample.position, motion_reserve)) {
                     std::ostringstream error;
                     error << "saved trajectory phase " << phase_index + 1
@@ -903,6 +928,11 @@ private:
     }
 
     void triggerCallback(const geometry_msgs::PoseStampedConstPtr&) {
+        if (state_ != State::WAIT_TRIGGER || !have_odom_ ||
+            ros::Time::now().toSec() - odom_time_ > 0.15 || !position_.allFinite()) {
+            ROS_ERROR("[FULL_SMOOTH] trigger rejected: not waiting or invalid/stale odometry");
+            return;
+        }
         if (execute_saved_trajectory_ && saved_trajectory_loaded_) {
             const double position_error = (position_ - saved_header_.start_position).norm();
             const double yaw_error = std::abs(angleDifference(saved_header_.start_yaw, yaw_));

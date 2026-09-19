@@ -1,0 +1,424 @@
+{
+  "format": "pre_map_vln.real_execution_bundle.v1",
+  "status": "preview_only",
+  "frame_id": "world",
+  "source_mission": "/home/uav/map_VLN/PRE_MAP_VLN/real_fly/stage2_offline/data/lab_room_v2/tasks/check_cup_basket_trashcan_01/planning/mission_plan.json",
+  "source_mission_sha256": "770b0e282e3176ad9ba7cde0fe4934e1da1d4cdc8402f2c4ea588e369944c62f",
+  "map_file_name": "handheld_map_lab_room_v2_complete.pcd",
+  "map_sha256": "898f4c19f21f9d109e5a5a1c1fcbcf8a6b922fc18b267fa5861988a14c237e73",
+  "voxel_metadata_sha256": "98f8a105b3c33fe7297420bb18f5076be1d1ef794a1dfeabece395e0795fabe5",
+  "map_identity": {
+    "map_epoch_uuid": "92ed82ce-7e07-40f8-a31f-4c5ffcf49d5a",
+    "geometry_map_version": 1,
+    "semantic_map_version": 1,
+    "snapshot_content_hash": "ef88ad006e443298c9d9a2f0fc9ef29c9419d506c27d9f9b7125355314e9a96f",
+    "occupancy_semantics_hash": "a1ffa7f2932b14ca508309ac9676fdf6369a516f42d6693137879707c5126399",
+    "planner_profile_hash": "b3ea23a5e4b10e3292effc29e275ef6401ba9b6f3998b497b99df00e11de60db"
+  },
+  "start_xyz_yaw": [
+    0.0,
+    0.0,
+    0.8,
+    0.0
+  ],
+  "mission_start_source": "explicit_approved_pose",
+  "goal_spacing_limit_m": 1.0,
+  "route_source": "offline_collision_checked_bspline_when_available",
+  "goals": [
+    {
+      "kind": "transit",
+      "xyz": [
+        0.6932258091485223,
+        0.060113198583598364,
+        0.8475630729748346
+      ],
+      "yaw": null,
+      "visit_index": 0,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        1.3533161052786327,
+        0.03890708061743882,
+        0.8601840841483537
+      ],
+      "yaw": null,
+      "visit_index": 0,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        2.020516749799907,
+        0.06256588964058629,
+        0.8355549652678582
+      ],
+      "yaw": null,
+      "visit_index": 0,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "observation",
+      "xyz": [
+        2.3261005664424,
+        0.19353025969519555,
+        0.766607
+      ],
+      "yaw": 1.0471975511965974,
+      "visit_index": 0,
+      "task_id": "check_cup_on_table_lounge",
+      "candidate_id": "check_cup_on_table_lounge__L1_boxer_reviewed_073__r1.00__026"
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        2.995727755216548,
+        0.14994684529935393,
+        0.7500063214930404
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        3.6941498422714294,
+        0.15061835120652622,
+        0.7502382886071716
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        4.391647318564442,
+        0.1497332874959111,
+        0.749909703265988
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        5.089818544710262,
+        0.15034979951544686,
+        0.7500439303148511
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        5.788082372568055,
+        0.1493630176711651,
+        0.7499740247534393
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        6.487935771728219,
+        0.1451652818354854,
+        0.7499968266985135
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        7.108440471663072,
+        0.4527738272814232,
+        0.7499999546985519
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        7.7426250004986885,
+        0.7273354763949631,
+        0.7499999629853318
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        8.362340713841991,
+        1.0368277262474181,
+        0.7500000455880576
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        9.001511585016598,
+        1.3013731492349427,
+        0.7526353553167993
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        9.65926764957232,
+        1.4450095682115898,
+        0.6561729150570712
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        10.33039285374257,
+        1.625683561471972,
+        0.650041627883143
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        10.976277835133699,
+        1.7515172206380598,
+        0.6499026449820715
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        11.67444786221668,
+        1.751224485441976,
+        0.6498961822578826
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        12.362819991871158,
+        1.774570859484967,
+        0.6498698143893104
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        12.889022938833868,
+        2.187165651336933,
+        0.6468611146148658
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        13.36066026838471,
+        2.66096152489846,
+        0.5516577754971391
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        13.854481974189211,
+        3.1550859399408147,
+        0.5543231192363451
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        14.25925717108026,
+        3.6793366584565255,
+        0.3316452991998181
+      ],
+      "yaw": null,
+      "visit_index": 1,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "observation",
+      "xyz": [
+        14.38780289673967,
+        3.716659450002388,
+        0.25
+      ],
+      "yaw": 3.141592653589793,
+      "visit_index": 1,
+      "task_id": "check_basketball_under_chair_activity",
+      "candidate_id": "check_basketball_under_chair_activity__L1_boxer_reviewed_010__r1.00__022"
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        14.84132706180641,
+        4.241342866444003,
+        0.24999999999999997
+      ],
+      "yaw": null,
+      "visit_index": 2,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        15.333233090585455,
+        4.733180688546576,
+        0.25000000000000006
+      ],
+      "yaw": null,
+      "visit_index": 2,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        15.749568366614623,
+        5.2563136502495915,
+        0.24999999999999817
+      ],
+      "yaw": null,
+      "visit_index": 2,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        15.750000012987101,
+        5.951719556875227,
+        0.25000000000506706
+      ],
+      "yaw": null,
+      "visit_index": 2,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        15.749999999971928,
+        6.647304231904606,
+        0.25000007425376697
+      ],
+      "yaw": null,
+      "visit_index": 2,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        15.750000742711537,
+        7.343644435395688,
+        0.24817661841336378
+      ],
+      "yaw": null,
+      "visit_index": 2,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "transit",
+      "xyz": [
+        15.752542112408207,
+        7.874653500647254,
+        0.647173705536837
+      ],
+      "yaw": null,
+      "visit_index": 2,
+      "task_id": null,
+      "candidate_id": null
+    },
+    {
+      "kind": "observation",
+      "xyz": [
+        15.66508174613268,
+        8.085293324137552,
+        0.778308
+      ],
+      "yaw": 0.26179938779914985,
+      "visit_index": 2,
+      "task_id": "check_trash_can_near_fan_storage",
+      "candidate_id": "check_trash_can_near_fan_storage__L1_boxer_reviewed_057__r1.00__024"
+    }
+  ],
+  "safety": {
+    "controller": "senior SUPER -> /planning/pos_cmd -> px4ctrl",
+    "adapter_publishes_position_command": false,
+    "automatic_arming": false,
+    "automatic_takeoff": false,
+    "automatic_landing": false,
+    "start_pose_explicitly_approved": true,
+    "autonomous_semantic_execution": false,
+    "motion_only_test_requires_explicit_acknowledgement": true,
+    "execution_requires_explicit_runtime_confirmation": true
+  }
+}

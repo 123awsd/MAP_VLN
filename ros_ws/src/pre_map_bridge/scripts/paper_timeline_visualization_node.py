@@ -8,7 +8,7 @@ from geometry_msgs.msg import Point
 from interactive_markers.interactive_marker_server import InteractiveMarkerServer
 from sensor_msgs import point_cloud2
 from sensor_msgs.msg import PointCloud2
-from std_msgs.msg import Header
+from std_msgs.msg import Header, Int32
 from visualization_msgs.msg import InteractiveMarker, InteractiveMarkerControl, Marker, MarkerArray
 
 
@@ -17,6 +17,7 @@ class TimelineView:
         self.frame_id = rospy.get_param("~frame_id", "world")
         self.width = float(rospy.get_param("~trajectory_width", 0.10))
         self.lift = float(rospy.get_param("~trajectory_lift", 0.18))
+        self.max_points = int(rospy.get_param("~max_points", 0))
         self.data = np.load(Path(rospy.get_param("~timeline_path")), allow_pickle=False)
         self.fractions = self.data["fractions"]
         self.times = self.data["snapshot_times"]
@@ -32,11 +33,22 @@ class TimelineView:
         self.slider_y = float(np.percentile(self.final_cloud[:, 1], 1) - 1.2)
         self.slider_z = float(np.percentile(self.final_cloud[:, 2], 99) + 0.8)
         self.index = int(round(float(rospy.get_param("~initial_percent", 35.0)) * (len(self.fractions)-1) / 100.0))
+        self.playback_stride = max(1, int(rospy.get_param("~playback_stride", 2)))
         self.make_slider()
         self.publish_context()
         self.publish_index(self.index)
+        rospy.Subscriber("/pre_map_vln/timeline_index", Int32, self.index_callback, queue_size=1)
+
+    def index_callback(self, message):
+        index = max(0, min(len(self.fractions) - 1, int(message.data)))
+        if index != self.index:
+            self.index = index
+            self.publish_index(index)
 
     def cloud(self, points):
+        if self.max_points > 0 and len(points) > self.max_points:
+            step = int(np.ceil(len(points) / float(self.max_points)))
+            points = points[::step]
         return point_cloud2.create_cloud_xyz32(Header(stamp=rospy.Time.now(), frame_id=self.frame_id), points.tolist())
 
     def make_slider(self):

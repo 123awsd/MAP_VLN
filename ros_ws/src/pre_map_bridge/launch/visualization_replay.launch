@@ -4,6 +4,7 @@
   <arg name="rate" default="1.0"/>
   <arg name="topdown" default="false"/>
   <arg name="delay" default="2.0"/>
+  <arg name="rviz_config" default="stage1.rviz"/>
   <arg name="roofless_floor_clearance" default="0.25"/>
   <arg name="roofless_ceiling_min_height" default="1.65"/>
   <arg name="roofless_ceiling_thickness" default="0.60"/>
@@ -15,7 +16,7 @@
     <param name="ceiling_thickness" value="$(arg roofless_ceiling_thickness)"/>
   </node>
   <node pkg="rviz" type="rviz" name="pre_map_vln_rviz" output="screen"
-        args="-d $(find pre_map_bridge)/config/stage1.rviz"/>
+        args="-d $(find pre_map_bridge)/config/$(arg rviz_config)"/>
   <node if="$(arg topdown)" pkg="rviz" type="rviz" name="pre_map_vln_rviz_topdown" output="screen"
         args="-d $(find pre_map_bridge)/config/stage1_topdown.rviz"/>
   <node unless="$(arg loop)" pkg="rosbag" type="play" name="stage1_bag_player" output="screen"

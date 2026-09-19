@@ -4,6 +4,7 @@ import csv
 import colorsys
 import json
 import math
+import os
 import struct
 import sys
 import zlib
@@ -129,8 +130,18 @@ def semantic_color(label):
 
 def add_observation_frustums(marker_array, mission, mission_path, frame):
     """Draw the selected candidate's nominal camera FoV at every visit."""
+    # The final saved-MINCO preview is intentionally stored in the NX runtime
+    # mission directory, while candidates.json remains part of the immutable
+    # Stage2 planning products. Do not infer the candidate file solely from
+    # the trajectory preview location.
     candidates_path = mission_path.parent / "candidates.json"
+    override = os.environ.get("RVIZ_CANDIDATES_JSON", "").strip()
+    if override:
+        override_path = Path(override)
+        if override_path.is_file():
+            candidates_path = override_path
     if not candidates_path.is_file():
+        rospy.logwarn("Observation frustums disabled: candidates file not found: %s", candidates_path)
         return 0
     document = json.loads(candidates_path.read_text())
     candidate_by_id = {

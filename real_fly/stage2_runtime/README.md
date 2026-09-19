@@ -161,20 +161,17 @@ with the aircraft secured before enabling free flight.
 
 ## Direct full-smooth execution
 
-For a static, pre-approved demo, `run_real_stage2_task.sh` also exports the
-continuous validated route as `full_smooth_route.txt`. This path uses the
-senior `full_smooth_mission` executor rather than the PoseStamped goal adapter:
-the node builds one continuous MINCO command stream from the route and sends it
-through `competition_command_mux` to PX4Ctrl. It does not start `/fsm_node`, and
-the direct launch keeps automatic landing disabled.
+For static tasks, `run_real_stage2_task.sh` generates final MINCO on the host.
+The saved coefficients, timing and yaw in `final_minco.txt` are the authority
+for both the host preview and NX execution. NX verifies the hashed artifact
+set and loads it without replanning. See [SAVED_MINCO.md](SAVED_MINCO.md).
+Automatic landing remains disabled; live clearance monitoring is shadow-only.
 
 After copying the task directory to the NX, start the direct executor with:
 
 ```bash
 ./real_fly/stage2_runtime/scripts/start_full_smooth_mission.sh \
   "/home/nv/dls_ws/${RUN_ID}.pcd" \
-  --route \
-  "real_fly/stage2_runtime/missions/${RUN_ID}/${TASK_ID}/full_smooth_route.txt" \
   --bundle \
   "real_fly/stage2_runtime/missions/${RUN_ID}/${TASK_ID}/execution_bundle.json"
 ```
