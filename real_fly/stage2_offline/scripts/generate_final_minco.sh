@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 # Host-only, isolated ROS master; no hardware or command consumers.
 set -euo pipefail
-[[ $# -eq 2 ]] || { echo "Usage: $0 RUN_ID TASK_ID" >&2; exit 2; }
-run=$1 task=$2
+[[ $# -ge 2 && $# -le 3 ]] || { echo "Usage: $0 RUN_ID TASK_ID [CLEARANCE_M]" >&2; exit 2; }
+run=$1 task=$2 clearance="${3:-0.25}"
 [[ "$run" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ && "$task" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || exit 2
+[[ "$clearance" =~ ^0[.][0-9]+$|^[1-9][0-9]*([.][0-9]+)?$ ]] || { echo "Invalid clearance: $clearance" >&2; exit 2; }
+python3 - "$clearance" <<'PY'
+import sys
+value = float(sys.argv[1])
+if not 0.10 <= value <= 1.00:
+    raise SystemExit(f"Clearance must be in [0.10, 1.00] m, got {value}")
+PY
 root="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$root"
 mission="real_fly/stage2_offline/data/$run/tasks/$task/planning/mission_plan.json"
@@ -22,9 +29,20 @@ if [[ ! -s "$dest/execution_bundle.json" ]]; then
 fi
 cp "$dest/execution_bundle.json" "$job/execution_bundle.json"
 cp real_fly/stage2_runtime/config/super_indoor_stage2.yaml "$job/planner.yaml"
-docker run --rm --network none --user "$(id -u):$(id -g)" \
+python3 - "$job/planner.yaml" "$clearance" <<'PY'
+import pathlib
+import sys
+import yaml
+
+path = pathlib.Path(sys.argv[1])
+document = yaml.safe_load(path.read_text(encoding="utf-8"))
+document["super_planner"]["robot_r"] = float(sys.argv[2])
+path.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+PY
+sudo docker run --rm --network none --user "$(id -u):$(id -g)" \
   -v "$root:/workspace/project" -e JOB="/workspace/project/$job" \
-  -e MAP="/workspace/project/$map" pre-map-vln/real-minco:local bash -c '
+  -e MAP="/workspace/project/$map" -e COLLISION_CLEARANCE="$clearance" \
+  pre-map-vln/real-minco:local bash -c '
 set -eo pipefail
 source /opt/ros/noetic/setup.bash
 source /workspace/project/real_fly/stage2_offline/runtime/minco_ws/devel/setup.bash
@@ -43,7 +61,7 @@ timeout 900 rosrun mission_planner full_smooth_mission \
   _known_map_pcd:="$JOB/collision.pcd" _super_config_path:="$JOB/planner.yaml" \
   _use_super_safe_corridor:=true _super_use_recorded_guide_without_astar:=true \
   _super_static_map_only:=true _local_collision_replan_enabled:=false \
-  _collision_clearance:=0.25 _auto_land:=false \
+  _collision_clearance:="$COLLISION_CLEARANCE" _auto_land:=false \
   _max_acceleration:=6.0 _max_jerk:=90.0 _max_snap:=350.0 \
   _max_yaw_rate:=1.5 _max_yaw_lock_variation:=1.0 _max_jerk_discontinuity:=0.0001 \
   _yaw_velocity_threshold:=0.08 _yaw_lookahead_time:=0.40 \
@@ -51,7 +69,7 @@ timeout 900 rosrun mission_planner full_smooth_mission \
   > "$JOB/generation.log" 2>&1
 test -s "$JOB/final_minco.txt"
 python3 /workspace/project/real_fly/stage2_runtime/scripts/saved_minco_artifact.py seal \
-  --directory "$JOB" --map "$MAP" --mission "$JOB/source_mission.json" --clearance 0.25
+  --directory "$JOB" --map "$MAP" --mission "$JOB/source_mission.json" --clearance "$COLLISION_CLEARANCE"
 '
 for name in final_minco.txt collision.pcd planner.yaml full_smooth_route.txt final_minco_preview.json; do
   cp "$job/$name" "$dest/$name"

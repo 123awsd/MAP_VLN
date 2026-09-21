@@ -35,7 +35,7 @@ def display_label(label):
     return original
 
 
-def read_binary_pcd(path):
+def read_binary_pcd(path, max_z=None):
     raw = path.read_bytes()
     marker = raw.find(b"DATA binary\n")
     if marker < 0:
@@ -56,13 +56,20 @@ def read_binary_pcd(path):
     if not all(name in offsets for name in ("x", "y", "z")):
         raise RuntimeError("PCD lacks x/y/z fields")
     intensity_offset = offsets.get("intensity")
-    return [(
-        struct.unpack_from("<f", payload, i * stride + offsets["x"])[0],
-        struct.unpack_from("<f", payload, i * stride + offsets["y"])[0],
-        struct.unpack_from("<f", payload, i * stride + offsets["z"])[0],
-        struct.unpack_from("<f", payload, i * stride + intensity_offset)[0]
-        if intensity_offset is not None else 0.0,
-    ) for i in range(points)]
+    selected = []
+    for i in range(points):
+        base = i * stride
+        z = struct.unpack_from("<f", payload, base + offsets["z"])[0]
+        if max_z is not None and (not math.isfinite(z) or z > max_z):
+            continue
+        selected.append((
+            struct.unpack_from("<f", payload, base + offsets["x"])[0],
+            struct.unpack_from("<f", payload, base + offsets["y"])[0],
+            z,
+            struct.unpack_from("<f", payload, base + intensity_offset)[0]
+            if intensity_offset is not None else 0.0,
+        ))
+    return selected
 
 
 def load_path(csv_path, topic):
@@ -247,7 +254,7 @@ def add_clearance_markers(marker_array, mission, voxel_snapshot, frame):
         sphere.action = Marker.ADD
         sphere.pose.position.x, sphere.pose.position.y, sphere.pose.position.z = map(float, point)
         sphere.pose.orientation.w = 1.0
-        sphere.scale.x = sphere.scale.y = sphere.scale.z = 0.18
+        sphere.scale.x = sphere.scale.y = sphere.scale.z = 0.08
         sphere.color.r = 1.0
         sphere.color.g = 0.05 if minimum < threshold else 0.75
         sphere.color.b = 0.05
@@ -319,7 +326,7 @@ def add_clearance_markers(marker_array, mission, voxel_snapshot, frame):
         highlight.action = Marker.ADD
         highlight.pose.position.x, highlight.pose.position.y, highlight.pose.position.z = map(float, point)
         highlight.pose.orientation.w = 1.0
-        highlight.scale.x = highlight.scale.y = highlight.scale.z = 0.46
+        highlight.scale.x = highlight.scale.y = highlight.scale.z = 0.16
         highlight.color.r = 1.0
         highlight.color.g = 0.0
         highlight.color.b = 0.0
@@ -381,7 +388,7 @@ def add_round_planned_path(marker_array, mission, frame):
     marker.type = Marker.SPHERE_LIST
     marker.action = Marker.ADD
     marker.pose.orientation.w = 1.0
-    marker.scale.x = marker.scale.y = marker.scale.z = 0.11
+    marker.scale.x = marker.scale.y = marker.scale.z = 0.05
     marker.color.r = 0.10
     marker.color.g = 0.85
     marker.color.b = 1.0
@@ -391,7 +398,7 @@ def add_round_planned_path(marker_array, mission, frame):
     return len(points)
 
 
-def publish_traversability(voxel_snapshot, frame):
+def publish_traversability(voxel_snapshot, frame, max_z=None):
     """Publish filtered occupancy and traversability voxel centers for RViz."""
     if voxel_snapshot is None:
         return [], 0, 0, 0, 0.0
@@ -420,6 +427,8 @@ def publish_traversability(voxel_snapshot, frame):
         zyx = np.argwhere(mask)
         xyz = zyx[:, ::-1].astype(np.float32)
         xyz = origin + (xyz + 0.5) * resolution
+        if max_z is not None:
+            xyz = xyz[xyz[:, 2] <= max_z]
         message = point_cloud2.create_cloud_xyz32(header, xyz)
         publisher = rospy.Publisher(topic, PointCloud2, queue_size=1, latch=True)
         publisher.publish(message)
@@ -484,6 +493,9 @@ def main():
     map_path, clusters_path, raw_targets_path, boxer_3d_path, trajectory_path, mission_path = map(Path, sys.argv[1:7])
     min_observations = int(sys.argv[7])
     voxel_snapshot = Path(sys.argv[8]) if len(sys.argv) == 9 else None
+    map_max_z = float(os.environ.get("RVIZ_MAX_Z", "2.0"))
+    if not math.isfinite(map_max_z):
+        raise SystemExit("RVIZ_MAX_Z must be finite")
     rospy.init_node("drone_room_offline_visualization", anonymous=False)
     frame = "map"
 
@@ -491,11 +503,12 @@ def main():
               PointField("z", 8, PointField.FLOAT32, 1),
               PointField("intensity", 12, PointField.FLOAT32, 1)]
     cloud_header = Header(frame_id=frame, stamp=rospy.Time.now())
-    cloud = point_cloud2.create_cloud(cloud_header, fields, read_binary_pcd(map_path))
+    map_points = read_binary_pcd(map_path, max_z=map_max_z)
+    cloud = point_cloud2.create_cloud(cloud_header, fields, map_points)
     cloud_pub = rospy.Publisher("/drone_room/map", PointCloud2, queue_size=1, latch=True)
     cloud_pub.publish(cloud)
     traversability_pubs, occupied_count, free_count, excluded_count, inflation_threshold = (
-        publish_traversability(voxel_snapshot, frame)
+        publish_traversability(voxel_snapshot, frame, max_z=map_max_z)
     )
     clicked_point_pub, clicked_point_sub = setup_clicked_point_display(frame)
 
@@ -542,6 +555,15 @@ def main():
         text.text = display_label(item["label"])
         semantic_markers.markers.append(text)
     trajectory_pub = load_path(trajectory_path, "/drone_room/trajectory")
+    actual_trajectory_pub = None
+    actual_trajectory_path = os.environ.get("RVIZ_ACTUAL_TRAJECTORY", "")
+    if actual_trajectory_path:
+        actual_path = Path(actual_trajectory_path)
+        if not actual_path.is_file():
+            raise RuntimeError(f"actual flight trajectory is missing: {actual_path}")
+        actual_trajectory_pub = load_path(
+            actual_path, "/drone_room/actual_flight_trajectory"
+        )
     mission = json.loads(mission_path.read_text())
     planning_markers = MarkerArray()
     frustum_count = add_observation_frustums(planning_markers, mission, mission_path, frame)
@@ -569,12 +591,15 @@ def main():
             plan.poses.append(pose)
     plan_pub = rospy.Publisher("/drone_room/planned_path", RosPath, queue_size=1, latch=True)
     plan_pub.publish(plan)
-    rospy.loginfo("Published map (%d points), filtered-occupied=%d, inflated-free=%d, inflation-excluded=%d "
+    rospy.loginfo("Published map (%d points at world z<=%.2fm), filtered-occupied=%d, inflated-free=%d, inflation-excluded=%d "
                   "(minimum clearance %.2fm), %d semantic 3D boxes, %d observation frustums, "
-                  "%d clearance markers, round plan (%d samples), trajectory and validated plan (%d poses)",
-                  len(cloud.data) // cloud.point_step, occupied_count, free_count, excluded_count,
+                  "%d clearance markers, round plan (%d samples), actual-flight=%s, trajectory and validated plan (%d poses)",
+                  len(cloud.data) // cloud.point_step, map_max_z,
+                  occupied_count, free_count, excluded_count,
                   inflation_threshold, len(boxes), frustum_count,
-                  clearance_count, round_path_count, len(plan.poses))
+                  clearance_count, round_path_count,
+                  "loaded" if actual_trajectory_pub is not None else "disabled",
+                  len(plan.poses))
     rospy.spin()
 
 

@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 2 || $# -gt 3 ]]; then
-  echo "Usage: $0 RUN_ID /path/to/mission_plan.json [MISSION_ID]" >&2
+if [[ $# -lt 2 || $# -gt 4 ]]; then
+  echo "Usage: $0 RUN_ID /path/to/mission_plan.json [MISSION_ID] [VOXEL_METADATA]" >&2
   exit 2
 fi
 run_id="$1"
 mission="$2"
 mission_id="${3:-}"
+metadata_override="${4:-}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 runtime_root="$(cd "$script_dir/.." && pwd)"
 root="$(cd "$runtime_root/../.." && pwd)"
 run_data="$root/real_fly/stage2_offline/data/$run_id"
 map_pcd="$run_data/fastlio_complete/handheld_map_${run_id}_complete.pcd"
 metadata="$run_data/voxel_snapshot/metadata.json"
-if [[ ! -r "$metadata" && -r "$run_data/voxel_snapshot_complete/metadata.json" ]]; then
+if [[ -n "$metadata_override" ]]; then
+  metadata="$(realpath "$metadata_override")"
+elif [[ ! -r "$metadata" && -r "$run_data/voxel_snapshot_complete/metadata.json" ]]; then
   metadata="$run_data/voxel_snapshot_complete/metadata.json"
 fi
 if [[ -n "$mission_id" ]]; then

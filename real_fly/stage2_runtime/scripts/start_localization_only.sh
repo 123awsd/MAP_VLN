@@ -5,7 +5,7 @@ usage() {
   cat <<'EOF'
 Usage: start_localization_only.sh [--no-monitor]
 
-Starts only the local ROS master when needed, MAVROS telemetry, MID-360S,
+Starts only the local ROS master when needed, MAVROS telemetry, MID-360,
 lightweight FAST-LIO odometry, and a read-only health display. It does not
 start a camera, RViz, a controller, a setpoint publisher, or map/point-cloud
 publication. Start it only while the aircraft is disarmed.
@@ -28,14 +28,25 @@ STAGE1_ROOT="$REAL_FLY_ROOT/stage1_exploration"
 DLS_WS=/home/nv/dls_ws
 STAGE1_WS="$STAGE1_ROOT/ros_ws"
 ROS_MASTER_PORT=11311
-LIVOX_CONFIG="$STAGE1_ROOT/data/mid360s_static_20260904_145259/MID360s_config.json"
-LIVOX_SERIAL=ARMCP720033122
 RUN_STAMP="$(date +%Y%m%d_%H%M%S)"
 LOG_DIR="$RUNTIME_ROOT/runtime/localization/$RUN_STAMP"
 mkdir -p "$LOG_DIR"
 
 unset _CATKIN_SETUP_DIR || true
 source /opt/ros/noetic/setup.bash
+
+if [[ -r "$DLS_WS/scripts/load_uav_env.sh" ]]; then
+  # shellcheck disable=SC1090
+  source "$DLS_WS/scripts/load_uav_env.sh"
+fi
+LIVOX_MODEL="${LIVOX_LIDAR_TYPE:-mid360}"
+LIVOX_IP="${LIVOX_LIDAR_IP:-192.168.1.139}"
+LIVOX_CONFIG="${LIVOX_LIDAR_CONFIG:-$DLS_WS/src/drivers/livox_ros_driver2/config/MID360_config.json}"
+if [[ "$LIVOX_MODEL" == "mid360" ]]; then
+  LIVOX_LABEL="MID-360"
+else
+  LIVOX_LABEL="MID-360S"
+fi
 
 export ROS_MASTER_URI="http://127.0.0.1:${ROS_MASTER_PORT}"
 export ROS_IP=127.0.0.1
@@ -45,7 +56,8 @@ export CMAKE_PREFIX_PATH="$STAGE1_WS/devel:$DLS_WS/devel:/opt/ros/noetic"
 export PATH="$STAGE1_WS/devel/lib/stage1_fast_lio:$DLS_WS/devel/lib/livox_ros_driver2:/opt/ros/noetic/bin:$PATH"
 export LD_LIBRARY_PATH="$STAGE1_WS/devel/lib:$DLS_WS/devel/lib:/opt/ros/noetic/lib:/opt/ros/noetic/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export PYTHONPATH="$STAGE1_WS/devel/lib/python3/dist-packages:$DLS_WS/devel/lib/python3/dist-packages:/opt/ros/noetic/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
-export LIVOX_LIDAR_TYPE=mid360s
+export LIVOX_LIDAR_TYPE="$LIVOX_MODEL"
+export LIVOX_LIDAR_IP="$LIVOX_IP"
 export LIVOX_LIDAR_CONFIG="$LIVOX_CONFIG"
 
 [[ -r "$LIVOX_CONFIG" ]] || { echo "Missing Livox config: $LIVOX_CONFIG" >&2; exit 1; }
@@ -148,9 +160,8 @@ fi
 if node_exists /livox_lidar_publisher2; then
   echo "Reusing /livox_lidar_publisher2"
 else
-  echo "Starting MID-360S at 192.168.1.122"
-  start_owned livox.log roslaunch "$DLS_WS/src/localization/FAST_LIO/launch/lidar.launch" \
-    "bd_list:=$LIVOX_SERIAL"
+  echo "Starting $LIVOX_LABEL at $LIVOX_IP"
+  start_owned livox.log roslaunch "$DLS_WS/src/localization/FAST_LIO/launch/lidar.launch"
 fi
 wait_for_topic /livox/lidar "Livox point cloud"
 

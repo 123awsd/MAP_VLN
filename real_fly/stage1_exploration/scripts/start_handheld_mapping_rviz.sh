@@ -6,7 +6,7 @@ usage() {
 Usage: start_handheld_mapping_rviz.sh [--record RUN_ID] [--no-camera] [--no-rviz]
 
 Starts the existing ROS master (or a private one when none exists), MAVROS
-telemetry, the aircraft MID-360S, the borrowed FAST-LIO mapping profile, the
+telemetry, the aircraft MID-360, the borrowed FAST-LIO mapping profile, the
 senior-provided ekf_quat fusion node, the D435 RGB-D stream, and the checked-in
 RViz view. It never arms the aircraft or publishes motion commands.
 
@@ -44,8 +44,6 @@ STAGE1_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DLS_WS=/home/nv/dls_ws
 STAGE1_WS="$STAGE1_ROOT/ros_ws"
 ROS_MASTER_PORT=11311
-LIVOX_CONFIG="$STAGE1_ROOT/data/mid360s_static_20260904_145259/MID360s_config.json"
-LIVOX_SERIAL=ARMCP720033122
 RVIZ_CONFIG="$STAGE1_ROOT/rviz/stage1_handheld_mapping.rviz"
 REALSENSE_PROFILE="$STAGE1_ROOT/config/realsense_d435_recording.conf"
 RUN_STAMP="$(date +%Y%m%d_%H%M%S)"
@@ -61,6 +59,22 @@ set +u
 source /opt/ros/noetic/setup.bash
 set -u
 
+# Reuse the same per-aircraft Livox settings as the senior localization stack.
+# This avoids overriding the new MID-360 with the previous MID-360S model and
+# broadcast code.
+if [[ -r "$DLS_WS/scripts/load_uav_env.sh" ]]; then
+  # shellcheck disable=SC1090
+  source "$DLS_WS/scripts/load_uav_env.sh"
+fi
+LIVOX_MODEL="${LIVOX_LIDAR_TYPE:-mid360}"
+LIVOX_IP="${LIVOX_LIDAR_IP:-192.168.1.139}"
+LIVOX_CONFIG="${LIVOX_LIDAR_CONFIG:-$DLS_WS/src/drivers/livox_ros_driver2/config/MID360_config.json}"
+if [[ "$LIVOX_MODEL" == "mid360" ]]; then
+  LIVOX_LABEL="MID-360"
+else
+  LIVOX_LABEL="MID-360S"
+fi
+
 export ROS_MASTER_URI="http://127.0.0.1:${ROS_MASTER_PORT}"
 export ROS_IP=127.0.0.1
 export ROS_HOSTNAME=127.0.0.1
@@ -69,7 +83,8 @@ export CMAKE_PREFIX_PATH="$STAGE1_WS/devel:$DLS_WS/devel:/opt/ros/noetic"
 export PATH="$STAGE1_WS/devel/lib/stage1_fast_lio:$DLS_WS/devel/lib/livox_ros_driver2:/opt/ros/noetic/bin:$PATH"
 export LD_LIBRARY_PATH="$STAGE1_WS/devel/lib:$DLS_WS/devel/lib:/opt/ros/noetic/lib:/opt/ros/noetic/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export PYTHONPATH="$STAGE1_WS/devel/lib/python3/dist-packages:$DLS_WS/devel/lib/python3/dist-packages:/opt/ros/noetic/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
-export LIVOX_LIDAR_TYPE=mid360s
+export LIVOX_LIDAR_TYPE="$LIVOX_MODEL"
+export LIVOX_LIDAR_IP="$LIVOX_IP"
 export LIVOX_LIDAR_CONFIG="$LIVOX_CONFIG"
 
 [[ -r "$LIVOX_CONFIG" ]] || { echo "Missing Livox config: $LIVOX_CONFIG" >&2; exit 1; }
@@ -192,11 +207,10 @@ if node_exists /livox_lidar_publisher2; then
 else
   livox_ready=0
   for attempt in 1 2; do
-    echo "Starting MID-360S at 192.168.1.122 (attempt $attempt/2)"
+    echo "Starting $LIVOX_LABEL at $LIVOX_IP (attempt $attempt/2)"
     livox_log="livox.log"
     [[ "$attempt" -eq 1 ]] || livox_log="livox_retry.log"
-    start_launch "$livox_log" roslaunch "$DLS_WS/src/localization/FAST_LIO/launch/lidar.launch" \
-      "bd_list:=$LIVOX_SERIAL"
+    start_launch "$livox_log" roslaunch "$DLS_WS/src/localization/FAST_LIO/launch/lidar.launch"
     livox_pid="${owned_pids[-1]}"
     if wait_for_topic /livox/lidar "Livox point cloud"; then
       livox_ready=1
@@ -206,7 +220,7 @@ else
     [[ "$attempt" -eq 2 ]] || sleep 5
   done
   [[ "$livox_ready" -eq 1 ]] || {
-    echo "MID-360S did not produce point cloud after two attempts." >&2
+    echo "$LIVOX_LABEL did not produce point cloud after two attempts." >&2
     exit 1
   }
 fi

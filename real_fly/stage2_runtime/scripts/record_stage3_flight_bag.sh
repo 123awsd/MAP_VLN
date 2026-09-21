@@ -29,6 +29,11 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 runtime_root="$(cd -- "$script_dir/.." && pwd)"
 project_root="$(cd -- "$runtime_root/../.." && pwd)"
 stage1_root="$project_root/real_fly/stage1_exploration"
+rgb_width="${STAGE3_RGB_WIDTH:-1280}"
+rgb_height="${STAGE3_RGB_HEIGHT:-720}"
+rgb_fps="${STAGE3_RGB_FPS:-30}"
+rgb_bitrate_kbps="${STAGE3_RGB_BITRATE_KBPS:-12000}"
+rgb_profile="${STAGE3_RGB_PROFILE:-$runtime_root/config/realsense_stage3_recording.conf}"
 
 # shellcheck disable=SC1091
 source "$stage1_root/scripts/env.sh"
@@ -53,8 +58,14 @@ rosnode list > "$output_dir/rosnode_list.txt"
 rostopic list -v > "$output_dir/rostopic_list.txt"
 
 camera_pid=""
+video_pid=""
+rgb_video=""
 cleanup() {
   trap - EXIT INT TERM
+  if [[ -n "$video_pid" ]]; then
+    kill -INT "$video_pid" 2>/dev/null || true
+    wait "$video_pid" 2>/dev/null || true
+  fi
   if [[ -n "$camera_pid" ]]; then
     kill -INT "$camera_pid" 2>/dev/null || true
     wait "$camera_pid" 2>/dev/null || true
@@ -72,8 +83,16 @@ wait_topic() {
 
 camera_topics=()
 if [[ "$with_camera" -eq 1 ]]; then
+  [[ "$rgb_width" =~ ^[1-9][0-9]*$ && "$rgb_height" =~ ^[1-9][0-9]*$ \
+    && "$rgb_fps" =~ ^[1-9][0-9]*$ ]] || {
+    echo "Invalid Stage-3 RGB profile: ${rgb_width}x${rgb_height}@${rgb_fps}" >&2
+    exit 2
+  }
+  [[ -r "$rgb_profile" ]] || {
+    echo "Missing Stage-3 RGB exposure profile: $rgb_profile" >&2
+    exit 1
+  }
   camera_topics=(
-    /camera/color/image_raw
     /camera/color/camera_info
   )
   if rostopic info /camera/color/image_raw 2>/dev/null \
@@ -83,16 +102,31 @@ if [[ "$with_camera" -eq 1 ]]; then
     echo "Stop the existing camera, or use --no-camera." >&2
     exit 1
   else
-    echo "Starting D435 RGB-only at 640x480, source 6 Hz."
+    echo "Starting D435 RGB-only at ${rgb_width}x${rgb_height}, source ${rgb_fps} Hz."
     taskset -c 0 nice -n 10 roslaunch "$stage1_root/launch/realsense_d435i.launch" \
       camera_name:=camera enable_color:=true enable_depth:=false \
       enable_accel:=false enable_gyro:=false enable_sync:=false align_depth:=false \
-      color_width:=640 color_height:=480 color_fps:=6 \
+      color_width:="$rgb_width" color_height:="$rgb_height" color_fps:="$rgb_fps" \
       > "$output_dir/realsense.log" 2>&1 &
     camera_pid=$!
   fi
   wait_topic /camera/color/image_raw "D435 RGB"
-  "$stage1_root/scripts/configure_realsense_rgb.sh"
+  REALSENSE_RECORDING_PROFILE="$rgb_profile" \
+    "$stage1_root/scripts/configure_realsense_rgb.sh"
+  echo "Waiting 3 seconds for RGB exposure to settle..."
+  sleep 3
+  rgb_video="$output_dir/${session}_rgb.mp4"
+  taskset -c 1 nice -n 10 python3 "$script_dir/record_ros_rgb_video.py" \
+    --output "$rgb_video" --width "$rgb_width" --height "$rgb_height" \
+    --fps "$rgb_fps" --bitrate-kbps "$rgb_bitrate_kbps" \
+    > "$output_dir/rgb_video.log" 2>&1 &
+  video_pid=$!
+  sleep 2
+  kill -0 "$video_pid" 2>/dev/null || {
+    echo "RGB video recorder exited during startup:" >&2
+    cat "$output_dir/rgb_video.log" >&2
+    exit 1
+  }
 fi
 
 topics=(
@@ -121,12 +155,15 @@ run_id: $run_id
 task_id: $task_id
 session: $session
 started_at: $(date --iso-8601=seconds)
-camera: $([[ "$with_camera" -eq 1 ]] && echo d435_rgb_640x480_6hz || echo disabled)
+camera: $([[ "$with_camera" -eq 1 ]] && echo "d435_rgb_h264_${rgb_width}x${rgb_height}_${rgb_fps}hz_${rgb_bitrate_kbps}kbps" || echo disabled)
+camera_profile: $([[ "$with_camera" -eq 1 ]] && echo "$rgb_profile" || echo disabled)
+camera_video: $([[ "$with_camera" -eq 1 ]] && echo "$rgb_video" || echo disabled)
 point_clouds: $([[ "$with_cloud" -eq 1 ]] && echo "$cloud_topic" || echo disabled)
-recorder_scheduling: taskset_cpu0_nice10
+recorder_scheduling: rosbag_cpu0_nice10_h264_cpu1_nice10
 EOF
 
 echo "Recording Stage-3 flight: $output_dir"
+[[ "$with_camera" -eq 0 ]] || echo "RGB video sidecar: $rgb_video"
 echo "Start this before takeoff/task execution; press Ctrl-C only after landing and disarming."
 echo "No arm, takeoff, landing, planner goal, or control command is published by this recorder."
 taskset -c 0 nice -n 10 rosbag record --lz4 --tcpnodelay --split --size=2048 \

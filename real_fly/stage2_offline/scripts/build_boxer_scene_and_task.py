@@ -100,6 +100,12 @@ def cluster_raw_boxes(boxes: list[dict[str, Any]], radius_m: float = 0.9) -> lis
         best["center_xyz_m"] = np.average(
             np.asarray([item["center_xyz_m"] for item in cluster]), axis=0, weights=weights
         ).tolist()
+        # A high-confidence single frame can see only a tabletop edge or a
+        # partially occluded object.  Keep its label/orientation, but estimate
+        # geometry from all compatible observations so one undersized frame
+        # cannot shrink the planning box.
+        sizes = np.asarray([item["size_xyz_m"] for item in cluster], dtype=float)
+        best["size_xyz_m"] = np.median(sizes, axis=0).tolist()
         best["observation_count"] = len(cluster)
         result.append(best)
     return result

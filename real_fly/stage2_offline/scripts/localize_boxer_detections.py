@@ -66,7 +66,7 @@ def main() -> None:
     parser.add_argument("--min-depth-m", type=float, default=0.35)
     parser.add_argument("--max-depth-m", type=float, default=8.0)
     parser.add_argument("--min-depth-valid-ratio", type=float, default=0.15)
-    parser.add_argument("--inner-box-scale", type=float, default=0.60)
+    parser.add_argument("--inner-box-scale", type=float, default=1.00)
     parser.add_argument("--max-rgb-depth-dt", type=float, default=0.08)
     parser.add_argument("--max-depth-odometry-dt", type=float, default=0.08)
     parser.add_argument("--cluster-radius-m", type=float, default=0.80)
@@ -235,6 +235,7 @@ def main() -> None:
             "min_depth_m": args.min_depth_m,
             "max_depth_m": args.max_depth_m,
             "min_depth_valid_ratio": args.min_depth_valid_ratio,
+            "inner_box_scale": args.inner_box_scale,
             "max_rgb_depth_dt_sec": args.max_rgb_depth_dt,
             "max_depth_odometry_dt_sec": args.max_depth_odometry_dt,
             "cluster_radius_m": args.cluster_radius_m,

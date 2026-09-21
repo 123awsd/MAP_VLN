@@ -72,6 +72,8 @@ public:
         private_nh_.param("yaw_velocity_threshold", yaw_velocity_threshold_, 0.08);
         private_nh_.param("yaw_lookahead_time", yaw_lookahead_time_, 0.30);
         private_nh_.param("max_yaw_rate", max_yaw_rate_, 2.5);
+        private_nh_.param("execution_max_velocity", execution_max_velocity_, 0.30);
+        private_nh_.param("execution_max_yaw_rate", execution_max_yaw_rate_, 0.60);
         private_nh_.param("max_yaw_lock_variation", max_yaw_lock_variation_, 1.0);
         private_nh_.param("wait_for_reload", wait_for_reload_, false);
         private_nh_.param("preview_only", preview_only_, false);
@@ -136,6 +138,10 @@ public:
         }
         if (sample_dt_ <= 0.0 || collision_validation_step_ <= 0.0) {
             throw std::invalid_argument("trajectory validation steps must be positive");
+        }
+        if (execution_max_velocity_ <= 0.0 || execution_max_velocity_ > max_velocity_ ||
+            execution_max_yaw_rate_ <= 0.0 || execution_max_yaw_rate_ > max_yaw_rate_) {
+            throw std::invalid_argument("execution speed limits must be positive and no larger than certified limits");
         }
         if (regional_ceiling_enabled_) {
             const std::size_t count = regional_ceiling_x_min_.size();
@@ -557,6 +563,8 @@ private:
     }
 
     void validateSavedTrajectoryForExecution() {
+        saved_peak_velocity_ = 0.0;
+        saved_peak_yaw_rate_ = 0.0;
         for (std::size_t phase_index = 0; phase_index < phases_.size(); ++phase_index) {
             const auto& phase = phases_[phase_index];
             const double exact_max_speed =
@@ -568,6 +576,7 @@ private:
                       << " m/s > " << max_velocity_ << " m/s";
                 throw std::runtime_error(error.str());
             }
+            saved_peak_velocity_ = std::max(saved_peak_velocity_, exact_max_speed);
             const double validation_dt = exact_max_speed > 1.0e-6
                 ? std::min(sample_dt_, collision_validation_step_ / exact_max_speed)
                 : sample_dt_;
@@ -584,7 +593,9 @@ private:
                     distance - motion_reserve < collision_clearance_) {
                     throw std::runtime_error("saved MINCO violates certified PCD clearance");
                 }
-                if (std::abs(commandYaw(phase, t).rate) > max_yaw_rate_ + 1e-6) {
+                const double yaw_rate = std::abs(commandYaw(phase, t).rate);
+                saved_peak_yaw_rate_ = std::max(saved_peak_yaw_rate_, yaw_rate);
+                if (yaw_rate > max_yaw_rate_ + 1e-6) {
                     throw std::runtime_error("saved MINCO exceeds execution yaw-rate limit");
                 }
                 if (!regionalHeightIsSafe(sample.position, motion_reserve)) {
@@ -605,6 +616,19 @@ private:
                 }
             }
         }
+        execution_time_scale_ = 1.0;
+        if (saved_peak_velocity_ > 1.0e-6) {
+            execution_time_scale_ = std::min(
+                execution_time_scale_, execution_max_velocity_ / saved_peak_velocity_);
+        }
+        if (saved_peak_yaw_rate_ > 1.0e-6) {
+            execution_time_scale_ = std::min(
+                execution_time_scale_, execution_max_yaw_rate_ / saved_peak_yaw_rate_);
+        }
+        execution_time_scale_ = std::max(0.05, std::min(1.0, execution_time_scale_));
+        ROS_WARN("[FULL_SMOOTH] runtime time scale %.3f: certified peaks v=%.3f m/s, yaw_rate=%.3f rad/s; execution limits v=%.3f m/s, yaw_rate=%.3f rad/s",
+                 execution_time_scale_, saved_peak_velocity_, saved_peak_yaw_rate_,
+                 execution_max_velocity_, execution_max_yaw_rate_);
     }
 
     void loadSavedTrajectory(const std::string& path) {
@@ -1272,6 +1296,7 @@ private:
         double phase_start_yaw = start_yaw;
         std::vector<SmoothRoutePoint, Eigen::aligned_allocator<SmoothRoutePoint>> guides;
         int relaxed_pass_points = 0;
+        int unsafe_relaxations_rejected = 0;
         const std::size_t first_route_index = skip_first_route_point ? 1 : 0;
         for (std::size_t route_index = first_route_index; route_index < route_.size(); ++route_index) {
             const auto& point = route_[route_index];
@@ -1293,10 +1318,20 @@ private:
                 }
                 auto candidate = guides;
                 candidate.erase(candidate.begin() + static_cast<long>(index));
-                if (canRelaxPassPoint(phase_start, candidate, phase_start_yaw, point.yaw)) {
+                const Eigen::Vector3d shortcut_start =
+                    index == 0 ? phase_start : candidate[index - 1].position;
+                const Eigen::Vector3d shortcut_end = candidate[index].position;
+                const bool shortcut_safe =
+                    !use_super_safe_corridor_ ||
+                    rawPcdSegmentIsSafe(shortcut_start, shortcut_end);
+                if (shortcut_safe &&
+                    canRelaxPassPoint(phase_start, candidate, phase_start_yaw, point.yaw)) {
                     guides.swap(candidate);
                     ++relaxed_pass_points;
                 } else {
+                    if (!shortcut_safe) {
+                        ++unsafe_relaxations_rejected;
+                    }
                     ++index;
                 }
             }
@@ -1389,6 +1424,8 @@ private:
         }
 
         ROS_INFO("[FULL_SMOOTH] relaxed %d optional pass-point constraints", relaxed_pass_points);
+        ROS_INFO("[FULL_SMOOTH] retained %d pass points because shortcut raw-PCD clearance was unsafe",
+                 unsafe_relaxations_rejected);
 
         minimum_clearance_ = std::numeric_limits<double>::infinity();
         certified_clearance_lower_bound_ = std::numeric_limits<double>::infinity();
@@ -1791,18 +1828,21 @@ private:
 
     quadrotor_msgs::PositionCommand makeCommand(const MincoTrajectory::Sample& sample,
                                                  const double yaw, const double yaw_rate,
-                                                 const int phase_id) const {
+                                                 const int phase_id,
+                                                 const double time_scale = 1.0) const {
         quadrotor_msgs::PositionCommand cmd;
         cmd.header.stamp = ros::Time::now();
         cmd.header.frame_id = "world";
         cmd.position.x = sample.position.x(); cmd.position.y = sample.position.y(); cmd.position.z = sample.position.z();
-        cmd.velocity.x = sample.velocity.x(); cmd.velocity.y = sample.velocity.y(); cmd.velocity.z = sample.velocity.z();
-        cmd.acceleration.x = sample.acceleration.x(); cmd.acceleration.y = sample.acceleration.y(); cmd.acceleration.z = sample.acceleration.z();
-        cmd.jerk.x = sample.jerk.x(); cmd.jerk.y = sample.jerk.y(); cmd.jerk.z = sample.jerk.z();
+        const double acceleration_scale = time_scale * time_scale;
+        const double jerk_scale = acceleration_scale * time_scale;
+        cmd.velocity.x = sample.velocity.x() * time_scale; cmd.velocity.y = sample.velocity.y() * time_scale; cmd.velocity.z = sample.velocity.z() * time_scale;
+        cmd.acceleration.x = sample.acceleration.x() * acceleration_scale; cmd.acceleration.y = sample.acceleration.y() * acceleration_scale; cmd.acceleration.z = sample.acceleration.z() * acceleration_scale;
+        cmd.jerk.x = sample.jerk.x() * jerk_scale; cmd.jerk.y = sample.jerk.y() * jerk_scale; cmd.jerk.z = sample.jerk.z() * jerk_scale;
         cmd.yaw = yaw;
-        cmd.yaw_dot = yaw_rate;
-        cmd.vel_norm = sample.velocity.norm();
-        cmd.acc_norm = sample.acceleration.norm();
+        cmd.yaw_dot = yaw_rate * time_scale;
+        cmd.vel_norm = sample.velocity.norm() * time_scale;
+        cmd.acc_norm = sample.acceleration.norm() * acceleration_scale;
         cmd.trajectory_id = 910000 + phase_id;
         cmd.trajectory_flag = quadrotor_msgs::PositionCommand::TRAJECTORY_STATUS_READY;
         return cmd;
@@ -1839,11 +1879,14 @@ private:
         }
         if (state_ == State::ACTIVE) {
             const auto& phase = phases_[phase_index_];
-            const double elapsed = std::min(now - phase_start_time_, phase.trajectory.duration());
-            const auto yaw_sample = commandYaw(phase, elapsed);
-            command_pub_.publish(makeCommand(phase.trajectory.sample(elapsed),
-                                              yaw_sample.yaw, yaw_sample.rate, phase_index_));
-            if (elapsed >= phase.trajectory.duration()) {
+            const double trajectory_time = std::min(
+                (now - phase_start_time_) * execution_time_scale_,
+                phase.trajectory.duration());
+            const auto yaw_sample = commandYaw(phase, trajectory_time);
+            command_pub_.publish(makeCommand(phase.trajectory.sample(trajectory_time),
+                                              yaw_sample.yaw, yaw_sample.rate, phase_index_,
+                                              execution_time_scale_));
+            if (trajectory_time >= phase.trajectory.duration()) {
                 state_ = State::DWELL;
                 dwell_start_time_ = now;
                 ROS_INFO("[FULL_SMOOTH] phase %d/%zu reached; dwell %.2f s at yaw %.1f deg",
@@ -1855,7 +1898,8 @@ private:
         if (state_ == State::DWELL) {
             const auto& phase = phases_[phase_index_];
             command_pub_.publish(makeCommand(phase.trajectory.sample(phase.trajectory.duration()),
-                                              phase.target_yaw, 0.0, phase_index_));
+                                              phase.target_yaw, 0.0, phase_index_,
+                                              execution_time_scale_));
             if (now - dwell_start_time_ < phase.dwell) return;
             if (++phase_index_ < static_cast<int>(phases_.size())) {
                 phase_start_time_ = now;
@@ -1891,6 +1935,8 @@ private:
     double max_snap_{500.0}, max_jerk_discontinuity_{1.0e-4};
     double yaw_start_blend_duration_{1.0}, yaw_terminal_blend_duration_{1.5};
     double yaw_velocity_threshold_{0.08}, yaw_lookahead_time_{0.30}, max_yaw_rate_{2.5};
+    double execution_max_velocity_{0.30}, execution_max_yaw_rate_{0.60};
+    double execution_time_scale_{1.0}, saved_peak_velocity_{0.0}, saved_peak_yaw_rate_{0.0};
     double max_yaw_lock_variation_{1.0}, super_astar_timeout_{5.0};
     double super_corridor_extra_margin_{0.0};
     double regional_ceiling_z_{2.0}, regional_ceiling_grid_resolution_{0.2};

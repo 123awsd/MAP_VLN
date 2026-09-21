@@ -20,6 +20,7 @@ Options:
   --frame-period SEC          RGB-D keyframe interval (default: 1.0).
   --max-frames N              Maximum exported RGB-D frames (default: 999).
   --depth-source raw|aligned  Depth source; raw is the default and recommended.
+  --inner-box-scale VALUE     Depth crop scale for 2-D target localization (default: 1.0).
   --boxer-python PATH         Boxer Python environment.
   --skip-fastlio              Reuse existing fastlio_complete output.
   --skip-boxer                Reuse existing Boxer output; fail if absent.
@@ -39,6 +40,7 @@ detector_2d="grounding_dino"
 frame_period="1.0"
 max_frames="999"
 depth_source="raw"
+inner_box_scale="1.0"
 boxer_python=""
 skip_fastlio=0
 skip_boxer=0
@@ -54,6 +56,7 @@ while [[ $# -gt 0 ]]; do
     --frame-period) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; frame_period="$2"; shift 2 ;;
     --max-frames) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; max_frames="$2"; shift 2 ;;
     --depth-source) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; depth_source="$2"; shift 2 ;;
+    --inner-box-scale) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; inner_box_scale="$2"; shift 2 ;;
     --boxer-python) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; boxer_python="$2"; shift 2 ;;
     --skip-fastlio) skip_fastlio=1; shift ;;
     --skip-boxer) skip_boxer=1; shift ;;
@@ -70,6 +73,7 @@ if [[ -z "$input_run_id" ]]; then input_run_id="$run_id"; fi
 [[ "$boxer_mode" == complete || "$boxer_mode" == smoke ]] || { echo "--boxer-mode must be complete or smoke" >&2; exit 2; }
 [[ "$detector_2d" == grounding_dino || "$detector_2d" == owlv2 ]] || { echo "--2d-detector must be grounding_dino or owlv2" >&2; exit 2; }
 [[ "$depth_source" == raw || "$depth_source" == aligned ]] || { echo "--depth-source must be raw or aligned" >&2; exit 2; }
+[[ "$inner_box_scale" =~ ^[0-9]+([.][0-9]+)?$ && "$inner_box_scale" != 0 ]] || { echo "Invalid --inner-box-scale" >&2; exit 2; }
 [[ "$frame_period" =~ ^[0-9]+([.][0-9]+)?$ && "$frame_period" != 0 ]] || { echo "Invalid --frame-period" >&2; exit 2; }
 [[ "$max_frames" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid --max-frames" >&2; exit 2; }
 
@@ -224,7 +228,8 @@ fi
 "$BOXER_PY" "$SCRIPT_DIR/summarize_boxer_output.py" "$BOXER_SCENE"
 "$BOXER_PY" "$SCRIPT_DIR/localize_boxer_detections.py" \
   --episode "$EPISODE" --detections-2d "$BOXER_SCENE/owl_2dbbs.csv" \
-  --output-dir "$LOCALIZATION" --cluster-radius-m 0.8 --min-cluster-observations 2
+  --output-dir "$LOCALIZATION" --cluster-radius-m 0.8 --min-cluster-observations 2 \
+  --inner-box-scale "$inner_box_scale"
 
 "${DOCKER[@]}" "$NOETIC_IMAGE" bash -lc \
   "source /opt/ros/noetic/setup.bash && python3 $CONTAINER_STAGE2/scripts/build_boxer_scene_and_task.py --boxer-dir $CONTAINER_STAGE2/data/$run_id/boxer_complete/episode --voxel-snapshot $CONTAINER_STAGE2/data/$run_id/voxel_snapshot --planning-config $CONTAINER_STAGE2/config/uav_3d_planning_real.yaml --scene-output $CONTAINER_STAGE2/data/$run_id/scene_graph.json --task-output $CONTAINER_STAGE2/data/$run_id/task_graph.json --start-output $CONTAINER_STAGE2/data/$run_id/planning_start.json --prefer-raw"

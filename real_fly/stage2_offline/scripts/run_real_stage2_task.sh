@@ -14,6 +14,10 @@ Options:
                           reuse planning_start.json for preview only.
   --budget-cny VALUE      Qwen parsing budget ceiling (default: 20).
   --max-candidates N      Maximum candidates retained per task (default: 6).
+  --planning-config FILE  Override the per-run planning profile.
+  --voxel-snapshot DIR    Override the matching voxel snapshot.
+  --collision-clearance M CIRI/MINCO clearance; must match the planning profile
+                          (default: 0.25).
   --static-demo           Freeze conditional tasks for a controlled fixed-layout demo.
   --visit-all-candidates  Exhaust all candidates of each task before the next task.
   --no-cache              Do not reuse the Qwen parser cache.
@@ -33,6 +37,9 @@ max_candidates="6"
 static_demo=0
 visit_all_candidates=0
 no_cache=0
+planning_config_override=""
+voxel_snapshot_override=""
+collision_clearance="0.25"
 start_values=()
 
 while [[ $# -gt 0 ]]; do
@@ -48,6 +55,9 @@ while [[ $# -gt 0 ]]; do
       ;;
     --budget-cny) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; budget_cny="$2"; shift 2 ;;
     --max-candidates) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; max_candidates="$2"; shift 2 ;;
+    --planning-config) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; planning_config_override="$2"; shift 2 ;;
+    --voxel-snapshot) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; voxel_snapshot_override="$2"; shift 2 ;;
+    --collision-clearance) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; collision_clearance="$2"; shift 2 ;;
     --static-demo) static_demo=1; shift ;;
     --visit-all-candidates) visit_all_candidates=1; shift ;;
     --no-cache) no_cache=1; shift ;;
@@ -64,6 +74,7 @@ if [[ -n "$instruction" && -n "$task_graph_source" ]] || [[ -z "$instruction" &&
 fi
 [[ "$budget_cny" =~ ^[0-9]+([.][0-9]+)?$ ]] || { echo "Invalid --budget-cny" >&2; exit 2; }
 [[ "$max_candidates" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid --max-candidates" >&2; exit 2; }
+[[ "$collision_clearance" =~ ^0[.][0-9]+$|^[1-9][0-9]*([.][0-9]+)?$ ]] || { echo "Invalid --collision-clearance" >&2; exit 2; }
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 stage2_dir="$(cd -- "$script_dir/.." && pwd)"
@@ -79,6 +90,8 @@ else
 fi
 voxel_snapshot="$run_data/voxel_snapshot"
 planning_config="$stage2_dir/config/uav_3d_planning_real.yaml"
+if [[ -n "$voxel_snapshot_override" ]]; then voxel_snapshot="$(realpath "$voxel_snapshot_override")"; fi
+if [[ -n "$planning_config_override" ]]; then planning_config="$(realpath "$planning_config_override")"; fi
 planning_start="$run_data/planning_start.json"
 map_pcd="$run_data/fastlio_complete/handheld_map_${run_id}_complete.pcd"
 task_dir="$run_data/tasks/$task_id"
@@ -97,6 +110,21 @@ for path in "$python" "$scene_graph" "$voxel_snapshot/metadata.json" \
   "$voxel_snapshot/voxel_map.npz" "$planning_config" "$planning_start" "$map_pcd"; do
   [[ -s "$path" ]] || { echo "Missing Stage2 input: $path" >&2; exit 2; }
 done
+
+"$python" - "$planning_config" "$collision_clearance" <<'PY'
+import math
+import sys
+import yaml
+
+profile = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
+configured = float(profile["planning"]["minimum_esdf_distance_m"])
+requested = float(sys.argv[2])
+if not math.isclose(configured, requested, rel_tol=0.0, abs_tol=1e-9):
+    raise SystemExit(
+        f"Planning/CIRI clearance mismatch: profile={configured:.3f} m, "
+        f"--collision-clearance={requested:.3f} m"
+    )
+PY
 
 # A failed parser/planner run leaves a partial task directory.  Preserve that
 # diagnostic output, but allow the same TASK_ID to be retried.  A completed
@@ -190,10 +218,10 @@ if [[ "$bundle_eligible" == "true" ]]; then
     --output "$full_smooth_route" \
     --path-source validated
   "$root/real_fly/stage2_runtime/scripts/prepare_real_execution.sh" \
-    "$run_id" "$mission" "$task_id"
+    "$run_id" "$mission" "$task_id" "$voxel_snapshot/metadata.json"
   runtime_mission_dir="$(dirname "$runtime_bundle")"
   cp -a "$full_smooth_route" "$runtime_mission_dir/full_smooth_route.txt"
-  bash "$script_dir/generate_final_minco.sh" "$run_id" "$task_id"
+  bash "$script_dir/generate_final_minco.sh" "$run_id" "$task_id" "$collision_clearance"
 else
   echo "Dynamic task preserved for preview, but no execution bundle was generated."
   echo "Reason: conditional/recovery motion requires the online perception/outcome executor."
@@ -201,7 +229,8 @@ fi
 
 "$python" - "$task_dir/run_manifest.json" "$run_id" "$task_id" "$start_source" \
   "$task_graph" "$mission" "$audit" "$runtime_bundle" "$bundle_eligible" \
-  "$full_smooth_route" "$scene_graph" <<'PY'
+  "$full_smooth_route" "$scene_graph" "$planning_config" "$voxel_snapshot" \
+  "$collision_clearance" <<'PY'
 import json
 import pathlib
 import sys
@@ -223,6 +252,9 @@ document = {
         str(full_smooth_route.resolve()) if full_smooth_route.is_file() else None
     ),
     "scene_graph": str(pathlib.Path(sys.argv[11]).resolve()),
+    "planning_config": str(pathlib.Path(sys.argv[12]).resolve()),
+    "voxel_snapshot": str(pathlib.Path(sys.argv[13]).resolve()),
+    "collision_clearance_m": float(sys.argv[14]),
     "autonomous_semantic_execution_eligible": False,
     "safety_scope": "offline_preview_only",
 }
