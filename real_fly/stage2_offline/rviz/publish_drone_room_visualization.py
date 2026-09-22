@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Publish Drone_room offline outputs for RViz; no sensors or flight nodes."""
 import csv
+import copy
 import colorsys
 import json
 import math
@@ -372,30 +373,118 @@ def add_clearance_markers(marker_array, mission, voxel_snapshot, frame):
     return count
 
 
-def add_round_planned_path(marker_array, mission, frame):
-    """Render the planned route as round samples instead of an RViz billboard ribbon."""
-    points = []
-    for segment in mission.get("segments", []):
-        validated = segment.get("validated_trajectory") or {}
-        points.extend(validated.get("points_xyz_m") or segment.get("points_xyz_m", []))
-    if not points:
-        return 0
+def add_planning_path_overlays(marker_array, mission, frame):
+    """Show raw A*, XY clearance refinement, and certified MINCO separately."""
+    series = [
+        ("raw_astar_path", "raw_astar_trajectory", (1.0, 0.42, 0.04), 0.035),
+        ("clearance_optimized_path", "clearance_optimized_trajectory", (0.15, 0.95, 0.22), 0.045),
+    ]
+    is_minco = str(mission.get("trajectory_source", "")).startswith("final_minco.txt")
+    if is_minco:
+        series.append(("final_minco_path", "validated_trajectory", (0.0, 0.82, 1.0), 0.065))
+    else:
+        series.append(("validated_bspline_path", "validated_trajectory", (0.75, 0.35, 1.0), 0.045))
 
-    marker = Marker()
-    marker.header.frame_id = frame
-    marker.ns = "round_planned_path"
-    marker.id = 0
-    marker.type = Marker.SPHERE_LIST
-    marker.action = Marker.ADD
-    marker.pose.orientation.w = 1.0
-    marker.scale.x = marker.scale.y = marker.scale.z = 0.05
-    marker.color.r = 0.10
-    marker.color.g = 0.85
-    marker.color.b = 1.0
-    marker.color.a = 1.0
-    marker.points = [Point(x=float(xyz[0]), y=float(xyz[1]), z=float(xyz[2])) for xyz in points]
-    marker_array.markers.append(marker)
-    return len(points)
+    counts = {}
+    for namespace, key, color, width in series:
+        points = []
+        for segment in mission.get("segments", []):
+            trajectory = segment.get(key) or {}
+            values = trajectory.get("points_xyz_m", [])
+            if key == "raw_astar_trajectory" and not values:
+                values = segment.get("points_xyz_m", [])
+            points.extend(values)
+        if not points:
+            counts[namespace] = 0
+            continue
+        marker = Marker()
+        marker.header.frame_id = frame
+        marker.ns = namespace
+        marker.id = 0
+        marker.type = Marker.LINE_STRIP
+        marker.action = Marker.ADD
+        marker.pose.orientation.w = 1.0
+        marker.scale.x = width
+        marker.color.r, marker.color.g, marker.color.b = color
+        marker.color.a = 0.88 if namespace != "final_minco_path" else 1.0
+        marker.points = [Point(x=float(xyz[0]), y=float(xyz[1]), z=float(xyz[2])) for xyz in points]
+        marker_array.markers.append(marker)
+        counts[namespace] = len(points)
+    return counts
+
+
+def add_narrow_corridor_overlays(marker_array, mission, frame):
+    """Render the detected bottleneck centerline and XY tube constraints."""
+    report = mission.get("narrow_corridor_report") or {}
+    constraints = [item for item in report.get("constraints", []) if item.get("applied")]
+    if not constraints:
+        return 0
+    markers = Marker()
+    markers.header.frame_id = frame
+    markers.ns = "narrow_corridor_constraints"
+    markers.id = 0
+    markers.type = Marker.LINE_LIST
+    markers.action = Marker.ADD
+    markers.pose.orientation.w = 1.0
+    markers.scale.x = 0.035
+    markers.color.r, markers.color.g, markers.color.b, markers.color.a = 1.0, 0.1, 1.0, 0.95
+    center_points = Marker()
+    center_points.header.frame_id = frame
+    center_points.ns = "narrow_corridor_centerline"
+    center_points.id = 1
+    center_points.type = Marker.SPHERE_LIST
+    center_points.action = Marker.ADD
+    center_points.pose.orientation.w = 1.0
+    center_points.scale.x = center_points.scale.y = center_points.scale.z = 0.10
+    center_points.color.r, center_points.color.g, center_points.color.b, center_points.color.a = 1.0, 0.0, 1.0, 1.0
+    text = Marker()
+    text.header.frame_id = frame
+    text.ns = "narrow_corridor_labels"
+    text.id = 2
+    text.type = Marker.TEXT_VIEW_FACING
+    text.action = Marker.ADD
+    text.pose.orientation.w = 1.0
+    text.scale.z = 0.16
+    text.color.r = text.color.b = 1.0
+    text.color.g = 0.0
+    text.color.a = 1.0
+    for item in constraints:
+        center = np.asarray(item["centerline"], dtype=float)
+        tangent = np.asarray(item["tangent"], dtype=float)
+        tangent[2] = 0.0
+        norm = np.linalg.norm(tangent[:2])
+        if norm <= 1.0e-6:
+            continue
+        tangent /= norm
+        normal = np.asarray(item.get("tube_normal", [-tangent[1], tangent[0], 0.0]), dtype=float)
+        normal[2] = 0.0
+        normal_norm = np.linalg.norm(normal[:2])
+        if normal_norm <= 1.0e-6:
+            normal = np.asarray([-tangent[1], tangent[0], 0.0])
+        else:
+            normal /= normal_norm
+        half_span = float(item.get("transition_distance_m", 0.45))
+        half_span = max(0.25, min(0.60, half_span))
+        half_width = float(item.get("applied_half_width_m", 0.0))
+        center_points.points.append(Point(x=float(center[0]), y=float(center[1]), z=float(center[2])))
+        for first, second in (
+            (center - tangent * half_span, center + tangent * half_span),
+            (center - normal * half_width, center + normal * half_width),
+        ):
+            markers.points.extend([
+                Point(x=float(first[0]), y=float(first[1]), z=float(first[2])),
+                Point(x=float(second[0]), y=float(second[1]), z=float(second[2])),
+            ])
+        label = copy.deepcopy(text)
+        label.id += 1
+        label.pose.position.x = float(center[0])
+        label.pose.position.y = float(center[1])
+        label.pose.position.z = float(center[2]) + 0.18
+        label.text = (f"BOTTLENECK C{int(item.get('corridor', 0)) + 1} "
+                      f"width {2.0 * half_width:.2f}m")
+        marker_array.markers.append(label)
+    marker_array.markers.extend([markers, center_points])
+    return len(center_points.points)
 
 
 def publish_traversability(voxel_snapshot, frame, max_z=None):
@@ -568,7 +657,8 @@ def main():
     planning_markers = MarkerArray()
     frustum_count = add_observation_frustums(planning_markers, mission, mission_path, frame)
     clearance_count = add_clearance_markers(planning_markers, mission, voxel_snapshot, frame)
-    round_path_count = add_round_planned_path(planning_markers, mission, frame)
+    path_overlay_counts = add_planning_path_overlays(planning_markers, mission, frame)
+    narrow_count = add_narrow_corridor_overlays(planning_markers, mission, frame)
     semantic_marker_pub = rospy.Publisher(
         "/drone_room/semantic_markers", MarkerArray, queue_size=1, latch=True
     )
@@ -593,11 +683,11 @@ def main():
     plan_pub.publish(plan)
     rospy.loginfo("Published map (%d points at world z<=%.2fm), filtered-occupied=%d, inflated-free=%d, inflation-excluded=%d "
                   "(minimum clearance %.2fm), %d semantic 3D boxes, %d observation frustums, "
-                  "%d clearance markers, round plan (%d samples), actual-flight=%s, trajectory and validated plan (%d poses)",
+                  "%d clearance markers, path overlays=%s, narrow constraints=%d, actual-flight=%s, trajectory and validated plan (%d poses)",
                   len(cloud.data) // cloud.point_step, map_max_z,
                   occupied_count, free_count, excluded_count,
                   inflation_threshold, len(boxes), frustum_count,
-                  clearance_count, round_path_count,
+                  clearance_count, path_overlay_counts, narrow_count,
                   "loaded" if actual_trajectory_pub is not None else "disabled",
                   len(plan.poses))
     rospy.spin()

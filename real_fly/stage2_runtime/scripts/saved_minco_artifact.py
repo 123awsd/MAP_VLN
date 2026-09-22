@@ -80,6 +80,13 @@ def main():
     args = p.parse_args()
     d = args.directory.resolve()
     names = ["final_minco.txt", "collision.pcd", "planner.yaml", "full_smooth_route.txt", "execution_bundle.json"]
+    optional_report = d / "narrow_corridor_report.json"
+    if optional_report.is_file() and optional_report.stat().st_size > 0:
+        names.append(optional_report.name)
+    for optional_diagnostic in ("narrow_corridor_metrics.json", "narrow_corridor_local_topdown.png"):
+        diagnostic_path = d / optional_diagnostic
+        if diagnostic_path.is_file() and diagnostic_path.stat().st_size > 0:
+            names.append(optional_diagnostic)
     manifest_path = d / "final_minco_manifest.json"
     if args.mode == "seal":
         start, phases = read_trajectory(d / "final_minco.txt")
@@ -98,6 +105,10 @@ def main():
             segment["validated_trajectory"] = dict(points_xyz_m=phase["points"],
                 times_sec=phase["times"], source="saved_MINCO_coefficients")
         preview["trajectory_source"] = "final_minco.txt (exact coefficients sampled at 20 ms)"
+        if optional_report.is_file() and optional_report.stat().st_size > 0:
+            preview["narrow_corridor_report"] = json.loads(
+                optional_report.read_text(encoding="utf-8")
+            )
         (d / "final_minco_preview.json").write_text(json.dumps(preview, ensure_ascii=False))
         names.append("final_minco_preview.json")
         manifest = dict(format="pre_map_vln.saved_minco.v1", map_sha256=digest(args.map),

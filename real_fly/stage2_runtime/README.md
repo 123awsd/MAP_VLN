@@ -159,6 +159,48 @@ speed, per-goal arrival checks and bounded timeouts. It never arms, takes off,
 lands, or publishes `PositionCommand`. Validate preview and a restrained test
 with the aircraft secured before enabling free flight.
 
+## Manual-flight exploration recording
+
+`scripts/record_manual_exploration_bag.sh` is an observation-only recorder for
+a manually flown mapping pass. Start it in a separate terminal after
+`/ekf_quat/ekf_odom` and `/cloud_registered` are healthy, but before arming:
+
+```bash
+./real_fly/stage2_runtime/scripts/record_manual_exploration_bag.sh \
+  dorm_manual_explore_01
+```
+
+It refuses to start unless MAVROS reports connected and disarmed. The bag
+contains a 2 Hz registered point cloud and 5 Hz JPEG-compressed RGB stream,
+plus odometry, TF, FCU, controller and diagnostics topics. A full-rate H.264
+RGB MP4 is stored beside the bag. These defaults deliberately avoid recording
+raw 30 Hz RGB or full-rate clouds during flight. The script starts no mapping,
+PX4Ctrl, takeoff, mode-change, goal, or setpoint publisher. Stop it with
+Ctrl-C only after landing and disarming so the split bag and MP4 are sealed.
+
+Replay one completed manual-exploration session as a progressively growing
+5 cm voxel map, actual trajectory and RGB first-person panel:
+
+```bash
+./real_fly/stage2_runtime/scripts/replay_manual_exploration_rviz.sh \
+  real_fly/stage2_runtime/runtime/manual_exploration_bags/<run>/<session> \
+  --rate 0.5 --max-z 2.0
+```
+
+The replay runs in a network-isolated container. Points above world Z=2 m are
+discarded before accumulation. It starts no sensor, MAVROS, PX4Ctrl, planner,
+setpoint or flight node. It also auto-detects the earlier Stage-1 profile with
+`/cloud_registered`, raw `/camera/color/image_raw`, and fused odometry, so the
+existing `dorm_room_v3/raw/sensors.bag` can be demonstrated immediately.
+Older Stage-3 flight bags that omitted point clouds and kept RGB only as an
+MP4 sidecar cannot provide this synchronized progressive view.
+
+Add `--record-video outputs/dorm_exploration_demo.mp4` to capture only the
+RViz window as an H.264 presentation video. The capture includes the growing
+map, trajectory, current pose and embedded RGB panel. The launcher delays bag
+playback until the RViz window and screen recorder are ready and refuses to
+overwrite an existing MP4.
+
 ## Direct full-smooth execution
 
 For static tasks, `run_real_stage2_task.sh` generates final MINCO on the host.

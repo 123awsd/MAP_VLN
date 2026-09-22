@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Export a validated Stage-2 mission as a full_smooth_mission route.
+"""Export a Stage-2 mission as a full_smooth_mission route.
 
-The route keeps the continuous offline validated trajectory samples as soft
-guide points.  The senior full_smooth_mission node consumes this route and
-generates the continuous MINCO command stream; it is not converted into a
-goal-by-goal PoseStamped mission.
+The route source is selectable so raw A*, XY clearance-refined A*, and
+collision-validated references can be compared independently. The
+full_smooth_mission node consumes the selected route and generates the
+continuous MINCO command stream; it is not a goal-by-goal PoseStamped mission.
 """
 
 import argparse
@@ -28,7 +28,7 @@ def main():
     parser.add_argument("--dwell", type=float, default=3.0)
     parser.add_argument(
         "--path-source",
-        choices=("validated", "astar", "sparse", "sparse_astar"),
+        choices=("validated", "clearance_optimized", "astar", "sparse", "sparse_astar"),
         default="validated",
         help=(
             "Guide source for full_smooth_mission (default: validated)."
@@ -57,7 +57,7 @@ def main():
 
     rows = []
     previous = None
-    if args.path_source in ("validated", "astar", "sparse", "sparse_astar"):
+    if args.path_source in ("validated", "clearance_optimized", "astar", "sparse", "sparse_astar"):
         start = mission.get("start_xyz_yaw", [])
         if len(start) != 4 or not all(math.isfinite(float(value)) for value in start):
             raise SystemExit("mission has invalid start_xyz_yaw")
@@ -68,6 +68,11 @@ def main():
         if args.path_source == "validated":
             validated = segment.get("validated_trajectory") or {}
             points = validated.get("points_xyz_m") or segment.get("points_xyz_m") or []
+        elif args.path_source == "clearance_optimized":
+            refined = segment.get("clearance_optimized_trajectory") or {}
+            points = refined.get("points_xyz_m") or []
+            if not points:
+                raise SystemExit(f"segment {index} has no clearance-optimized path")
         elif args.path_source == "sparse":
             points = []
         else:

@@ -116,6 +116,26 @@ public:
                  max_velocity_, super_config_path_.c_str());
         private_nh_.param("super_astar_timeout", super_astar_timeout_, 5.0);
         private_nh_.param("super_corridor_extra_margin", super_corridor_extra_margin_, 0.0);
+        private_nh_.param("narrow_corridor/enabled", narrow_corridor_enabled_, true);
+        private_nh_.param("narrow_corridor/clearance_threshold",
+                          narrow_corridor_clearance_threshold_, 0.40);
+        private_nh_.param("narrow_corridor/max_width", narrow_corridor_max_width_, 1.00);
+        private_nh_.param("narrow_corridor/transition_length",
+                          narrow_corridor_transition_length_, 0.45);
+        private_nh_.param("narrow_corridor/max_half_width",
+                          narrow_corridor_max_half_width_, 0.18);
+        private_nh_.param("narrow_corridor/min_half_width",
+                          narrow_corridor_min_half_width_, 0.10);
+        private_nh_.param("narrow_corridor/margin", narrow_corridor_margin_, 0.03);
+        private_nh_.param("narrow_corridor/side_vertical_window",
+                          narrow_corridor_side_vertical_window_, 0.35);
+        private_nh_.param("narrow_corridor/side_longitudinal_window",
+                          narrow_corridor_side_longitudinal_window_, 0.35);
+        private_nh_.param("narrow_corridor/max_plane_violation",
+                          narrow_corridor_max_plane_violation_, 0.005);
+        private_nh_.param("vertical_guide_floor/enabled", vertical_guide_floor_enabled_, true);
+        private_nh_.param("vertical_guide_floor/max_violation",
+                          vertical_guide_floor_max_violation_, 0.002);
         private_nh_.param("local_collision_replan_enabled", local_collision_replan_enabled_, true);
         private_nh_.param("local_collision_replan_max_attempts",
                           local_collision_replan_max_attempts_, 1);
@@ -131,6 +151,20 @@ public:
         private_nh_.getParam("regional_ceiling/region_y_max", regional_ceiling_y_max_);
         if (super_corridor_extra_margin_ < 0.0) {
             throw std::invalid_argument("super_corridor_extra_margin must be non-negative");
+        }
+        if (narrow_corridor_clearance_threshold_ <= collision_clearance_ ||
+            narrow_corridor_max_width_ <= 2.0 * narrow_corridor_min_half_width_ ||
+            narrow_corridor_transition_length_ <= 0.0 ||
+            narrow_corridor_max_half_width_ < narrow_corridor_min_half_width_ ||
+            narrow_corridor_margin_ < 0.0 ||
+            narrow_corridor_side_vertical_window_ <= 0.0 ||
+            narrow_corridor_side_longitudinal_window_ <= 0.0 ||
+            narrow_corridor_max_plane_violation_ <= 0.0) {
+            throw std::invalid_argument("invalid narrow corridor configuration");
+        }
+        if (vertical_guide_floor_max_violation_ < 0.0 ||
+            vertical_guide_floor_max_violation_ > 0.02) {
+            throw std::invalid_argument("invalid vertical guide floor configuration");
         }
         if (local_collision_replan_max_attempts_ < 0 ||
             local_collision_replan_inflation_radius_ <= 0.0) {
@@ -273,6 +307,27 @@ private:
         Eigen::Vector3d closest_path_point{Eigen::Vector3d::Zero()};
         Eigen::Vector3d closest_obstacle{Eigen::Vector3d::Zero()};
         double clearance{std::numeric_limits<double>::infinity()};
+        std::string reason;
+    };
+
+    struct NarrowCorridorDiagnostic {
+        int phase_index{0};
+        int corridor_index{0};
+        Eigen::Vector3d guide_point{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d centerline{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d tangent{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d tube_normal{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d seed_start{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d seed_end{Eigen::Vector3d::Zero()};
+        double path_clearance{0.0};
+        double left_clearance{0.0};
+        double right_clearance{0.0};
+        double available_half_width{0.0};
+        double applied_half_width{0.0};
+        double transition_distance{0.0};
+        bool candidate{false};
+        bool applied{false};
+        std::string tube_normal_source{"local_guide"};
         std::string reason;
     };
 
@@ -426,6 +481,359 @@ private:
         return true;
     }
 
+    bool estimateNarrowCorridorAt(const Eigen::Vector3d& point,
+                                  const Eigen::Vector2d& tangent,
+                                  double& path_clearance,
+                                  double& left_clearance,
+                                  double& right_clearance,
+                                  Eigen::Vector3d& centerline) const {
+        if (!known_map_ || known_map_->empty() || tangent.norm() < 1.0e-6) {
+            return false;
+        }
+        pcl::PointXYZ query;
+        query.x = static_cast<float>(point.x());
+        query.y = static_cast<float>(point.y());
+        query.z = static_cast<float>(point.z());
+        std::vector<int> nearest_index(1);
+        std::vector<float> nearest_squared_distance(1);
+        if (map_tree_.nearestKSearch(query, 1, nearest_index,
+                                     nearest_squared_distance) <= 0) {
+            return false;
+        }
+        path_clearance = std::sqrt(nearest_squared_distance.front());
+        const Eigen::Vector2d unit_tangent = tangent.normalized();
+        const Eigen::Vector2d normal(-unit_tangent.y(), unit_tangent.x());
+        left_clearance = std::numeric_limits<double>::infinity();
+        right_clearance = std::numeric_limits<double>::infinity();
+
+        std::vector<int> indices;
+        std::vector<float> squared_distances;
+        const double search_radius = std::max(
+            1.0, narrow_corridor_side_longitudinal_window_ +
+                      narrow_corridor_max_width_);
+        if (map_tree_.radiusSearch(query, search_radius, indices,
+                                   squared_distances) <= 0) {
+            return false;
+        }
+        for (const int index : indices) {
+            const auto& obstacle = known_map_->points[index];
+            const Eigen::Vector3d delta(
+                obstacle.x - point.x(), obstacle.y - point.y(), obstacle.z - point.z());
+            if (std::abs(delta.z()) > narrow_corridor_side_vertical_window_) {
+                continue;
+            }
+            const double along = delta.head<2>().dot(unit_tangent);
+            if (std::abs(along) > narrow_corridor_side_longitudinal_window_) {
+                continue;
+            }
+            const double lateral = delta.head<2>().dot(normal);
+            if (lateral > 0.05) {
+                left_clearance = std::min(left_clearance, lateral);
+            } else if (lateral < -0.05) {
+                right_clearance = std::min(right_clearance, -lateral);
+            }
+        }
+        if (!std::isfinite(left_clearance) || !std::isfinite(right_clearance)) {
+            return false;
+        }
+        const double center_offset = 0.5 * (left_clearance - right_clearance);
+        centerline = point;
+        centerline.x() += normal.x() * center_offset;
+        centerline.y() += normal.y() * center_offset;
+        return path_clearance <= narrow_corridor_clearance_threshold_ &&
+               left_clearance + right_clearance <= narrow_corridor_max_width_;
+    }
+
+    static double pointToLineParameter(const Eigen::Vector3d& point,
+                                       const Eigen::Vector3d& start,
+                                       const Eigen::Vector3d& end) {
+        const Eigen::Vector3d delta = end - start;
+        const double denominator = delta.squaredNorm();
+        if (denominator <= 1.0e-12) {
+            return 0.0;
+        }
+        return (point - start).dot(delta) / denominator;
+    }
+
+    // Recorded guides contain repeated/near-repeated points at observation
+    // stops and at clearance-refinement joins.  A one-sample finite
+    // difference at such a join is not a useful passage direction.  Estimate
+    // the local direction from the nearest points on either side that are at
+    // least 5 cm away in accumulated path length; this keeps a short doorway
+    // turn local without treating a duplicate point as a wall direction.
+    static Eigen::Vector2d robustGuideTangent(const SuperPath& guide_path,
+                                              const std::size_t guide_index,
+                                              const Eigen::Vector2d& fallback) {
+        constexpr double minimum_span = 0.05;
+        std::size_t previous = guide_index;
+        double previous_span = 0.0;
+        while (previous > 0 && previous_span < minimum_span) {
+            previous_span += (guide_path[previous] - guide_path[previous - 1]).head<2>().norm();
+            --previous;
+        }
+        std::size_t next = guide_index;
+        double next_span = 0.0;
+        while (next + 1 < guide_path.size() && next_span < minimum_span) {
+            next_span += (guide_path[next + 1] - guide_path[next]).head<2>().norm();
+            ++next;
+        }
+        Eigen::Vector2d tangent = (guide_path[next] - guide_path[previous]).head<2>();
+        if (tangent.norm() < 1.0e-6) {
+            tangent = fallback;
+        }
+        return tangent.normalized();
+    }
+
+    bool tightenNarrowCorridors(const SuperPath& guide_path,
+                                geometry_utils::PolytopeVec& corridor,
+                                const int phase_index) {
+        narrow_corridor_diagnostics_.clear();
+        if (!narrow_corridor_enabled_ || guide_path.size() < 3 || corridor.empty()) {
+            return true;
+        }
+
+        int candidate_count = 0;
+        int applied_count = 0;
+        for (std::size_t corridor_index = 0; corridor_index < corridor.size();
+             ++corridor_index) {
+            if (!corridor[corridor_index].HaveSeedLine()) {
+                continue;
+            }
+            const auto seed = corridor[corridor_index].seed_line;
+            const Eigen::Vector3d seed_start(seed.first.x(), seed.first.y(), seed.first.z());
+            const Eigen::Vector3d seed_end(seed.second.x(), seed.second.y(), seed.second.z());
+            Eigen::Vector2d seed_tangent = (seed_end - seed_start).head<2>();
+            if (seed_tangent.norm() < 1.0e-6) {
+                continue;
+            }
+            seed_tangent.normalize();
+
+            NarrowCorridorDiagnostic best;
+            best.phase_index = phase_index;
+            best.corridor_index = static_cast<int>(corridor_index);
+            double best_width = std::numeric_limits<double>::infinity();
+            for (std::size_t guide_index = 1; guide_index + 1 < guide_path.size();
+                 ++guide_index) {
+                const Eigen::Vector3d guide_point(
+                    guide_path[guide_index].x(), guide_path[guide_index].y(),
+                    guide_path[guide_index].z());
+                const double parameter = pointToLineParameter(
+                    guide_point, seed_start, seed_end);
+                const Eigen::Vector3d projection = seed_start +
+                    std::max(0.0, std::min(1.0, parameter)) * (seed_end - seed_start);
+                const double distance_to_seed = (guide_point - projection).norm();
+                const double along_distance = std::abs(parameter * (seed_end - seed_start).norm());
+                if (distance_to_seed > 0.20 ||
+                    (parameter < 0.0 && along_distance > narrow_corridor_transition_length_) ||
+                    (parameter > 1.0 && along_distance - (seed_end - seed_start).norm() >
+                                             narrow_corridor_transition_length_)) {
+                    continue;
+                }
+                const Eigen::Vector2d tangent = robustGuideTangent(
+                    guide_path, guide_index, seed_tangent);
+                double path_clearance = 0.0, left_clearance = 0.0, right_clearance = 0.0;
+                Eigen::Vector3d centerline;
+                if (!estimateNarrowCorridorAt(guide_point, tangent, path_clearance,
+                                               left_clearance, right_clearance, centerline)) {
+                    continue;
+                }
+                const double width = left_clearance + right_clearance;
+                if (width >= best_width) {
+                    continue;
+                }
+                best_width = width;
+                best.guide_point = guide_point;
+                best.centerline = centerline;
+                best.tangent = Eigen::Vector3d(tangent.x(), tangent.y(), 0.0);
+                best.path_clearance = path_clearance;
+                best.left_clearance = left_clearance;
+                best.right_clearance = right_clearance;
+                best.available_half_width = std::max(
+                    narrow_corridor_min_half_width_,
+                    0.5 * width - collision_clearance_ - narrow_corridor_margin_);
+                best.transition_distance = std::max(
+                    0.0, std::min(std::abs(parameter * (seed_end - seed_start).norm()),
+                                  std::abs((parameter - 1.0) * (seed_end - seed_start).norm())));
+                best.candidate = true;
+            }
+            if (!best.candidate) {
+                continue;
+            }
+            ++candidate_count;
+            // The added half-spaces must contain the whole CIRI seed.  Use
+            // the measured local passage direction for the transverse
+            // normal.  The original CIRI seed remains in the intersection
+            // check below; it is not used to silently reintroduce a world-
+            // or seed-chord-aligned diagonal degree of freedom.
+            const Eigen::Vector2d local_tangent = best.tangent.head<2>().normalized();
+            const Eigen::Vector2d seed_normal(-seed_tangent.y(), seed_tangent.x());
+            Eigen::Vector2d normal(-local_tangent.y(), local_tangent.x());
+            best.tube_normal_source = "local_guide";
+            best.tube_normal = Eigen::Vector3d(normal.x(), normal.y(), 0.0);
+            best.seed_start = seed_start;
+            best.seed_end = seed_end;
+            // The geometric midpoint is the preferred centerline.  If the
+            // sparse PCD makes that midpoint slightly too close to an
+            // obstacle, retain the nearest point on the original safe guide
+            // segment instead of silently dropping the bottleneck constraint.
+            if (!rawPcdPointIsSafe(best.centerline)) {
+                const Eigen::Vector3d preferred = best.centerline;
+                best.centerline = best.guide_point;
+                for (int step = 1; step <= 20; ++step) {
+                    const double alpha = static_cast<double>(step) / 20.0;
+                    const Eigen::Vector3d candidate = best.guide_point +
+                        alpha * (preferred - best.guide_point);
+                    if (rawPcdPointIsSafe(candidate)) {
+                        best.centerline = candidate;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            double endpoint_span = std::max(
+                std::abs((seed_start - best.centerline).head<2>().dot(normal)),
+                std::abs((seed_end - best.centerline).head<2>().dot(normal)));
+            double half_width = std::min(
+                narrow_corridor_max_half_width_,
+                std::max(best.available_half_width, endpoint_span + 0.01));
+            // A corridor seed can straddle a genuine bend.  In that case the
+            // local tube may not contain both seed endpoints even though the
+            // neighboring seed in the same bottleneck does.  Preserve a
+            // feasible transition constraint in the seed's own local frame,
+            // and record that fallback explicitly; never silently drop it.
+            if (half_width < narrow_corridor_min_half_width_ ||
+                endpoint_span > half_width - 0.005) {
+                normal = seed_normal;
+                endpoint_span = std::max(
+                    std::abs((seed_start - best.centerline).head<2>().dot(normal)),
+                    std::abs((seed_end - best.centerline).head<2>().dot(normal)));
+                half_width = std::min(
+                    narrow_corridor_max_half_width_,
+                    std::max(best.available_half_width, endpoint_span + 0.01));
+                best.tube_normal_source = "ciri_seed_transition";
+                best.tube_normal = Eigen::Vector3d(normal.x(), normal.y(), 0.0);
+            }
+            best.applied_half_width = half_width;
+            if (half_width < narrow_corridor_min_half_width_ ||
+                endpoint_span > half_width - 0.005) {
+                best.reason = "seed_line_outside_feasible_centered_tube";
+                ROS_WARN("[FULL_SMOOTH] narrow candidate phase %d corridor %zu rejected: available half-width %.3f, applied %.3f, endpoint span %.3f, center=[%.3f %.3f %.3f]",
+                         phase_index, corridor_index, best.available_half_width, half_width,
+                         endpoint_span, best.centerline.x(), best.centerline.y(), best.centerline.z());
+                narrow_corridor_diagnostics_.push_back(best);
+                continue;
+            }
+            const Eigen::Vector3d center = best.centerline;
+            const auto original_planes = corridor[corridor_index].GetPlanes();
+            Eigen::Matrix<double, Eigen::Dynamic, 4> planes(
+                original_planes.rows() + 2, 4);
+            planes.topRows(original_planes.rows()) = original_planes;
+            planes.row(original_planes.rows()) << normal.x(), normal.y(), 0.0,
+                -(normal.dot(center.head<2>()) + half_width);
+            planes.row(original_planes.rows() + 1) << -normal.x(), -normal.y(), 0.0,
+                normal.dot(center.head<2>() ) - half_width;
+            Eigen::Vector3d interior;
+            if (!geometry_utils::findInterior(planes, interior)) {
+                best.reason = "centered_tube_intersection_is_empty";
+                ROS_WARN("[FULL_SMOOTH] narrow candidate phase %d corridor %zu rejected: centered tube polytope is empty (half-width %.3f, center=[%.3f %.3f %.3f])",
+                         phase_index, corridor_index, half_width, center.x(), center.y(), center.z());
+                narrow_corridor_diagnostics_.push_back(best);
+                continue;
+            }
+            if (!rawPcdPointIsSafe(center)) {
+                best.reason = "estimated_centerline_is_not_raw_pcd_safe";
+                ROS_WARN("[FULL_SMOOTH] narrow candidate phase %d corridor %zu rejected: centerline is not raw-PCD safe (center=[%.3f %.3f %.3f])",
+                         phase_index, corridor_index, center.x(), center.y(), center.z());
+                narrow_corridor_diagnostics_.push_back(best);
+                continue;
+            }
+            corridor[corridor_index].SetPlanes(planes);
+            bool overlap_is_feasible = true;
+            for (const int neighbor : {-1, 1}) {
+                const int adjacent = static_cast<int>(corridor_index) + neighbor;
+                if (adjacent < 0 || adjacent >= static_cast<int>(corridor.size())) {
+                    continue;
+                }
+                const std::size_t first = static_cast<std::size_t>(
+                    std::min(adjacent, static_cast<int>(corridor_index)));
+                const std::size_t second = static_cast<std::size_t>(
+                    std::max(adjacent, static_cast<int>(corridor_index)));
+                const auto overlap = corridor[first].CrossWith(corridor[second]);
+                Eigen::Vector3d overlap_interior;
+                if (!geometry_utils::findInterior(overlap.GetPlanes(), overlap_interior)) {
+                    overlap_is_feasible = false;
+                    break;
+                }
+            }
+            if (!overlap_is_feasible) {
+                // A curved passage may make one seed's local direction
+                // incompatible with the previous/next seed even though the
+                // same bottleneck has another feasible corridor.  Roll back
+                // only this seed; the group-level check below still refuses
+                // an entirely unconstrained bottleneck.
+                corridor[corridor_index].SetPlanes(original_planes);
+                best.reason = "local_tube_breaks_adjacent_corridor_overlap";
+                ROS_WARN("[FULL_SMOOTH] narrow candidate phase %d corridor %zu rejected: local tube breaks adjacent corridor overlap",
+                         phase_index, corridor_index);
+                narrow_corridor_diagnostics_.push_back(best);
+                continue;
+            }
+            best.applied = true;
+            best.reason = "applied_xy_centerline_halfspaces";
+            narrow_corridor_diagnostics_.push_back(best);
+            ++applied_count;
+        }
+
+        if (candidate_count == 0) {
+            ROS_INFO("[FULL_SMOOTH] narrow-corridor detector found no two-sided bottleneck in phase %d",
+                     phase_index);
+            return true;
+        }
+        for (std::size_t index = 1; index < corridor.size(); ++index) {
+            const auto overlap = corridor[index - 1].CrossWith(corridor[index]);
+            Eigen::Vector3d interior;
+            if (!geometry_utils::findInterior(overlap.GetPlanes(), interior)) {
+                ROS_ERROR("[FULL_SMOOTH] narrow-corridor constraints destroy corridor overlap between pieces %zu and %zu in phase %d",
+                          index - 1, index, phase_index);
+                return false;
+            }
+        }
+        // Multiple CIRI seeds can cover the same physical bottleneck.  A
+        // local direction constraint is acceptable only if every detected
+        // bottleneck group retains at least one applied corridor; otherwise
+        // refusing the phase is safer than silently using the unconstrained
+        // MINCO solution.
+        for (std::size_t index = 0; index < narrow_corridor_diagnostics_.size(); ++index) {
+            const auto& candidate = narrow_corridor_diagnostics_[index];
+            if (!candidate.candidate) {
+                continue;
+            }
+            bool group_has_applied = candidate.applied;
+            for (std::size_t other = 0; other < narrow_corridor_diagnostics_.size(); ++other) {
+                const auto& member = narrow_corridor_diagnostics_[other];
+                if (member.phase_index != candidate.phase_index || !member.applied) {
+                    continue;
+                }
+                if ((member.centerline - candidate.centerline).head<2>().norm() <= 0.18) {
+                    group_has_applied = true;
+                    break;
+                }
+            }
+            if (!group_has_applied) {
+                ROS_ERROR("[FULL_SMOOTH] narrow-corridor bottleneck at phase %d center=[%.3f %.3f %.3f] has no feasible applied corridor; refusing unconstrained bottleneck",
+                          candidate.phase_index, candidate.centerline.x(),
+                          candidate.centerline.y(), candidate.centerline.z());
+                return false;
+            }
+        }
+        narrow_corridor_report_.insert(narrow_corridor_report_.end(),
+                                      narrow_corridor_diagnostics_.begin(),
+                                      narrow_corridor_diagnostics_.end());
+        ROS_INFO("[FULL_SMOOTH] applied %d automatic XY centerline bottleneck corridor constraints in phase %d",
+                 applied_count, phase_index);
+        return true;
+    }
+
     double maximumCorridorViolation(const geometry_utils::Trajectory& trajectory,
                                     const geometry_utils::PolytopeVec& corridor) const {
         if (trajectory.getPieceNum() != static_cast<int>(corridor.size())) {
@@ -446,6 +854,64 @@ private:
             }
         }
         return maximum;
+    }
+
+    bool applyVerticalGuideFloor(const SuperPath& guide_path,
+                                 geometry_utils::PolytopeVec& corridor,
+                                 const int phase_index,
+                                 double& floor_z) const {
+        floor_z = std::numeric_limits<double>::infinity();
+        for (const auto& point : guide_path) {
+            floor_z = std::min(floor_z, static_cast<double>(point.z()));
+        }
+        if (!vertical_guide_floor_enabled_ || !std::isfinite(floor_z)) {
+            return true;
+        }
+
+        // CIRI half spaces use n.x * x + n.y * y + n.z * z + d <= 0.
+        // Intersect every corridor in this phase with z >= min(guide.z).
+        // The collision-checked guide itself remains feasible, while MINCO is
+        // no longer free to create a downward overshoot solely to reduce its
+        // smoothness cost.
+        for (std::size_t index = 0; index < corridor.size(); ++index) {
+            const auto original = corridor[index].GetPlanes();
+            Eigen::Matrix<double, Eigen::Dynamic, 4> planes(original.rows() + 1, 4);
+            planes.topRows(original.rows()) = original;
+            planes.row(original.rows()) << 0.0, 0.0, -1.0, floor_z;
+            Eigen::Vector3d interior;
+            if (!geometry_utils::findInterior(planes, interior)) {
+                ROS_ERROR("[FULL_SMOOTH] vertical guide floor z>=%.3f makes corridor %zu infeasible in phase %d",
+                          floor_z, index, phase_index);
+                return false;
+            }
+            corridor[index].SetPlanes(planes);
+        }
+        for (std::size_t index = 1; index < corridor.size(); ++index) {
+            const auto overlap = corridor[index - 1].CrossWith(corridor[index]);
+            Eigen::Vector3d interior;
+            if (!geometry_utils::findInterior(overlap.GetPlanes(), interior)) {
+                ROS_ERROR("[FULL_SMOOTH] vertical guide floor z>=%.3f destroys corridor overlap %zu/%zu in phase %d",
+                          floor_z, index - 1, index, phase_index);
+                return false;
+            }
+        }
+        ROS_INFO("[FULL_SMOOTH] applied vertical guide floor z>=%.3f m to %zu corridors in phase %d",
+                 floor_z, corridor.size(), phase_index);
+        return true;
+    }
+
+    static double minimumTrajectoryHeight(const geometry_utils::Trajectory& trajectory) {
+        double minimum = std::numeric_limits<double>::infinity();
+        for (int piece_index = 0; piece_index < trajectory.getPieceNum(); ++piece_index) {
+            const auto& piece = trajectory[piece_index];
+            constexpr int sample_count = 400;
+            for (int sample_index = 0; sample_index <= sample_count; ++sample_index) {
+                minimum = std::min(
+                    minimum,
+                    piece.getPos(piece.getDuration() * sample_index / sample_count).z());
+            }
+        }
+        return minimum;
     }
 
     void addLocalCollisionAvoidance(const FailureDiagnostic& collision) {
@@ -559,6 +1025,73 @@ private:
         if (std::rename(temporary_path.c_str(), saved_trajectory_path_.c_str()) != 0) {
             std::remove(temporary_path.c_str());
             throw std::runtime_error("cannot replace saved trajectory: " + saved_trajectory_path_);
+        }
+    }
+
+    void writeNarrowCorridorReport() const {
+        if (saved_trajectory_path_.empty()) {
+            return;
+        }
+        const std::string suffix = "/final_minco.txt";
+        std::string report_path = saved_trajectory_path_;
+        const std::size_t suffix_position = report_path.rfind(suffix);
+        if (suffix_position != std::string::npos &&
+            suffix_position + suffix.size() == report_path.size()) {
+            report_path.replace(suffix_position, suffix.size(),
+                                "/narrow_corridor_report.json");
+        } else {
+            report_path += ".narrow_corridor.json";
+        }
+        std::ofstream output(report_path + ".tmp", std::ios::out | std::ios::trunc);
+        if (!output.is_open()) {
+            throw std::runtime_error("cannot write narrow corridor report: " + report_path);
+        }
+        output << std::setprecision(17);
+        output << "{\n  \"format\": \"pre_map_vln.narrow_corridor_report.v2\",\n"
+               << "  \"enabled\": " << (narrow_corridor_enabled_ ? "true" : "false") << ",\n"
+               << "  \"clearance_threshold_m\": " << narrow_corridor_clearance_threshold_ << ",\n"
+               << "  \"max_width_m\": " << narrow_corridor_max_width_ << ",\n"
+               << "  \"transition_length_m\": " << narrow_corridor_transition_length_ << ",\n"
+               << "  \"max_half_width_m\": " << narrow_corridor_max_half_width_ << ",\n"
+               << "  \"min_half_width_m\": " << narrow_corridor_min_half_width_ << ",\n"
+               << "  \"margin_m\": " << narrow_corridor_margin_ << ",\n"
+               << "  \"constraints\": [\n";
+        for (std::size_t index = 0; index < narrow_corridor_report_.size(); ++index) {
+            const auto& diagnostic = narrow_corridor_report_[index];
+            const auto write_vector = [&output](const Eigen::Vector3d& value) {
+                output << "[" << value.x() << ", " << value.y() << ", " << value.z() << "]";
+            };
+            output << "    {\"phase\": " << diagnostic.phase_index
+                   << ", \"corridor\": " << diagnostic.corridor_index
+                   << ", \"candidate\": " << (diagnostic.candidate ? "true" : "false")
+                   << ", \"applied\": " << (diagnostic.applied ? "true" : "false")
+                   << ", \"guide_point\": ";
+            write_vector(diagnostic.guide_point);
+            output << ", \"centerline\": ";
+            write_vector(diagnostic.centerline);
+            output << ", \"tangent\": ";
+            write_vector(diagnostic.tangent);
+            output << ", \"tube_normal\": ";
+            write_vector(diagnostic.tube_normal);
+            output << ", \"tube_normal_source\": \"" << diagnostic.tube_normal_source << "\"";
+            output << ", \"seed_start\": ";
+            write_vector(diagnostic.seed_start);
+            output << ", \"seed_end\": ";
+            write_vector(diagnostic.seed_end);
+            output << ", \"path_clearance_m\": " << diagnostic.path_clearance
+                   << ", \"left_clearance_m\": " << diagnostic.left_clearance
+                   << ", \"right_clearance_m\": " << diagnostic.right_clearance
+                   << ", \"available_half_width_m\": " << diagnostic.available_half_width
+                   << ", \"applied_half_width_m\": " << diagnostic.applied_half_width
+                   << ", \"transition_distance_m\": " << diagnostic.transition_distance
+                   << ", \"reason\": \"" << diagnostic.reason << "\"}"
+                   << (index + 1 == narrow_corridor_report_.size() ? "\n" : ",\n");
+        }
+        output << "  ]\n}\n";
+        output.close();
+        if (!output || std::rename((report_path + ".tmp").c_str(), report_path.c_str()) != 0) {
+            std::remove((report_path + ".tmp").c_str());
+            throw std::runtime_error("cannot replace narrow corridor report: " + report_path);
         }
     }
 
@@ -749,9 +1282,13 @@ private:
         // therefore a physical/tracking allowance, not a voxel-size patch.
         const double safe_corridor_radius =
             std::max(config.robot_r, collision_clearance_) + super_corridor_extra_margin_;
-        const double full_smooth_seed_line_length = std::min(
-            config.corridor_line_max_length,
-            std::max(2.0 * safe_corridor_radius, 4.0 * config.resolution));
+        // This limits only how much path geometry is bundled into one CIRI
+        // seed.  It is not a clearance/radius.  Use SUPER's configured seed
+        // span (0.8 m for the real-flight config) so valid longer guide edges
+        // are subdivided/covered instead of failing against an implicit
+        // two-radii cap.  CIRI still validates every corridor with the exact
+        // configured safe_corridor_radius and filtered PCD.
+        const double full_smooth_seed_line_length = config.corridor_line_max_length;
         super_astar_ = std::make_shared<path_search::Astar>(super_config_path_, super_ros_, super_map_);
         super_astar_->setTransitionValidator(
             [this](const SuperVec3& from, const SuperVec3& to) {
@@ -894,6 +1431,18 @@ private:
             ROS_WARN("[FULL_SMOOTH] SUPER cannot construct a continuous safe corridor");
             return false;
         }
+        if (!tightenNarrowCorridors(guide_path, corridor, phase_index)) {
+            recordFailurePath(guide_path, phase_index,
+                              "automatic narrow-corridor constraints are infeasible");
+            return false;
+        }
+        double vertical_guide_floor = -std::numeric_limits<double>::infinity();
+        if (!applyVerticalGuideFloor(guide_path, corridor, phase_index,
+                                     vertical_guide_floor)) {
+            recordFailurePath(guide_path, phase_index,
+                              "vertical guide floor constraints are infeasible");
+            return false;
+        }
         std::vector<double> guide_times;
         guide_times.reserve(guide_path.size());
         guide_times.push_back(0.0);
@@ -920,8 +1469,31 @@ private:
             ROS_WARN("[FULL_SMOOTH] SUPER corridor-constrained MINCO optimization failed");
             return false;
         }
-        ROS_INFO("[FULL_SMOOTH] MINCO maximum normalized CIRI-plane violation: %.6f m",
-                 maximumCorridorViolation(trajectory, corridor));
+        const double corridor_violation = maximumCorridorViolation(trajectory, corridor);
+        ROS_INFO("[FULL_SMOOTH] MINCO maximum normalized CIRI/tube-plane violation: %.6f m",
+                 corridor_violation);
+        if (narrow_corridor_enabled_ && !narrow_corridor_diagnostics_.empty() &&
+            corridor_violation > narrow_corridor_max_plane_violation_) {
+            ROS_ERROR("[FULL_SMOOTH] optimized MINCO exceeds automatic narrow-corridor tube by %.6f m (limit %.6f m)",
+                      corridor_violation, narrow_corridor_max_plane_violation_);
+            recordFailurePath(guide_path, phase_index,
+                              "optimized MINCO violates automatic narrow-corridor tube");
+            return false;
+        }
+        if (vertical_guide_floor_enabled_) {
+            const double minimum_height = minimumTrajectoryHeight(trajectory);
+            ROS_INFO("[FULL_SMOOTH] MINCO phase %d vertical guide floor %.3f m, sampled minimum z %.3f m",
+                     phase_index, vertical_guide_floor, minimum_height);
+            if (minimum_height <
+                vertical_guide_floor - vertical_guide_floor_max_violation_) {
+                ROS_ERROR("[FULL_SMOOTH] optimized MINCO undershoots vertical guide floor by %.6f m (limit %.6f m)",
+                          vertical_guide_floor - minimum_height,
+                          vertical_guide_floor_max_violation_);
+                recordFailurePath(guide_path, phase_index,
+                                  "optimized MINCO violates vertical guide floor");
+                return false;
+            }
+        }
         output.setCorridorTrajectory(trajectory);
         ROS_INFO("[FULL_SMOOTH] SUPER A* + %zu safe corridors + constrained MINCO: %.2f s",
                  corridor.size(), trajectory.getTotalDuration());
@@ -1292,6 +1864,7 @@ private:
                           const bool skip_first_route_point = false) {
         phases_.clear();
         clearFailureDiagnostic();
+        narrow_corridor_report_.clear();
         Eigen::Vector3d phase_start = start;
         double phase_start_yaw = start_yaw;
         std::vector<SmoothRoutePoint, Eigen::aligned_allocator<SmoothRoutePoint>> guides;
@@ -1569,6 +2142,7 @@ private:
         }
         if (trajectory_safe_ && save_generated_trajectory_) {
             try {
+                writeNarrowCorridorReport();
                 writeSavedTrajectory(start, start_yaw);
                 ROS_INFO("[FULL_SMOOTH] saved exact executable global trajectory to %s",
                          saved_trajectory_path_.c_str());
@@ -1939,6 +2513,16 @@ private:
     double execution_time_scale_{1.0}, saved_peak_velocity_{0.0}, saved_peak_yaw_rate_{0.0};
     double max_yaw_lock_variation_{1.0}, super_astar_timeout_{5.0};
     double super_corridor_extra_margin_{0.0};
+    double narrow_corridor_clearance_threshold_{0.40};
+    double narrow_corridor_max_width_{1.00};
+    double narrow_corridor_transition_length_{0.45};
+    double narrow_corridor_max_half_width_{0.18};
+    double narrow_corridor_min_half_width_{0.10};
+    double narrow_corridor_margin_{0.03};
+    double narrow_corridor_side_vertical_window_{0.35};
+    double narrow_corridor_side_longitudinal_window_{0.35};
+    double narrow_corridor_max_plane_violation_{0.005};
+    double vertical_guide_floor_max_violation_{0.002};
     double regional_ceiling_z_{2.0}, regional_ceiling_grid_resolution_{0.2};
     double recorded_waypoint_speed_{1.2};
     double local_collision_replan_inflation_radius_{0.15};
@@ -1953,6 +2537,8 @@ private:
     bool super_use_recorded_guide_without_astar_{false};
     bool local_collision_replan_enabled_{true};
     bool regional_ceiling_enabled_{false};
+    bool narrow_corridor_enabled_{true};
+    bool vertical_guide_floor_enabled_{true};
     bool preview_built_{false}, trajectory_safe_{false}, land_sent_{false};
     double start_time_{0.0}, odom_time_{0.0}, yaw_{0.0};
     double start_position_tolerance_{0.20}, start_yaw_tolerance_{M_PI / 4.0};
@@ -1969,6 +2555,8 @@ private:
     std::vector<double> regional_ceiling_y_min_, regional_ceiling_y_max_;
     std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>>
         local_collision_guides_;
+    std::vector<NarrowCorridorDiagnostic> narrow_corridor_diagnostics_;
+    std::vector<NarrowCorridorDiagnostic> narrow_corridor_report_;
     Eigen::Vector3d position_{Eigen::Vector3d::Zero()};
     FailureDiagnostic failure_diagnostic_;
     SavedTrajectoryHeader saved_header_;

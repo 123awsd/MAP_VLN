@@ -216,7 +216,7 @@ if [[ "$bundle_eligible" == "true" ]]; then
   "$python" "$script_dir/export_full_smooth_route.py" \
     --mission "$mission" \
     --output "$full_smooth_route" \
-    --path-source validated
+    --path-source clearance_optimized
   "$root/real_fly/stage2_runtime/scripts/prepare_real_execution.sh" \
     "$run_id" "$mission" "$task_id" "$voxel_snapshot/metadata.json"
   runtime_mission_dir="$(dirname "$runtime_bundle")"

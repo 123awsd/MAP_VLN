@@ -93,6 +93,33 @@ namespace super_planner {
             return false;
         }
 
+        if (seed_line_max_length_ <= 0.0) {
+            ros_ptr_->error(" -- [SUPER] Invalid seed line max length {}", seed_line_max_length_);
+            return false;
+        }
+        // Keep the original guide geometry but insert intermediate samples
+        // on long edges. Each resulting seed is independently checked by
+        // GeneratePolytopeFromLine/CIRI against the same filtered obstacle
+        // cloud and robot radius; interpolation does not bypass collision
+        // validation or alter the requested route.
+        vec_Vec3f corridor_path;
+        corridor_path.reserve(path.size());
+        corridor_path.push_back(path.front());
+        const double seed_step = seed_line_max_length_ * 0.9;
+        for (size_t i = 1; i < path.size(); ++i) {
+            const Vec3f &start = path[i - 1];
+            const Vec3f &end = path[i];
+            const double length = (end - start).norm();
+            const int pieces = std::max(1, static_cast<int>(std::ceil(length / seed_step)));
+            for (int piece = 1; piece <= pieces; ++piece) {
+                corridor_path.push_back(start + (static_cast<double>(piece) / pieces) * (end - start));
+            }
+            if (pieces > 1) {
+                ros_ptr_->info(" -- [SUPER] Densified guide edge {} m into {} CIRI-checked seeds",
+                               length, pieces);
+            }
+        }
+
         vector<Line> seed_lines;
         int first_id, second_id;
         Polytope overlap;
@@ -103,22 +130,26 @@ namespace super_planner {
         int cnt_loop = 0;
         first_id = 0;
 
-        while(first_id < path.size() && map_ptr_->isOccupiedInflate(path[first_id])) {
+        while(first_id < corridor_path.size() && map_ptr_->isOccupiedInflate(corridor_path[first_id])) {
             first_id++;
+        }
+        if (first_id >= corridor_path.size()) {
+            ros_ptr_->error(" -- [SUPER] Corridor path has no unoccupied start point");
+            return false;
         }
 
         if(first_id!=0){
-            shifted_start_pt = path[first_id];
-            double dis = (path[first_id] - path[0]).norm() * 1.2;
-            GenerateEmptyPolytope(path[0], dis, temp_poly);
+            shifted_start_pt = corridor_path[first_id];
+            double dis = (corridor_path[first_id] - corridor_path[0]).norm() * 1.2;
+            GenerateEmptyPolytope(corridor_path[0], dis, temp_poly);
             sfcs.emplace_back(temp_poly);
         }
 
         while (cnt_loop++ < max_loop) {
             second_id = first_id;
-            for (int j = first_id + 1; j < path.size(); j++) {
+            for (int j = first_id + 1; j < corridor_path.size(); j++) {
                 bool reach_segment = false;
-                if (!map_ptr_->isLineFree(path[first_id], path[j], seed_line_max_length_,
+                if (!map_ptr_->isLineFree(corridor_path[first_id], corridor_path[j], seed_line_max_length_,
                                           line_seed_neighbor_list)) {
                     reach_segment = true;
                 }
@@ -132,19 +163,55 @@ namespace super_planner {
                 second_id = j;
             }
 
-            if (second_id == first_id && second_id + 1 < path.size()) {
-                second_id += 1;
+            if (second_id == first_id && first_id + 1 < corridor_path.size()) {
+                second_id = first_id + 1;
             }
-
-            seed_lines.emplace_back(path[first_id], path[second_id]);
-            if ((path[first_id] - path[second_id]).norm() > seed_line_max_length_ * 1.5) {
-                fmt::print("first: {}\n second: {}\n seed line max: {}\n", path[first_id].transpose(),
-                           path[second_id].transpose(), seed_line_max_length_);
-                throw std::runtime_error("seed line too long");
-                return false;
+            const double max_seed_length = seed_line_max_length_ * 1.5;
+            bool seed_polytope_ready = false;
+            while (second_id > first_id) {
+                Line candidate(corridor_path[first_id], corridor_path[second_id]);
+                const double candidate_length = (candidate.second - candidate.first).norm();
+                if (candidate_length <= max_seed_length + 1e-6 &&
+                    GeneratePolytopeFromLine(candidate, temp_poly)) {
+                    seed_lines.emplace_back(candidate);
+                    seed_polytope_ready = true;
+                    break;
+                }
+                --second_id;
             }
-            if (!GeneratePolytopeFromLine(seed_lines.back(), temp_poly)) {
-                cout << YELLOW << " -- [SUPER] GeneratePolytopeFromLine failed." << RESET << endl;
+            if (!seed_polytope_ready) {
+                const bool at_terminal_point = first_id + 1 == corridor_path.size();
+                if (at_terminal_point && !sfcs.empty() &&
+                    sfcs.back().PointIsInside(corridor_path.back(), 1.0e-4)) {
+                    // A duplicate/near-duplicate final guide point can remain
+                    // after the last valid line seed.  It is already covered
+                    // by the previous CIRI corridor, so do not ask CIRI to
+                    // construct a zero-length seed for it.
+                    ros_ptr_->info(" -- [SUPER] Final guide point is already inside the last CIRI corridor; closing path");
+                    break;
+                }
+                if (at_terminal_point && !sfcs.empty() &&
+                    GeneratePolytopeFromPoint(corridor_path.back(), temp_poly_fix_p)) {
+                    overlap = sfcs.back().CrossWith(temp_poly_fix_p);
+                    interior_depth = geometry_utils::findInteriorDist(overlap.GetPlanes(), interior_pt);
+                    if (interior_depth > 0.01) {
+                        temp_poly_fix_p.overlap_depth_with_last_one = interior_depth;
+                        temp_poly_fix_p.interior_pt_with_last_one = interior_pt;
+                        sfcs.push_back(temp_poly_fix_p);
+                        ros_ptr_->info(
+                                " -- [SUPER] Closed terminal guide point with a point-CIRI corridor; overlap depth {} m",
+                                interior_depth);
+                        break;
+                    }
+                    ros_ptr_->error(
+                            " -- [SUPER] Terminal point corridor does not overlap the previous corridor; depth {} m",
+                            interior_depth);
+                }
+                ros_ptr_->error(
+                        " -- [SUPER] CIRI could not construct a safe seed at path index {}/{} "
+                        "(point={}, max line {} m); refusing corridor construction",
+                        first_id, corridor_path.size() - 1,
+                        corridor_path[first_id].transpose(), max_seed_length);
                 return false;
             }
 
@@ -158,7 +225,7 @@ namespace super_planner {
                 temp_poly.overlap_depth_with_last_one = interior_depth;
                 temp_poly.interior_pt_with_last_one = interior_pt;
                 if (interior_depth < min_overlap_threshold_) {
-                    if (!GeneratePolytopeFromPoint(path[first_id], temp_poly_fix_p)) {
+                    if (!GeneratePolytopeFromPoint(corridor_path[first_id], temp_poly_fix_p)) {
                         cout << YELLOW << " -- [SUPER] GeneratePolytopeFromPoint failed." << RESET << endl;
                         return false;
                     }
@@ -204,7 +271,7 @@ namespace super_planner {
             }
 
             sfcs.push_back(temp_poly);
-            if (second_id == path.size() - 1) {
+            if (second_id == corridor_path.size() - 1) {
                 break;
             }
             first_id = second_id;

@@ -155,7 +155,10 @@ Visualization Manager:
         global_bottleneck_highlight: true
         global_bottleneck_label: true
         planned_observation_frustums: true
-        round_planned_path: true
+        raw_astar_path: true
+        clearance_optimized_path: true
+        final_minco_path: true
+        validated_bspline_path: true
         trajectory_clearance: true
         trajectory_clearance_labels: true
         trajectory_clearance_vectors: true

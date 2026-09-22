@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Collision-check and freeze an offline mission for real-machine preview.
 
-This program is deliberately ROS-free.  It never starts hardware and never
-publishes a command.  The validated B-spline is exported as a continuous
-full_smooth route; the senior full_smooth_mission node is the runtime MINCO
-executor for that route.
+This program is deliberately ROS-free. It never starts hardware and never
+publishes a command. It retains the raw A* path, applies a collision-checked
+XY-only ESDF clearance refinement, and validates a B-spline reference. The
+clearance-refined path is exported as the full_smooth MINCO guide.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ from stage2.bspline_3d import (  # noqa: E402
     anchor_astar_path,
     plan_collision_checked_bspline,
 )
+from stage2.clearance_refinement import refine_path_xy  # noqa: E402
 from stage2.io_utils import atomic_json, load_json  # noqa: E402
 from stage2.planning_contract import PlannerProfile  # noqa: E402
 from stage2.voxel_map_3d import VoxelMap3D  # noqa: E402
@@ -148,19 +149,37 @@ def main() -> None:
         if math.dist(previous, goal) <= 1e-7:
             if not voxel_map.is_state_valid(goal):
                 raise SystemExit(f"visit {index} same-position goal is not collision-free")
-            trajectory = [goal]
+            anchored = [goal]
             mode, degree, smoothing, pieces = "same_position_yaw_only", 0, 0.0, 1
             clearance = voxel_map.clearance(goal)
         else:
             try:
                 anchored = anchor_astar_path(astar_points, previous, goal, voxel_map)
-                fitted = plan_collision_checked_bspline(anchored, voxel_map, settings)
+            except (RuntimeError, TypeError, ValueError) as error:
+                raise SystemExit(f"segment {index} A* endpoint anchoring failed: {error}") from error
+        try:
+            refined, refinement = refine_path_xy(anchored, voxel_map)
+        except (RuntimeError, TypeError, ValueError) as error:
+            raise SystemExit(f"segment {index} XY clearance refinement failed: {error}") from error
+        if math.dist(previous, goal) <= 1e-7:
+            trajectory = refined
+        else:
+            try:
+                fitted = plan_collision_checked_bspline(refined, voxel_map, settings)
             except (RuntimeError, TypeError, ValueError) as error:
                 raise SystemExit(f"segment {index} B-spline validation failed: {error}") from error
             trajectory = fitted.points_xyz_m
             mode, degree = fitted.mode, fitted.degree
             smoothing, pieces = fitted.smoothing_m, fitted.piece_count
             clearance = fitted.minimum_clearance_m
+        segment["raw_astar_trajectory"] = {
+            "points_xyz_m": anchored,
+            "source": "A* path anchored to the exact mission start/observation pose",
+        }
+        segment["clearance_optimized_trajectory"] = {
+            "points_xyz_m": refined,
+            **refinement,
+        }
         if not all(voxel_map.is_state_valid(point) for point in trajectory):
             raise SystemExit(f"segment {index} trajectory leaves inflated FREE space")
         if not all(
