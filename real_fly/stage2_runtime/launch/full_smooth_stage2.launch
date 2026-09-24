@@ -48,7 +48,7 @@
     <param name="max_yaw_rate" value="1.5"/>
     <!-- Runtime time-scaling keeps the certified geometry but slows old and new
          saved trajectories to these stricter execution limits. -->
-    <param name="execution_max_velocity" value="0.30"/>
+    <param name="execution_max_velocity" value="0.8"/>
     <param name="execution_max_yaw_rate" value="0.60"/>
 
     <param name="max_yaw_lock_variation" value="1.0"/>

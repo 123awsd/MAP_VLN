@@ -71,6 +71,7 @@ namespace traj_opt {
             MatD3f partialGradByCoeffs;
             VecDf partialGradByTimes;
             bool default_init{true};
+            double minimum_vertical_velocity{-1.0e6};
             bool given_init_ts_and_ps{false};
             int piece_num;
             Mat3Df points;
@@ -116,6 +117,7 @@ namespace traj_opt {
                                           const int &integralResolution,
                                           const VecDf &magnitudeBounds,
                                           const VecDf &penaltyWeights,
+                                          const double minimum_vertical_velocity,
                                           flatness::FlatnessMap &flatMap,
                                           double &cost,
                                           VecDf &gradT,
@@ -321,6 +323,9 @@ namespace traj_opt {
         double optimize(Trajectory &traj, const double &relCostTol);
 
     public:
+        void setMinimumVerticalVelocity(double value) {
+            opt_vars.minimum_vertical_velocity = value;
+        }
         typedef std::shared_ptr<ExpTrajOpt> Ptr;
 
         ExpTrajOpt(const traj_opt::Config &cfg, const ros_interface::RosInterface::Ptr & ros_ptr);

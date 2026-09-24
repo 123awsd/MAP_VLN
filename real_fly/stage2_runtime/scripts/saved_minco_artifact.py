@@ -83,7 +83,8 @@ def main():
     optional_report = d / "narrow_corridor_report.json"
     if optional_report.is_file() and optional_report.stat().st_size > 0:
         names.append(optional_report.name)
-    for optional_diagnostic in ("narrow_corridor_metrics.json", "narrow_corridor_local_topdown.png"):
+    for optional_diagnostic in ("narrow_corridor_metrics.json", "narrow_corridor_local_topdown.png",
+                               "departure_geometry_report.json"):
         diagnostic_path = d / optional_diagnostic
         if diagnostic_path.is_file() and diagnostic_path.stat().st_size > 0:
             names.append(optional_diagnostic)

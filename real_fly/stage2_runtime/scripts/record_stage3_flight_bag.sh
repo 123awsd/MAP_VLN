@@ -37,6 +37,19 @@ rgb_profile="${STAGE3_RGB_PROFILE:-$runtime_root/config/realsense_stage3_recordi
 
 # shellcheck disable=SC1091
 source "$stage1_root/scripts/env.sh"
+# Fail before starting the camera if source-timestamp encoding is unavailable.
+if [[ "$with_camera" -eq 1 ]]; then
+  python3 - <<'PY'
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import Gst
+Gst.init(None)
+required = ('appsrc', 'videoconvert', 'x264enc', 'h264parse', 'mp4mux', 'filesink')
+missing = [name for name in required if Gst.ElementFactory.find(name) is None]
+if missing:
+    raise SystemExit('Missing timestamped recording plugins: ' + ', '.join(missing))
+PY
+fi
 export ROS_MASTER_URI="${ROS_MASTER_URI:-http://127.0.0.1:11311}"
 rosnode list >/dev/null 2>&1 || {
   echo "ROS master unavailable; start global localization first." >&2
@@ -158,6 +171,8 @@ started_at: $(date --iso-8601=seconds)
 camera: $([[ "$with_camera" -eq 1 ]] && echo "d435_rgb_h264_${rgb_width}x${rgb_height}_${rgb_fps}hz_${rgb_bitrate_kbps}kbps" || echo disabled)
 camera_profile: $([[ "$with_camera" -eq 1 ]] && echo "$rgb_profile" || echo disabled)
 camera_video: $([[ "$with_camera" -eq 1 ]] && echo "$rgb_video" || echo disabled)
+camera_timing: $([[ "$with_camera" -eq 1 ]] && echo source_header_stamp_vfr || echo disabled)
+camera_timestamps: $([[ "$with_camera" -eq 1 ]] && echo "$rgb_video.timestamps.csv" || echo disabled)
 point_clouds: $([[ "$with_cloud" -eq 1 ]] && echo "$cloud_topic" || echo disabled)
 recorder_scheduling: rosbag_cpu0_nice10_h264_cpu1_nice10
 EOF

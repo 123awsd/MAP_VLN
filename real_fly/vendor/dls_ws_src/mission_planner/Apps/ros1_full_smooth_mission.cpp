@@ -136,6 +136,13 @@ public:
         private_nh_.param("vertical_guide_floor/enabled", vertical_guide_floor_enabled_, true);
         private_nh_.param("vertical_guide_floor/max_violation",
                           vertical_guide_floor_max_violation_, 0.002);
+        private_nh_.param("guide_tracking/enabled", guide_tracking_enabled_, true);
+        private_nh_.param("guide_tracking/horizontal_half_width",
+                          guide_tracking_horizontal_half_width_, 0.12);
+        private_nh_.param("guide_tracking/monotonic_vertical_band",
+                          guide_tracking_monotonic_vertical_band_, 0.01);
+        private_nh_.param("guide_tracking/max_plane_violation",
+                          guide_tracking_max_plane_violation_, 0.005);
         private_nh_.param("local_collision_replan_enabled", local_collision_replan_enabled_, true);
         private_nh_.param("local_collision_replan_max_attempts",
                           local_collision_replan_max_attempts_, 1);
@@ -165,6 +172,11 @@ public:
         if (vertical_guide_floor_max_violation_ < 0.0 ||
             vertical_guide_floor_max_violation_ > 0.02) {
             throw std::invalid_argument("invalid vertical guide floor configuration");
+        }
+        if (guide_tracking_horizontal_half_width_ <= 0.0 ||
+            guide_tracking_monotonic_vertical_band_ <= 0.0 ||
+            guide_tracking_max_plane_violation_ <= 0.0) {
+            throw std::invalid_argument("invalid guide tracking configuration");
         }
         if (local_collision_replan_max_attempts_ < 0 ||
             local_collision_replan_inflation_radius_ <= 0.0) {
@@ -914,6 +926,89 @@ private:
         return minimum;
     }
 
+    bool applyGuideTrackingEnvelope(const SuperPath& guide_path,
+                                    geometry_utils::PolytopeVec& corridor,
+                                    const int phase_index) const {
+        if (!guide_tracking_enabled_ || guide_path.size() < 2 || corridor.empty()) {
+            return true;
+        }
+        constexpr double monotonic_tolerance = 1.0e-4;
+        bool nondecreasing = true;
+        for (std::size_t index = 1; index < guide_path.size(); ++index) {
+            const double delta_z = guide_path[index].z() - guide_path[index - 1].z();
+            nondecreasing = nondecreasing && delta_z >= -monotonic_tolerance;
+        }
+        // The envelope is intended for departure phases whose safe guide is
+        // level and then climbs.  Applying the same local tubes to a long
+        // descending observation approach can make consecutive bend
+        // corridors lose overlap without addressing the departure problem.
+        // Those phases retain their original CIRI constraints and the global
+        // guide floor; ascending/level phases get both XY tracking and the
+        // progressive vertical envelope.
+        const bool monotonic_vertical = nondecreasing;
+        if (!monotonic_vertical) {
+            ROS_INFO("[FULL_SMOOTH] guide tracking envelope skipped in phase %d because guide height is not nondecreasing",
+                     phase_index);
+            return true;
+        }
+
+        for (std::size_t index = 0; index < corridor.size(); ++index) {
+            if (!corridor[index].HaveSeedLine()) {
+                ROS_ERROR("[FULL_SMOOTH] guide tracking requires a seed line for corridor %zu in phase %d",
+                          index, phase_index);
+                return false;
+            }
+            const auto seed = corridor[index].seed_line;
+            const Eigen::Vector3d start(seed.first.x(), seed.first.y(), seed.first.z());
+            const Eigen::Vector3d end(seed.second.x(), seed.second.y(), seed.second.z());
+            Eigen::Vector2d tangent = (end - start).head<2>();
+            const auto original = corridor[index].GetPlanes();
+            const int horizontal_plane_count = tangent.norm() > 1.0e-6 ? 2 : 0;
+            const int vertical_plane_count = monotonic_vertical ? 2 : 0;
+            Eigen::Matrix<double, Eigen::Dynamic, 4> planes(
+                original.rows() + horizontal_plane_count + vertical_plane_count, 4);
+            planes.topRows(original.rows()) = original;
+            int row = original.rows();
+            if (horizontal_plane_count > 0) {
+                tangent.normalize();
+                const Eigen::Vector2d normal(-tangent.y(), tangent.x());
+                const Eigen::Vector2d center = 0.5 * (start + end).head<2>();
+                planes.row(row++) << normal.x(), normal.y(), 0.0,
+                    -(normal.dot(center) + guide_tracking_horizontal_half_width_);
+                planes.row(row++) << -normal.x(), -normal.y(), 0.0,
+                    normal.dot(center) - guide_tracking_horizontal_half_width_;
+            }
+            if (vertical_plane_count > 0) {
+                const double lower = std::min(start.z(), end.z()) -
+                                     guide_tracking_monotonic_vertical_band_;
+                const double upper = std::max(start.z(), end.z()) +
+                                     guide_tracking_monotonic_vertical_band_;
+                planes.row(row++) << 0.0, 0.0, -1.0, lower;
+                planes.row(row++) << 0.0, 0.0, 1.0, -upper;
+            }
+            Eigen::Vector3d interior;
+            if (!geometry_utils::findInterior(planes, interior)) {
+                ROS_ERROR("[FULL_SMOOTH] guide tracking envelope makes corridor %zu infeasible in phase %d",
+                          index, phase_index);
+                return false;
+            }
+            corridor[index].SetPlanes(planes);
+        }
+        for (std::size_t index = 1; index < corridor.size(); ++index) {
+            const auto overlap = corridor[index - 1].CrossWith(corridor[index]);
+            Eigen::Vector3d interior;
+            if (!geometry_utils::findInterior(overlap.GetPlanes(), interior)) {
+                ROS_ERROR("[FULL_SMOOTH] guide tracking envelope destroys corridor overlap %zu/%zu in phase %d",
+                          index - 1, index, phase_index);
+                return false;
+            }
+        }
+        ROS_INFO("[FULL_SMOOTH] applied %.3f m horizontal guide tube to %zu corridors in phase %d%s",
+                 guide_tracking_horizontal_half_width_, corridor.size(), phase_index,
+                 monotonic_vertical ? " with monotonic vertical envelope" : "");
+        return true;
+    }
+
     void addLocalCollisionAvoidance(const FailureDiagnostic& collision) {
         // Updating an initialized ROG map in-place after CIRI has already
         // constructed corridors can leave CIRI's internal search in an
@@ -1328,7 +1423,11 @@ private:
         // globally inflating the corridor and unnecessarily closing unrelated
         // narrow but physically valid passages.
         corridor_opt_config.integral_reso = std::max(corridor_opt_config.integral_reso, 40);
-        corridor_opt_config.penna_pos = std::max(corridor_opt_config.penna_pos, 5.0e7);
+        // Corridor planes are penalties in the upstream optimizer rather than
+        // exact algebraic constraints.  A high weight is required for the
+        // guide-floor plane: at a low observation stop, even a visually small
+        // downward bow is undesirable although it remains collision-free.
+        corridor_opt_config.penna_pos = std::max(corridor_opt_config.penna_pos, 5.0e9);
         corridor_opt_config.max_vel = std::min(corridor_opt_config.max_vel,
                                                std::max(0.2, max_velocity_ - 0.05));
         super_optimizer_ = std::make_shared<traj_opt::ExpTrajOpt>(corridor_opt_config, super_ros_);
@@ -1424,7 +1523,33 @@ private:
                  minimumRawPcdClearance(guide_path));
         geometry_utils::PolytopeVec corridor;
         SuperVec3 shifted_start;
-        if (!super_corridor_->SearchPolytopeOnPath(guide_path, corridor, shifted_start, false) ||
+        bool ascending_guide = guide_tracking_enabled_;
+        for (std::size_t i = 1; i < guide_path.size(); ++i) {
+            ascending_guide = ascending_guide && guide_path[i].z() >= guide_path[i-1].z() - 1e-8;
+        }
+        bool corridor_ready = true;
+        if (ascending_guide) {
+            // Preserve a contiguous seed chain. SearchPolytopeOnPath prunes
+            // intervening polytopes on the basis of their ORIGINAL overlap;
+            // that overlap need not survive adding guide tracking planes.
+            std::size_t first = 0;
+            for (std::size_t i = 1; i < guide_path.size(); ++i) {
+                if ((guide_path[i] - guide_path[first]).norm() < 0.40 &&
+                    i + 1 < guide_path.size()) continue;
+                super_utils::Line line(guide_path[first], guide_path[i]);
+                geometry_utils::Polytope poly;
+                if (!super_corridor_->GeneratePolytopeFromLine(line, poly)) {
+                    corridor_ready = false;
+                    break;
+                }
+                corridor.push_back(poly);
+                first = i;
+            }
+        } else {
+            corridor_ready = super_corridor_->SearchPolytopeOnPath(
+                guide_path, corridor, shifted_start, false);
+        }
+        if (!corridor_ready ||
             corridor.empty()) {
             recordFailurePath(guide_path, phase_index,
                               "CIRI cannot inflate this guide path to the required safety clearance");
@@ -1441,6 +1566,11 @@ private:
                                      vertical_guide_floor)) {
             recordFailurePath(guide_path, phase_index,
                               "vertical guide floor constraints are infeasible");
+            return false;
+        }
+        if (!applyGuideTrackingEnvelope(guide_path, corridor, phase_index)) {
+            recordFailurePath(guide_path, phase_index,
+                              "guide tracking envelope constraints are infeasible");
             return false;
         }
         std::vector<double> guide_times;
@@ -1463,6 +1593,7 @@ private:
         head.col(0) = guide_path.front();
         tail.col(0) = guide_path.back();
         geometry_utils::Trajectory trajectory;
+        super_optimizer_->setMinimumVerticalVelocity(ascending_guide ? 0.0 : -1.0e6);
         if (!super_optimizer_->optimize(head, tail, guide_path, guide_times, corridor, trajectory)) {
             recordFailurePath(guide_path, phase_index,
                               "corridor-constrained MINCO optimization failed");
@@ -1478,6 +1609,14 @@ private:
                       corridor_violation, narrow_corridor_max_plane_violation_);
             recordFailurePath(guide_path, phase_index,
                               "optimized MINCO violates automatic narrow-corridor tube");
+            return false;
+        }
+        if (guide_tracking_enabled_ &&
+            corridor_violation > guide_tracking_max_plane_violation_) {
+            ROS_ERROR("[FULL_SMOOTH] optimized MINCO exceeds guide tracking envelope by %.6f m (limit %.6f m)",
+                      corridor_violation, guide_tracking_max_plane_violation_);
+            recordFailurePath(guide_path, phase_index,
+                              "optimized MINCO violates guide tracking envelope");
             return false;
         }
         if (vertical_guide_floor_enabled_) {
@@ -2523,6 +2662,9 @@ private:
     double narrow_corridor_side_longitudinal_window_{0.35};
     double narrow_corridor_max_plane_violation_{0.005};
     double vertical_guide_floor_max_violation_{0.002};
+    double guide_tracking_horizontal_half_width_{0.12};
+    double guide_tracking_monotonic_vertical_band_{0.01};
+    double guide_tracking_max_plane_violation_{0.005};
     double regional_ceiling_z_{2.0}, regional_ceiling_grid_resolution_{0.2};
     double recorded_waypoint_speed_{1.2};
     double local_collision_replan_inflation_radius_{0.15};
@@ -2539,6 +2681,7 @@ private:
     bool regional_ceiling_enabled_{false};
     bool narrow_corridor_enabled_{true};
     bool vertical_guide_floor_enabled_{true};
+    bool guide_tracking_enabled_{true};
     bool preview_built_{false}, trajectory_safe_{false}, land_sent_{false};
     double start_time_{0.0}, odom_time_{0.0}, yaw_{0.0};
     double start_position_tolerance_{0.20}, start_yaw_tolerance_{M_PI / 4.0};

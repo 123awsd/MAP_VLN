@@ -52,6 +52,7 @@ void ExpTrajOpt::constraintsFunctional(const VecDf &T,
                                        const int &integralResolution,
                                        const VecDf &magnitudeBounds,
                                        const VecDf &penaltyWeights,
+                                       const double minimum_vertical_velocity,
                                        flatness::FlatnessMap &flatMap,
         // outputs
                                        double &cost,
@@ -155,6 +156,12 @@ void ExpTrajOpt::constraintsFunctional(const VecDf &T,
             }
 
             /* 2.3 For vel cost  */
+            double verticalPenalty, verticalGradient;
+            if (gcopter::smoothedL1(minimum_vertical_velocity - vel.z(),
+                                    smoothFactor, verticalPenalty, verticalGradient)) {
+                gradVel.z() -= weightPos * verticalGradient;
+                tmp_cost += weightPos * verticalPenalty;
+            }
             const auto &violaVel = vel.squaredNorm() - vmaxSqr;
             double violaVelPena, violaVelPenaD;
             if (weightVel > 0 && gcopter::smoothedL1(violaVel, smoothFactor, violaVelPena, violaVelPenaD)) {
@@ -315,6 +322,7 @@ double ExpTrajOpt::costFunctional(void *ptr,
                           waypoint_attractor, waypoint_attractor_dead_d,
                           smooth_eps, integral_res,
                           magnitudeBounds, penaltyWeights,
+                          obj.minimum_vertical_velocity,
                           quadrotor_flatness,
                           cost, partialGradByTimes, partialGradByCoeffs, obj.penalty_log);
 

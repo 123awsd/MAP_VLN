@@ -18,6 +18,8 @@ Options:
   --voxel-snapshot DIR    Override the matching voxel snapshot.
   --collision-clearance M CIRI/MINCO clearance; must match the planning profile
                           (default: 0.25).
+  --speed-mps VALUE       Final route/MINCO speed limit (default: 0.6).
+  --max-yaw-rate VALUE    Final yaw-rate limit in rad/s (default: 1.5).
   --static-demo           Freeze conditional tasks for a controlled fixed-layout demo.
   --visit-all-candidates  Exhaust all candidates of each task before the next task.
   --no-cache              Do not reuse the Qwen parser cache.
@@ -40,6 +42,8 @@ no_cache=0
 planning_config_override=""
 voxel_snapshot_override=""
 collision_clearance="0.25"
+speed_mps="0.6"
+max_yaw_rate="1.5"
 start_values=()
 
 while [[ $# -gt 0 ]]; do
@@ -58,6 +62,8 @@ while [[ $# -gt 0 ]]; do
     --planning-config) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; planning_config_override="$2"; shift 2 ;;
     --voxel-snapshot) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; voxel_snapshot_override="$2"; shift 2 ;;
     --collision-clearance) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; collision_clearance="$2"; shift 2 ;;
+    --speed-mps) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; speed_mps="$2"; shift 2 ;;
+    --max-yaw-rate) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; max_yaw_rate="$2"; shift 2 ;;
     --static-demo) static_demo=1; shift ;;
     --visit-all-candidates) visit_all_candidates=1; shift ;;
     --no-cache) no_cache=1; shift ;;
@@ -75,6 +81,16 @@ fi
 [[ "$budget_cny" =~ ^[0-9]+([.][0-9]+)?$ ]] || { echo "Invalid --budget-cny" >&2; exit 2; }
 [[ "$max_candidates" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid --max-candidates" >&2; exit 2; }
 [[ "$collision_clearance" =~ ^0[.][0-9]+$|^[1-9][0-9]*([.][0-9]+)?$ ]] || { echo "Invalid --collision-clearance" >&2; exit 2; }
+python3 - "$speed_mps" "$max_yaw_rate" <<'PY'
+import math
+import sys
+
+speed, yaw_rate = map(float, sys.argv[1:])
+if not math.isfinite(speed) or not 0.1 <= speed <= 2.0:
+    raise SystemExit(f"Speed must be in [0.1, 2.0] m/s, got {speed}")
+if not math.isfinite(yaw_rate) or not 0.1 <= yaw_rate <= 3.0:
+    raise SystemExit(f"Maximum yaw rate must be in [0.1, 3.0] rad/s, got {yaw_rate}")
+PY
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 stage2_dir="$(cd -- "$script_dir/.." && pwd)"
@@ -216,12 +232,14 @@ if [[ "$bundle_eligible" == "true" ]]; then
   "$python" "$script_dir/export_full_smooth_route.py" \
     --mission "$mission" \
     --output "$full_smooth_route" \
-    --path-source clearance_optimized
+    --path-source clearance_optimized \
+    --speed "$speed_mps"
   "$root/real_fly/stage2_runtime/scripts/prepare_real_execution.sh" \
     "$run_id" "$mission" "$task_id" "$voxel_snapshot/metadata.json"
   runtime_mission_dir="$(dirname "$runtime_bundle")"
   cp -a "$full_smooth_route" "$runtime_mission_dir/full_smooth_route.txt"
-  bash "$script_dir/generate_final_minco.sh" "$run_id" "$task_id" "$collision_clearance"
+  bash "$script_dir/generate_final_minco.sh" "$run_id" "$task_id" \
+    "$collision_clearance" clearance_optimized "$speed_mps" "$max_yaw_rate"
 else
   echo "Dynamic task preserved for preview, but no execution bundle was generated."
   echo "Reason: conditional/recovery motion requires the online perception/outcome executor."
@@ -230,7 +248,7 @@ fi
 "$python" - "$task_dir/run_manifest.json" "$run_id" "$task_id" "$start_source" \
   "$task_graph" "$mission" "$audit" "$runtime_bundle" "$bundle_eligible" \
   "$full_smooth_route" "$scene_graph" "$planning_config" "$voxel_snapshot" \
-  "$collision_clearance" <<'PY'
+  "$collision_clearance" "$speed_mps" "$max_yaw_rate" <<'PY'
 import json
 import pathlib
 import sys
@@ -255,6 +273,8 @@ document = {
     "planning_config": str(pathlib.Path(sys.argv[12]).resolve()),
     "voxel_snapshot": str(pathlib.Path(sys.argv[13]).resolve()),
     "collision_clearance_m": float(sys.argv[14]),
+    "speed_mps": float(sys.argv[15]),
+    "max_yaw_rate_rad_s": float(sys.argv[16]),
     "autonomous_semantic_execution_eligible": False,
     "safety_scope": "offline_preview_only",
 }

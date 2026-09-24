@@ -4,6 +4,7 @@ set -euo pipefail
 [[ $# -ge 2 && $# -le 6 ]] || { echo "Usage: $0 RUN_ID TASK_ID [CLEARANCE_M] [PATH_SOURCE] [SPEED_MPS] [MAX_YAW_RATE_RAD_S]" >&2; exit 2; }
 run=$1 task=$2 clearance="${3:-0.25}" path_source="${4:-clearance_optimized}"
 speed="${5:-0.6}" max_yaw_rate="${6:-1.5}"
+departure_validation=false
 [[ "$run" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ && "$task" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || exit 2
 case "$path_source" in
   validated|clearance_optimized|astar|sparse|sparse_astar) ;;
@@ -29,6 +30,9 @@ PY
 root="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$root"
 mission="real_fly/stage2_offline/data/$run/tasks/$task/planning/mission_plan.json"
+if [[ -s "real_fly/stage2_offline/data/$run/tasks/$task/departure_guide_report.json" ]]; then
+  departure_validation=true
+fi
 map="real_fly/stage2_offline/data/$run/fastlio_complete/handheld_map_${run}_complete.pcd"
 dest="real_fly/stage2_runtime/missions/$run/$task"
 [[ -s "$mission" && -s "$map" ]] || { echo "Missing mission/map" >&2; exit 2; }
@@ -60,6 +64,7 @@ sudo docker run --rm --network none --user "$(id -u):$(id -g)" \
   -e MAP="/workspace/project/$map" -e COLLISION_CLEARANCE="$clearance" \
   -e MINCO_PATH_SOURCE="$path_source" -e MINCO_SPEED_MPS="$speed" \
   -e MINCO_MAX_YAW_RATE="$max_yaw_rate" \
+  -e DEPARTURE_VALIDATION="$departure_validation" \
   pre-map-vln/real-minco:local bash -c '
 set -eo pipefail
 source /opt/ros/noetic/setup.bash
@@ -88,17 +93,28 @@ timeout 900 rosrun mission_planner full_smooth_mission \
   _narrow_corridor/margin:=0.03 _narrow_corridor/side_vertical_window:=0.35 \
   _narrow_corridor/side_longitudinal_window:=0.35 _narrow_corridor/max_plane_violation:=0.005 \
   _vertical_guide_floor/enabled:=true _vertical_guide_floor/max_violation:=0.002 \
+  _guide_tracking/enabled:=true _guide_tracking/horizontal_half_width:=0.05 \
+  _guide_tracking/monotonic_vertical_band:=0.01 \
+  _guide_tracking/max_plane_violation:=0.005 \
   _yaw_velocity_threshold:=0.08 _yaw_lookahead_time:=0.40 \
   _yaw_start_blend_duration:=1.5 _yaw_terminal_blend_duration:=2.0 \
   > "$JOB/generation.log" 2>&1
 test -s "$JOB/final_minco.txt"
 test -s "$JOB/narrow_corridor_report.json"
+if [[ "$DEPARTURE_VALIDATION" == true ]]; then
+  python3 /workspace/project/real_fly/stage2_offline/scripts/verify_departure_geometry.py \
+    --artifact "$JOB/final_minco.txt" --map "$MAP" \
+    --output "$JOB/departure_geometry_report.json"
+fi
 python3 /workspace/project/real_fly/stage2_runtime/scripts/saved_minco_artifact.py seal \
   --directory "$JOB" --map "$MAP" --mission "$JOB/source_mission.json" --clearance "$COLLISION_CLEARANCE"
 '
 for name in final_minco.txt collision.pcd planner.yaml full_smooth_route.txt final_minco_preview.json narrow_corridor_report.json; do
   cp "$job/$name" "$dest/$name"
 done
+if [[ -s "$job/departure_geometry_report.json" ]]; then
+  cp "$job/departure_geometry_report.json" "$dest/departure_geometry_report.json"
+fi
 cp "$job/final_minco_manifest.json" "$dest/final_minco_manifest.json"
 echo "Final MINCO ready: $root/$dest/final_minco.txt"
 echo "Generation log: $root/$job/generation.log"
