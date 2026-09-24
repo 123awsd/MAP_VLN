@@ -1,4 +1,4 @@
-"""Qwen3-VL task-terminal image verification with strict JSON and cost audit."""
+"""Qwen task-terminal image verification with strict JSON and cost audit."""
 
 from __future__ import annotations
 
@@ -17,10 +17,10 @@ from .io_utils import atomic_json, load_json
 
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-MODEL = "qwen3-vl-plus"
+MODEL = "qwen3.8-flash"
 PROMPT_VERSION = "stage4-terminal-verifier-v1"
-INPUT_CNY_PER_MILLION = 1.0
-OUTPUT_CNY_PER_MILLION = 10.0
+INPUT_CNY_PER_MILLION = 0.8
+OUTPUT_CNY_PER_MILLION = 2.7
 
 
 SYSTEM_PROMPT = """You verify whether an indoor robot has visually completed an observation task.

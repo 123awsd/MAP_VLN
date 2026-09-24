@@ -370,9 +370,24 @@ def matching_objects(
             # identify which physical anchor the user meant (e.g. the bed near
             # the curtain while looking for an unmapped pillow). Do not admit
             # every same-label instance into the initial location pool.
-            return ranked[:1] if target_is_search_anchor else ranked[:12]
+            matches = (
+                ranked[:1]
+                if target_is_search_anchor
+                or task["target"].get("reference_binding") == "nearest"
+                else ranked[:12]
+            )
+            instance_index = task["target"].get("instance_index")
+            if instance_index is not None:
+                return matches[int(instance_index):int(instance_index) + 1]
+            return matches
     matches = room_matches if prefer_room and room_matches else all_matches
-    return sorted(matches, key=lambda item: float(item[1].get("probability", 0.0)), reverse=True)[:12]
+    matches = sorted(
+        matches, key=lambda item: (-float(item[1].get("probability", 0.0)), str(item[1]["id"]))
+    )[:12]
+    instance_index = task["target"].get("instance_index")
+    if instance_index is not None:
+        return matches[int(instance_index):int(instance_index) + 1]
+    return matches
 
 
 def generate_candidates(

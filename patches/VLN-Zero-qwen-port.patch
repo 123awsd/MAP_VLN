@@ -26,7 +26,7 @@ index b91758e..7b46c0f 100644
 +    record = {
 +        "timestamp_unix": time.time(),
 +        "method": "vln_zero_qwen_port",
-+        "model": os.getenv("VLN_ZERO_MODEL", "gpt-4.1"),
++        "model": "qwen3.8-flash",
 +        "prompt_tokens": int(getattr(usage, "prompt_tokens", 0) or 0),
 +        "completion_tokens": int(getattr(usage, "completion_tokens", 0) or 0),
 +        "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
@@ -54,7 +54,7 @@ index b91758e..7b46c0f 100644
                  if (use_cached_action == False):
                      response = self.client.chat.completions.create(
 -                        model="gpt-4.1",
-+                        model=os.getenv("VLN_ZERO_MODEL", "gpt-4.1"),
++                        model="qwen3.8-flash",
                          messages=messages,
                          max_tokens=300,
                          temperature=0.3,
@@ -109,7 +109,7 @@ index 0a58b5f..711913e 100644
 +    record = {
 +        "timestamp_unix": time.time(),
 +        "method": "vln_zero_qwen_port",
-+        "model": os.getenv("VLN_ZERO_MODEL", "gpt-4.1"),
++        "model": "qwen3.8-flash",
 +        "prompt_tokens": int(getattr(usage, "prompt_tokens", 0) or 0),
 +        "completion_tokens": int(getattr(usage, "completion_tokens", 0) or 0),
 +        "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
@@ -137,7 +137,7 @@ index 0a58b5f..711913e 100644
                  if (use_cached_action == False):
                      response = self.client.chat.completions.create(
 -                        model="gpt-4.1",
-+                        model=os.getenv("VLN_ZERO_MODEL", "gpt-4.1"),
++                        model="qwen3.8-flash",
                          messages=messages,
                          max_tokens=300,
                          temperature=0.3,

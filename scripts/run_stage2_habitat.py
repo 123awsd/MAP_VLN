@@ -163,6 +163,10 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--step-m", type=float, default=0.12)
     parser.add_argument(
+        "--start-pose-falcon", default="[0.0, 0.0, 1.0, 0.0]",
+        help="JSON [x,y,z,yaw] pose in the frozen FALCON map frame",
+    )
+    parser.add_argument(
         "--execution-hz", type=float, default=5.0,
         help="nominal trajectory sample rate used to enforce the simulated yaw rate",
     )
@@ -328,7 +332,9 @@ def main() -> None:
     if args.verification_mode in {"semantic", "hybrid"}:
         agent_cfg.sensor_specifications.append(sensor("semantic", habitat_sim.SensorType.SEMANTIC))
 
-    current_f = [0.0, 0.0, 1.0, 0.0]
+    current_f = [float(value) for value in json.loads(args.start_pose_falcon)]
+    if len(current_f) != 4:
+        parser.error("--start-pose-falcon must contain exactly four values")
     trajectory = [list(current_f)]
     observations_log = []
     map_updates = []
@@ -393,8 +399,10 @@ def main() -> None:
             sim.pathfinder.seed(7)
             initial_agent_h = np.asarray(sim.pathfinder.get_random_navigable_point(), dtype=np.float64)
         initial_state = habitat_sim.AgentState()
-        initial_state.position = initial_agent_h
-        initial_state.rotation = quat_from_angle_axis(0.0, np.asarray([0.0, 1.0, 0.0]))
+        initial_state.position = falcon_to_agent_h(initial_agent_h, current_f)
+        initial_state.rotation = quat_from_angle_axis(
+            current_f[3], np.asarray([0.0, 1.0, 0.0])
+        )
         agent = sim.initialize_agent(0, initial_state)
 
         def record_motion_frame(pose_f, observations) -> None:
@@ -786,6 +794,18 @@ def main() -> None:
             ) if action in {"inspect", "find", "observe"} else {
                 "retry": False, "attempt_index": 1, "reason": "non_visual_action",
             }
+            if (
+                tasks[visit["task_id"]].get("condition_observation_policy")
+                == "first_viewpoint"
+            ):
+                # Authored benchmark branches explicitly depend on the first
+                # observation position.  Do not silently turn that condition
+                # into an exhaustive multi-view search before deciding it.
+                recovery_decision.update({
+                    "retry": False,
+                    "reason": "first_viewpoint_condition_decided",
+                    "condition_observation_policy": "first_viewpoint",
+                })
             search_activated = False
             if (
                 (semantic_recovery_planner is not None or offline_recovery_plan is not None)
@@ -998,7 +1018,7 @@ def main() -> None:
             "task_ids": sorted(semantic_recovery_task_ids),
             "planner": (
                 "offline_fixture" if offline_recovery_plan is not None
-                else "qwen3.7-max-2026-06-08" if semantic_recovery_enabled else None
+                else "qwen3.8-flash" if semantic_recovery_enabled else None
             ),
             "events": semantic_recovery_events,
             "plans_by_task": recovery_plans,

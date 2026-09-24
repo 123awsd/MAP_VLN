@@ -16,10 +16,10 @@ from .semantic_region_search import canonical_region_type, infer_region_type, ma
 
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-MODEL = "qwen3.7-max-2026-06-08"
+MODEL = "qwen3.8-flash"
 PROMPT_VERSION = "semantic-recovery-v5-canonical-observation-regions"
-INPUT_CNY_PER_MILLION = 2.0
-OUTPUT_CNY_PER_MILLION = 8.0
+INPUT_CNY_PER_MILLION = 0.8
+OUTPUT_CNY_PER_MILLION = 2.7
 RANK_PENALTY = {"high": 0.0, "medium": 0.6, "low": 1.2}
 SEMANTIC_REGION_TYPES = {
     "support_surface", "below_region", "surrounding_region", "instance_region",

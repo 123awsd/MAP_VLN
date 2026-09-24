@@ -125,7 +125,26 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
             "reference": reference,
             "reference_secondary": reference_secondary,
             "references": references,
+            # Benchmark task semantics.  These fields select among repeated
+            # same-category instances without exposing evaluator-private IDs.
+            "instance_index": (
+                int(target["instance_index"])
+                if target.get("instance_index") is not None else None
+            ),
+            "distinct_group": _optional_text(target.get("distinct_group")),
+            "reference_binding": str(
+                target.get("reference_binding", "all")
+            ).strip().lower(),
         }
+        _require(
+            normalized_target["reference_binding"] in {"all", "nearest"},
+            f"task {task_id} target reference_binding must be all or nearest",
+        )
+        if normalized_target["instance_index"] is not None:
+            _require(
+                normalized_target["instance_index"] >= 0,
+                f"task {task_id} target instance_index must be non-negative",
+            )
         if normalized_target["floor_id"] is not None:
             _require(
                 normalized_target["floor_id"] >= 1,
@@ -205,6 +224,15 @@ def normalize_and_validate_task_graph(value: dict[str, Any], instruction: str = 
         task["prerequisites"] = prerequisites
         task["active_initially"] = bool(task.get("active_initially", True))
         task["success_outcome"] = str(task.get("success_outcome", "found" if action in {"find", "inspect"} else "done"))
+        task["condition_observation_policy"] = str(
+            task.get("condition_observation_policy", "terminal_search_outcome")
+        ).strip().lower()
+        _require(
+            task["condition_observation_policy"] in {
+                "terminal_search_outcome", "first_viewpoint",
+            },
+            f"unsupported condition observation policy in {task_id}",
+        )
         search_policy = task.get("search_policy") or {}
         _require(isinstance(search_policy, dict), f"task {task_id} search_policy must be an object")
         search_mode = str(search_policy.get("mode", "fixed")).strip().lower()

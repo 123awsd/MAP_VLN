@@ -8,7 +8,7 @@ cd "$open_nav"
 exec "$project_root/scripts/run_vlnce_legacy.sh" open-nav run.py \
   --exp_name pre_map_vln_smoke \
   --exp-config run_OpenNav.yaml \
-  --llm qwen3.7-max-2026-06-08 \
+  --llm qwen3.8-flash \
   EVAL.EPISODE_COUNT 1 \
   TASK_CONFIG.DATASET.EPISODES_TO_LOAD 1 \
   RESULTS_DIR "$project_root/outputs/baselines/opennav/"

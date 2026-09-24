@@ -16,10 +16,10 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-MODEL = "qwen3.7-max-2026-06-08"
+MODEL = "qwen3.8-flash"
 PROMPT_VERSION = "stage1-structure-policy-v2"
-INPUT_CNY_PER_MILLION = 2.0
-OUTPUT_CNY_PER_MILLION = 8.0
+INPUT_CNY_PER_MILLION = 0.8
+OUTPUT_CNY_PER_MILLION = 2.7
 ROLES = {"structural_boundary", "opening_boundary", "interior_object", "fixed_fixture", "uncertain"}
 
 

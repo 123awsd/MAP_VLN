@@ -104,7 +104,7 @@ third_party/boxer/ckpts/
 .envs/habitat/bin/python scripts/configure_secrets.py --qwen-stdin
 ~~~
 
-Qwen 调用默认使用 qwen3.7-max-2026-06-08，结果和估算费用写入 API ledger；密钥不要写入命令记录、README、日志或 Git。
+Qwen 调用统一使用 qwen3.8-flash，结果和估算费用写入 API ledger；密钥不要写入命令记录、README、日志或 Git。
 
 ## 3. Python 环境
 

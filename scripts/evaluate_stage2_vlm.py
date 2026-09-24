@@ -47,7 +47,7 @@ def main() -> None:
     report = {
         "format": "pre_map_vln.stage2_vlm_perception.v1",
         "status": "passed",
-        "model": "qwen3-vl-plus", "record_count": len(records),
+        "model": "qwen3.8-flash", "record_count": len(records),
         "agreement_count": agreement, "agreement_rate": agreement / max(1, len(records)),
         "records": records,
         "note": "Semantic decisions include the controlled television threshold; disagreements require evidence review.",
