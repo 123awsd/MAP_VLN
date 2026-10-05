@@ -1,0 +1,66 @@
+Panels:
+- Class: rviz/Displays
+  Help Height: 70
+  Name: Displays
+  Property Tree Widget:
+    Expanded:
+    - /Animated final trajectory1
+    Splitter Ratio: 0.5
+  Tree Height: 363
+- Class: rviz/Views
+  Expanded:
+  - /Current View1
+  Name: Views
+  Splitter Ratio: 0.5
+Preferences:
+  PromptSaveOnExit: false
+Toolbars:
+  toolButtonStyle: 2
+Visualization Manager:
+  Class: ''
+  Displays:
+  - Class: rviz/MarkerArray
+    Enabled: true
+    Value: true
+    Name: Approved room map
+    Marker Topic: /lab_rooms/map
+    Queue Size: 100
+  Enabled: true
+  Global Options:
+    Background Color: 35; 39; 45
+    Default Light: true
+    Fixed Frame: map
+    Frame Rate: 30
+  Name: root
+  Tools:
+  - Class: rviz/MoveCamera
+  - Class: rviz/Interact
+    Hide Inactive Objects: true
+  - Class: rviz/Select
+  - Class: rviz/PublishPoint
+    Single click: true
+    Topic: /clicked_point
+  Value: true
+  Views:
+    Current:
+      Class: rviz/TopDownOrtho
+      Name: Current View
+      Target Frame: map
+      Scale: 19
+      Angle: 0
+      X: -7
+      Y: 5
+      Near Clip Distance: 0.01
+    Saved: null
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 900
+  Hide Left Dock: false
+  Hide Right Dock: false
+  QMainWindow State: 000000ff00000000fd0000000100000000000001560000032efc0200000002fb000000100044006900730070006c006100790073010000003b000001ec000000c700fffffffb0000000a00560069006500770073010000022d0000013c000000a000ffffff0000041c0000032e00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Views:
+    collapsed: false
+  Width: 1400
+  X: 100
+  Y: 80
