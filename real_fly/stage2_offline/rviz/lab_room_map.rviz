@@ -46,10 +46,10 @@ Visualization Manager:
       Class: rviz/TopDownOrtho
       Name: Current View
       Target Frame: map
-      Scale: 19
+      Scale: 13
       Angle: 0
-      X: -7
-      Y: 5
+      X: -11
+      Y: -4.5
       Near Clip Distance: 0.01
     Saved: null
 Window Geometry:
