@@ -25,6 +25,8 @@ LABEL_ZH = {
     "coffee table": "茶几", "desk": "书桌", "cabinet": "柜子",
     "television": "电视", "television stand": "电视柜", "refrigerator": "冰箱",
     "microwave": "微波炉", "pot": "锅", "cup": "水杯", "bottle": "水瓶",
+    "shelf": "架子", "storage rack": "置物架", "ping pong table": "乒乓球桌",
+    "pool table": "台球桌",
     "toilet": "马桶", "sink": "洗手台", "toilet paper": "卫生纸",
     "laptop": "笔记本电脑", "mobile phone": "手机", "speaker": "音箱",
     "fire extinguisher": "灭火器", "dumbbell": "哑铃", "pool table": "台球桌",
@@ -36,7 +38,7 @@ def display_label(label):
     return original
 
 
-def read_binary_pcd(path, max_z=None):
+def read_binary_pcd(path, min_z=None, max_z=None):
     raw = path.read_bytes()
     marker = raw.find(b"DATA binary\n")
     if marker < 0:
@@ -61,7 +63,11 @@ def read_binary_pcd(path, max_z=None):
     for i in range(points):
         base = i * stride
         z = struct.unpack_from("<f", payload, base + offsets["z"])[0]
-        if max_z is not None and (not math.isfinite(z) or z > max_z):
+        if not math.isfinite(z):
+            continue
+        if min_z is not None and z < min_z:
+            continue
+        if max_z is not None and z > max_z:
             continue
         selected.append((
             struct.unpack_from("<f", payload, base + offsets["x"])[0],
@@ -98,11 +104,27 @@ def load_box_geometry(clusters_path, raw_targets_path, boxer_3d_path, min_observ
     """Attach one representative Boxer OBB geometry to each semantic cluster."""
     clusters = [item for item in json.loads(clusters_path.read_text())
                 if int(item["observations"]) >= min_observations]
-    raw = json.loads(raw_targets_path.read_text())
-    boxer_by_time = {}
+    raw_targets = json.loads(raw_targets_path.read_text())
+    # Fused Boxer output intentionally has time_ns=0, so it cannot be joined
+    # back to per-frame targets by timestamp.  Match each semantic cluster to
+    # the nearest same-label OBB in world coordinates instead.  This also works
+    # for the unfused per-frame CSV fallback and, unlike the old exact-time
+    # lookup, preserves each object's measured dimensions in RViz.
+    boxer_by_label = {}
     with boxer_3d_path.open(newline="", encoding="utf-8") as stream:
         for row in csv.DictReader(stream):
-            boxer_by_time.setdefault((int(row["time_ns"]), row["name"].strip().lower()), []).append(row)
+            label = row["name"].strip().lower()
+            boxer_by_label.setdefault(label, []).append(row)
+    # Clusters below the fusion threshold are intentionally absent from the
+    # fused CSV. Recover their measured OBB from the matching per-frame row
+    # instead of drawing an arbitrary fixed-size cube.
+    raw_boxer_path = boxer_3d_path.with_name("boxer_3dbbs.csv")
+    raw_boxer_by_time = {}
+    if raw_boxer_path != boxer_3d_path and raw_boxer_path.is_file():
+        with raw_boxer_path.open(newline="", encoding="utf-8") as stream:
+            for row in csv.DictReader(stream):
+                key = (int(row["time_ns"]), row["name"].strip().lower())
+                raw_boxer_by_time.setdefault(key, []).append(row)
     result = []
     for cluster in clusters:
         if "size_x_m" in cluster and "orientation_wxyz" in cluster:
@@ -115,19 +137,68 @@ def load_box_geometry(clusters_path, raw_targets_path, boxer_3d_path, min_observ
             }))
             continue
         center = (float(cluster["world_x_m"]), float(cluster["world_y_m"]), float(cluster["world_z_m"]))
-        nearby = sorted((item for item in raw if item["label"] == cluster["label"]),
-                        key=lambda item: sum((float(item[k]) - center[i]) ** 2
-                            for i, k in enumerate(("world_x_m", "world_y_m", "world_z_m"))))
-        representative = nearby[0] if nearby else None
-        geometry = None
-        if representative:
-            candidates = boxer_by_time.get((int(representative["time_ns"]), cluster["label"]), [])
-            if candidates:
-                geometry = min(candidates, key=lambda row: sum(
-                    (float(row[k]) - float(representative[rk])) ** 2
-                    for k, rk in zip(("tx_world_object", "ty_world_object", "tz_world_object"),
-                                     ("world_x_m", "world_y_m", "world_z_m"))))
+        candidates = boxer_by_label.get(str(cluster["label"]).strip().lower(), [])
+        geometry = min(candidates, key=lambda row: sum(
+            (float(row[key]) - center[index]) ** 2
+            for index, key in enumerate(
+                ("tx_world_object", "ty_world_object", "tz_world_object")))) if candidates else None
+        if geometry is None and raw_boxer_by_time:
+            label = str(cluster["label"]).strip().lower()
+            representative = min(
+                (item for item in raw_targets
+                 if str(item["label"]).strip().lower() == label),
+                key=lambda item: sum(
+                    (float(item[key]) - center[index]) ** 2
+                    for index, key in enumerate(
+                        ("world_x_m", "world_y_m", "world_z_m"))),
+                default=None,
+            )
+            if representative is not None:
+                frame_candidates = raw_boxer_by_time.get(
+                    (int(representative["time_ns"]), label), [])
+                if frame_candidates:
+                    geometry = min(frame_candidates, key=lambda row: sum(
+                        (float(row[box_key]) - float(representative[target_key])) ** 2
+                        for box_key, target_key in zip(
+                            ("tx_world_object", "ty_world_object", "tz_world_object"),
+                            ("world_x_m", "world_y_m", "world_z_m"))))
         result.append((cluster, geometry))
+    return result
+
+
+def load_scene_graph_boxes(scene_path, min_observations):
+    """Load stable, manually editable object IDs and their exact OBB geometry."""
+    document = json.loads(scene_path.read_text())
+    objects = [obj for room in document.get("rooms", [])
+               for obj in room.get("objects", [])]
+    objects.extend(document.get("unassigned_objects", []))
+    result = []
+    for obj in objects:
+        observations = int(obj.get("observation_count", 1))
+        if observations < min_observations:
+            continue
+        center = obj["center_xyz_m"]
+        size = obj["size_xyz_m"]
+        orientation = obj.get("orientation_wxyz", [1.0, 0.0, 0.0, 0.0])
+        item = {
+            "object_id": str(obj["id"]),
+            "label": str(obj["label"]),
+            "confidence_max": float(obj.get("probability", 0.0)),
+            "observations": observations,
+            "world_x_m": float(center[0]),
+            "world_y_m": float(center[1]),
+            "world_z_m": float(center[2]),
+        }
+        geometry = {
+            "qw_world_object": float(orientation[0]),
+            "qx_world_object": float(orientation[1]),
+            "qy_world_object": float(orientation[2]),
+            "qz_world_object": float(orientation[3]),
+            "scale_x": float(size[0]),
+            "scale_y": float(size[1]),
+            "scale_z": float(size[2]),
+        }
+        result.append((item, geometry))
     return result
 
 
@@ -138,6 +209,9 @@ def semantic_color(label):
 
 def add_observation_frustums(marker_array, mission, mission_path, frame):
     """Draw the selected candidate's nominal camera FoV at every visit."""
+    frustum_scale = float(os.environ.get("RVIZ_FRUSTUM_SCALE", "0.25"))
+    if not math.isfinite(frustum_scale) or not 0.05 <= frustum_scale <= 1.0:
+        raise RuntimeError("RVIZ_FRUSTUM_SCALE must be in [0.05, 1.0]")
     # The final saved-MINCO preview is intentionally stored in the NX runtime
     # mission directory, while candidates.json remains part of the immutable
     # Stage2 planning products. Do not infer the candidate file solely from
@@ -169,7 +243,7 @@ def add_observation_frustums(marker_array, mission, mission_path, frame):
         horizontal_fov = math.radians(float(candidate.get("horizontal_fov_deg", 90.0)))
         vertical_fov = math.radians(float(candidate.get("vertical_fov_deg", 70.0)))
         target_range = math.dist(origin, target)
-        depth = min(3.0, max(0.5, target_range))
+        depth = max(0.15, min(3.0, max(0.5, target_range)) * frustum_scale)
         half_width = depth * math.tan(horizontal_fov * 0.5)
         half_height = depth * math.tan(vertical_fov * 0.5)
         forward = [math.cos(yaw), math.sin(yaw), 0.0]
@@ -184,7 +258,7 @@ def add_observation_frustums(marker_array, mission, mission_path, frame):
         ]
         lines = [(origin, corner) for corner in corners]
         lines.extend((corners[i], corners[(i + 1) % 4]) for i in range(4))
-        lines.append((origin, target))
+        lines.append((origin, center))
 
         marker = Marker()
         marker.header.frame_id = frame
@@ -202,33 +276,97 @@ def add_observation_frustums(marker_array, mission, mission_path, frame):
         marker.points = [Point(x=a[0], y=a[1], z=a[2])
                          for line in lines for a in line]
         marker_array.markers.append(marker)
+
+        height = Marker()
+        height.header.frame_id = frame
+        height.ns = "observation_height_labels"
+        height.id = index
+        height.type = Marker.TEXT_VIEW_FACING
+        height.action = Marker.ADD
+        height.pose.position.x = origin[0]
+        height.pose.position.y = origin[1]
+        height.pose.position.z = origin[2] + 0.12
+        height.pose.orientation.w = 1.0
+        height.scale.z = 0.14
+        height.color.r = 1.0
+        height.color.g = 0.92
+        height.color.b = 0.30
+        height.color.a = 1.0
+        height.text = f"V{index + 1}  z={origin[2]:.2f} m"
+        height.lifetime = rospy.Duration(0)
+        marker_array.markers.append(height)
         count += 1
     return count
 
 
-def add_clearance_markers(marker_array, mission, voxel_snapshot, frame):
-    """Mark each segment's minimum-ESDF point and its nearest occupied voxel."""
-    if voxel_snapshot is None:
-        return 0
-    metadata_path = voxel_snapshot / "metadata.json"
-    arrays_path = voxel_snapshot / "voxel_map.npz"
-    if not metadata_path.is_file() or not arrays_path.is_file():
-        return 0
-    metadata = json.loads(metadata_path.read_text())
-    arrays = np.load(arrays_path)
-    esdf = arrays["esdf_zyx_m"]
-    raw_occupancy = arrays["raw_occupancy_zyx"]
-    origin = np.asarray(metadata["origin_xyz_m"], dtype=float)
-    resolution = float(metadata["resolution_m"])
-    threshold = float(metadata.get("minimum_esdf_distance_m", 0.0))
+def spatial_nearest_distance(points, bucket_size=1.0):
+    """Exact nearest distance using spatial buckets; no optional SciPy dependency."""
+    keys = np.floor(points / bucket_size).astype(np.int64)
+    unique, inverse = np.unique(keys, axis=0, return_inverse=True)
+    order = np.argsort(inverse)
+    groups = np.split(order, np.cumsum(np.bincount(inverse))[:-1])
+    buckets = {tuple(key): points[group] for key, group in zip(unique, groups)}
+    lower_key, upper_key = unique.min(axis=0), unique.max(axis=0)
 
-    # np.argwhere is z/y/x. Convert occupied voxel indices to world x/y/z
-    # centers once, then use the small local neighbourhood around each
-    # bottleneck for an exact nearest-voxel marker.
-    occupied_zyx = np.argwhere(raw_occupancy > 0)
-    occupied_xyz = origin + (occupied_zyx[:, ::-1].astype(float) + 0.5) * resolution
+    def query(point):
+        p = np.asarray(point, dtype=float)
+        key = np.floor(p / bucket_size).astype(np.int64)
+        limit = int(np.max(np.maximum(abs(key - lower_key), abs(key - upper_key)))) + 1
+        best = float("inf")
+        for radius in range(limit + 1):
+            for x in range(-radius, radius + 1):
+                for y in range(-radius, radius + 1):
+                    for z in range(-radius, radius + 1):
+                        if max(abs(x), abs(y), abs(z)) != radius:
+                            continue
+                        block = buckets.get(tuple(key + (x, y, z)))
+                        if block is not None:
+                            delta = block - p
+                            best = min(best, float(np.sqrt(np.einsum('ij,ij->i', delta, delta).min())))
+            # Any unvisited bucket is outside this axis-aligned search box.
+            boundary_distance = float(np.min(np.minimum(
+                p - (key - radius) * bucket_size,
+                (key + radius + 1) * bucket_size - p)))
+            if best <= boundary_distance:
+                return best
+        return best
+    return query
+
+
+def add_clearance_markers(marker_array, mission, voxel_snapshot, frame,
+                          collision_pcd=None, certified_threshold=None):
+    """Mark path clearance against the exact obstacle source used to plan it."""
+    use_collision = collision_pcd is not None and collision_pcd.is_file()
+    if use_collision:
+        occupied_xyz = np.asarray(read_binary_pcd(collision_pcd), dtype=float)[:, :3]
+        resolution = 0.10
+        threshold = float(certified_threshold)
+        source_label = "collision.pcd"
+    else:
+        if voxel_snapshot is None:
+            return 0
+        metadata_path = voxel_snapshot / "metadata.json"
+        arrays_path = voxel_snapshot / "voxel_map.npz"
+        if not metadata_path.is_file() or not arrays_path.is_file():
+            return 0
+        metadata = json.loads(metadata_path.read_text())
+        arrays = np.load(arrays_path)
+        esdf = arrays["esdf_zyx_m"]
+        raw_occupancy = arrays["raw_occupancy_zyx"]
+        origin = np.asarray(metadata["origin_xyz_m"], dtype=float)
+        resolution = float(metadata["resolution_m"])
+        threshold = float(metadata.get("minimum_esdf_distance_m", 0.0))
+        occupied_zyx = np.argwhere(raw_occupancy > 0)
+        occupied_xyz = origin + (occupied_zyx[:, ::-1].astype(float) + 0.5) * resolution
+        source_label = "voxel ESDF"
+
+    if not len(occupied_xyz):
+        return 0
+    nearest_distance = spatial_nearest_distance(occupied_xyz) if use_collision else None
 
     def clearance(point):
+        if use_collision:
+            return nearest_distance(point)
         index = np.floor((np.asarray(point, dtype=float) - origin) / resolution).astype(int)
         x, y, z = [int(value) for value in index]
         if z < 0 or y < 0 or x < 0 or z >= esdf.shape[0] or y >= esdf.shape[1] or x >= esdf.shape[2]:
@@ -274,7 +412,7 @@ def add_clearance_markers(marker_array, mission, voxel_snapshot, frame):
         label.pose.orientation.w = 1.0
         label.scale.z = 0.18
         label.color.r = label.color.g = label.color.b = label.color.a = 1.0
-        label.text = f"seg {segment_index + 1}: clearance={minimum:.2f}m"
+        label.text = f"MINCO {segment_index + 1}: {minimum:.2f} m ({source_label})"
         marker_array.markers.append(label)
 
         path_point = np.asarray(point, dtype=float)
@@ -487,14 +625,36 @@ def add_narrow_corridor_overlays(marker_array, mission, frame):
     return len(center_points.points)
 
 
-def publish_traversability(voxel_snapshot, frame, max_z=None):
+def horizontal_surface_mask(occupied):
+    """Detect broad, thin XY sheets while preserving vertically continuous walls."""
+    horizontal = np.zeros(occupied.shape, dtype=np.uint8)
+    for dy in range(-2, 3):
+        for dx in range(-2, 3):
+            source_y = slice(max(0, -dy), occupied.shape[1] - max(0, dy))
+            target_y = slice(max(0, dy), occupied.shape[1] - max(0, -dy))
+            source_x = slice(max(0, -dx), occupied.shape[2] - max(0, dx))
+            target_x = slice(max(0, dx), occupied.shape[2] - max(0, -dx))
+            horizontal[:, target_y, target_x] += occupied[:, source_y, source_x]
+
+    vertical = np.zeros(occupied.shape, dtype=np.uint8)
+    for dz in range(-2, 3):
+        source_z = slice(max(0, -dz), occupied.shape[0] - max(0, dz))
+        target_z = slice(max(0, dz), occupied.shape[0] - max(0, -dz))
+        vertical[target_z] += occupied[source_z]
+
+    # At 0.20 m resolution this means at least 8 occupied cells in a local
+    # 1 m x 1 m patch, but no more than two occupied layers over 1 m vertically.
+    return occupied & (horizontal >= 8) & (vertical <= 2)
+
+
+def publish_traversability(voxel_snapshot, frame, min_z=None, max_z=None):
     """Publish filtered occupancy and traversability voxel centers for RViz."""
     if voxel_snapshot is None:
-        return [], 0, 0, 0, 0.0
+        return [], 0, 0, 0, 0.0, 0
     metadata_path = voxel_snapshot / "metadata.json"
     arrays_path = voxel_snapshot / "voxel_map.npz"
     if not metadata_path.is_file() or not arrays_path.is_file():
-        return [], 0, 0, 0, 0.0
+        return [], 0, 0, 0, 0.0, 0
 
     metadata = json.loads(metadata_path.read_text())
     arrays = np.load(arrays_path)
@@ -506,6 +666,8 @@ def publish_traversability(voxel_snapshot, frame, max_z=None):
 
     observed_free = raw == 0
     filtered_occupied = raw > 0
+    hidden_horizontal = horizontal_surface_mask(filtered_occupied)
+    displayed_occupied = filtered_occupied & ~hidden_horizontal
     inflated_free = observed_free & (esdf + 1e-6 >= threshold)
     inflation_excluded = observed_free & ~inflated_free
     header = Header(frame_id=frame, stamp=rospy.Time.now())
@@ -516,6 +678,8 @@ def publish_traversability(voxel_snapshot, frame, max_z=None):
         zyx = np.argwhere(mask)
         xyz = zyx[:, ::-1].astype(np.float32)
         xyz = origin + (xyz + 0.5) * resolution
+        if min_z is not None:
+            xyz = xyz[xyz[:, 2] >= min_z]
         if max_z is not None:
             xyz = xyz[xyz[:, 2] <= max_z]
         message = point_cloud2.create_cloud_xyz32(header, xyz)
@@ -524,10 +688,17 @@ def publish_traversability(voxel_snapshot, frame, max_z=None):
         publishers.append(publisher)
         return len(xyz)
 
-    occupied_count = publish_mask(filtered_occupied, "/drone_room/filtered_occupied")
+    occupied_count = publish_mask(displayed_occupied, "/drone_room/filtered_occupied")
     free_count = publish_mask(inflated_free, "/drone_room/inflated_free")
     excluded_count = publish_mask(inflation_excluded, "/drone_room/inflation_excluded")
-    return publishers, occupied_count, free_count, excluded_count, threshold
+    z_centers = origin[2] + (np.arange(raw.shape[0]) + 0.5) * resolution
+    visible_z = np.ones(raw.shape[0], dtype=bool)
+    if min_z is not None:
+        visible_z &= z_centers >= min_z
+    if max_z is not None:
+        visible_z &= z_centers <= max_z
+    return (publishers, occupied_count, free_count, excluded_count, threshold,
+            int(np.count_nonzero(hidden_horizontal[visible_z])))
 
 
 def setup_clicked_point_display(frame):
@@ -582,9 +753,10 @@ def main():
     map_path, clusters_path, raw_targets_path, boxer_3d_path, trajectory_path, mission_path = map(Path, sys.argv[1:7])
     min_observations = int(sys.argv[7])
     voxel_snapshot = Path(sys.argv[8]) if len(sys.argv) == 9 else None
+    map_min_z = float(os.environ.get("RVIZ_MIN_Z", "0.2"))
     map_max_z = float(os.environ.get("RVIZ_MAX_Z", "2.0"))
-    if not math.isfinite(map_max_z):
-        raise SystemExit("RVIZ_MAX_Z must be finite")
+    if not math.isfinite(map_min_z) or not math.isfinite(map_max_z) or map_min_z > map_max_z:
+        raise SystemExit("RVIZ_MIN_Z/RVIZ_MAX_Z must be finite and ordered")
     rospy.init_node("drone_room_offline_visualization", anonymous=False)
     frame = "map"
 
@@ -592,22 +764,45 @@ def main():
               PointField("z", 8, PointField.FLOAT32, 1),
               PointField("intensity", 12, PointField.FLOAT32, 1)]
     cloud_header = Header(frame_id=frame, stamp=rospy.Time.now())
-    map_points = read_binary_pcd(map_path, max_z=map_max_z)
+    map_points = read_binary_pcd(map_path, min_z=map_min_z, max_z=map_max_z)
     cloud = point_cloud2.create_cloud(cloud_header, fields, map_points)
     cloud_pub = rospy.Publisher("/drone_room/map", PointCloud2, queue_size=1, latch=True)
     cloud_pub.publish(cloud)
-    traversability_pubs, occupied_count, free_count, excluded_count, inflation_threshold = (
-        publish_traversability(voxel_snapshot, frame, max_z=map_max_z)
+    (traversability_pubs, occupied_count, free_count, excluded_count,
+     inflation_threshold, hidden_horizontal_count) = (
+        publish_traversability(voxel_snapshot, frame, min_z=map_min_z, max_z=map_max_z)
     )
     clicked_point_pub, clicked_point_sub = setup_clicked_point_display(frame)
 
     semantic_markers = MarkerArray()
-    boxes = load_box_geometry(clusters_path, raw_targets_path, boxer_3d_path, min_observations)
-    for item, geometry in boxes:
+    scene_graph_path = Path(os.environ.get("RVIZ_SCENE_GRAPH", ""))
+    if scene_graph_path.is_file():
+        boxes = load_scene_graph_boxes(scene_graph_path, min_observations)
+        rospy.loginfo("Displaying editable scene objects from %s", scene_graph_path)
+    else:
+        boxes = load_box_geometry(clusters_path, raw_targets_path, boxer_3d_path, min_observations)
+    if os.environ.get("RVIZ_SHOW_BOXES", "1") == "0":
+        boxes = []
+    elif os.environ.get("RVIZ_TASK_ONLY", "0") == "1":
+        selected_mission = json.loads(mission_path.read_text())
+        object_ids = {str(v["object_id"]) for v in selected_mission.get("visits", []) if "object_id" in v}
+        boxes = [(item, geometry) for item, geometry in boxes
+                 if item.get("object_id") in object_ids]
+    fallback_box_count = sum(geometry is None for _, geometry in boxes)
+    if fallback_box_count:
+        rospy.logwarn(
+            "%d/%d semantic boxes have no same-label Boxer geometry; "
+            "only those boxes use the 0.30 m visualization fallback",
+            fallback_box_count, len(boxes),
+        )
+    else:
+        rospy.loginfo("Matched measured Boxer dimensions for all %d semantic boxes", len(boxes))
+    interactive_edit = os.environ.get("RVIZ_INTERACTIVE_EDIT", "0") == "1"
+    for marker_index, (item, geometry) in enumerate(boxes if not interactive_edit else []):
         marker = Marker()
         marker.header.frame_id = frame
         marker.ns = "semantic_boxes"
-        marker.id = int(item["cluster_id"])
+        marker.id = marker_index
         marker.type = Marker.CUBE
         marker.action = Marker.ADD
         marker.pose.position.x = float(item["world_x_m"])
@@ -631,7 +826,7 @@ def main():
         text = Marker()
         text.header.frame_id = frame
         text.ns = "semantic_labels"
-        text.id = int(item["cluster_id"])
+        text.id = marker_index
         text.type = Marker.TEXT_VIEW_FACING
         text.action = Marker.ADD
         text.pose.position.x = marker.pose.position.x
@@ -641,7 +836,10 @@ def main():
         text.scale.z = 0.18
         text.color.r = text.color.g = text.color.b = 1.0
         text.color.a = 1.0
-        text.text = display_label(item["label"])
+        object_id = str(item.get("object_id", f"C{marker_index:03d}"))
+        short_id = object_id.rsplit("_", 1)[-1]
+        confidence = float(item.get("confidence_max", 0.0))
+        text.text = f"[{short_id}] {display_label(item['label'])} {confidence:.2f}"
         semantic_markers.markers.append(text)
     trajectory_pub = load_path(trajectory_path, "/drone_room/trajectory")
     actual_trajectory_pub = None
@@ -656,16 +854,29 @@ def main():
     mission = json.loads(mission_path.read_text())
     planning_markers = MarkerArray()
     frustum_count = add_observation_frustums(planning_markers, mission, mission_path, frame)
-    clearance_count = add_clearance_markers(planning_markers, mission, voxel_snapshot, frame)
     path_overlay_counts = add_planning_path_overlays(planning_markers, mission, frame)
+    planning_marker_pub = rospy.Publisher(
+        "/drone_room/planning_markers", MarkerArray, queue_size=1, latch=True
+    )
+    planning_marker_pub.publish(planning_markers)
+    rospy.loginfo("Published trajectory overlays before clearance diagnostics: %s", path_overlay_counts)
+    collision_pcd_value = os.environ.get("RVIZ_COLLISION_PCD", "").strip()
+    collision_pcd = Path(collision_pcd_value) if collision_pcd_value else None
+    collision_clearance_value = os.environ.get("RVIZ_COLLISION_CLEARANCE", "").strip()
+    collision_clearance = float(collision_clearance_value) if collision_clearance_value else None
+    clearance_count = add_clearance_markers(
+        planning_markers, mission, voxel_snapshot, frame,
+        collision_pcd=collision_pcd,
+        certified_threshold=collision_clearance,
+    )
     narrow_count = add_narrow_corridor_overlays(planning_markers, mission, frame)
     semantic_marker_pub = rospy.Publisher(
         "/drone_room/semantic_markers", MarkerArray, queue_size=1, latch=True
     )
-    planning_marker_pub = rospy.Publisher(
-        "/drone_room/planning_markers", MarkerArray, queue_size=1, latch=True
-    )
     semantic_marker_pub.publish(semantic_markers)
+    if os.environ.get("RVIZ_TASK_ONLY", "0") == "1":
+        planning_markers.markers = [m for m in planning_markers.markers
+                                   if m.ns == "final_minco_path"]
     planning_marker_pub.publish(planning_markers)
 
     plan = RosPath()
@@ -681,11 +892,11 @@ def main():
             plan.poses.append(pose)
     plan_pub = rospy.Publisher("/drone_room/planned_path", RosPath, queue_size=1, latch=True)
     plan_pub.publish(plan)
-    rospy.loginfo("Published map (%d points at world z<=%.2fm), filtered-occupied=%d, inflated-free=%d, inflation-excluded=%d "
+    rospy.loginfo("Published map (%d points at %.2fm<=world z<=%.2fm), structural-occupied=%d, hidden-horizontal=%d, inflated-free=%d, inflation-excluded=%d "
                   "(minimum clearance %.2fm), %d semantic 3D boxes, %d observation frustums, "
                   "%d clearance markers, path overlays=%s, narrow constraints=%d, actual-flight=%s, trajectory and validated plan (%d poses)",
-                  len(cloud.data) // cloud.point_step, map_max_z,
-                  occupied_count, free_count, excluded_count,
+                  len(cloud.data) // cloud.point_step, map_min_z, map_max_z,
+                  occupied_count, hidden_horizontal_count, free_count, excluded_count,
                   inflation_threshold, len(boxes), frustum_count,
                   clearance_count, path_overlay_counts, narrow_count,
                   "loaded" if actual_trajectory_pub is not None else "disabled",
