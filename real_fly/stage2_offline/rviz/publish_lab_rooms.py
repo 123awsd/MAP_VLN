@@ -37,31 +37,10 @@ for i, room in enumerate(scene['rooms']):
     fill.points=[Point(x=float(x),y=float(y),z=-.02) for x,y in triangulate(polygon)]
     m=marker('room_boundary',Marker.LINE_STRIP,col); m.scale.x=.07
     m.points=[Point(x=float(x),y=float(y),z=0) for x,y in polygon+[polygon[0]]]
-    label=marker('room_name',Marker.TEXT_VIEW_FACING,col); label.scale.z=.7
+    label=marker('room_name',Marker.TEXT_VIEW_FACING,col); label.scale.z=1.0
     x,y=room.get('centroid_xy_m',[sum(p[0] for p in polygon)/len(polygon),sum(p[1] for p in polygon)/len(polygon)])
     label.pose.position.x=x; label.pose.position.y=y; label.pose.position.z=.1
     label.text=room.get('name',room['id']).replace('_',' ')
-# Adjacency is a schematic link, not a measured door or flight passage.
-rooms={r['id']:r for r in scene['rooms']}
-links=set()
-def boundary_samples(poly):
-    return [(a[0]+(b[0]-a[0])*t/80,a[1]+(b[1]-a[1])*t/80)
-            for a,b in zip(poly,poly[1:]+poly[:1]) for t in range(81)]
-for room in scene['rooms']:
-    for adjacent in room.get('adjacent_room_ids',[]):
-        key=tuple(sorted([room['id'],adjacent]))
-        if key in links or adjacent not in rooms: continue
-        links.add(key)
-        a,b=min(((a,b) for a in boundary_samples(room['polygon_xy_m'])
-                 for b in boundary_samples(rooms[adjacent]['polygon_xy_m'])),
-                key=lambda ab:(ab[0][0]-ab[1][0])**2+(ab[0][1]-ab[1][1])**2)
-        # Make the encoded adjacency visible across segmentation gaps.
-        m=marker('room_adjacency_schematic',Marker.LINE_LIST,(.9,.9,.9)); m.scale.x=.22
-        m.points=[Point(x=x,y=y,z=.04) for x,y in [a,b]]
-        for x,y in [a,b]:
-            dot=marker('room_adjacency_endpoint',Marker.SPHERE,(.9,.9,.9))
-            dot.pose.position.x=x;dot.pose.position.y=y;dot.pose.position.z=.04
-            dot.scale.x=dot.scale.y=.3;dot.scale.z=.05
 seen=set()
 for visit in mission.get('visits',[]):
     task=visit.get('task_id')
