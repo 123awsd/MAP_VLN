@@ -1,0 +1,20 @@
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+@@ -1044,1 +1044,6 @@
+         ros::param::param("/exploration_manager/preview_recovery_memory", recovery_memory, false);
++        bool preview_height_filter = false;
++        ros::param::param("/exploration_manager/preview_tracking_recovery", preview_height_filter, false);
++        const auto valid_recovery_height = [&](const Position &target) {
++          return !preview_height_filter || (target.z() >= 0.8 && target.z() <= 1.5);
++        };
+@@ -1060,1 +1065,3 @@
+-          if (committed && (committed_target - pos).norm() > 0.6 && now < committed_until) {
++          if (committed && valid_recovery_height(committed_target) &&
++              !isTemporarilyBlocked(committed_target) &&
++              (committed_target - pos).norm() > 0.6 && now < committed_until) {
+@@ -1093,1 +1100,1 @@
+-          if (!center.allFinite() || (center - pos).norm() < 0.75 ||
++          if (!center.allFinite() || !valid_recovery_height(center) || (center - pos).norm() < 0.75 ||
+@@ -1112,1 +1119,1 @@
+-            if (!historical.allFinite() || (historical - pos).norm() < 1.5 ||
++            if (!historical.allFinite() || !valid_recovery_height(historical) || (historical - pos).norm() < 1.5 ||

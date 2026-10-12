@@ -1,0 +1,23 @@
+--- a/falcon_planner/exploration_utils/src/perception_utils/perception_utils.cpp
++++ b/falcon_planner/exploration_utils/src/perception_utils/perception_utils.cpp
+@@ -19,6 +19,8 @@
+     fov_type_ = PINHOLE;
+   } else if (fov_type_str == "omni_lidar") {
+     fov_type_ = OMNI_LIDAR;
++    nh.param("/perception_utils/lidar_top_angle", top_angle_, top_angle_);
++    nh.param("/perception_utils/lidar_bottom_angle", bottom_angle_, bottom_angle_);
+   } else {
+     ROS_ERROR("[PerceptionUtils] Unknown FOV type: %s", fov_type_str.c_str());
+   }
+@@ -74,8 +76,9 @@
+     // Keep the historical member name for compatibility with the evaluator.
+     cam_fov_voxels_.clear();
+     for (double azimuth = -M_PI; azimuth < M_PI; azimuth += M_PI / 90.0) {
+-      for (int j = 0; j <= 4; ++j) {
+-        const double elevation = -bottom_angle_ + (top_angle_ + bottom_angle_) * j / 4.0;
++      const int vertical_steps = std::max(1, int(std::ceil((top_angle_ + bottom_angle_) / (4.0 * M_PI / 180.0))));
++      for (int j = 0; j <= vertical_steps; ++j) {
++        const double elevation = -bottom_angle_ + (top_angle_ + bottom_angle_) * j / vertical_steps;
+         cam_fov_voxels_.push_back(max_dist_ * Vector3d(
+             cos(elevation) * cos(azimuth), cos(elevation) * sin(azimuth), sin(elevation)));
+       }

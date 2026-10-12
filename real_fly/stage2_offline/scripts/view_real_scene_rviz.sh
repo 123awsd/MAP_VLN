@@ -13,6 +13,7 @@ image="pre-map-vln/falcon-noetic:local"
 run_id="${1:-}"
 min_observations="${2:-1}"
 task_id="${3:-}"
+map_min_z="${RVIZ_MIN_Z:-0.2}"
 map_max_z="${RVIZ_MAX_Z:-2.0}"
 flight_bag="${RVIZ_FLIGHT_BAG:-}"
 flight_topic="${RVIZ_FLIGHT_TOPIC:-/Odometry}"
@@ -30,6 +31,10 @@ map_pcd="${RVIZ_MAP_PCD:-$run_data/fastlio_complete/handheld_map_${run_id}_compl
 # global_dense_map is retained for diagnostics and is not silently preferred.
 clusters="${RVIZ_CLUSTERS_JSON:-$run_data/localization/target_points_clustered.json}"
 raw_targets="${RVIZ_RAW_TARGETS_JSON:-$run_data/localization/target_points_raw.json}"
+scene_graph="$run_data/scene_graph.json"
+if [[ -s "$run_data/approved_scene_graph.json" ]]; then
+  scene_graph="$run_data/approved_scene_graph.json"
+fi
 # Show the same stable geometry used by the semantic scene builder when the
 # fused output exists. Fall back to the per-frame CSV for incomplete runs.
 if [[ -n "${RVIZ_BOXER_CSV:-}" ]]; then
@@ -42,6 +47,8 @@ fi
 trajectory="${RVIZ_TRAJECTORY:-$run_data/fastlio_complete/trajectory.csv}"
 mission="$run_data/planning/mission_plan.json"
 candidates_json=""
+collision_pcd=""
+collision_clearance=""
 if [[ -n "$task_id" ]]; then
   [[ "$task_id" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || {
     echo "Invalid TASK_ID: $task_id" >&2
@@ -57,6 +64,8 @@ if [[ -n "$task_id" ]]; then
       --directory "$final_dir" \
       --map "$run_data/fastlio_complete/handheld_map_${run_id}_complete.pcd"
     mission="$final_dir/final_minco_preview.json"
+    collision_pcd="$final_dir/collision.pcd"
+    collision_clearance="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["collision_clearance"])' "$final_dir/final_minco_manifest.json")"
     echo "Preview source: final saved MINCO coefficients (same artifact as NX)"
   else
     echo "No certified final MINCO exists; showing Stage2 geometric preview only."
@@ -83,11 +92,23 @@ if ! [[ "$min_observations" =~ ^[0-9]+$ ]]; then
   echo "MIN_OBSERVATIONS must be a non-negative integer" >&2
   exit 2
 fi
+if ! [[ "$map_min_z" =~ ^-?[0-9]+([.][0-9]+)?$ ]]; then
+  echo "RVIZ_MIN_Z must be a finite numeric world-z limit" >&2
+  exit 2
+fi
 if ! [[ "$map_max_z" =~ ^-?[0-9]+([.][0-9]+)?$ ]]; then
   echo "RVIZ_MAX_Z must be a finite numeric world-z limit" >&2
   exit 2
 fi
-echo "RViz geometry display: world z <= ${map_max_z} m (visualization only)"
+if ! python3 - "$map_min_z" "$map_max_z" <<'PY'
+import sys
+raise SystemExit(0 if float(sys.argv[1]) <= float(sys.argv[2]) else 1)
+PY
+then
+  echo "RVIZ_MIN_Z must be smaller than or equal to RVIZ_MAX_Z" >&2
+  exit 2
+fi
+echo "RViz geometry display: ${map_min_z} m <= world z <= ${map_max_z} m (visualization only)"
 
 flight_args=(-e RVIZ_FLIGHT_BAG= -e RVIZ_FLIGHT_TOPIC="$flight_topic")
 if [[ -n "$flight_bag" ]]; then
@@ -113,6 +134,15 @@ fi
 
 mission_rel="${mission#"$root/"}"
 voxel_snapshot="${RVIZ_VOXEL_SNAPSHOT:-$run_data/voxel_snapshot}"
+if [[ -z "${RVIZ_VOXEL_SNAPSHOT:-}" && -n "$task_id" ]]; then
+  task_manifest="$run_data/tasks/$task_id/run_manifest.json"
+  if [[ -s "$task_manifest" ]]; then
+    task_snapshot="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("voxel_snapshot", ""))' "$task_manifest")"
+    if [[ -n "$task_snapshot" && -s "$task_snapshot/metadata.json" && -s "$task_snapshot/voxel_map.npz" ]]; then
+      voxel_snapshot="$task_snapshot"
+    fi
+  fi
+fi
 
 # CDI supplies the host-matched NVIDIA graphics libraries and devices only
 # to this viewer. Keep CPU rendering available as an explicit compatibility mode.
@@ -138,15 +168,23 @@ exec "${docker_cmd[@]}" run --rm --init --net host \
   -e DISABLE_ROS1_EOL_WARNINGS=1 \
   -e QT_X11_NO_MITSHM=1 \
   -e RVIZ_RUN_ID="$run_id" \
+  -e RVIZ_HOST_UID="$(id -u)" \
+  -e RVIZ_HOST_GID="$(id -g)" \
   -e RVIZ_MISSION="/workspace/project/$mission_rel" \
   -e RVIZ_CANDIDATES_JSON="/workspace/project/${candidates_json#"$root/"}" \
+  -e RVIZ_COLLISION_PCD="${collision_pcd:+/workspace/project/${collision_pcd#"$root/"}}" \
+  -e RVIZ_COLLISION_CLEARANCE="$collision_clearance" \
+  -e RVIZ_FRUSTUM_SCALE="${RVIZ_FRUSTUM_SCALE:-0.25}" \
   -e RVIZ_VOXEL_SNAPSHOT="/workspace/project/${voxel_snapshot#"$root/"}" \
   -e RVIZ_MIN_OBSERVATIONS="$min_observations" \
+  -e RVIZ_MIN_Z="$map_min_z" \
   -e RVIZ_MAX_Z="$map_max_z" \
   -e RVIZ_MAP_PCD="/workspace/project/${map_pcd#"$root/"}" \
   -e RVIZ_MAPPING_BAG="/workspace/project/${mapping_bag#"$root/"}" \
   -e RVIZ_CLUSTERS_JSON="/workspace/project/${clusters#"$root/"}" \
   -e RVIZ_RAW_TARGETS_JSON="/workspace/project/${raw_targets#"$root/"}" \
+  -e RVIZ_SCENE_GRAPH="/workspace/project/${scene_graph#"$root/"}" \
+  -e RVIZ_INTERACTIVE_EDIT=1 \
   -e RVIZ_BOXER_CSV="/workspace/project/${boxer_csv#"$root/"}" \
   -e RVIZ_TRAJECTORY="/workspace/project/${trajectory#"$root/"}" \
   -v "$root:/workspace/project" \
@@ -172,7 +210,8 @@ exec "${docker_cmd[@]}" run --rm --init --net host \
     roscore >/tmp/real_scene_rviz_roscore.log 2>&1 &
     master=$!
     publisher=""
-    trap "kill $master $publisher 2>/dev/null || true" EXIT INT TERM
+    editor=""
+    trap "kill $master $publisher $editor 2>/dev/null || true" EXIT INT TERM
     sleep 2
 
     publisher_args=( \
@@ -190,6 +229,13 @@ exec "${docker_cmd[@]}" run --rm --init --net host \
     python3 "${publisher_args[@]}" \
       >/tmp/real_scene_rviz_publisher.log 2>&1 &
     publisher=$!
+
+    env HOME=/tmp setpriv \
+      --reuid="$RVIZ_HOST_UID" --regid="$RVIZ_HOST_GID" --clear-groups \
+      python3 /workspace/project/real_fly/stage2_offline/rviz/edit_scene_objects_rviz.py \
+      "$RVIZ_SCENE_GRAPH" "$RVIZ_MIN_OBSERVATIONS" \
+      >/tmp/real_scene_rviz_editor.log 2>&1 &
+    editor=$!
 
     sleep 3
     rviz -d /workspace/project/real_fly/stage2_offline/rviz/drone_room.rviz

@@ -77,6 +77,52 @@ def write_binary_xyz(path: Path, points: np.ndarray) -> None:
         stream.write(np.ascontiguousarray(points, dtype="<f4").tobytes())
 
 
+def build_from_voxel_snapshot(snapshot: Path, output: Path,
+                              output_resolution: float) -> None:
+    """Preserve the snapshot's occupied-cell decisions in SUPER's PCD."""
+    metadata_path = snapshot / "metadata.json"
+    arrays_path = snapshot / "voxel_map.npz"
+    if not metadata_path.is_file() or not arrays_path.is_file():
+        raise SystemExit(f"incomplete voxel snapshot: {snapshot}")
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    source_resolution = float(metadata["resolution_m"])
+    if (not math.isfinite(output_resolution) or output_resolution <= 0.0
+            or not math.isfinite(source_resolution) or source_resolution <= 0.0):
+        raise SystemExit("snapshot and output resolutions must be finite and positive")
+    ratio = source_resolution / output_resolution
+    subdivisions = int(round(ratio))
+    if (not math.isfinite(output_resolution) or output_resolution <= 0.0
+            or subdivisions < 1 or not math.isclose(
+                ratio, subdivisions, rel_tol=0.0, abs_tol=1e-6)):
+        raise SystemExit(
+            "snapshot resolution must be an integer multiple of output resolution"
+        )
+    arrays = np.load(arrays_path)
+    occupied_zyx = np.argwhere(arrays["raw_occupancy_zyx"] > 0)
+    if not len(occupied_zyx):
+        raise SystemExit("voxel snapshot contains no occupied cells")
+    occupied_xyz = occupied_zyx[:, ::-1].astype(np.float64)
+    origin = np.asarray(metadata["origin_xyz_m"], dtype=np.float64)
+    offsets_1d = (np.arange(subdivisions, dtype=np.float64) + 0.5) / subdivisions
+    offsets = np.stack(np.meshgrid(
+        offsets_1d, offsets_1d, offsets_1d, indexing="ij"
+    ), axis=-1).reshape(-1, 3)
+    points = origin + (
+        occupied_xyz[:, None, :] + offsets[None, :, :]
+    ) * source_resolution
+    points = points.reshape(-1, 3)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    write_binary_xyz(output, points)
+    print(json.dumps({
+        "format": "pre_map_vln.snapshot_collision_pcd.v1",
+        "snapshot": str(snapshot.resolve()),
+        "source_resolution_m": source_resolution,
+        "output_resolution_m": output_resolution,
+        "occupied_cells": int(len(occupied_xyz)),
+        "collision_points": int(len(points)),
+    }))
+
+
 def load_approved_start(bundle_path: Path, source_hash: str) -> tuple[list[float], str]:
     bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
     if bundle.get("format") != "pre_map_vln.real_execution_bundle.v1":
@@ -101,7 +147,15 @@ def main() -> None:
                         help="approved execution bundle defining the launch hover pose")
     parser.add_argument("--launch-clearance-radius", type=float, default=0.60)
     parser.add_argument("--max-removed-voxels", type=int, default=100)
+    parser.add_argument("--voxel-snapshot", type=Path,
+                        help="use an existing Stage2 occupancy snapshot instead of re-counting the input PCD")
+    parser.add_argument("--snapshot-output-resolution", type=float, default=0.10)
     args = parser.parse_args()
+    if args.voxel_snapshot is not None:
+        build_from_voxel_snapshot(
+            args.voxel_snapshot, args.output, args.snapshot_output_resolution
+        )
+        return
     if args.voxel < 0.1:
         raise SystemExit("--voxel must be at least the 0.10 m ROG resolution")
     if args.min_points_per_voxel < 1:

@@ -55,6 +55,8 @@ def main() -> None:
     parser.add_argument("--min-occupied-points", type=int, default=100)
     parser.add_argument("--scan-period", type=float, default=2.0)
     parser.add_argument("--max-ray-m", type=float, default=25.0)
+    parser.add_argument("--max-grid-voxels", type=int, default=30_000_000,
+                        help="memory guard for the dense 3-D voxel grid")
     args = parser.parse_args()
     if args.output.exists(): raise SystemExit(f"refusing to overwrite: {args.output}")
     if args.min_occupied_points < 1:
@@ -69,8 +71,19 @@ def main() -> None:
     upper = np.percentile(occupied_points, 99.75, axis=0) + [1.0, 1.0, 0.75]
     origin = np.floor(lower / args.resolution) * args.resolution
     shape_xyz = np.ceil((upper - origin) / args.resolution).astype(int)
-    if int(np.prod(shape_xyz)) > 12_000_000:
-        raise SystemExit(f"voxel grid is unexpectedly large: {shape_xyz.tolist()}")
+    voxel_count = int(np.prod(shape_xyz))
+    if args.max_grid_voxels < 1:
+        raise SystemExit("--max-grid-voxels must be positive")
+    if voxel_count > args.max_grid_voxels:
+        raise SystemExit(
+            f"voxel grid is unexpectedly large: {shape_xyz.tolist()} = {voxel_count} voxels; "
+            f"limit={args.max_grid_voxels}"
+        )
+    print(
+        f"voxel grid: shape={shape_xyz.tolist()} count={voxel_count} "
+        f"resolution={args.resolution:.2f}m limit={args.max_grid_voxels}",
+        flush=True,
+    )
     raw = np.full(tuple(shape_xyz[::-1]), int(OccupancyState.UNKNOWN), dtype=np.int8)
 
     def indices(points):

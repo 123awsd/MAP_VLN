@@ -1,0 +1,36 @@
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+@@ -1970,13 +1970,16 @@
+   double preview_clearance = 0.0;
+   ros::param::param<double>("/astar/preview_min_clearance", preview_clearance, 0.0);
+   if (preview_clearance > 0.0) {
++    const auto start_cell = map_server_->getOccupancyGrid()->positionToIndex(pos);
+     auto &trajectory = planner_manager_->local_data_.position_traj_;
+     const double duration = trajectory.getTimeSum();
+     const int count = std::max(1, int(std::ceil(duration / 0.05)));
+     for (int i = 0; i <= count; ++i) {
+       const Vector3d sample = trajectory.evaluateDeBoorT(duration * i / count);
+-      if (!map_server_->isInBox(sample) || sample.z() < 0.8 || sample.z() > 1.5 ||
+-          map_server_->getOccupancy(sample) != voxel_mapping::OccupancyType::FREE ||
++      if (!previewGeofenceAllowed(sample) || !map_server_->isInBox(sample) || sample.z() < 0.8 || sample.z() > 1.5 ||
++          (map_server_->getOccupancy(sample) != voxel_mapping::OccupancyType::FREE &&
++           !(map_server_->getOccupancy(sample) == voxel_mapping::OccupancyType::UNKNOWN &&
++             (map_server_->getOccupancyGrid()->positionToIndex(sample).array() == start_cell.array()).all())) ||
+           map_server_->getESDF()->getVoxel(sample).value < preview_clearance) {
+         ROS_WARN("[PreviewTrajectoryGuard] unsafe B-spline sample (%.3f,%.3f,%.3f); use native FALCON A* prefix", sample.x(), sample.y(), sample.z());
+         return planSafeAstarPrefix(pos, yaw[0], 2.0) ? SUCCEED : FAIL;
+@@ -2026,9 +2029,13 @@
+     const double distance = delta.norm();
+     bool free_corridor = true;
+     const int sample_count = std::max(1, int(std::ceil(distance / sample_step)));
++    const auto start_cell = map_server_->getOccupancyGrid()->positionToIndex(pos);
+     for (int sample = 0; sample <= sample_count; ++sample) {
+       const Vector3d point = pos + delta * (double(sample) / double(sample_count));
+-      if (map_server_->getOccupancy(point) != voxel_mapping::OccupancyType::FREE ||
++      const auto occupancy = map_server_->getOccupancy(point);
++      const bool unknown_start = occupancy == voxel_mapping::OccupancyType::UNKNOWN &&
++          (map_server_->getOccupancyGrid()->positionToIndex(point).array() == start_cell.array()).all();
++      if (!previewGeofenceAllowed(point) || (occupancy != voxel_mapping::OccupancyType::FREE && !unknown_start) ||
+           (preview_clearance > 0.0 && (!map_server_->isInBox(point) || point.z() < 0.8 || point.z() > 1.5 ||
+            map_server_->getESDF()->getVoxel(point).value < preview_clearance))) {
+         free_corridor = false;

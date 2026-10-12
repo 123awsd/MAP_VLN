@@ -6,6 +6,7 @@
 # Usage:
 #   ./build_map_scdb.sh MAP.pcd                  # grid 1.0m, lidar height 0.5m
 #   ./build_map_scdb.sh MAP.pcd 1.0 0.5          # explicit grid / lidar height
+#   ./build_map_scdb.sh MAP.pcd 0.5 0 --near-origin # 25 candidates around origin
 # Output: MAP.pcd.scdb next to the map file.
 #
 # Requires the fast_lio package to be built (./build.sh lite). The tool binary
@@ -33,6 +34,13 @@ if [[ ! -f "${MAP_VALUE}" ]]; then
     exit 3
 fi
 OUT_VALUE="${MAP_VALUE}.scdb"
+if [[ "${4:-}" == "--near-origin" ]]; then
+    OUT_VALUE="${MAP_VALUE}.near_origin.scdb"
+fi
+if [[ -e "$OUT_VALUE" ]]; then
+    echo "Refusing to overwrite existing database: $OUT_VALUE" >&2
+    exit 3
+fi
 shift
 
 exec rosrun fast_lio build_map_scdb "${MAP_VALUE}" "${OUT_VALUE}" "$@"

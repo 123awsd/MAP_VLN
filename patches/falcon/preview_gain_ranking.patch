@@ -1,0 +1,10 @@
+--- a/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
++++ b/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
+@@ -1016,6 +1016,8 @@
+   // select viewpoints with visib_num > mean
+   for (int i = 0; i < visib_nums.size(); ++i) {
++    // Keep the downstream ranking consistent with the LiDAR gain filter.
++    if (lidar_gain) viewpoints[i].visib_num_ = visib_nums[i];
+     if (visib_nums[i] > mean + viewpoint_z_score_cutoff_ * sd) {
+       frontier.viewpoints_.push_back(viewpoints[i]);
+     }

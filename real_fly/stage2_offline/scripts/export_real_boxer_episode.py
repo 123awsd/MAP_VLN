@@ -213,6 +213,27 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def ekf_to_body_pose(pose, reference):
+    """Undo EKF output/reference offsets, retaining its estimated motion.
+
+    Senior EKF: R_i=R_body*inv(Rr_i), p_i=p_body-R_i*tr_i;
+    published p=p_i+R_i*imu_trans+world_offset. Quaternions Rr_i are wxyz.
+    """
+    q = np.asarray(reference["Rr_i"], dtype=float)
+    if q.shape != (4,) or not np.isfinite(q).all() or np.linalg.norm(q) < 1e-8:
+        raise ValueError("invalid recorded EKF Rr_i")
+    rotation = rotation_matrix(Rotation.from_quat(q[[1, 2, 3, 0]]))
+    tr = np.asarray(reference["tr_i"], dtype=float)
+    trans = np.asarray([reference["imu_trans_" + k] for k in "xyz"], dtype=float)
+    offset = np.asarray([reference["offset_p" + k] for k in "xyz"], dtype=float)
+    if tr.shape != (3,) or not np.isfinite(np.r_[tr, trans, offset]).all():
+        raise ValueError("invalid recorded EKF translations")
+    result = pose.copy()
+    result[:3, 3] = pose[:3, 3] - offset + pose[:3, :3] @ (tr - trans)
+    result[:3, :3] = pose[:3, :3] @ rotation
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("bag", type=Path)
@@ -224,6 +245,10 @@ def main() -> None:
                         help="bag containing the pose topic; defaults to mapping bag")
     parser.add_argument("--pose-topic", default="auto",
                         help="pose topic, or auto to prefer /ekf_quat/ekf_odom and fall back to /Odometry")
+    parser.add_argument("--ekf-reference", type=Path,
+                        help="Recorded EKF parameters; transform its output back to the FAST-LIO body reference")
+    parser.add_argument("--online-map", action="store_true",
+                        help="Use fixed recorded calibration with sparse scan evidence; no targetless fitting")
     parser.add_argument("--frame-period", type=float, default=1.0)
     parser.add_argument("--max-frames", type=int, default=180)
     parser.add_argument("--max-rgb-depth-dt", type=float, default=0.08)
@@ -236,6 +261,9 @@ def main() -> None:
     parser.add_argument("--fastlio-config", type=Path,
                         help="FAST-LIO YAML containing LiDAR-to-IMU extrinsic_R/extrinsic_T")
     args = parser.parse_args()
+    if args.online_map and not (args.lidar_camera_extrinsic and args.fastlio_config and args.ekf_reference):
+        raise SystemExit("online map needs recorded camera, FAST-LIO and EKF calibration")
+    ekf_reference = json.loads(args.ekf_reference.read_text()) if args.ekf_reference else None
     if args.output.exists():
         raise SystemExit(f"refusing to overwrite: {args.output}")
     mapping_bag = args.mapping_bag or args.bag
@@ -256,7 +284,12 @@ def main() -> None:
         if pose_topic not in available_pose_topics:
             raise SystemExit(f"selected pose topic is missing: {pose_topic}")
         for _, msg, bt in bag.read_messages(topics=[pose_topic]):
-            odom_times.append(stamp(msg, bt)); odom_poses.append(pose_matrix(msg))
+            pose = pose_matrix(msg)
+            if ekf_reference is not None:
+                if pose_topic != "/ekf_quat/ekf_odom":
+                    raise SystemExit("EKF reference correction requires EKF pose topic")
+                pose = ekf_to_body_pose(pose, ekf_reference)
+            odom_times.append(stamp(msg, bt)); odom_poses.append(pose)
     if not odom_times:
         raise SystemExit(f"pose topic has no messages: {pose_topic}")
     with rosbag.Bag(str(args.bag), "r") as bag:
@@ -372,7 +405,7 @@ def main() -> None:
         if len(points) < 50: continue
         body_pose = odom_poses[nearest_index(odom_times, selected[idx])]
         calibration_samples.append([selected[idx], body_pose, points, None])
-    if len(calibration_samples) < 8:
+    if len(calibration_samples) < 8 and not args.online_map:
         raise SystemExit("too few valid RGB-D/odometry calibration samples")
 
     # Pair every calibration depth frame with the closest registered LiDAR
@@ -390,8 +423,17 @@ def main() -> None:
                 points = voxel_downsample(points[np.isfinite(points).all(axis=1)], 0.08)
                 calibration_samples[idx][3] = cKDTree(points)
                 best_dt[idx] = delta
+    if args.online_map:
+        # Sparse scans support occupancy raycasting, not every RGB timestamp.
+        # With fixed measured calibration, evaluate against the final map;
+        # never fit a new extrinsic to repeated global-map surfaces.
+        map_points = load_pcd_xyz(args.map_pcd)
+        map_points = voxel_downsample(map_points[np.isfinite(map_points).all(axis=1)], 0.08)
+        tree = cKDTree(map_points)
+        for item in calibration_samples:
+            item[3] = tree
     calibration_samples = [item for item in calibration_samples if item[3] is not None]
-    if len(calibration_samples) < 8:
+    if not calibration_samples or (len(calibration_samples) < 8 and not args.online_map):
         raise SystemExit("too few time-paired depth/LiDAR scans for targetless calibration")
 
     def residual_transform(body_to_optical, samples):
@@ -479,6 +521,8 @@ def main() -> None:
     report = {
         "format": "pre_map_vln.real_rgbd_extrinsic.v1",
         "method": method,
+        "ekf_reference": ekf_reference,
+        "validation_source": "online_global_map_fixed_calibration" if args.online_map else "concurrent_lidar_scans",
         "status": status,
         "body_to_camera_link": body_to_link.tolist(),
         "camera_link_to_color_optical": camera_link_to_optical.tolist(),

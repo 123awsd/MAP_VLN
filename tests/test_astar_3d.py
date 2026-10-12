@@ -48,6 +48,17 @@ class Astar3DTest(unittest.TestCase):
         self.assertIsInstance(result, AstarFailure)
         self.assertEqual(result.status, "no_path")
 
+    def test_collision_point_guard_blocks_edge_between_valid_endpoints(self):
+        from scipy.spatial import cKDTree
+        voxel_map = make_map(np.zeros((12, 12, 12), dtype=np.int8), self.profile)
+        voxel_map.collision_point_tree = cKDTree([[0.6, 0.55, 0.55]])
+        voxel_map.collision_point_clearance_m = 0.03
+        voxel_map.collision_point_distances = np.full(voxel_map.raw.shape, 0.05)
+        a, b = [0.55, 0.55, 0.55], [0.65, 0.55, 0.55]
+        self.assertTrue(voxel_map.is_state_valid(a))
+        self.assertTrue(voxel_map.is_state_valid(b))
+        self.assertFalse(voxel_map.line_is_valid(a, b))
+
     def test_diagonal_cannot_cut_occupied_corner(self):
         raw = np.full((4, 4, 4), int(OccupancyState.UNKNOWN), dtype=np.int8)
         raw[0:2, 0:2, 0:2] = int(OccupancyState.FREE)

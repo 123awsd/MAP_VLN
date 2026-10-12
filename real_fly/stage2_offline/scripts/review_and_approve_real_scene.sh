@@ -12,6 +12,7 @@ Options:
   --decomp-threshold VALUE  OccuSG decomposition threshold (default: 1.8).
   --floor-id N              Semantic floor number (default: 1).
   --floor-z VALUE           Optional floor z used for the 2-D structure projection.
+  --trajectory-margin VALUE Expand the recorded-trajectory XY bounds by this distance (default: 5.0 m).
   --room-max-z VALUE        Ignore PCD points above this world z (default: 2.0).
   --wall-min-count N|auto   Minimum points per 5 cm XY cell (default: auto).
   --min-room-area VALUE     Reject room regions smaller than this (default: 5.0 m^2).
@@ -28,6 +29,7 @@ min_observations=""
 decomp_threshold="1.8"
 floor_id="1"
 floor_z=""
+trajectory_margin="5.0"
 room_max_z="2.0"
 wall_min_count="auto"
 min_room_area="5.0"
@@ -39,6 +41,7 @@ while [[ $# -gt 0 ]]; do
     --decomp-threshold) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; decomp_threshold="$2"; shift 2 ;;
     --floor-id) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; floor_id="$2"; shift 2 ;;
     --floor-z) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; floor_z="$2"; shift 2 ;;
+    --trajectory-margin) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; trajectory_margin="$2"; shift 2 ;;
     --room-max-z) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; room_max_z="$2"; shift 2 ;;
     --wall-min-count) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; wall_min_count="$2"; shift 2 ;;
     --min-room-area) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; min_room_area="$2"; shift 2 ;;
@@ -55,6 +58,7 @@ done
 if [[ -n "$floor_z" ]]; then
   [[ "$floor_z" =~ ^-?[0-9]+([.][0-9]+)?$ ]] || { echo "Invalid --floor-z" >&2; exit 2; }
 fi
+[[ "$trajectory_margin" =~ ^[0-9]+([.][0-9]+)?$ ]] || { echo "Invalid --trajectory-margin" >&2; exit 2; }
 [[ "$room_max_z" =~ ^-?[0-9]+([.][0-9]+)?$ ]] || { echo "Invalid --room-max-z" >&2; exit 2; }
 [[ "$wall_min_count" == "auto" || "$wall_min_count" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid --wall-min-count" >&2; exit 2; }
 [[ "$min_room_area" =~ ^[0-9]+([.][0-9]+)?$ ]] || { echo "Invalid --min-room-area" >&2; exit 2; }
@@ -94,12 +98,13 @@ grid_metadata="$review_dir/structure_grid.json"
 regions="$review_dir/regions_raw.json"
 
 if [[ -s "$proposal_manifest" ]]; then
-  "$python" - "$proposal_manifest" "$run_id" "$decomp_threshold" "$floor_id" "$floor_z" "$room_max_z" "$wall_min_count" <<'PY'
+  "$python" - "$proposal_manifest" "$run_id" "$decomp_threshold" "$floor_id" "$floor_z" "$trajectory_margin" "$room_max_z" "$wall_min_count" <<'PY'
 import json, sys
 document = json.load(open(sys.argv[1], encoding="utf-8"))
 expected = {"run_id": sys.argv[2], "decomp_threshold": float(sys.argv[3]),
             "floor_id": int(sys.argv[4]), "floor_z_m": None if not sys.argv[5] else float(sys.argv[5]),
-            "room_max_z_m": float(sys.argv[6]), "wall_min_count": sys.argv[7]}
+            "trajectory_margin_m": float(sys.argv[6]),
+            "room_max_z_m": float(sys.argv[7]), "wall_min_count": sys.argv[8]}
 for key, value in expected.items():
     if document.get(key) != value:
         raise SystemExit(f"Existing proposal uses {key}={document.get(key)!r}, requested {value!r}; preserve it or use a new RUN_ID")
@@ -114,7 +119,7 @@ PY
     exit 2
   }
   recorded_algorithm="$("$python" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("wall_extraction", {}).get("algorithm", ""))' "$grid_metadata")"
-  [[ "$recorded_algorithm" == "bounded_xy_density_boundary_components_v4" ]] || {
+  [[ "$recorded_algorithm" == "bounded_xy_density_all_components_v5" ]] || {
     echo "The room-grid algorithm changed; refusing stale proposal reuse." >&2
     exit 2
   }
@@ -126,7 +131,8 @@ else
   echo "Safety scope: host-side offline PCD room review only; source PCD and voxel collision data remain read-only."
   grid_args=(
     "$script_dir/build_pcd_room_grid.py" "$map_pcd" "$trajectory" "$grid_prefix"
-    --resolution 0.05 --room-max-z "$room_max_z" --wall-min-count "$wall_min_count"
+    --resolution 0.05 --trajectory-margin "$trajectory_margin"
+    --room-max-z "$room_max_z" --wall-min-count "$wall_min_count"
   )
   if [[ -n "$floor_z" ]]; then grid_args+=(--floor-z "$floor_z"); fi
   "$python" "${grid_args[@]}"
@@ -139,7 +145,7 @@ else
   cp "$grid_prefix.png" "$review_dir/structure_grid.png"
   cp "$regions_source" "$regions"
   "$python" - "$proposal_manifest" "$run_id" "$decomp_threshold" "$floor_id" "$floor_z" \
-    "$min_observations" "$map_pcd" "$regions_source" "$room_max_z" "$wall_min_count" <<'PY'
+    "$min_observations" "$map_pcd" "$regions_source" "$trajectory_margin" "$room_max_z" "$wall_min_count" <<'PY'
 import json, pathlib, sys
 target = pathlib.Path(sys.argv[1])
 document = {
@@ -149,7 +155,8 @@ document = {
     "initial_min_object_observations": int(sys.argv[6]),
     "source_pcd": str(pathlib.Path(sys.argv[7]).resolve()),
     "source_regions": str(pathlib.Path(sys.argv[8]).resolve()),
-    "room_max_z_m": float(sys.argv[9]), "wall_min_count": sys.argv[10],
+    "trajectory_margin_m": float(sys.argv[9]),
+    "room_max_z_m": float(sys.argv[10]), "wall_min_count": sys.argv[11],
     "uses_rgbd": False, "uses_qwen": False, "voxel_collision_map_modified": False,
 }
 temporary = target.with_suffix(target.suffix + ".tmp")
@@ -170,7 +177,7 @@ fi
 
 "$python" "$script_dir/edit_real_rooms.py" \
   --run-id "$run_id" --grid "$grid" --metadata "$grid_metadata" --regions "$regions" \
-  --clusters "$clusters" --voxel-metadata "$voxel_snapshot/metadata.json" \
+  --scene-graph "$base_scene" --voxel-metadata "$voxel_snapshot/metadata.json" \
   --planning-start "$planning_start" \
   --draft "$draft" --preview "$review_dir/rooms_draft.png" \
   --min-observations "$min_observations" --min-room-area "$min_room_area" --floor-id "$floor_id"

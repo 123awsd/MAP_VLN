@@ -71,6 +71,23 @@ COPY patches/falcon/executed_goal_oscillation_guard.patch /tmp/executed_goal_osc
 COPY patches/falcon/online_floor_priority.patch /tmp/online_floor_priority.patch
 COPY patches/falcon/prepublish_collision_viewpoint_block.patch /tmp/prepublish_collision_viewpoint_block.patch
 COPY patches/falcon/unreachable_hgrid_relocation.patch /tmp/unreachable_hgrid_relocation.patch
+COPY patches/falcon/sop_timeout_guard.patch /tmp/sop_timeout_guard.patch
+COPY patches/falcon/lidar_radial_depth.patch /tmp/lidar_radial_depth.patch
+COPY patches/falcon/lidar_ray_occupancy.patch /tmp/lidar_ray_occupancy.patch
+COPY patches/falcon/lidar_unique_gain.patch /tmp/lidar_unique_gain.patch
+COPY patches/falcon/coarse_unknown_targets.patch /tmp/coarse_unknown_targets.patch
+COPY patches/falcon/refresh_frontier_viewpoints.patch /tmp/refresh_frontier_viewpoints.patch
+COPY patches/falcon/scanned_observation_targets.patch /tmp/scanned_observation_targets.patch
+COPY patches/falcon/frontier_extrema_candidates.patch /tmp/frontier_extrema_candidates.patch
+COPY patches/falcon/asymmetric_lidar_fov.patch /tmp/asymmetric_lidar_fov.patch
+COPY patches/falcon/attempted_viewpoint_cooldown.patch /tmp/attempted_viewpoint_cooldown.patch
+COPY patches/falcon/progress_aware_viewpoint_cooldown.patch /tmp/progress_aware_viewpoint_cooldown.patch
+COPY patches/falcon/preview_trajectory_clearance_guard.patch /tmp/preview_trajectory_clearance_guard.patch
+COPY patches/falcon/omni_lidar_visualization_cleanup.patch /tmp/omni_lidar_visualization_cleanup.patch
+COPY patches/falcon/recovery_target_memory.patch /tmp/recovery_target_memory.patch
+COPY patches/falcon/preview_tracking_recovery.patch /tmp/preview_tracking_recovery.patch
+COPY patches/falcon/preview_target_progress.patch /tmp/preview_target_progress.patch
+COPY patches/falcon/preview_recovery_height.patch /tmp/preview_recovery_height.patch
 RUN patch -d FALCON -p1 < /tmp/habitat_ground_viewpoint.patch
 RUN patch -d FALCON -p1 < /tmp/true_3d_viewpoints.patch
 RUN patch -d FALCON -p1 < /tmp/astar_start_voxel_escape.patch
@@ -94,6 +111,40 @@ RUN patch -d FALCON -p1 < /tmp/executed_goal_oscillation_guard.patch
 RUN patch -d FALCON -p1 < /tmp/online_floor_priority.patch
 RUN patch -d FALCON -p1 < /tmp/prepublish_collision_viewpoint_block.patch
 RUN patch -d FALCON -p1 < /tmp/unreachable_hgrid_relocation.patch
+RUN patch -d FALCON -p1 < /tmp/sop_timeout_guard.patch
+RUN patch -d FALCON -p1 < /tmp/lidar_radial_depth.patch
+RUN patch -d FALCON -p1 < /tmp/lidar_ray_occupancy.patch
+RUN patch -d FALCON -p1 < /tmp/lidar_unique_gain.patch
+RUN patch -d FALCON -p1 < /tmp/coarse_unknown_targets.patch
+RUN patch -d FALCON -p1 < /tmp/refresh_frontier_viewpoints.patch
+RUN patch -d FALCON -p1 < /tmp/scanned_observation_targets.patch
+RUN patch -d FALCON -p1 < /tmp/frontier_extrema_candidates.patch
+RUN patch -d FALCON -p1 < /tmp/asymmetric_lidar_fov.patch
+RUN patch -d FALCON -p1 < /tmp/attempted_viewpoint_cooldown.patch
+RUN patch -d FALCON -p1 < /tmp/progress_aware_viewpoint_cooldown.patch
+RUN patch -d FALCON -p1 < /tmp/preview_trajectory_clearance_guard.patch
+RUN patch -d FALCON -p1 < /tmp/omni_lidar_visualization_cleanup.patch
+RUN patch -d FALCON -p1 < /tmp/recovery_target_memory.patch
+RUN patch -d FALCON -p1 < /tmp/preview_tracking_recovery.patch
+RUN patch -d FALCON -p1 < /tmp/preview_target_progress.patch
+RUN patch -d FALCON -p1 < /tmp/preview_recovery_height.patch
+COPY patches/falcon/preview_start_diagnostics.patch /tmp/preview_start_diagnostics.patch
+RUN patch -d FALCON -p1 < /tmp/preview_start_diagnostics.patch
+COPY patches/falcon/preview_final_geometry_guard.patch /tmp/preview_final_geometry_guard.patch
+RUN patch -d FALCON -p1 < /tmp/preview_final_geometry_guard.patch
+COPY patches/falcon/preview_goal_prefilter.patch /tmp/preview_goal_prefilter.patch
+RUN patch -d FALCON -p1 < /tmp/preview_goal_prefilter.patch
+COPY patches/falcon/preview_geofence.h FALCON/falcon_planner/pathfinding/include/pathfinding/preview_geofence.h
+COPY patches/falcon/preview_geofence.patch /tmp/preview_geofence.patch
+RUN patch -d FALCON -p1 < /tmp/preview_geofence.patch
+COPY patches/falcon/preview_roi_gain.patch /tmp/preview_roi_gain.patch
+RUN patch -d FALCON -p1 < /tmp/preview_roi_gain.patch
+COPY patches/falcon/preview_scope_consistency.patch /tmp/preview_scope_consistency.patch
+RUN patch -d FALCON -p1 < /tmp/preview_scope_consistency.patch
+COPY patches/falcon/preview_start_cell_consistency.patch /tmp/preview_start_cell_consistency.patch
+RUN patch -d FALCON -p1 < /tmp/preview_start_cell_consistency.patch
+COPY patches/falcon/preview_gain_ranking.patch /tmp/preview_gain_ranking.patch
+RUN patch -d FALCON -p1 < /tmp/preview_gain_ranking.patch
 
 # Habitat replaces FALCON's built-in CUDA/Open3D sensor renderers.
 RUN touch FALCON/uav_simulator/camera_sensing/pointcloud_render/CATKIN_IGNORE \

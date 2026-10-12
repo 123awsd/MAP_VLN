@@ -77,6 +77,7 @@ def main():
     p.add_argument("--map", type=Path, required=True)
     p.add_argument("--mission", type=Path)
     p.add_argument("--clearance", type=float, default=.25)
+    p.add_argument("--voxel-snapshot", type=Path)
     args = p.parse_args()
     d = args.directory.resolve()
     names = ["final_minco.txt", "collision.pcd", "planner.yaml", "full_smooth_route.txt", "execution_bundle.json"]
@@ -91,6 +92,45 @@ def main():
     manifest_path = d / "final_minco_manifest.json"
     if args.mode == "seal":
         start, phases = read_trajectory(d / "final_minco.txt")
+        if args.voxel_snapshot is not None:
+            metadata = json.loads((args.voxel_snapshot / "metadata.json").read_text())
+            arrays = np.load(args.voxel_snapshot / "voxel_map.npz")
+            raw = arrays["raw_occupancy_zyx"]
+            origin = np.asarray(metadata["origin_xyz_m"])
+            resolution = float(metadata["resolution_m"])
+            shape = np.asarray(raw.shape[::-1])
+            radius = int(math.ceil(args.clearance / resolution)) + 2
+            minimum = math.inf
+            closest = None
+            occupied_samples = 0
+            for phase in phases:
+                for point in np.asarray(phase["points"]):
+                    cell = np.floor((point - origin) / resolution).astype(int)
+                    if np.any(cell < 0) or np.any(cell >= shape):
+                        raise ValueError("MINCO outside occupancy snapshot bounds")
+                    occupied_samples += int(raw[cell[2], cell[1], cell[0]] > 0)
+                    lo = np.maximum(0, cell - radius)
+                    hi = np.minimum(shape, cell + radius + 1)
+                    if np.any(lo >= hi):
+                        raise ValueError("MINCO outside occupancy snapshot bounds")
+                    cells = np.argwhere(raw[lo[2]:hi[2], lo[1]:hi[1], lo[0]:hi[0]] > 0)
+                    if not len(cells):
+                        continue
+                    lower = origin + (cells[:, ::-1] + lo) * resolution
+                    delta = np.maximum(np.maximum(lower - point, point - lower - resolution), 0)
+                    distance = float(np.linalg.norm(delta, axis=1).min())
+                    if distance < minimum:
+                        minimum, closest = distance, point.tolist()
+            report = dict(sampled_cube_surface_clearance_m=minimum,
+                          required_collision_point_clearance_m=args.clearance,
+                          cube_surface_clearance_is_informational=True,
+                          occupied_samples=occupied_samples, closest_xyz=closest,
+                          sample_period_s=0.02,
+                          passed=occupied_samples == 0 and minimum > 0)
+            (d / "voxel_clearance_report.json").write_text(json.dumps(report, indent=2)+"\n")
+            if not report["passed"]:
+                raise ValueError(f"MINCO intersects occupied cubes: {occupied_samples} samples, surface distance {minimum:.6f} m at {closest}")
+            names.append("voxel_clearance_report.json")
         bundle = json.loads((d / "execution_bundle.json").read_text())
         if bundle["map_sha256"] != digest(args.map):
             raise ValueError("map/bundle mismatch")
@@ -115,6 +155,7 @@ def main():
         manifest = dict(format="pre_map_vln.saved_minco.v1", map_sha256=digest(args.map),
             files={name: digest(d / name) for name in names}, start_xyz_yaw=start,
             collision_clearance=args.clearance, phases=len(phases),
+            collision_clearance_reference="collision.pcd point samples",
             duration_s=sum(x["duration"] + x["dwell"] for x in phases))
         temp = manifest_path.with_suffix(".tmp")
         temp.write_text(json.dumps(manifest, indent=2)+"\n")

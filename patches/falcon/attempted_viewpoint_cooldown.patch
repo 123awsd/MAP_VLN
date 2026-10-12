@@ -1,0 +1,56 @@
+--- a/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
++++ b/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
+@@ -15,9 +15,14 @@
+ ros::Subscriber observation_subscriber;
+ bool suppress_scanned_targets = false;
+ double scanned_target_radius = 0.4;
++struct AttemptedView { Vector3d position; ros::Time stamp; int count; };
++std::vector<AttemptedView> attempted_views;
+ bool alreadyScanned(const Vector3d &point) {
+   if (!suppress_scanned_targets) return false;
+   std::lock_guard<std::mutex> lock(observation_mutex);
++  for (const auto &attempt : attempted_views)
++    if (attempt.count >= 2 && (ros::Time::now() - attempt.stamp).toSec() < 60.0 &&
++        (attempt.position - point).norm() < 0.4) return true;
+   for (const auto &visited : scanned_positions)
+     if ((visited - point).norm() < scanned_target_radius) return true;
+   return false;
+@@ -25,5 +30,20 @@
+ }
+ }
++void registerPreviewViewAttempt(const Vector3d &point) {
++  if (!suppress_scanned_targets) return;
++  std::lock_guard<std::mutex> lock(observation_mutex);
++  const auto now = ros::Time::now();
++  for (auto &attempt : attempted_views) {
++    if ((attempt.position - point).norm() >= 0.4) continue;
++    if ((now - attempt.stamp).toSec() > 60.0) attempt.count = 0;
++    attempt.stamp = now;
++    ++attempt.count;
++    if (attempt.count == 2)
++      ROS_WARN("[ObservationHistory] repeated attempted viewpoint (%.2f,%.2f,%.2f): cooldown 60s, NOT marked explored", point.x(), point.y(), point.z());
++    return;
++  }
++  attempted_views.push_back({point, now, 1});
++}
+ FrontierFinder::FrontierFinder(ros::NodeHandle &nh, const shared_ptr<MapServer> &map_server) {
+   nh.param("/frontier_finder/suppress_scanned_targets", suppress_scanned_targets, false);
+   nh.param("/frontier_finder/scanned_target_radius", scanned_target_radius, 0.4);
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+@@ -20,6 +20,7 @@
+ using namespace Eigen;
+ 
+ namespace fast_planner {
++void registerPreviewViewAttempt(const Vector3d &point);
+ 
+ ExplorationManager::ExplorationManager() {}
+ 
+@@ -1399,6 +1400,7 @@
+   ed_->next_yaw_ = next_yaw;
+   ROS_INFO("[ExplorationManager] Next pos: %.2lf, %.2lf, %.2lf, yaw: %.2lf", next_pos[0],
+            next_pos[1], next_pos[2], next_yaw);
++  registerPreviewViewAttempt(next_pos);
+   LOG(INFO) << "[ExplorationManager] Next pos: " << next_pos[0] << ", " << next_pos[1] << ", "
+             << next_pos[2] << ", yaw: " << next_yaw;
+ 

@@ -1,0 +1,91 @@
+--- a/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
++++ b/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
+@@ -919,7 +919,7 @@
+       viewpoints.push_back(vp);
+   }
+ 
+-  if (viewpoints.size() <= 1) {
++  if (viewpoints.empty()) {
+     frontier.viewpoints_ = viewpoints;
+     return;
+   }
+@@ -980,6 +980,7 @@
+         if (map_server_->getOccupancyGrid()->getVoxel(idx).value ==
+             voxel_mapping::OccupancyType::UNKNOWN) {
+           const auto unknown_pos = map_server_->getTSDF()->indexToPosition(idx);
++          if (!previewGeofenceAllowed(unknown_pos)) continue;
+           if (lidar_gain && coarse_gain && (unknown_pos.z() < target_min_z || unknown_pos.z() > target_max_z))
+             continue;
+           voxels_world_unknown.push_back(unknown_pos);
+@@ -1021,7 +1022,8 @@
+   }
+ 
+   if (viewpoints.size() > 0 && frontier.viewpoints_.size() == 0) {
+-    frontier.viewpoints_ = viewpoints;
++    for (size_t i = 0; i < viewpoints.size(); ++i)
++      if (visib_nums[i] > 0) frontier.viewpoints_.push_back(viewpoints[i]);
+   }
+ }
+ 
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+@@ -1488,6 +1488,14 @@
+       ros::param::param("/exploration_manager/preview_tracking_recovery", preview_filter, false);
+       if (preview_filter && (candidate.z() < 0.8 || candidate.z() > 1.5))
+         return;
++      if (preview_filter) {
++        double clearance = 0.0;
++        ros::param::param("/astar/preview_min_clearance", clearance, 0.0);
++        if (!previewGeofenceAllowed(candidate) || !map_server_->isInBox(candidate) ||
++            map_server_->getOccupancy(candidate) != voxel_mapping::OccupancyType::FREE ||
++            map_server_->getESDF()->getVoxel(candidate).value < clearance)
++          return;
++      }
+       if (isTemporarilyBlocked(candidate))
+         return;
+       if ((candidate - pos).norm() < 0.20)
+--- a/falcon_planner/exploration_preprocessing/src/hierarchical_grid.cpp
++++ b/falcon_planner/exploration_preprocessing/src/hierarchical_grid.cpp
+@@ -1,6 +1,7 @@
+ #include <pcl/kdtree/kdtree_flann.h>
+ 
+ #include "exploration_preprocessing/hierarchical_grid.h"
++#include "pathfinding/preview_geofence.h"
+ 
+ namespace fast_planner {
+ 
+@@ -1258,7 +1259,8 @@
+     // return map_server_->getOccupancy(idx) == voxel_mapping::OccupancyType::FREE;
+ 
+     // Change to TSDF value
+-    return map_server_->getOccupancy(idx) == voxel_mapping::OccupancyType::FREE;
++    return previewExplorationTargetAllowed(map_server_->getTSDF()->indexToPosition(idx)) &&
++           map_server_->getOccupancy(idx) == voxel_mapping::OccupancyType::FREE;
+   };
+ 
+   auto isFreeInflated = [&](const VoxelIndex &idx) {
+@@ -1266,13 +1268,15 @@
+     // return map_server_->getOccupancy(idx) == voxel_mapping::OccupancyType::FREE;
+ 
+     // Change to TSDF value
+-    return map_server_->getOccupancy(idx) == voxel_mapping::OccupancyType::FREE &&
++    return previewExplorationTargetAllowed(map_server_->getTSDF()->indexToPosition(idx)) &&
++           map_server_->getOccupancy(idx) == voxel_mapping::OccupancyType::FREE &&
+            map_server_->getESDF()->getVoxel(idx).value > 0.5;
+   };
+ 
+   auto isUnknown = [&](const VoxelIndex &idx) {
+     free_unknown_state = 1;
+-    return map_server_->getOccupancy(idx) == voxel_mapping::OccupancyType::UNKNOWN;
++    return previewExplorationTargetAllowed(map_server_->getTSDF()->indexToPosition(idx)) &&
++           map_server_->getOccupancy(idx) == voxel_mapping::OccupancyType::UNKNOWN;
+   };
+ 
+   // ROS_INFO("[UniformGrid] Cell %d, starting CCL", cell_id);
+@@ -3153,4 +3157,4 @@
+     visulization_pubs_["MarkerArray"].publish(marker_array);
+ }
+ 
+-} // namespace fast_planner
+\ No newline at end of file
++} // namespace fast_planner

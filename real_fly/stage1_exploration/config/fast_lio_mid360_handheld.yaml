@@ -20,17 +20,18 @@ mapping:
   b_acc_cov: 0.0001
   b_gyr_cov: 0.0001
   det_range: 100.0
-  # Aircraft mounting calibration from the existing tuned MID-360 profile.
+  # Multi-pose static calibration, 2026-10-01. LiDAR frame to FCU body.
+  # Bias-rejecting fit residual: 0.18 deg RMS (old +15 deg: 1.52 deg).
   extrinsic_R:
-  - 0.9659258
-  - 0.0
-  - 0.2588190
-  - 0.0
-  - 1.0
-  - 0.0
-  - -0.2588190
-  - 0.0
-  - 0.9659258
+  - 0.9589842
+  - -0.0110434
+  - 0.2832443
+  - 0.0114241
+  - 0.9999347
+  - 0.0003079
+  - -0.2832292
+  - 0.0029405
+  - 0.9590478
   extrinsic_T:
   - -0.011
   - -0.02329

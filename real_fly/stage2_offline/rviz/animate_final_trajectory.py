@@ -20,6 +20,11 @@ for seg_index,seg in enumerate(mission.get('segments',[])):
     seg_points=t.get('points_xyz_m') or seg.get('points_xyz_m',[])
     points.extend(seg_points)
     point_segments.extend([seg_index]*len(seg_points))
+execution_frames=[]
+if os.environ.get('RVIZ_EXECUTION_TIMELINE'):
+    execution_frames=json.load(open(os.environ['RVIZ_EXECUTION_TIMELINE']))['frames']
+    points=[f['xyz'] for f in execution_frames]
+    point_segments=[f['segment'] for f in execution_frames]
 if not points: raise SystemExit('mission has no validated trajectory points')
 rospy.init_node('final_trajectory_animation', anonymous=False)
 path_pub=rospy.Publisher('/drone_room/animated_trajectory',Path,queue_size=1,latch=True)
@@ -31,6 +36,7 @@ speed=max(0.05,float(os.environ.get('RVIZ_ANIMATION_SPEED','1.0')))
 step_accumulator=0.0
 yaw_rate_limit=float(os.environ.get('RVIZ_YAW_RATE_RPS','1.0'))
 current_yaw=None
+frame_step_mode=os.environ.get('RVIZ_FRAME_STEP','0')=='1'
 path=Path(); path.header.frame_id='map'; i=0
 initial_hold_seconds=max(0.0,float(os.environ.get('RVIZ_INITIAL_HOLD_SECONDS','60')))
 if initial_hold_seconds > 0:
@@ -95,6 +101,13 @@ def current_frustum(p, yaw, now):
     return m
 visits=mission.get('visits',[]); seg_idx=0
 while not rospy.is_shutdown():
+    if frame_step_mode:
+        while not rospy.is_shutdown() and int(rospy.get_param('/drone_room/requested_frame',-1)) != i:
+            rospy.sleep(.005)
+        if rospy.is_shutdown(): break
+    if rospy.get_param('/drone_room/playback_paused', False):
+        rate.sleep()
+        continue
     p=points[min(i,len(points)-1)]; now=rospy.Time.now(); path.header.stamp=now
     pose=PoseStamped(); pose.header=path.header
     pose.pose.position.x,pose.pose.position.y,pose.pose.position.z=map(float,p); pose.pose.orientation.w=1.0
@@ -118,6 +131,9 @@ while not rospy.is_shutdown():
         delta=(desired-current_yaw+math.pi)%(2*math.pi)-math.pi
         dt=1.0/max(1.0,float(os.environ.get('RVIZ_ANIMATION_FPS','30')))
         current_yaw += max(-yaw_rate_limit*dt,min(yaw_rate_limit*dt,delta))
+        if execution_frames:
+            # Recorded executed command yaw takes precedence over preview smoothing.
+            current_yaw=float(execution_frames[min(i,len(execution_frames)-1)]['yaw'])
         # Mark an execution candidate reached only when the animated pose
         # is physically at its target, rather than at a segment transition.
         selected_pose=visit.get('pose',{})
@@ -129,11 +145,24 @@ while not rospy.is_shutdown():
         if selected_dist <= 0.03 and yaw_error <= math.radians(5.0) and visit.get('candidate_id'):
             reached_execution_ids.add(visit.get('candidate_id'))
         va=viewpoint_markers(visit, now); va.markers.append(current_frustum(p, current_yaw, now)); view_pub.publish(va)
+    if frame_step_mode:
+        rospy.set_param('/drone_room/published_frame', i)
+        i += 1
+        if i >= len(points):
+            rospy.set_param('/drone_room/playback_complete',True)
+            rospy.spin()
+            break
+        continue
     step_accumulator += speed
     advance = int(step_accumulator)
     step_accumulator -= advance
     next_i = i + advance
     if next_i >= len(points):
+        if os.environ.get('RVIZ_PLAY_ONCE', '0') == '1':
+            rospy.set_param('/drone_room/playback_complete', True)
+            while not rospy.is_shutdown():
+                rate.sleep()
+            break
         # Clear the latched path before replaying from the start.  Otherwise
         # RViz keeps the previous cycle's tail while the new cycle begins.
         path.poses = []

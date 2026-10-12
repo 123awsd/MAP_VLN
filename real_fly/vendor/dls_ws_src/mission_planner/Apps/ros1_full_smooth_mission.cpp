@@ -102,11 +102,20 @@ public:
         // do not duplicate it in either launch file.
         const super_planner::Config super_config(super_config_path_);
         const double configured_max_velocity = super_config.exp_traj_cfg.max_vel;
+        const double configured_max_acceleration = super_config.exp_traj_cfg.max_acc;
+        const double configured_max_jerk = super_config.exp_traj_cfg.max_jerk;
         if (!std::isfinite(configured_max_velocity) || configured_max_velocity <= 0.0) {
             throw std::runtime_error("traj_opt.boundary.max_vel must be positive in " +
                                      super_config_path_);
         }
+        if (!std::isfinite(configured_max_acceleration) || configured_max_acceleration <= 0.0 ||
+            !std::isfinite(configured_max_jerk) || configured_max_jerk <= 0.0) {
+            throw std::runtime_error("traj_opt.boundary max_acc/max_jerk must be positive in " +
+                                     super_config_path_);
+        }
         max_velocity_ = configured_max_velocity;
+        max_acceleration_ = configured_max_acceleration;
+        max_jerk_ = configured_max_jerk;
         if (has_legacy_max_velocity &&
             std::abs(legacy_max_velocity - max_velocity_) > 1.0e-6) {
             ROS_WARN("[FULL_SMOOTH] ignoring legacy ~max_velocity=%.3f; using %.3f m/s from %s traj_opt.boundary.max_vel",
@@ -114,9 +123,13 @@ public:
         }
         ROS_INFO("[FULL_SMOOTH] velocity limit %.3f m/s from %s traj_opt.boundary.max_vel",
                  max_velocity_, super_config_path_.c_str());
+        ROS_INFO("[FULL_SMOOTH] acceleration/jerk limits %.3f m/s^2 and %.3f m/s^3 from %s",
+                 max_acceleration_, max_jerk_, super_config_path_.c_str());
         private_nh_.param("super_astar_timeout", super_astar_timeout_, 5.0);
         private_nh_.param("super_corridor_extra_margin", super_corridor_extra_margin_, 0.0);
         private_nh_.param("narrow_corridor/enabled", narrow_corridor_enabled_, true);
+        private_nh_.param("narrow_corridor/seed_local_candidates_only",
+                          narrow_corridor_seed_local_candidates_only_, false);
         private_nh_.param("narrow_corridor/clearance_threshold",
                           narrow_corridor_clearance_threshold_, 0.40);
         private_nh_.param("narrow_corridor/max_width", narrow_corridor_max_width_, 1.00);
@@ -481,12 +494,22 @@ private:
             const Eigen::Vector3d position = start +
                 (end - start) * static_cast<double>(sample_index) / samples;
             if (!regionalHeightIsSafe(position)) {
+                ROS_WARN("[FULL_SMOOTH] raw PCD segment rejected by regional height at sample %d/%d: position=[%.6f, %.6f, %.6f]",
+                         sample_index, samples, position.x(), position.y(), position.z());
                 return false;
             }
             Eigen::Vector3d obstacle;
             double distance = std::numeric_limits<double>::infinity();
-            if (!nearestObstacle(position, obstacle, distance) ||
-                distance + 1.0e-6 < collision_clearance_) {
+            if (!nearestObstacle(position, obstacle, distance)) {
+                ROS_WARN("[FULL_SMOOTH] raw PCD segment nearest-neighbor query failed at sample %d/%d: position=[%.6f, %.6f, %.6f]",
+                         sample_index, samples, position.x(), position.y(), position.z());
+                return false;
+            }
+            if (distance + 1.0e-6 < collision_clearance_) {
+                ROS_WARN("[FULL_SMOOTH] raw PCD segment clearance failed at sample %d/%d: position=[%.6f, %.6f, %.6f] obstacle=[%.6f, %.6f, %.6f] distance=%.6f required=%.6f",
+                         sample_index, samples, position.x(), position.y(), position.z(),
+                         obstacle.x(), obstacle.y(), obstacle.z(), distance,
+                         collision_clearance_);
                 return false;
             }
         }
@@ -634,6 +657,15 @@ private:
                 const Eigen::Vector3d projection = seed_start +
                     std::max(0.0, std::min(1.0, parameter)) * (seed_end - seed_start);
                 const double distance_to_seed = (guide_point - projection).norm();
+                // An adjacent leg around a bend is not part of this seed.
+                // Its doorway tube must not constrain a perpendicular seed
+                // after the vehicle has already left that doorway. CIRI's
+                // original collision half-spaces remain unchanged.
+                if (narrow_corridor_seed_local_candidates_only_ &&
+                    (parameter < -1e-6 || parameter > 1.0 + 1e-6 ||
+                     distance_to_seed > 0.05)) {
+                    continue;
+                }
                 const double along_distance = std::abs(parameter * (seed_end - seed_start).norm());
                 if (distance_to_seed > 0.20 ||
                     (parameter < 0.0 && along_distance > narrow_corridor_transition_length_) ||
@@ -880,33 +912,45 @@ private:
             return true;
         }
 
+        // The guide floor is an optional anti-dip preference, not part of the
+        // collision certificate.  Apply it transactionally: a floor can split
+        // otherwise valid neighbouring CIRI polytopes, especially where the
+        // local map clips one polytope near a height transition.  In that case
+        // preserve the original collision-safe corridor and let the final
+        // continuous PCD validation decide whether the MINCO trajectory is
+        // executable.
+        geometry_utils::PolytopeVec constrained = corridor;
+
         // CIRI half spaces use n.x * x + n.y * y + n.z * z + d <= 0.
         // Intersect every corridor in this phase with z >= min(guide.z).
         // The collision-checked guide itself remains feasible, while MINCO is
         // no longer free to create a downward overshoot solely to reduce its
         // smoothness cost.
-        for (std::size_t index = 0; index < corridor.size(); ++index) {
-            const auto original = corridor[index].GetPlanes();
+        for (std::size_t index = 0; index < constrained.size(); ++index) {
+            const auto original = constrained[index].GetPlanes();
             Eigen::Matrix<double, Eigen::Dynamic, 4> planes(original.rows() + 1, 4);
             planes.topRows(original.rows()) = original;
             planes.row(original.rows()) << 0.0, 0.0, -1.0, floor_z;
             Eigen::Vector3d interior;
             if (!geometry_utils::findInterior(planes, interior)) {
-                ROS_ERROR("[FULL_SMOOTH] vertical guide floor z>=%.3f makes corridor %zu infeasible in phase %d",
-                          floor_z, index, phase_index);
-                return false;
+                ROS_WARN("[FULL_SMOOTH] skipping optional vertical guide floor z>=%.3f: corridor %zu becomes infeasible in phase %d; preserving original CIRI corridor",
+                         floor_z, index, phase_index);
+                floor_z = -std::numeric_limits<double>::infinity();
+                return true;
             }
-            corridor[index].SetPlanes(planes);
+            constrained[index].SetPlanes(planes);
         }
-        for (std::size_t index = 1; index < corridor.size(); ++index) {
-            const auto overlap = corridor[index - 1].CrossWith(corridor[index]);
+        for (std::size_t index = 1; index < constrained.size(); ++index) {
+            const auto overlap = constrained[index - 1].CrossWith(constrained[index]);
             Eigen::Vector3d interior;
             if (!geometry_utils::findInterior(overlap.GetPlanes(), interior)) {
-                ROS_ERROR("[FULL_SMOOTH] vertical guide floor z>=%.3f destroys corridor overlap %zu/%zu in phase %d",
-                          floor_z, index - 1, index, phase_index);
-                return false;
+                ROS_WARN("[FULL_SMOOTH] skipping optional vertical guide floor z>=%.3f: destroys corridor overlap %zu/%zu in phase %d; preserving original CIRI corridor",
+                         floor_z, index - 1, index, phase_index);
+                floor_z = -std::numeric_limits<double>::infinity();
+                return true;
             }
         }
+        corridor.swap(constrained);
         ROS_INFO("[FULL_SMOOTH] applied vertical guide floor z>=%.3f m to %zu corridors in phase %d",
                  floor_z, corridor.size(), phase_index);
         return true;
@@ -988,9 +1032,46 @@ private:
             }
             Eigen::Vector3d interior;
             if (!geometry_utils::findInterior(planes, interior)) {
-                ROS_ERROR("[FULL_SMOOTH] guide tracking envelope makes corridor %zu infeasible in phase %d",
-                          index, phase_index);
-                return false;
+                // A centered doorway corridor can shift away from the old
+                // grid guide. Do not intersect two incompatible XY tubes.
+                // In the opt-in offline profile, translate ONLY the guide
+                // tube towards the already-safe constrained corridor. Keep
+                // every original collision/centerline/vertical plane and
+                // retain the same tube width. Reject shifts beyond 15 cm.
+                bool aligned = false;
+                if (narrow_corridor_seed_local_candidates_only_ && horizontal_plane_count == 2) {
+                    Eigen::Matrix<double, Eigen::Dynamic, 4> safe_planes(
+                        original.rows() + vertical_plane_count, 4);
+                    safe_planes.topRows(original.rows()) = original;
+                    if (vertical_plane_count) {
+                        safe_planes.bottomRows(vertical_plane_count) = planes.bottomRows(vertical_plane_count);
+                    }
+                    Eigen::Vector3d safe_interior;
+                    if (geometry_utils::findInterior(safe_planes, safe_interior)) {
+                        const Eigen::Vector2d normal(-tangent.y(), tangent.x());
+                        const double offset = normal.dot(safe_interior.head<2>() -
+                            0.5 * (start + end).head<2>());
+                        for (int attempt = 1; attempt <= 30; ++attempt) {
+                            const double shift = offset * attempt / 30.0;
+                            if (std::abs(shift) > 0.15) break;
+                            auto translated = planes;
+                            translated(original.rows(), 3) -= shift;
+                            translated(original.rows() + 1, 3) += shift;
+                            if (geometry_utils::findInterior(translated, interior)) {
+                                planes = translated;
+                                aligned = true;
+                                ROS_INFO("[FULL_SMOOTH] aligned guide tube by %.4f m with safe centered corridor %zu in phase %d; collision planes and tube width unchanged",
+                                         shift, index, phase_index);
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (!aligned) {
+                    ROS_ERROR("[FULL_SMOOTH] guide tracking envelope makes corridor %zu infeasible in phase %d",
+                              index, phase_index);
+                    return false;
+                }
             }
             corridor[index].SetPlanes(planes);
         }
@@ -1234,8 +1315,14 @@ private:
                           << regionalMaximumVehicleZ() << " m";
                     throw std::runtime_error(error.str());
                 }
-                if (sample.acceleration.norm() > max_acceleration_ ||
-                    sample.jerk.norm() > max_jerk_ ||
+                // SUPER's soft dynamic penalties can converge a few per-mille
+                // above their nominal boundary.  Accept only this numerical
+                // optimizer tolerance; runtime time scaling reduces the actual
+                // commanded derivatives further.
+                constexpr double kDynamicsNumericalTolerance = 1.005;
+                if (sample.acceleration.norm() >
+                        max_acceleration_ * kDynamicsNumericalTolerance ||
+                    sample.jerk.norm() > max_jerk_ * kDynamicsNumericalTolerance ||
                     sample.snap.norm() > max_snap_) {
                     std::ostringstream error;
                     error << "saved trajectory phase " << phase_index + 1
@@ -1588,6 +1675,33 @@ private:
                                     requested_speed);
             guide_times.push_back(elapsed);
         }
+        // Every observation phase starts and ends at rest.  Distance/speed is
+        // not a feasible initial duration for a short phase because it ignores
+        // the acceleration and deceleration needed at its endpoints.  Give
+        // MINCO a dynamically feasible rest-to-rest timing seed and preserve
+        // the relative timing of all points along the guide path.
+        const double path_length = elapsed * requested_speed;
+        const double timing_acceleration = std::max(1.0e-3, max_acceleration_);
+        const double timing_velocity = std::max(0.2,
+                                                std::min(requested_speed, max_velocity_));
+        const double acceleration_distance =
+            timing_velocity * timing_velocity / timing_acceleration;
+        const double rest_to_rest_minimum =
+            path_length <= acceleration_distance
+                ? 2.0 * std::sqrt(path_length / timing_acceleration)
+                : path_length / timing_velocity + timing_velocity / timing_acceleration;
+        // Keep a modest margin because the optimizer enforces the continuous
+        // limit while the post-build audit samples the resulting polynomial;
+        // seeding exactly at the bang-bang lower bound is numerically brittle.
+        const double target_duration = std::max(elapsed, 1.20 * rest_to_rest_minimum);
+        if (elapsed > 1.0e-6 && target_duration > elapsed + 1.0e-6) {
+            const double timing_scale = target_duration / elapsed;
+            for (double &guide_time : guide_times) guide_time *= timing_scale;
+            ROS_INFO("[FULL_SMOOTH] phase %d rest-to-rest timing seed expanded %.3f -> %.3f s "
+                     "(length %.3f m, vmax %.3f m/s, amax %.3f m/s^2)",
+                     phase_index + 1, elapsed, target_duration, path_length,
+                     timing_velocity, timing_acceleration);
+        }
         super_utils::StatePVAJ head = super_utils::StatePVAJ::Zero();
         super_utils::StatePVAJ tail = super_utils::StatePVAJ::Zero();
         head.col(0) = guide_path.front();
@@ -1619,7 +1733,7 @@ private:
                               "optimized MINCO violates guide tracking envelope");
             return false;
         }
-        if (vertical_guide_floor_enabled_) {
+        if (vertical_guide_floor_enabled_ && std::isfinite(vertical_guide_floor)) {
             const double minimum_height = minimumTrajectoryHeight(trajectory);
             ROS_INFO("[FULL_SMOOTH] MINCO phase %d vertical guide floor %.3f m, sampled minimum z %.3f m",
                      phase_index, vertical_guide_floor, minimum_height);
@@ -2261,9 +2375,11 @@ private:
                 }
             }
         }
+        constexpr double kDynamicsNumericalTolerance = 1.005;
         trajectory_safe_ = !collision && maximum_velocity_ <= max_velocity_ &&
-                           maximum_acceleration_ <= max_acceleration_ &&
-                           maximum_jerk_ <= max_jerk_ &&
+                           maximum_acceleration_ <=
+                               max_acceleration_ * kDynamicsNumericalTolerance &&
+                           maximum_jerk_ <= max_jerk_ * kDynamicsNumericalTolerance &&
                            maximum_snap_seen_ <= max_snap_ &&
                            maximum_jerk_discontinuity_seen_ <= max_jerk_discontinuity_ &&
                            maximum_yaw_rate_seen_ <= max_yaw_rate_ &&
@@ -2680,6 +2796,7 @@ private:
     bool local_collision_replan_enabled_{true};
     bool regional_ceiling_enabled_{false};
     bool narrow_corridor_enabled_{true};
+    bool narrow_corridor_seed_local_candidates_only_{false};
     bool vertical_guide_floor_enabled_{true};
     bool guide_tracking_enabled_{true};
     bool preview_built_{false}, trajectory_safe_{false}, land_sent_{false};

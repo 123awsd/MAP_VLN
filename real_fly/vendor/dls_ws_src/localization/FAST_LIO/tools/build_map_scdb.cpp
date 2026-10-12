@@ -23,6 +23,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <chrono>
 
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_cloud.h>
@@ -94,8 +95,15 @@ int main(int argc, char** argv) {
   const std::string out_path = argv[2];
   const double grid_step = argc > 3 ? std::atof(argv[3]) : 1.0;
   const double lidar_height = argc > 4 ? std::atof(argv[4]) : 0.5;
+  const bool near_origin = argc == 6 && std::string(argv[5]) == "--near-origin";
+  if (argc > 6 || (argc == 6 && !near_origin) ||
+      !std::isfinite(grid_step) || grid_step <= 0 || !std::isfinite(lidar_height)) {
+    std::cerr << "Invalid arguments; optional final flag: --near-origin" << std::endl;
+    return 2;
+  }
+  const auto started = std::chrono::steady_clock::now();
 
-  const auto map = load_xyz(map_path);
+  auto map = load_xyz(map_path);
   std::cout << "[scdb] map=" << map_path << " points=" << map->size() << std::endl;
 
   double min_x = 1e9, max_x = -1e9, min_y = 1e9, max_y = -1e9;
@@ -107,6 +115,15 @@ int main(int argc, char** argv) {
   }
   std::cout << "[scdb] extent x[" << min_x << ", " << max_x
             << "] y[" << min_y << ", " << max_y << "]" << std::endl;
+  if (near_origin) {
+    // Keep all geometry within 22 m of any candidate in [-1,1]^2.
+    // This is descriptor preprocessing only; the localization PCD is untouched.
+    std::cout << "[scdb] near-origin: retaining environment radius 23.415 m; preprocessing 0.10 m voxels" << std::endl;
+    map = voxel(crop_lidar_frame(map, 0, 0, 22.0 + std::sqrt(2.0), 0), 0.10);
+    min_x = min_y = -1.0;
+    max_x = max_y = 1.0;
+    std::cout << "[scdb] descriptor input points=" << map->size() << std::endl;
+  }
 
   SCManager sc_manager;
   sc_manager.PC_NUM_RING = PC_NUM_RING;
@@ -119,10 +136,20 @@ int main(int argc, char** argv) {
   struct Entry { double x, y; Eigen::MatrixXd desc, key; };
   std::vector<Entry> entries;
   int skipped = 0;
+  int completed = 0;
+  const int total = (int(std::floor((max_x-min_x)/grid_step))+1) *
+                    (int(std::floor((max_y-min_y)/grid_step))+1);
+  std::cout << "[scdb] candidates=" << total << " step=" << grid_step << std::endl;
   for (double cx = min_x; cx <= max_x; cx += grid_step) {
     for (double cy = min_y; cy <= max_y; cy += grid_step) {
       auto crop = crop_lidar_frame(map, cx, cy, db_radius, lidar_height);
       crop = voxel(crop, 0.3);
+      ++completed;
+      if (completed == 1 || completed % 10 == 0 || completed == total) {
+        const double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
+        std::cout << "[scdb] progress " << completed << "/" << total
+                  << " elapsed=" << elapsed << " s" << std::endl;
+      }
       if (crop->size() < 200) { ++skipped; continue; }
       Entry e;
       e.x = cx; e.y = cy;
@@ -132,6 +159,7 @@ int main(int argc, char** argv) {
     }
   }
   std::cout << "[scdb] entries=" << entries.size() << " skipped=" << skipped << std::endl;
+  if (entries.empty()) { std::cerr << "[scdb] no valid candidates; no database written" << std::endl; return 1; }
 
   FILE* f = std::fopen(out_path.c_str(), "wb");
   if (!f) { std::cerr << "[scdb] cannot open " << out_path << std::endl; return 1; }

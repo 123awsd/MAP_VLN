@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
+import copy
 import json
 import math
 from pathlib import Path
@@ -119,7 +120,10 @@ def nearest_safe_index(safe: np.ndarray, requested_xyz, origin, resolution):
 
 
 def flatten_objects(scene_graph: dict) -> list[dict]:
-    return [item for room in scene_graph.get("rooms", []) for item in room.get("objects", [])]
+    result = [item for room in scene_graph.get("rooms", [])
+              for item in room.get("objects", [])]
+    result.extend(scene_graph.get("unassigned_objects", []))
+    return result
 
 
 def match_objects(clusters, base_objects, threshold, maximum_distance):
@@ -155,7 +159,8 @@ def main():
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--rooms", type=Path, required=True)
     parser.add_argument("--scene-graph", type=Path, required=True)
-    parser.add_argument("--clusters", type=Path, required=True)
+    parser.add_argument("--clusters", type=Path,
+                        help="Deprecated compatibility input; reviewed scene_graph objects are authoritative.")
     parser.add_argument("--voxel-snapshot", type=Path, required=True)
     parser.add_argument("--planning-start", type=Path, required=True)
     parser.add_argument("--min-observations", type=int, required=True)
@@ -165,11 +170,11 @@ def main():
     parser.add_argument("--preview", type=Path, required=True)
     parser.add_argument("--maximum-geometry-match-m", type=float, default=2.0)
     parser.add_argument("--maximum-unassigned-gap-m", type=float, default=0.75)
+    parser.add_argument("--maximum-room-overlap-m2", type=float, default=0.25)
     args = parser.parse_args()
 
     draft = json.loads(args.rooms.read_text(encoding="utf-8"))
     base = json.loads(args.scene_graph.read_text(encoding="utf-8"))
-    clusters = json.loads(args.clusters.read_text(encoding="utf-8"))
     metadata = json.loads((args.voxel_snapshot / "metadata.json").read_text(encoding="utf-8"))
     arrays = np.load(args.voxel_snapshot / "voxel_map.npz")
     raw, esdf = arrays["raw_occupancy_zyx"], arrays["esdf_zyx_m"]
@@ -258,8 +263,11 @@ def main():
 
     overlap_cells = int(np.count_nonzero(occupied_by_interiors > 1))
     overlap_area = overlap_cells * overlap_resolution * overlap_resolution
-    if overlap_area > 0.25:
-        errors.append(f"room polygons overlap by {overlap_area:.2f} m^2 (maximum 0.25 m^2)")
+    if overlap_area > args.maximum_room_overlap_m2:
+        errors.append(
+            f"room polygons overlap by {overlap_area:.2f} m^2 "
+            f"(maximum {args.maximum_room_overlap_m2:.2f} m^2)"
+        )
 
     id_set = set(ids)
     adjacency = {room["id"]: set(room.get("adjacent_room_ids", [])) for room in rooms if room.get("id")}
@@ -278,9 +286,11 @@ def main():
         if seen != id_set:
             errors.append("room adjacency graph is disconnected; check doors/transition spaces")
 
-    objects, object_warnings = match_objects(
-        clusters, flatten_objects(base), args.min_observations, args.maximum_geometry_match_m)
-    warnings.extend(object_warnings)
+    # scene_graph.json is the manually reviewed source of truth. Rebuilding
+    # objects from the pre-review localization clusters here would resurrect
+    # deleted detections and discard manual moves/relabels.
+    objects = [copy.deepcopy(item) for item in flatten_objects(base)
+               if int(item.get("observation_count", 1)) >= args.min_observations]
     output_rooms = []
     for room in rooms:
         room_id = room["id"]
@@ -337,6 +347,7 @@ def main():
         "counts": {"rooms": len(output_rooms), "objects": len(objects),
                    "unassigned_objects": len(unassigned), "overlap_cells": overlap_cells},
         "minimum_room_area_m2": args.min_room_area,
+        "maximum_room_overlap_m2": args.maximum_room_overlap_m2,
         "safety": {"voxel_map_unchanged": True, "minimum_esdf_distance_m": minimum_esdf,
                    "planning_start_safe_index_zyx": list(start_index) if start_index else None},
     }

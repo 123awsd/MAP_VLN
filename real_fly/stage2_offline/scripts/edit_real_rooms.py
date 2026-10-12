@@ -116,7 +116,7 @@ class RoomEditor:
         self.ax.set_title(f"{args.run_id}: {source_role} + OccuSG manual room review")
         self.ax.set_xlabel("world x [m]")
         self.ax.set_ylabel("world y [m]")
-        self.draw_clusters()
+        self.draw_scene_objects()
         self.create_controls()
         self.fig.canvas.mpl_connect("button_press_event", self.on_click)
         self.redraw()
@@ -149,19 +149,28 @@ class RoomEditor:
             })
         return rooms
 
-    def draw_clusters(self):
+    def draw_scene_objects(self):
         if self.args.hide_boxes:
             return
-        if not self.args.clusters.is_file():
+        if not self.args.scene_graph.is_file():
             return
-        clusters = json.loads(self.args.clusters.read_text(encoding="utf-8"))
-        selected = [item for item in clusters if int(item.get("observations", 0)) >= self.args.min_observations]
+        scene = json.loads(self.args.scene_graph.read_text(encoding="utf-8"))
+        objects = [obj for room in scene.get("rooms", [])
+                   for obj in room.get("objects", [])]
+        objects.extend(scene.get("unassigned_objects", []))
+        selected = [item for item in objects
+                    if int(item.get("observation_count", 1)) >= self.args.min_observations]
         if not selected:
             return
-        self.ax.scatter([item["world_x_m"] for item in selected],
-                        [item["world_y_m"] for item in selected],
+        self.ax.scatter([item["center_xyz_m"][0] for item in selected],
+                        [item["center_xyz_m"][1] for item in selected],
                         marker="x", s=28, c="#ef4444", zorder=4,
-                        label=f"Box clusters (observations >= {self.args.min_observations})")
+                        label=f"Edited scene objects (observations >= {self.args.min_observations})")
+        for item in selected:
+            short_id = str(item.get("id", "?")).rsplit("_", 1)[-1]
+            self.ax.text(item["center_xyz_m"][0], item["center_xyz_m"][1],
+                         f"[{short_id}] {item.get('label', '?')}", fontsize=7,
+                         color="#ef4444", zorder=5)
         self.ax.legend(loc="upper right")
 
     def create_controls(self):
@@ -400,7 +409,7 @@ def main():
     parser.add_argument("--grid", type=Path, required=True)
     parser.add_argument("--metadata", type=Path, required=True)
     parser.add_argument("--regions", type=Path, required=True)
-    parser.add_argument("--clusters", type=Path, required=True)
+    parser.add_argument("--scene-graph", type=Path, required=True)
     parser.add_argument("--hide-boxes", action="store_true",
                         help="Hide Box cluster markers in the room editor.")
     parser.add_argument("--voxel-metadata", type=Path, required=True)

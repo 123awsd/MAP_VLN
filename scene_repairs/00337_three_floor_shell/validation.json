@@ -1,0 +1,19 @@
+{
+  "static_objects": 14,
+  "depth_center_m": 0.26000040769577026,
+  "new_wall_ray_hits": [
+    {
+      "distance": 0.10999701917171478,
+      "object_id": 2
+    }
+  ],
+  "bad_transition_blocked": true,
+  "bad_transition_actual_falcon": [
+    1.2767415046691895,
+    7.017361402511597,
+    5.121026515960693
+  ],
+  "stairs_min_safe_fraction": 1.0,
+  "stairs_blocked_segments": 0,
+  "stairs_repair_intersections": []
+}

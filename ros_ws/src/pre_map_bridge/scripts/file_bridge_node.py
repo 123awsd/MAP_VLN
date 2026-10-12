@@ -4,13 +4,15 @@
 import csv
 import json
 import os
+import struct
+import tempfile
 from pathlib import Path
 
 import rospy
 from geometry_msgs.msg import Point, PoseStamped, TransformStamped
 from nav_msgs.msg import Odometry, Path as RosPath
 from quadrotor_msgs.msg import PositionCommand
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, PointCloud2, PointField
 from std_msgs.msg import Int32, String
 from visualization_msgs.msg import Marker, MarkerArray
 
@@ -20,11 +22,17 @@ class FileBridge:
         self.root = Path(rospy.get_param("~bridge_dir", "/workspace/shared/bridge"))
         self.root.mkdir(parents=True, exist_ok=True)
         self.last_sequence = -1
+        self.last_blocked_trajectory = None
+        self.contact_points = []
+        self.blocked_pub = rospy.Publisher('/preview/motion_blocked', Int32, queue_size=1)
         self.latest = None
         self.completion_path = self.root / "exploration_complete.json"
         self.completion_written = False
         self.depth_pub = rospy.Publisher("/uav_simulator/depth_image", Image, queue_size=1)
         self.rgb_pub = rospy.Publisher("/habitat/rgb", Image, queue_size=1)
+        self.lidar_pub = rospy.Publisher(
+            "/uav_simulator/lidar_points", PointCloud2, queue_size=1
+        )
         self.odom_pub = rospy.Publisher("/uav_simulator/odometry", Odometry, queue_size=10)
         self.pose_pub = rospy.Publisher("/uav_simulator/sensor_pose", TransformStamped, queue_size=10)
         self.path_pub = rospy.Publisher("/pre_map_vln/agent_path", RosPath, queue_size=1, latch=True)
@@ -45,10 +53,16 @@ class FileBridge:
 
     @staticmethod
     def atomic_json(path, value):
-        temp = path.with_suffix(path.suffix + ".tmp")
-        with temp.open("w", encoding="utf-8") as stream:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=str(path.parent),
+                                         prefix=path.name + ".", delete=False) as stream:
+            temp = stream.name
+            os.fchmod(stream.fileno(), 0o644)
             json.dump(value, stream)
-        os.replace(str(temp), str(path))
+        try:
+            os.replace(temp, str(path))
+        finally:
+            if os.path.exists(temp):
+                os.unlink(temp)
 
     def command_callback(self, msg):
         self.atomic_json(self.root / "command.json", {
@@ -78,25 +92,47 @@ class FileBridge:
         rospy.logwarn("FALCON entered FINISH; wrote %s", self.completion_path)
 
     def load_frame(self):
+        bundle_path = self.root / "frame_bundle.bin"
+        if bundle_path.exists():
+            try:
+                payload = bundle_path.read_bytes()
+                header_size = struct.unpack_from("<I", payload)[0]
+                state = json.loads(payload[4:4 + header_size].decode("utf-8"))
+                if int(state["sequence"]) == self.last_sequence:
+                    return None
+                pixels = int(state["width"]) * int(state["height"])
+                offset = 4 + header_size
+                if len(payload) != offset + pixels * 5:
+                    raise ValueError("Incomplete synchronized RGB-D frame")
+                return state, payload[offset:offset + pixels * 2], payload[offset + pixels * 2:], b""
+            except (OSError, ValueError, KeyError, struct.error) as exc:
+                rospy.logwarn_throttle(2.0, "Synchronized frame not ready: %s", exc)
+                return None
         state_path = self.root / "state.json"
         depth_path = self.root / "depth_u16.raw"
         rgb_path = self.root / "rgb_u8.raw"
-        if not state_path.exists() or not depth_path.exists() or not rgb_path.exists():
+        if not state_path.exists() or not rgb_path.exists():
             return None
         try:
             state = json.loads(state_path.read_text(encoding="utf-8"))
             sequence = int(state["sequence"])
             if sequence == self.last_sequence:
                 return None
-            depth = depth_path.read_bytes()
+            sensor_model = state.get("sensor_model", "camera")
+            depth = depth_path.read_bytes() if sensor_model == "camera" else b""
+            lidar_path = self.root / "lidar_xyz_f32.raw"
+            lidar = lidar_path.read_bytes() if sensor_model == "mid360" else b""
             rgb = rgb_path.read_bytes()
-            if len(depth) != int(state["width"]) * int(state["height"]) * 2:
+            if sensor_model == "camera" and len(depth) != int(state["width"]) * int(state["height"]) * 2:
                 rospy.logwarn_throttle(2.0, "Depth frame size mismatch")
+                return None
+            if sensor_model == "mid360" and (not lidar or len(lidar) % 12):
+                rospy.logwarn_throttle(2.0, "MID-360 pointcloud frame size mismatch")
                 return None
             if len(rgb) != int(state["width"]) * int(state["height"]) * 3:
                 rospy.logwarn_throttle(2.0, "RGB frame size mismatch")
                 return None
-            return state, depth, rgb
+            return state, depth, rgb, lidar
         except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
             rospy.logwarn_throttle(2.0, "Bridge frame not ready: %s", exc)
             return None
@@ -128,6 +164,12 @@ class FileBridge:
         odom.child_frame_id = "base_link"
         odom.pose.pose.position = body_transform.transform.translation
         odom.pose.pose.orientation = body_transform.transform.rotation
+        velocity = self.latest.get('velocity_world', [0.0, 0.0, 0.0])
+        # FALCON's odometryCallback directly consumes these components as
+        # world-frame velocity (its simulator convention), without rotation.
+        odom.twist.twist.linear.x = float(velocity[0])
+        odom.twist.twist.linear.y = float(velocity[1])
+        odom.twist.twist.linear.z = float(velocity[2])
         self.odom_pub.publish(odom)
 
     def publish_boxes(self, _event):
@@ -221,17 +263,41 @@ class FileBridge:
         loaded = self.load_frame()
         if loaded is None:
             return
-        state, depth, rgb = loaded
+        state, depth, rgb, lidar = loaded
         self.latest = state
         self.last_sequence = int(state["sequence"])
         stamp = rospy.Time.now()
         self.publish_pose(stamp)
         image = Image()
+        if state.get('preview_motion_blocked', False):
+            for point in state.get('preview_contact_points', []):
+                if not any(sum((a-b)**2 for a,b in zip(point,q)) < 0.05**2 for q in self.contact_points):
+                    self.contact_points.append(point)
+            # Sparse executed contacts only; never preload the scene mesh.
+            rospy.set_param('/preview/observed_contacts', self.contact_points)
+            blocked_id = int(state.get('blocked_trajectory_id', -1))
+            if blocked_id != self.last_blocked_trajectory:
+                self.last_blocked_trajectory = blocked_id
+                self.blocked_pub.publish(Int32(data=blocked_id))
         image.header.stamp, image.header.frame_id = stamp, "camera"
         image.height, image.width = int(state["height"]), int(state["width"])
-        image.encoding, image.is_bigendian, image.step = "16UC1", False, image.width * 2
-        image.data = depth
-        self.depth_pub.publish(image)
+        if state.get("sensor_model", "camera") == "mid360":
+            cloud = PointCloud2()
+            cloud.header.stamp, cloud.header.frame_id = stamp, "world"
+            cloud.height, cloud.width = 1, len(lidar) // 12
+            cloud.fields = [
+                PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
+                PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
+                PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
+            ]
+            cloud.is_bigendian = False
+            cloud.point_step, cloud.row_step = 12, 12 * cloud.width
+            cloud.is_dense, cloud.data = True, lidar
+            self.lidar_pub.publish(cloud)
+        else:
+            image.encoding, image.is_bigendian, image.step = "16UC1", False, image.width * 2
+            image.data = depth
+            self.depth_pub.publish(image)
 
         rgb_image = Image()
         rgb_image.header.stamp, rgb_image.header.frame_id = stamp, "camera"

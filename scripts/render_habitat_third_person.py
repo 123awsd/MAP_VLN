@@ -63,6 +63,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--height", type=int, default=720)
     parser.add_argument("--source-hz", type=float, default=5.0)
     parser.add_argument("--playback-rate", type=float, default=4.0)
+    parser.add_argument("--camera-mode", choices=("chase", "path-follow"), default="chase")
     parser.add_argument("--hfov", type=float, default=76.0)
     parser.add_argument("--chase-distance", type=float, default=2.00)
     parser.add_argument("--chase-height", type=float, default=0.58)
@@ -70,8 +71,10 @@ def parse_args() -> argparse.Namespace:
         "--camera-smoothing",
         type=float,
         default=0.10,
-        help="Per-frame follow fraction; smaller values make position/yaw smoother.",
+        help="Per-frame follow fraction for camera position, heading and view direction.",
     )
+    parser.add_argument("--camera-max-turn-rate", type=float, default=90.0,
+                        help="Maximum camera turn rate in degrees per output-video second.")
     parser.add_argument("--look-ahead", type=float, default=0.0)
     parser.add_argument("--look-height", type=float, default=0.02)
     parser.add_argument("--drone-scale", type=float, default=0.13)
@@ -509,12 +512,94 @@ def yaw_quaternion(yaw: float) -> mn.Quaternion:
     return mn.Quaternion.rotation(mn.Rad(yaw), mn.Vector3.y_axis())
 
 
+def smooth_view_direction(previous, desired, fraction, max_angle):
+    """Spherical interpolation with an angular bound, including opposite vectors."""
+    if previous is None:
+        return desired.copy()
+    previous = previous / max(np.linalg.norm(previous), 1e-9)
+    desired = desired / max(np.linalg.norm(desired), 1e-9)
+    angle = math.acos(float(np.clip(np.dot(previous, desired), -1.0, 1.0)))
+    if angle < 1e-9:
+        return desired.copy()
+    tangent = desired - np.dot(previous, desired) * previous
+    if np.linalg.norm(tangent) < 1e-8:
+        basis = np.eye(3)[int(np.argmin(np.abs(previous)))]
+        tangent = basis - np.dot(previous, basis) * previous
+    tangent /= np.linalg.norm(tangent)
+    step = min(fraction * angle, max_angle)
+    return math.cos(step) * previous + math.sin(step) * tangent
+
+
+def constrain_camera_segment(sim, origin, destination, clearance=0.10, ignore_object_id=None):
+    """Sweep a small camera envelope and stop before scene geometry."""
+    delta = destination - origin
+    distance = float(np.linalg.norm(delta))
+    if distance < 1e-8:
+        return destination.copy()
+    direction = delta / distance
+    # Parallel rays approximate the camera's physical clearance, rather than
+    # testing only a center ray that can graze corners and clip through walls.
+    offsets = [np.zeros(3)]
+    for axis in np.eye(3):
+        offsets.extend([0.06 * axis, -0.06 * axis])
+    allowed = distance
+    for offset in offsets:
+        result = sim.cast_ray(habitat_sim.geo.Ray(
+            (origin + offset).astype(np.float32), direction.astype(np.float32)
+        ), distance + clearance, 0.0)
+        if result.has_hits():
+            hits = [float(hit.ray_distance) for hit in result.hits
+                    if float(hit.ray_distance) > 0.01
+                    and hit.object_id != ignore_object_id]
+            if hits:
+                allowed = min(allowed, max(0.0, min(hits) - clearance))
+    return origin + allowed * direction
+
+
+def plan_path_follow_camera(sim, positions, yaws, distance, source_hz, ignore_object_id):
+    """Follow the recorded free-space path; anticipate visibility bottlenecks."""
+    arc = np.r_[0.0, np.cumsum(np.linalg.norm(np.diff(positions, axis=0), axis=1))]
+    unique, indices = np.unique(arc, return_index=True)
+    path = positions[indices]
+    def sample(value):
+        if value < 0:
+            return positions[0] + value * forward_in_habitat(float(yaws[0]))
+        return np.array([np.interp(value, unique, path[:, k]) for k in range(3)])
+    lags = np.full(len(positions), distance)
+    for i, position in enumerate(positions):
+        for lag in np.arange(distance, 0.39, -0.10):
+            desired = sample(arc[i] - lag) + np.array([0.0, 0.08, 0.0])
+            safe = constrain_camera_segment(sim, position, desired, clearance=0.08,
+                                            ignore_object_id=ignore_object_id)
+            if np.linalg.norm(safe - desired) < 0.02:
+                lags[i] = lag
+                break
+        else:
+            lags[i] = 0.40
+    # Anticipation removes frame-local emergency camera relocation. A slow
+    # release also prevents zooming back out immediately after every corner.
+    horizon = max(1, round(source_hz * 1.5))
+    anticipated = np.array([lags[max(0,i-horizon):min(len(lags),i+horizon+1)].min()
+                            for i in range(len(lags))])
+    lag = float(anticipated[0]); cameras=[]; previous=None
+    for i, position in enumerate(positions):
+        lag += float(np.clip(anticipated[i]-lag, -0.5/source_hz, 0.20/source_hz))
+        desired = sample(arc[i] - lag) + np.array([0.0, 0.08, 0.0])
+        if previous is not None:
+            desired = previous + 0.18 * (desired - previous)
+            desired = constrain_camera_segment(sim, previous, desired,
+                                                ignore_object_id=ignore_object_id)
+        cameras.append(desired);previous=desired
+    return np.array(cameras)
+
+
 def collision_aware_camera(
     sim: habitat_sim.Simulator,
     position: np.ndarray,
     forward: np.ndarray,
     chase_distance: float,
     chase_height: float,
+    ignore_object_id=None,
 ) -> tuple[np.ndarray, float, float]:
     """Keep a fixed rear chase camera; only shorten distance when obstructed."""
     up = np.asarray([0.0, 1.0, 0.0], dtype=np.float64)
@@ -536,10 +621,11 @@ def collision_aware_camera(
             float(hit.ray_distance)
             for hit in result.hits
             if float(hit.ray_distance) > 0.05
+            and hit.object_id != ignore_object_id
         ]
         if positive_hits:
             hit_distance = min(hit_distance, min(positive_hits))
-    usable_distance = max(0.35, min(desired_distance, hit_distance - 0.12))
+    usable_distance = max(0.01, min(desired_distance, hit_distance - 0.12))
     return ray_origin + usable_distance * ray_direction, 0.0, usable_distance
 
 
@@ -647,6 +733,8 @@ def main() -> None:
         raise ValueError("camera-smoothing must be in (0, 1]")
     if args.emissive_bloom_strength < 0.0 or args.emissive_bloom_radius <= 0.0:
         raise ValueError("emissive bloom strength must be non-negative and radius positive")
+    if args.camera_max_turn_rate <= 0:
+        raise ValueError("camera-max-turn-rate must be positive")
     output_fps = args.source_hz * args.playback_rate
     if abs(output_fps - round(output_fps)) > 1e-6:
         raise ValueError("source-hz * playback-rate must produce an integer output FPS")
@@ -729,35 +817,117 @@ def main() -> None:
         middle_index = len(positions_h) // 2
         smoothed_camera_position = None
         smoothed_view_direction = None
+        camera_yaw = None
+        max_turn_step = math.radians(args.camera_max_turn_rate) / output_fps
         box_hold_frames = max(1, int(round(args.found_box_hold_s * args.source_hz)))
+        path_cameras = None
+        if args.camera_mode == "path-follow":
+            drone.translation = mn.Vector3(10000.0, 10000.0, 10000.0)
+            path_cameras = plan_path_follow_camera(
+                sim, positions_h, yaws, args.chase_distance, args.source_hz, drone.object_id,
+            )
+            print("planned continuous path-follow camera", flush=True)
         try:
             for index, (position, yaw) in enumerate(zip(positions_h, yaws)):
+                # Ray queries can include visual geometry even for a non-collidable
+                # kinematic model. Remove it from the query region, then restore
+                # its exact recorded pose before rendering this frame.
+                drone.translation = mn.Vector3(10000.0, 10000.0, 10000.0)
                 forward = forward_in_habitat(float(yaw))
-                desired_camera_position, camera_angle, camera_clearance = collision_aware_camera(
-                    sim,
-                    position,
-                    forward,
-                    args.chase_distance,
-                    args.chase_height,
-                )
-                if smoothed_camera_position is None:
-                    smoothed_camera_position = desired_camera_position.copy()
+                if path_cameras is not None:
+                    camera_position = path_cameras[index]
+                    target = position + np.asarray([0.0, 0.02, 0.0])
+                    smoothed_view_direction = target - camera_position
+                    smoothed_view_direction /= max(np.linalg.norm(smoothed_view_direction), 1e-9)
+                    camera_angle = 0.0
+                    camera_clearance = float(np.linalg.norm(camera_position-position))
                 else:
-                    smoothed_camera_position += args.camera_smoothing * (
-                        desired_camera_position - smoothed_camera_position
+                    if camera_yaw is None:
+                        camera_yaw = float(yaw)
+                    else:
+                        yaw_delta = math.atan2(math.sin(float(yaw) - camera_yaw),
+                                               math.cos(float(yaw) - camera_yaw))
+                        camera_yaw += float(np.clip(args.camera_smoothing * yaw_delta,
+                                                    -max_turn_step, max_turn_step))
+                    camera_forward = forward_in_habitat(camera_yaw)
+                    desired_camera_position, camera_angle, camera_clearance = collision_aware_camera(
+                        sim,
+                        position,
+                        camera_forward,
+                        args.chase_distance,
+                        args.chase_height,
+                        ignore_object_id=drone.object_id,
                     )
-                camera_position = smoothed_camera_position
-                target = (
-                    position
-                    + args.look_ahead * forward
-                    + np.asarray([0.0, args.look_height, 0.0])
-                )
-                desired_view_direction = target - camera_position
-                desired_view_direction /= max(np.linalg.norm(desired_view_direction), 1e-9)
-                # Do not cap angular speed: the view follows the UAV yaw directly.
-                # Position smoothing remains enabled to suppress translational jitter.
-                smoothed_view_direction = desired_view_direction
-                target = camera_position + smoothed_view_direction
+                    if smoothed_camera_position is None:
+                        candidate_camera = desired_camera_position.copy()
+                    else:
+                        candidate_camera = smoothed_camera_position + args.camera_smoothing * (
+                            desired_camera_position - smoothed_camera_position
+                        )
+                        candidate_camera = constrain_camera_segment(
+                            sim, smoothed_camera_position, candidate_camera,
+                            ignore_object_id=drone.object_id,
+                        )
+                    # Recheck visibility AFTER smoothing: interpolation can otherwise
+                    # put a safe chase pose behind a wall or cut across a corner.
+                    camera_position = constrain_camera_segment(
+                        sim, position + np.asarray([0.0, 0.10, 0.0]), candidate_camera,
+                        ignore_object_id=drone.object_id,
+                    )
+                    if np.linalg.norm(camera_position - position) < 0.65:
+                        # A blocked rear view must not collapse into the drone.
+                        # Try nearby orbit positions and retain the nearest usable
+                        # view to the smoothed camera, with adequate subject distance.
+                        alternatives = []
+                        origin = position + np.asarray([0.0, 0.10, 0.0])
+                        for angle_deg in range(-180, 181, 15):
+                            orbit_forward = forward_in_habitat(
+                                camera_yaw + math.radians(angle_deg)
+                            )
+                            for height in (args.chase_height, 0.20):
+                                desired = position - args.chase_distance * orbit_forward
+                                desired = desired + np.asarray([0.0, height, 0.0])
+                                safe = constrain_camera_segment(
+                                    sim, origin, desired, ignore_object_id=drone.object_id,
+                                )
+                                distance = float(np.linalg.norm(safe - position))
+                                if distance >= 0.65:
+                                    reference = smoothed_camera_position if smoothed_camera_position is not None else candidate_camera
+                                    score = float(np.linalg.norm(safe - reference))
+                                    score += 2.0 * max(0.0, 1.2 - distance)
+                                    alternatives.append((score, safe))
+                        if alternatives:
+                            camera_position = min(alternatives, key=lambda item: item[0])[1]
+                    smoothed_camera_position = camera_position.copy()
+                    target = (
+                        position
+                        + args.look_ahead * forward
+                        + np.asarray([0.0, args.look_height, 0.0])
+                    )
+                    desired_view_direction = target - camera_position
+                    desired_view_direction /= max(np.linalg.norm(desired_view_direction), 1e-9)
+                    smoothed_view_direction = smooth_view_direction(
+                        smoothed_view_direction, desired_view_direction,
+                        args.camera_smoothing, max_turn_step,
+                    )
+                    # Tracking takes priority over the turn limit: keep the drone
+                    # center within a conservative cone inside both image axes.
+                    drone_direction = position - camera_position
+                    drone_direction /= max(np.linalg.norm(drone_direction), 1e-9)
+                    vertical_fov = 2.0 * math.atan(
+                        math.tan(math.radians(args.hfov) / 2.0)
+                        * args.height / args.width
+                    )
+                    tracking_margin = min(math.radians(10.0), vertical_fov / 4.0)
+                    tracking_error = math.acos(float(np.clip(
+                        np.dot(smoothed_view_direction, drone_direction), -1.0, 1.0
+                    )))
+                    if tracking_error > tracking_margin:
+                        smoothed_view_direction = smooth_view_direction(
+                            smoothed_view_direction, drone_direction, 1.0,
+                            tracking_error - tracking_margin,
+                        )
+                    target = camera_position + smoothed_view_direction
 
                 drone.translation = mn.Vector3(*position)
                 drone.rotation = yaw_quaternion(float(yaw)) * model_forward_correction
@@ -828,7 +998,9 @@ def main() -> None:
         "duration_s": len(positions_h) / output_fps,
         "chase_distance_m": args.chase_distance,
         "chase_height_m": args.chase_height,
+        "camera_mode": args.camera_mode,
         "camera_smoothing": args.camera_smoothing,
+        "camera_max_turn_rate_deg_s": args.camera_max_turn_rate,
         "drone_scale": args.drone_scale,
         "drone_glow": args.drone_glow,
         "model_emissive_bloom": args.model_emissive_bloom,

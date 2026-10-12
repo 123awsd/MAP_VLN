@@ -47,6 +47,9 @@ class VoxelMap3D:
         self.resolution = float(resolution_m)
         self.profile = profile
         self.identity = identity
+        self.collision_point_tree = None
+        self.collision_point_clearance_m = 0.0
+        self.collision_point_distances = None
         # FALCON's B-spline collision constraint is an ESDF threshold. Unknown
         # remains blocked even if its distance to occupied geometry is large.
         self.inflated_free = (
@@ -59,10 +62,48 @@ class VoxelMap3D:
         metadata = json.loads((directory / "metadata.json").read_text(encoding="utf-8"))
         arrays = np.load(directory / "voxel_map.npz")
         identity = MapIdentity(**metadata["identity"])
-        return cls(
+        result = cls(
             arrays["raw_occupancy_zyx"], arrays["esdf_zyx_m"],
             metadata["origin_xyz_m"], metadata["resolution_m"], profile, identity,
         )
+        guard = metadata.get("collision_point_guard")
+        if guard:
+            from scipy.spatial import cKDTree
+            from real_fly.stage2_runtime.scripts.build_super_collision_pcd import read_binary_xyz
+            pcd_path = Path(guard["pcd_path"])
+            if not pcd_path.is_absolute():
+                pcd_path = directory / pcd_path
+            result.collision_point_tree = cKDTree(read_binary_xyz(pcd_path))
+            result.collision_point_clearance_m = float(guard["clearance_m"])
+            indices = np.argwhere(result.inflated_free)
+            points = result.origin + (indices[:, ::-1] + 0.5) * result.resolution
+            distances = result.collision_point_tree.query(points)[0]
+            result.collision_point_distances = np.zeros(result.raw.shape, dtype=np.float32)
+            result.collision_point_distances[indices[:, 0], indices[:, 1], indices[:, 2]] = distances
+            bad = indices[distances < result.collision_point_clearance_m]
+            result.inflated_free[bad[:, 0], bad[:, 1], bad[:, 2]] = False
+        return result
+
+    def collision_point_line_is_valid(self, start_xyz, end_xyz) -> bool:
+        if self.collision_point_tree is None:
+            return True
+        start, end = np.asarray(start_xyz), np.asarray(end_xyz)
+        length = float(np.linalg.norm(end - start))
+        bounds = []
+        for point in (start, end):
+            index = self.world_to_voxel(point)
+            if not self.in_bounds(index):
+                return False
+            center = np.asarray(self.voxel_to_world(index))
+            x, y, z = index
+            bounds.append(float(self.collision_point_distances[z, y, x]) - float(np.linalg.norm(point - center)))
+        if min(bounds) - length / 2 >= self.collision_point_clearance_m:
+            return True
+        count = max(1, int(math.ceil(length / 0.02)))
+        points = start + np.linspace(0.0, 1.0, count + 1)[:, None] * (end - start)
+        # Distance is 1-Lipschitz; half the sample spacing bounds unseen dips.
+        bound = float(self.collision_point_tree.query(points)[0].min()) - length / (2 * count)
+        return bound + 1e-9 >= self.collision_point_clearance_m
 
     @property
     def shape_xyz(self) -> tuple[int, int, int]:
@@ -99,7 +140,10 @@ class VoxelMap3D:
         if not self.in_bounds(index):
             return False
         x, y, z = index
-        return bool(self.inflated_free[z, y, x])
+        if not self.inflated_free[z, y, x]:
+            return False
+        return (self.collision_point_tree is None or
+                self.collision_point_tree.query(list(xyz))[0] >= self.collision_point_clearance_m)
 
     def nearest_valid(self, xyz: Iterable[float], radius_m: float | None = None) -> list[float] | None:
         radius = self.profile.nearest_free_radius_m if radius_m is None else float(radius_m)
@@ -125,6 +169,8 @@ class VoxelMap3D:
         start = np.asarray(list(start_xyz), dtype=float)
         end = np.asarray(list(end_xyz), dtype=float)
         distance = float(np.linalg.norm(end - start))
+        if not self.collision_point_line_is_valid(start, end):
+            return False
         samples = max(1, int(math.ceil(distance / (0.5 * self.resolution))))
         return all(
             self.is_state_valid(start + (end - start) * (index / samples))

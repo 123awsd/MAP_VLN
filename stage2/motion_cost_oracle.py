@@ -46,6 +46,11 @@ class MotionCostOracle:
         start = self.planner.world_to_cell(start_xyz)
         goal = self.planner.world_to_cell(goal_xyz)
         payload = [*namespace, start, goal]
+        if self.voxel_map.collision_point_tree is not None:
+            payload.extend([
+                "collision_point_guard_v1", self.voxel_map.collision_point_clearance_m,
+                list(start_xyz), list(goal_xyz),
+            ])
         return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
     def _save(self) -> None:

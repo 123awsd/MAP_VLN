@@ -1,0 +1,97 @@
+--- a/falcon_planner/pathfinding/src/astar.cpp
++++ b/falcon_planner/pathfinding/src/astar.cpp
+@@ -6,6 +6,14 @@
+ using namespace Eigen;
+ 
+ namespace fast_planner {
++namespace {
++bool previewClearanceSafe(const voxel_mapping::MapServer::Ptr &map, const Vector3d &p) {
++  static const double minimum = [] { double v; ros::param::param<double>("/astar/preview_min_clearance", v, 0.0); return v; }();
++  if (minimum <= 0.0) return true;
++  return map->isInBox(p) && p.z() >= 0.8 && p.z() <= 1.5 &&
++         map->getESDF()->getVoxel(p).value >= minimum;
++}
++}
+ Astar::Astar() {}
+ 
+ Astar::~Astar() {
+@@ -133,7 +141,7 @@
+       break;
+     }
+ 
+-    return is_valid;
++    return is_valid && ((mode != MODE::FREE_ONLY && mode != MODE::FREE_ONLY_BBOX) || previewClearanceSafe(map_server_, p));
+   };
+ 
+   AstarNode::Ptr cur_node = path_node_pool_[0];
+@@ -284,6 +292,7 @@
+   const VoxelIndex start_voxel_idx =
+       map_server_->getOccupancyGrid()->positionToIndex(start_pt);
+   auto isFreeOrUnknownStartVoxel = [&](const Position &p) {
++    if (!previewClearanceSafe(map_server_, p)) return false;
+     const VoxelIndex idx = map_server_->getOccupancyGrid()->positionToIndex(p);
+     const voxel_mapping::OccupancyType voxel_type =
+         map_server_->getOccupancyGrid()->getVoxel(idx).value;
+@@ -434,6 +443,7 @@
+   const VoxelIndex start_voxel_idx =
+       map_server_->getOccupancyGrid()->positionToIndex(start_pt);
+   auto isFreeOrUnknownStartVoxel = [&](const Position &p) {
++    if (!previewClearanceSafe(map_server_, p)) return false;
+     const VoxelIndex idx = map_server_->getOccupancyGrid()->positionToIndex(p);
+     const voxel_mapping::OccupancyType voxel_type =
+         map_server_->getOccupancyGrid()->getVoxel(idx).value;
+@@ -1127,7 +1137,8 @@
+       Eigen::Vector3i idx;
+       while (ray_caster_->nextId(idx) && ros::ok()) {
+         if (map_server_->getOccupancy(idx) == voxel_mapping::OccupancyType::OCCUPIED ||
+-            map_server_->getOccupancy(idx) == voxel_mapping::OccupancyType::UNKNOWN) {
++            map_server_->getOccupancy(idx) == voxel_mapping::OccupancyType::UNKNOWN ||
++            !previewClearanceSafe(map_server_, map_server_->getTSDF()->indexToPosition(idx))) {
+           // Occuluded by obstacles or unknown space,
+           // short_tour.push_back(path[i]);
+           occluded = true;
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+@@ -1877,6 +1877,22 @@
+   ROS_INFO("[ExplorationManager] Traj plan t: %.4lf, yaw plan t: %.4lf", traj_plan_time,
+            yaw_time);
+ 
++  double preview_clearance = 0.0;
++  ros::param::param<double>("/astar/preview_min_clearance", preview_clearance, 0.0);
++  if (preview_clearance > 0.0) {
++    auto &trajectory = planner_manager_->local_data_.position_traj_;
++    const double duration = trajectory.getTimeSum();
++    const int count = std::max(1, int(std::ceil(duration / 0.05)));
++    for (int i = 0; i <= count; ++i) {
++      const Vector3d sample = trajectory.evaluateDeBoorT(duration * i / count);
++      if (!map_server_->isInBox(sample) || sample.z() < 0.8 || sample.z() > 1.5 ||
++          map_server_->getOccupancy(sample) != voxel_mapping::OccupancyType::FREE ||
++          map_server_->getESDF()->getVoxel(sample).value < preview_clearance) {
++        ROS_WARN("[PreviewTrajectoryGuard] unsafe B-spline sample (%.3f,%.3f,%.3f); use native FALCON A* prefix", sample.x(), sample.y(), sample.z());
++        return planSafeAstarPrefix(pos, yaw[0], 2.0) ? SUCCEED : FAIL;
++      }
++    }
++  }
+   return SUCCEED;
+ }
+ 
+@@ -1912,6 +1928,8 @@
+   }
+ 
+   const double sample_step = std::max(0.02, 0.5 * map_server_->getResolution());
++  double preview_clearance = 0.0;
++  ros::param::param<double>("/astar/preview_min_clearance", preview_clearance, 0.0);
+   for (auto endpoint_it = endpoints.rbegin(); endpoint_it != endpoints.rend(); ++endpoint_it) {
+     const Vector3d endpoint = *endpoint_it;
+     const Vector3d delta = endpoint - pos;
+@@ -1920,7 +1938,9 @@
+     const int sample_count = std::max(1, int(std::ceil(distance / sample_step)));
+     for (int sample = 0; sample <= sample_count; ++sample) {
+       const Vector3d point = pos + delta * (double(sample) / double(sample_count));
+-      if (map_server_->getOccupancy(point) != voxel_mapping::OccupancyType::FREE) {
++      if (map_server_->getOccupancy(point) != voxel_mapping::OccupancyType::FREE ||
++          (preview_clearance > 0.0 && (!map_server_->isInBox(point) || point.z() < 0.8 || point.z() > 1.5 ||
++           map_server_->getESDF()->getVoxel(point).value < preview_clearance))) {
+         free_corridor = false;
+         break;
+       }

@@ -53,12 +53,14 @@ def parse_args() -> argparse.Namespace:
         default=0.86,
         help="Camera distance multiplier; smaller values make the scene larger.",
     )
+    parser.add_argument("--trajectory-color", default=None, help="Fixed RGB hex color, e.g. FF006E")
     parser.add_argument("--trajectory-radius", type=float, default=0.015)
     parser.add_argument("--trajectory-line-width", type=int, default=2)
     parser.add_argument("--trajectory-outline-width", type=int, default=4)
     parser.add_argument("--trajectory-halo-width", type=int, default=0)
     parser.add_argument("--task-marker-radius", type=int, default=4)
     parser.add_argument("--endpoint-marker-radius", type=int, default=4)
+    parser.add_argument("--current-frustum", action="store_true")
     parser.add_argument("--frustum-depth", type=float, default=1.0)
     parser.add_argument("--frustum-line-width", type=int, default=2)
     parser.add_argument("--observation-hfov", type=float, default=90.0)
@@ -115,7 +117,7 @@ def trajectory_in_habitat(execution: dict, generated: dict) -> np.ndarray:
     trajectory_f = np.asarray(execution["trajectory_xyz_yaw"], dtype=np.float64)
     if trajectory_f.ndim != 2 or trajectory_f.shape[0] < 2 or trajectory_f.shape[1] < 3:
         raise ValueError("execution trajectory_xyz_yaw must contain at least two XYZ poses")
-    initial_agent_h = np.asarray(generated["initial_agent_habitat_xyz"], dtype=np.float64)
+    initial_agent_h = np.asarray(generated.get("initial_sensor_habitat_xyz", generated["initial_agent_habitat_xyz"]), dtype=np.float64)
     return initial_agent_h + (
         S_HABITAT_TO_FALCON.T
         @ (trajectory_f[:, :3] - FALCON_INITIAL_POSITION).T
@@ -124,7 +126,7 @@ def trajectory_in_habitat(execution: dict, generated: dict) -> np.ndarray:
 
 def falcon_points_in_habitat(points_f: np.ndarray, generated: dict) -> np.ndarray:
     points_f = np.asarray(points_f, dtype=np.float64).reshape(-1, 3)
-    initial_agent_h = np.asarray(generated["initial_agent_habitat_xyz"], dtype=np.float64)
+    initial_agent_h = np.asarray(generated.get("initial_sensor_habitat_xyz", generated["initial_agent_habitat_xyz"]), dtype=np.float64)
     return initial_agent_h + (
         S_HABITAT_TO_FALCON.T
         @ (points_f - FALCON_INITIAL_POSITION).T
@@ -235,6 +237,7 @@ def draw_xray_trajectory(
     frustum_line_width: int,
     color_height_range: tuple[float, float],
     show_current_position: bool,
+    fixed_color=None,
 ) -> np.ndarray:
     height, width = rgb.shape[:2]
     pixels, depth = project_points(points, camera_position, target, width, height, hfov_deg)
@@ -265,6 +268,8 @@ def draw_xray_trajectory(
         color_rgb = color_for_height(
             0.5 * (points[index, 1] + points[index + 1, 1]), path_low, path_high
         )
+        if fixed_color is not None:
+            color_rgb = fixed_color
         cv2.line(overlay, start, end, color_rgb[::-1], line_width, cv2.LINE_AA)
 
     frustum_edges = (
@@ -315,8 +320,8 @@ def draw_xray_trajectory(
 
     # Start is fixed and the red head advances with the revealed trajectory.
     # At the final frame the moving head is also the true endpoint.
-    endpoint_markers = [(0, (60, 220, 70))]
-    if show_current_position and len(points) > 1:
+    endpoint_markers = [(0, (60, 220, 70))] if endpoint_marker_radius > 0 else []
+    if endpoint_marker_radius > 0 and show_current_position and len(points) > 1:
         endpoint_markers.append((-1, (45, 55, 245)))
     for point_index, color_bgr in endpoint_markers:
         center = tuple(np.rint(pixels[point_index]).astype(int))
@@ -383,8 +388,8 @@ def render(args: argparse.Namespace) -> None:
         raise ValueError("scene saturation must be non-negative")
     if args.task_marker_radius <= 0:
         raise ValueError("task marker radius must be positive")
-    if args.endpoint_marker_radius <= 0:
-        raise ValueError("endpoint marker radius must be positive")
+    if args.endpoint_marker_radius < 0:
+        raise ValueError("endpoint marker radius must be nonnegative")
     if args.frustum_depth <= 0 or args.frustum_line_width <= 0:
         raise ValueError("frustum depth and line width must be positive")
     if args.start_hold_fraction < 0 or args.end_hold_fraction < 0:
@@ -504,6 +509,12 @@ def render(args: argparse.Namespace) -> None:
                     else [event["frustum"] for event in reached_events]
                 )
 
+                if args.current_frustum:
+                    pose = execution["trajectory_xyz_yaw"][revealed_pose_count - 1]
+                    frustum_f = observation_frustum_in_falcon(
+                        pose, args.frustum_depth, args.observation_hfov, 16.0 / 9.0
+                    )
+                    visible_frustums = [falcon_points_in_habitat(frustum_f, generated)]
                 angle = math.radians(args.orbit_start_deg) + 2.0 * math.pi * frame_index / args.frames
                 camera_position = target + np.asarray(
                     [
@@ -548,6 +559,7 @@ def render(args: argparse.Namespace) -> None:
                         args.frustum_line_width,
                         (float(points[:, 1].min()), float(points[:, 1].max())),
                         show_current_position=revealed_pose_count > 1,
+                        fixed_color=(tuple(int(args.trajectory_color.lstrip("#")[i:i+2],16) for i in (0,2,4)) if args.trajectory_color else None),
                     )
                 if not args.no_caption:
                     rgb = add_caption(

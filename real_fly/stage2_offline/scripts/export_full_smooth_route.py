@@ -101,10 +101,13 @@ def main():
             raise SystemExit(f"visit {index} has invalid yaw")
         if not points or math.dist(points[-1], terminal) > 1.0e-6:
             points.append(terminal)
+        dwell = float(visit.get("dwell_s", args.dwell))
+        if not math.isfinite(dwell) or not 0.0 <= dwell <= 30.0:
+            raise SystemExit(f"visit {index} dwell_s must be in [0.0, 30.0] s")
         for point_index, point in enumerate(points):
             is_terminal = point_index == len(points) - 1
             if is_terminal:
-                rows.append((*point, args.speed, math.degrees(yaw), args.dwell, "stop"))
+                rows.append((*point, args.speed, math.degrees(yaw), dwell, "stop"))
             else:
                 rows.append((*point, args.speed, float("nan"), 0.0, "pass"))
             previous = point
@@ -120,7 +123,9 @@ def main():
             )
     print(json.dumps({"output": str(args.output), "points": len(rows),
                       "stops": len(visits), "speed_mps": args.speed,
-                      "dwell_s": args.dwell, "path_source": args.path_source},
+                      "default_dwell_s": args.dwell,
+                      "visit_dwell_s": [float(visit.get("dwell_s", args.dwell)) for visit in visits],
+                      "path_source": args.path_source},
                      ensure_ascii=False))
 
 

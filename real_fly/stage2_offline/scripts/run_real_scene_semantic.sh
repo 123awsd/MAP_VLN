@@ -10,6 +10,8 @@ Usage:
 
 Required input:
   real_fly/stage1_exploration/data/ID/raw/sensors.bag
+  New recordings also contain online/completion.json and online/dense_map.pcd;
+  they automatically skip offline FAST-LIO replay.
 
 Options:
   --run-id ID                 Input/output run id.
@@ -17,10 +19,15 @@ Options:
   --boxer-mode complete|smoke Complete fused Boxer pass (default: complete).
   --2d-detector grounding_dino|owlv2
                               2-D detector; default is grounding_dino.
+  --labels TEXT               Per-run object vocabulary. Chinese/English names may be
+                              separated by Chinese or English commas.
+  --confidence VALUE          2-D detector confidence threshold in [0,1].
+                              Defaults: Grounding DINO 0.25, OWLv2 0.18.
   --frame-period SEC          RGB-D keyframe interval (default: 1.0).
   --max-frames N              Maximum exported RGB-D frames (default: 999).
   --depth-source raw|aligned  Depth source; raw is the default and recommended.
   --inner-box-scale VALUE     Depth crop scale for 2-D target localization (default: 1.0).
+  --voxel-resolution VALUE   Per-run occupancy and A* resolution (default: 0.20 m).
   --boxer-python PATH         Boxer Python environment.
   --skip-fastlio              Reuse existing fastlio_complete output.
   --skip-boxer                Reuse existing Boxer output; fail if absent.
@@ -41,6 +48,9 @@ frame_period="1.0"
 max_frames="999"
 depth_source="raw"
 inner_box_scale="1.0"
+custom_labels=""
+confidence=""
+voxel_resolution="0.20"
 boxer_python=""
 skip_fastlio=0
 skip_boxer=0
@@ -53,10 +63,13 @@ while [[ $# -gt 0 ]]; do
     --input-run-id) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; input_run_id="$2"; shift 2 ;;
     --boxer-mode) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; boxer_mode="$2"; shift 2 ;;
     --2d-detector) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; detector_2d="$2"; shift 2 ;;
+    --labels) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; custom_labels="$2"; shift 2 ;;
+    --confidence) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; confidence="$2"; shift 2 ;;
     --frame-period) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; frame_period="$2"; shift 2 ;;
     --max-frames) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; max_frames="$2"; shift 2 ;;
     --depth-source) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; depth_source="$2"; shift 2 ;;
     --inner-box-scale) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; inner_box_scale="$2"; shift 2 ;;
+    --voxel-resolution) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; voxel_resolution="$2"; shift 2 ;;
     --boxer-python) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; boxer_python="$2"; shift 2 ;;
     --skip-fastlio) skip_fastlio=1; shift ;;
     --skip-boxer) skip_boxer=1; shift ;;
@@ -76,13 +89,31 @@ if [[ -z "$input_run_id" ]]; then input_run_id="$run_id"; fi
 [[ "$inner_box_scale" =~ ^[0-9]+([.][0-9]+)?$ && "$inner_box_scale" != 0 ]] || { echo "Invalid --inner-box-scale" >&2; exit 2; }
 [[ "$frame_period" =~ ^[0-9]+([.][0-9]+)?$ && "$frame_period" != 0 ]] || { echo "Invalid --frame-period" >&2; exit 2; }
 [[ "$max_frames" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid --max-frames" >&2; exit 2; }
+[[ "$voxel_resolution" =~ ^0[.][0-9]+$ ]] || { echo "Invalid --voxel-resolution" >&2; exit 2; }
+if [[ -n "$confidence" ]]; then
+  python3 - "$confidence" <<'PY' || { echo "Invalid --confidence: $confidence (expected a value in [0,1])" >&2; exit 2; }
+import math
+import sys
+
+value = float(sys.argv[1])
+if not math.isfinite(value) or not 0.0 <= value <= 1.0:
+    raise SystemExit(1)
+PY
+fi
 
 if [[ "$detector_2d" == grounding_dino ]]; then
   boxer_detector="grounding_dino"
   detector_threshold="0.25"
+  # The measured model is already cached locally. Avoid optional Hugging Face
+  # metadata probes making an otherwise offline run depend on HTTPS health.
+  export HF_HUB_OFFLINE=1
+  export TRANSFORMERS_OFFLINE=1
 else
   boxer_detector="owl"
   detector_threshold="0.18"
+fi
+if [[ -n "$confidence" ]]; then
+  detector_threshold="$confidence"
 fi
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -114,6 +145,7 @@ BOXER_PY="${boxer_python:-${BOXER_PY:-$ROOT/.envs/boxer/bin/python}}"
 CALIBRATION="$ROOT/real_fly/calibration/config/calib_01_lidar_camera.json"
 FASTLIO_CONFIG="$STAGE1_DIR/config/fast_lio_mid360_handheld.yaml"
 PLANNING_CONFIG="$STAGE2_DIR/config/uav_3d_planning_real.yaml"
+RUN_PLANNING_CONFIG="$RUN_DATA/uav_3d_planning_real.yaml"
 CONTAINER_ROOT="/home/nv/SL_WS/PRE_MAP_VLN_real_fly"
 CONTAINER_STAGE1="$CONTAINER_ROOT/real_fly/stage1_exploration"
 CONTAINER_STAGE2="$CONTAINER_ROOT/real_fly/stage2_offline"
@@ -121,6 +153,15 @@ CONTAINER_INPUT_RUN_ID="$input_run_id"
 
 echo "Safety scope: offline only; source Bag is read-only; no flight/control node is started."
 [[ -f "$BAG" ]] || { echo "Missing Bag: $BAG" >&2; exit 2; }
+ONLINE_SOURCE="$STAGE1_DIR/data/$input_run_id/online"
+online_mode=0
+if [[ -d "$ONLINE_SOURCE" ]]; then
+  [[ -s "$ONLINE_SOURCE/completion.json" ]] || {
+    echo "Online map did not finish saving: $ONLINE_SOURCE/completion.json missing" >&2; exit 2;
+  }
+  online_mode=1
+  echo "Online dense map detected: skip FAST-LIO replay; use recorded EKF for RGB-D projection."
+fi
 if [[ -e "$RUN_DATA" && "$resume" -eq 0 ]]; then
   echo "Refusing to overwrite existing output: $RUN_DATA" >&2
   echo "Use --resume to continue completed stages, or choose a new --run-id." >&2
@@ -147,6 +188,25 @@ if ! sudo docker image inspect "$NOETIC_IMAGE" >/dev/null 2>&1; then
 fi
 
 mkdir -p "$RUN_DATA"
+python3 "$SCRIPT_DIR/prepare_run_planning_config.py" \
+  --base "$PLANNING_CONFIG" --output "$RUN_PLANNING_CONFIG" \
+  --voxel-resolution "$voxel_resolution"
+CONTAINER_RUN_PLANNING_CONFIG="$CONTAINER_STAGE2/data/$run_id/uav_3d_planning_real.yaml"
+
+pose_options="--pose-bag $CONTAINER_STAGE2/data/$run_id/fastlio_complete/mapping_outputs.bag --pose-topic /Odometry"
+if [[ "$online_mode" -eq 1 ]]; then
+  if [[ "$resume" -eq 1 && -s "$FASTLIO/online_import.json" ]]; then
+    echo "Resume: reuse imported online map"
+  else
+    python3 "$SCRIPT_DIR/import_online_map.py" --source "$ONLINE_SOURCE" \
+      --output "$FASTLIO" --input-run-id "$input_run_id" --run-id "$run_id"
+  fi
+  skip_fastlio=1
+  pose_options="--pose-bag $CONTAINER_STAGE1/data/$CONTAINER_INPUT_RUN_ID/raw/sensors.bag --pose-topic /ekf_quat/ekf_odom --ekf-reference $CONTAINER_STAGE2/data/$run_id/fastlio_complete/ekf_reference.json --online-map"
+  if [[ -s "$ONLINE_SOURCE/leveled_pose.bag" ]]; then
+    pose_options="--pose-bag $CONTAINER_STAGE1/data/$CONTAINER_INPUT_RUN_ID/online/leveled_pose.bag --pose-topic /ekf_quat/ekf_odom --ekf-reference $CONTAINER_STAGE2/data/$run_id/fastlio_complete/ekf_reference.json --online-map"
+  fi
+fi
 
 if [[ "$resume" -eq 1 && -s "$LOCAL_MAP" && -s "$MAPPING_BAG" ]]; then
   skip_fastlio=1
@@ -173,7 +233,7 @@ else
 fi
 [[ -s "$LOCAL_MAP" && -s "$MAPPING_BAG" ]] || { echo "FAST-LIO output missing: $FASTLIO" >&2; exit 2; }
 
-if [[ "$resume" -eq 1 && -s "$GLOBAL_MAP" && -s "$GLOBAL_MAP_REPORT" ]]; then
+if [[ ( "$resume" -eq 1 || "$online_mode" -eq 1 ) && -s "$GLOBAL_MAP" && -s "$GLOBAL_MAP_REPORT" ]]; then
   echo "Resume: reuse accumulated global point cloud: $GLOBAL_MAP"
 else
   [[ ! -e "$GLOBAL_MAP" && ! -e "$GLOBAL_MAP_REPORT" ]] || {
@@ -188,9 +248,15 @@ fi
 if [[ "$resume" -eq 1 && -f "$EPISODE/manifest.json" ]]; then
   echo "Resume: reuse exported RGB-D episode: $EPISODE"
 else
+  camera_config="$CONTAINER_ROOT/real_fly/calibration/config/calib_01_lidar_camera.json"
+  lio_config="$CONTAINER_STAGE1/config/fast_lio_mid360_handheld.yaml"
+  if [[ "$online_mode" -eq 1 ]]; then
+    camera_config="$CONTAINER_STAGE2/data/$run_id/fastlio_complete/lidar_camera.json"
+    lio_config="$CONTAINER_STAGE2/data/$run_id/fastlio_complete/fastlio.yaml"
+  fi
   [[ ! -e "$EPISODE" ]] || { echo "Partial episode exists without manifest; remove or rename it before retrying: $EPISODE" >&2; exit 2; }
   "${DOCKER[@]}" --shm-size=4g "$NOETIC_IMAGE" bash -lc \
-    "source /opt/ros/noetic/setup.bash && source /home/nv/dls_ws/devel/setup.bash && python3 $CONTAINER_STAGE2/scripts/export_real_boxer_episode.py $CONTAINER_STAGE1/data/$CONTAINER_INPUT_RUN_ID/raw/sensors.bag $CONTAINER_STAGE2/data/$run_id/fastlio_complete/handheld_map_${FASTLIO_RUN_ID}.pcd $CONTAINER_STAGE2/data/$run_id/episode --mapping-bag $CONTAINER_STAGE2/data/$run_id/fastlio_complete/mapping_outputs.bag --pose-bag $CONTAINER_STAGE2/data/$run_id/fastlio_complete/mapping_outputs.bag --pose-topic /Odometry --frame-period $frame_period --max-frames $max_frames --depth-source $depth_source --lidar-camera-extrinsic $CONTAINER_ROOT/real_fly/calibration/config/calib_01_lidar_camera.json --fastlio-config $CONTAINER_STAGE1/config/fast_lio_mid360_handheld.yaml"
+    "source /opt/ros/noetic/setup.bash && source /home/nv/dls_ws/devel/setup.bash && python3 $CONTAINER_STAGE2/scripts/export_real_boxer_episode.py $CONTAINER_STAGE1/data/$CONTAINER_INPUT_RUN_ID/raw/sensors.bag $CONTAINER_STAGE2/data/$run_id/fastlio_complete/handheld_map_${FASTLIO_RUN_ID}.pcd $CONTAINER_STAGE2/data/$run_id/episode --mapping-bag $CONTAINER_STAGE2/data/$run_id/fastlio_complete/mapping_outputs.bag $pose_options --frame-period $frame_period --max-frames $max_frames --depth-source $depth_source --lidar-camera-extrinsic $camera_config --fastlio-config $lio_config"
 fi
 
 if [[ "$resume" -eq 1 && -f "$VOXEL/metadata.json" ]]; then
@@ -198,13 +264,17 @@ if [[ "$resume" -eq 1 && -f "$VOXEL/metadata.json" ]]; then
 else
   [[ ! -e "$VOXEL" ]] || { echo "Partial voxel snapshot exists without metadata; remove or rename it before retrying: $VOXEL" >&2; exit 2; }
   "${DOCKER[@]}" "$NOETIC_IMAGE" bash -lc \
-    "source /opt/ros/noetic/setup.bash && source /home/nv/dls_ws/devel/setup.bash && python3 $CONTAINER_STAGE2/scripts/build_real_voxel_snapshot.py $CONTAINER_STAGE2/data/$run_id/fastlio_complete/mapping_outputs.bag $CONTAINER_STAGE2/data/$run_id/fastlio_complete/handheld_map_${FASTLIO_RUN_ID}.pcd $CONTAINER_STAGE2/config/uav_3d_planning_real.yaml $CONTAINER_STAGE2/data/$run_id/voxel_snapshot"
+    "source /opt/ros/noetic/setup.bash && source /home/nv/dls_ws/devel/setup.bash && python3 $CONTAINER_STAGE2/scripts/build_real_voxel_snapshot.py $CONTAINER_STAGE2/data/$run_id/fastlio_complete/mapping_outputs.bag $CONTAINER_STAGE2/data/$run_id/fastlio_complete/handheld_map_${FASTLIO_RUN_ID}.pcd $CONTAINER_RUN_PLANNING_CONFIG $CONTAINER_STAGE2/data/$run_id/voxel_snapshot --resolution $voxel_resolution"
 fi
 
 if [[ "$skip_boxer" -eq 1 ]]; then
   echo "Reuse requested for Boxer output: $BOXER_SCENE"
 else
-  LABELS="$(sed -e 's/#.*$//' -e '/^[[:space:]]*$/d' "$ROOT/config/stage1_indoor_v2.txt" | paste -sd, -)"
+  if [[ -n "$custom_labels" ]]; then
+    LABELS="$(python3 "$SCRIPT_DIR/resolve_detection_labels.py" --labels "$custom_labels")"
+  else
+    LABELS="$(sed -e 's/#.*$//' -e '/^[[:space:]]*$/d' "$ROOT/config/stage1_indoor_v2.txt" | paste -sd, -)"
+  fi
   mkdir -p "$BOXER_OUT"
   # The project-specific HabitatLoader lives outside the third-party Boxer
   # checkout; keep it on PYTHONPATH for the detector and helper scripts.
@@ -232,7 +302,7 @@ fi
   --inner-box-scale "$inner_box_scale"
 
 "${DOCKER[@]}" "$NOETIC_IMAGE" bash -lc \
-  "source /opt/ros/noetic/setup.bash && python3 $CONTAINER_STAGE2/scripts/build_boxer_scene_and_task.py --boxer-dir $CONTAINER_STAGE2/data/$run_id/boxer_complete/episode --voxel-snapshot $CONTAINER_STAGE2/data/$run_id/voxel_snapshot --planning-config $CONTAINER_STAGE2/config/uav_3d_planning_real.yaml --scene-output $CONTAINER_STAGE2/data/$run_id/scene_graph.json --task-output $CONTAINER_STAGE2/data/$run_id/task_graph.json --start-output $CONTAINER_STAGE2/data/$run_id/planning_start.json --prefer-raw"
+  "source /opt/ros/noetic/setup.bash && python3 $CONTAINER_STAGE2/scripts/build_boxer_scene_and_task.py --boxer-dir $CONTAINER_STAGE2/data/$run_id/boxer_complete/episode --voxel-snapshot $CONTAINER_STAGE2/data/$run_id/voxel_snapshot --planning-config $CONTAINER_RUN_PLANNING_CONFIG --scene-output $CONTAINER_STAGE2/data/$run_id/scene_graph.json --task-output $CONTAINER_STAGE2/data/$run_id/task_graph.json --start-output $CONTAINER_STAGE2/data/$run_id/planning_start.json --prefer-raw"
 
 if [[ "$with_planning" -eq 1 ]]; then
   mkdir -p "$PLANNING_DIR"
@@ -241,7 +311,7 @@ if [[ "$with_planning" -eq 1 ]]; then
     --task-graph "$CONTAINER_STAGE2/data/$run_id/task_graph.json" \
     --scene-graph "$CONTAINER_STAGE2/data/$run_id/scene_graph.json" \
     --voxel-snapshot "$CONTAINER_STAGE2/data/$run_id/voxel_snapshot" \
-    --planning-config "$CONTAINER_STAGE2/config/uav_3d_planning_real.yaml" \
+    --planning-config "$CONTAINER_RUN_PLANNING_CONFIG" \
     --motion-cache "$CONTAINER_STAGE2/data/$run_id/planning/motion_cost_cache.json" \
     --start "$sx" "$sy" "$sz" "$syaw" --output-dir "$CONTAINER_STAGE2/data/$run_id/planning"
 fi

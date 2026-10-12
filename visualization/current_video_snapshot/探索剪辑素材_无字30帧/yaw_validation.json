@@ -1,0 +1,9 @@
+{
+  "mode": "offline rerender following planning/pos_cmd yaw with rate and acceleration limits",
+  "max_yaw_rate_rad_s": 1.5707963267948966,
+  "max_yaw_acceleration_rad_s2": 1.5707963267948966,
+  "measured_output_max_yaw_rate_rad_s": 1.5707963267950225,
+  "position_source": "recorded sensor positions linearly resampled",
+  "pointcloud_source": "unchanged original observations",
+  "frames": 1200
+}

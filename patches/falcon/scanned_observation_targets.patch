@@ -1,0 +1,53 @@
+--- a/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
++++ b/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
+@@ -1,13 +1,42 @@
+ #include <Eigen/Eigenvalues>
+ #include <pcl/filters/voxel_grid.h>
+ #include <set>
++#include <mutex>
++#include <nav_msgs/Odometry.h>
+ 
+ #include "exploration_preprocessing/frontier_finder.h"
+ #include "pathfinding/path_cost_evaluator.h"
+ #include "perception_utils/perception_utils.h"
+ 
+ namespace fast_planner {
++namespace {
++std::mutex observation_mutex;
++std::vector<Vector3d> scanned_positions;
++ros::Subscriber observation_subscriber;
++bool suppress_scanned_targets = false;
++double scanned_target_radius = 0.4;
++bool alreadyScanned(const Vector3d &point) {
++  if (!suppress_scanned_targets) return false;
++  std::lock_guard<std::mutex> lock(observation_mutex);
++  for (const auto &visited : scanned_positions)
++    if ((visited - point).norm() < scanned_target_radius) return true;
++  return false;
++}
++}
+ FrontierFinder::FrontierFinder(ros::NodeHandle &nh, const shared_ptr<MapServer> &map_server) {
++  nh.param("/frontier_finder/suppress_scanned_targets", suppress_scanned_targets, false);
++  nh.param("/frontier_finder/scanned_target_radius", scanned_target_radius, 0.4);
++  if (suppress_scanned_targets) {
++    observation_subscriber = nh.subscribe<nav_msgs::Odometry>(
++        "/uav_simulator/odometry", 1, +[](const nav_msgs::Odometry::ConstPtr &msg) {
++          const Vector3d p(msg->pose.pose.position.x, msg->pose.pose.position.y, msg->pose.pose.position.z);
++          if (!p.allFinite()) return;
++          std::lock_guard<std::mutex> lock(observation_mutex);
++          if (scanned_positions.empty() || (scanned_positions.back() - p).norm() >= 0.15)
++            scanned_positions.push_back(p);
++        });
++    ROS_INFO("[ObservationHistory] exclude already scanned observation targets within %.2f m; transit remains allowed", scanned_target_radius);
++  }
+   this->map_server_ = map_server;
+   int voxel_num = map_server_->getVoxelNum();
+   frontier_flag_ = vector<bool>(voxel_num, false);
+@@ -775,6 +804,7 @@
+       if (viewpoint_height_ >= 0.0) {
+         sample_pos.z() = viewpoint_height_;
+       }
++      if (alreadyScanned(sample_pos)) continue;
+ 
+       // Qualified viewpoint is in bounding box and in safe region
+       if (!map_server_->isInBox(sample_pos) ||

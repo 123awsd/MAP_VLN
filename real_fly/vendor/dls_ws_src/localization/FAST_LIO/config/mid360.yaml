@@ -8,18 +8,17 @@ mapping:
   b_acc_cov: 0.0001
   b_gyr_cov: 0.0001
   det_range: 100.0
-  # LiDAR-to-FCU-body rotation for the 15 deg tilted LiDAR setup.
-  # Pure +15 deg pitch about body Y; avoids yaw/axis swap from ego_lidar_ws.
+  # Multi-pose static calibration, 2026-10-01. LiDAR frame to FCU body.
   extrinsic_R:
-  - 0.9659258
-  - 0
-  - 0.2588190
-  - 0
-  - 1
-  - 0
-  - -0.2588190
-  - 0
-  - 0.9659258
+  - 0.9589842
+  - -0.0110434
+  - 0.2832443
+  - 0.0114241
+  - 0.9999347
+  - 0.0003079
+  - -0.2832292
+  - 0.0029405
+  - 0.9590478
   extrinsic_T:
   - -0.011
   - -0.02329
@@ -57,7 +56,7 @@ wxx:
     # /mavros/imu/data is already in FCU body axes, but the raw MID-360 scan
     # still needs the calibrated LiDAR-to-body transform before map matching.
     # This switch affects initial_align only; laserMapping keeps the existing
-    # split between wxx (identity) and mapping/extrinsic_R (+15 deg pitch).
+    # split between wxx (identity) and mapping/extrinsic_R (calibrated above).
     scan_extrinsic_from_mapping: true
   initial_map_from_pcd: false
   map_incremental: true

@@ -194,18 +194,15 @@ def main() -> None:
     # Fill only one-cell sampling holes. No line fitting or long-range gap
     # completion is allowed, so a measured doorway cannot be bridged.
     wall = cv2.morphologyEx(wall, cv2.MORPH_CLOSE, np.ones((3, 3), dtype=np.uint8))
-    floor_u8 = observed_floor.astype(np.uint8)
-    frontier = cv2.dilate(floor_u8, np.ones((11, 11), np.uint8)) - cv2.erode(
-        floor_u8, np.ones((11, 11), np.uint8))
-    component_count, labels = cv2.connectedComponents(wall, 8)
-    retained = np.zeros_like(wall)
-    retained_components = 0
-    for label in range(1, component_count):
-        component = labels == label
-        if np.any(frontier[component]):
-            retained[component] = 1
-            retained_components += 1
-    wall = retained.astype(bool)
+    # Keep every structure component supported by the requested point-density
+    # threshold.  Requiring contact with the observed-floor frontier removed
+    # real walls whenever floor returns were sparse or the mapped floor was
+    # slightly tilted.  This grid is a manually reviewed room proposal, not
+    # the collision map, so retaining dense geometric evidence is preferable
+    # to silently deleting it.
+    component_count, _labels = cv2.connectedComponents(wall, 8)
+    retained_components = component_count - 1
+    wall = wall.astype(bool)
 
     grid = np.full((height, width), -1, dtype=np.int8)
     grid[observed_floor] = 0
@@ -228,7 +225,7 @@ def main() -> None:
         "trajectory_roi_xy_m": {"min": lower_xy.tolist(), "max": upper_xy.tolist(),
                                 "margin_m": args.trajectory_margin},
         "wall_extraction": {
-            "algorithm": "bounded_xy_density_boundary_components_v4",
+            "algorithm": "bounded_xy_density_all_components_v5",
             "room_max_world_z_m": args.room_max_z,
             "minimum_points_per_cell": wall_min_count,
             "threshold_source": threshold_source,

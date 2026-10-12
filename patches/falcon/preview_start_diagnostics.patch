@@ -1,0 +1,24 @@
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+@@ -1572,1 +1572,8 @@
+   // ROS_INFO("[ExplorationManager] planTrajToView next yaw: %.2lf", next_yaw);
++  bool preview_diagnostics = false;
++  ros::param::param("/exploration_manager/preview_tracking_recovery", preview_diagnostics, false);
++  if (preview_diagnostics && map_server_->isInBox(pos)) {
++    ROS_WARN_THROTTLE(2.0, "[PreviewStartDiagnostic] actual start=(%.4f,%.4f,%.4f) occupancy=%d ESDF=%.4f goal=(%.4f,%.4f,%.4f)",
++      pos.x(), pos.y(), pos.z(), static_cast<int>(map_server_->getOccupancy(pos)),
++      map_server_->getESDF()->getVoxel(pos).value, next_pos.x(), next_pos.y(), next_pos.z());
++  }
+--- a/falcon_planner/exploration_manager/src/exploration_fsm.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_fsm.cpp
+@@ -725,1 +725,10 @@
+ int ExplorationFSM::callExplorationPlanner() {
++  bool preview_diagnostics = false;
++  ros::param::param("/exploration_manager/preview_tracking_recovery", preview_diagnostics, false);
++  if (preview_diagnostics && planner_manager_->map_server_->isInBox(fd_->start_pos_)) {
++    ROS_WARN_THROTTLE(2.0, "[PreviewFSMStart] start=(%.4f,%.4f,%.4f) occupancy=%d ESDF=%.4f static=%d",
++      fd_->start_pos_.x(), fd_->start_pos_.y(), fd_->start_pos_.z(),
++      static_cast<int>(planner_manager_->map_server_->getOccupancy(fd_->start_pos_)),
++      planner_manager_->map_server_->getESDF()->getVoxel(fd_->start_pos_).value,
++      static_cast<int>(fd_->static_state_));
++  }

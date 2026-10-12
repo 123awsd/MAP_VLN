@@ -65,6 +65,19 @@ def main() -> None:
         grid, scene_graph, task_graph, max_candidates=args.max_candidates,
         selected_objects=target_selection,
     )
+    # Controlled, auditable experiments may pin a task to reviewed candidate
+    # IDs.  Filtering happens after normal geometric generation, so an
+    # allowlisted pose must still pass the same occupancy/visibility checks.
+    for task in task_graph.get("tasks", []):
+        allowlist = task.get("candidate_allowlist")
+        if allowlist is None:
+            continue
+        allowed = {str(value) for value in allowlist}
+        task_id = task["id"]
+        candidates[task_id] = [
+            candidate for candidate in candidates.get(task_id, [])
+            if candidate["id"] in allowed
+        ]
     unresolved = [task_id for task_id, values in candidates.items() if not values]
     if unresolved:
         raise SystemExit(f"no feasible candidates: {', '.join(unresolved)}")

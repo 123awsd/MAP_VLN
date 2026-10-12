@@ -1,0 +1,85 @@
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+@@ -1034,6 +1034,48 @@
+       Eigen::Vector3d grid_center = ed_->grid_tour2_[1];
+       bool selected_reposition_center = false;
+       auto select_recovery_target = [&]() {
++        // Preview-only recovery memory: periodic replanning must not replace
++        // an unfinished retreat with a point from the new outward trace.
++        static bool committed = false;
++        static Position committed_target;
++        static ros::Time committed_until;
++        static vector<pair<Position, ros::Time>> recent_recovery_targets;
++        bool recovery_memory = false;
++        ros::param::param("/exploration_manager/preview_recovery_memory", recovery_memory, false);
++        const ros::Time now = ros::Time::now();
++        auto select_position = [&](const Position &target, double cost) {
++          const Position direction = target - pos;
++          next_pos = target;
++          next_yaw = direction.head<2>().norm() > 1e-3
++                         ? std::atan2(direction.y(), direction.x()) : yaw[0];
++          selected_reposition_center = true;
++          ROS_WARN("[RecoveryMemory] %s target (%.2f, %.2f, %.2f), cost %.2f",
++                   committed ? "continue committed" : "select",
++                   target.x(), target.y(), target.z(), cost);
++        };
++        if (recovery_memory) {
++          recent_recovery_targets.erase(std::remove_if(
++              recent_recovery_targets.begin(), recent_recovery_targets.end(),
++              [&](const pair<Position, ros::Time> &item) { return now >= item.second; }),
++              recent_recovery_targets.end());
++          if (committed && (committed_target - pos).norm() > 0.6 && now < committed_until) {
++            vector<Position> committed_path;
++            const double cost = PathCostEvaluator::computeCost(
++                pos, committed_target, yaw[0], yaw[0], vel, yaw[1], committed_path);
++            if (std::isfinite(cost) && cost < 499.0 &&
++                map_server_->getOccupancy(committed_target) == voxel_mapping::OccupancyType::FREE) {
++              select_position(committed_target, cost);
++              return true;
++            }
++          }
++          committed = false;
++        }
++        auto recently_recovered = [&](const Position &target) {
++          if (!recovery_memory) return false;
++          for (const auto &item : recent_recovery_targets)
++            if ((target - item.first).norm() < 3.0) return true;
++          return false;
++        };
+         double best_center_cost = std::numeric_limits<double>::max();
+         Position best_center;
+         int free_hgrid_centers = 0;
+@@ -1049,7 +1091,7 @@
+             continue;
+           ++free_hgrid_centers;
+           if (!center.allFinite() || (center - pos).norm() < 0.75 ||
+-              isTemporarilyBlocked(center))
++              isTemporarilyBlocked(center) || recently_recovered(center))
+             continue;
+           vector<Eigen::Vector3d> center_path;
+           const double center_cost = PathCostEvaluator::computeCost(
+@@ -1068,7 +1110,7 @@
+                it != executed_safe_pose_history_.rend(); ++it) {
+             const Position &historical = *it;
+             if (!historical.allFinite() || (historical - pos).norm() < 1.5 ||
+-                isTemporarilyBlocked(historical) ||
++                isTemporarilyBlocked(historical) || recently_recovered(historical) ||
+                 map_server_->getOccupancy(historical) !=
+                     voxel_mapping::OccupancyType::FREE)
+               continue;
+@@ -1088,6 +1130,15 @@
+         if (!std::isfinite(best_center_cost) || best_center_cost > 499.0)
+           return false;
+ 
++        if (recovery_memory) {
++          recent_recovery_targets.push_back({best_center, now + ros::Duration(120.0)});
++          select_position(best_center, best_center_cost);
++          committed = true;
++          committed_target = best_center;
++          committed_until = now + ros::Duration(45.0);
++          return true;
++        }
++
+         Position horizontal = best_center - pos;
+         horizontal.z() = 0.0;
+         next_pos = best_center;

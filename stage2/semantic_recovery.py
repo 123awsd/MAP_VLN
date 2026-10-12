@@ -16,7 +16,7 @@ from .semantic_region_search import canonical_region_type, infer_region_type, ma
 
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-MODEL = "qwen3.7-plus"
+DEFAULT_MODEL = "qwen-flash"
 PROMPT_VERSION = "semantic-recovery-v5-canonical-observation-regions"
 INPUT_CNY_PER_MILLION = 2.0
 OUTPUT_CNY_PER_MILLION = 8.0
@@ -158,15 +158,19 @@ def merge_historical_target_boxes(
 
 
 class QwenSemanticRecoveryPlanner:
-    def __init__(self, budget_cny: float = 20.0, api_key_path: Path | None = None):
+    def __init__(
+        self, budget_cny: float = 20.0, api_key_path: Path | None = None,
+        model: str | None = None,
+    ):
         self.budget_cny = float(budget_cny)
         self.api_key_path = api_key_path or ROOT / ".secrets/dashscope_api_key"
+        self.model = model or os.environ.get("PRE_MAP_VLN_RECOVERY_MODEL", DEFAULT_MODEL)
         self.cache_dir = ROOT / "outputs/stage2/recovery_cache"
         self.ledger_path = ROOT / "outputs/stage2/api_usage.json"
 
     def _cache_path(self, target_label: str, failed: set[str], inventory: dict[str, Any]) -> Path:
         data = json.dumps({
-            "version": PROMPT_VERSION, "target": target_label,
+            "version": PROMPT_VERSION, "model": self.model, "target": target_label,
             "failed": sorted(failed), "inventory": inventory,
         }, sort_keys=True, ensure_ascii=False).encode()
         return self.cache_dir / f"{hashlib.sha256(data).hexdigest()}.json"
@@ -182,7 +186,7 @@ class QwenSemanticRecoveryPlanner:
             result = merge_historical_target_boxes(
                 result, scene_graph, failed_object_ids, maximum_hypotheses,
             )
-            result["provenance"] = {"planner": "qwen_vlm", "model": MODEL, "cache_hit": True}
+            result["provenance"] = {"planner": "qwen_vlm", "model": self.model, "cache_hit": True}
             return result
 
         ledger = load_json(self.ledger_path) if self.ledger_path.exists() else {
@@ -198,7 +202,7 @@ class QwenSemanticRecoveryPlanner:
             "global_scene_inventory": inventory,
         }
         payload = {
-            "model": MODEL,
+            "model": self.model,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
@@ -236,7 +240,7 @@ class QwenSemanticRecoveryPlanner:
         ledger["authorized_budget_cny"] = self.budget_cny
         ledger["total_estimated_cny"] = round(previous + cost, 8)
         ledger["calls"].append({
-            "model": MODEL, "purpose": "semantic_recovery_search",
+            "model": self.model, "purpose": "semantic_recovery_search",
             "prompt_tokens": int(usage.get("prompt_tokens", 0)),
             "completion_tokens": int(usage.get("completion_tokens", 0)),
             "estimated_cny": round(cost, 8),
@@ -244,7 +248,7 @@ class QwenSemanticRecoveryPlanner:
         atomic_json(self.ledger_path, ledger)
         atomic_json(cache_path, result)
         result["provenance"] = {
-            "planner": "qwen_vlm", "model": body.get("model", MODEL),
+            "planner": "qwen_vlm", "model": body.get("model", self.model),
             "prompt_version": PROMPT_VERSION, "cache_hit": False,
             "estimated_cny": round(cost, 8),
         }

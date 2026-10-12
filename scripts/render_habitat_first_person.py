@@ -26,8 +26,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--execution", required=True, type=Path)
     parser.add_argument("--generated-config", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--supersample", type=int, choices=(1,2,3), default=1)
     parser.add_argument("--width", type=int, default=640)
     parser.add_argument("--height", type=int, default=480)
+    parser.add_argument("--runtime-objects", type=Path)
     parser.add_argument("--fps", type=float, default=20.0)
     parser.add_argument("--hfov", type=float, default=90.0)
     parser.add_argument("--gpu-device-id", type=int, default=0)
@@ -165,7 +167,7 @@ def main() -> None:
     sensor = habitat_sim.CameraSensorSpec()
     sensor.uuid = "rgb"
     sensor.sensor_type = habitat_sim.SensorType.COLOR
-    sensor.resolution = [args.height, args.width]
+    sensor.resolution = [args.height * args.supersample, args.width * args.supersample]
     sensor.position = [0.0, 1.0, 0.0]
     sensor.hfov = args.hfov
     agent_cfg = habitat_sim.agent.AgentConfiguration()
@@ -183,6 +185,10 @@ def main() -> None:
     )
     try:
         with habitat_sim.Simulator(habitat_sim.Configuration(sim_cfg, [agent_cfg])) as sim:
+            runtime_instances = []
+            if args.runtime_objects:
+                from render_habitat_third_person import register_runtime_objects
+                runtime_instances = register_runtime_objects(sim, json.loads(args.runtime_objects.read_text()), args.runtime_objects, generated, None)
             agent = sim.initialize_agent(0)
             for index, pose in enumerate(trajectory):
                 sensor_delta_f = pose[:3] - np.asarray([0.0, 0.0, 1.0])
@@ -194,6 +200,8 @@ def main() -> None:
                 agent.set_state(state)
                 rgba = np.asarray(sim.get_sensor_observations()["rgb"])
                 rgb = np.ascontiguousarray(rgba[..., :3].astype(np.uint8))
+                if args.supersample > 1:
+                    rgb = cv2.resize(rgb, (args.width, args.height), interpolation=cv2.INTER_AREA)
                 if events:
                     rgb = overlay_target_boxes(
                         rgb, pose, events, index, args.hfov,

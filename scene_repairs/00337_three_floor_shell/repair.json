@@ -1,0 +1,224 @@
+{
+  "format": "habitat_scene_overlay.v1",
+  "scene_filename": "CFVBbU9Rsyb.basis.glb",
+  "source_glb_sha256": "ba375c4ec3112293f93be9ab2560542be068e19a900e6fed30152e33ed40ca12",
+  "coordinate_frame": "mesh vertices: Habitat world, metres",
+  "reference_initial_sensor_habitat_xyz": [
+    9.714411735534668,
+    -1.6005380153656006,
+    -2.374816417694092
+  ],
+  "objects": [
+    {
+      "name": "second_floor_ceiling_seal",
+      "mesh": "second_floor_ceiling_seal.obj",
+      "falcon_min": [
+        0.32,
+        3.3,
+        5.13
+      ],
+      "falcon_max": [
+        4.95,
+        10.35,
+        5.25
+      ],
+      "purpose": "按附近原天花板约5.15m加固封闭；真实楼梯投影在x<=0.13，保留开口"
+    },
+    {
+      "name": "third_east_middle",
+      "mesh": "third_east_middle.obj",
+      "falcon_min": [
+        1.42,
+        5.7,
+        5.49
+      ],
+      "falcon_max": [
+        1.54,
+        11.27,
+        8.0
+      ],
+      "purpose": "封闭此前向东侧空域出界的中段"
+    },
+    {
+      "name": "third_east_south_step",
+      "mesh": "third_east_south_step.obj",
+      "falcon_min": [
+        1.42,
+        5.7,
+        5.49
+      ],
+      "falcon_max": [
+        3.4,
+        5.82,
+        8.0
+      ],
+      "purpose": "连接第三层东侧阶梯形外边界"
+    },
+    {
+      "name": "third_east_south",
+      "mesh": "third_east_south.obj",
+      "falcon_min": [
+        3.28,
+        -1.55,
+        5.49
+      ],
+      "falcon_max": [
+        3.4,
+        5.82,
+        8.0
+      ],
+      "purpose": "第三层南段外侧封闭"
+    },
+    {
+      "name": "third_east_north_step",
+      "mesh": "third_east_north_step.obj",
+      "falcon_min": [
+        1.42,
+        11.15,
+        5.49
+      ],
+      "falcon_max": [
+        3.4,
+        11.27,
+        8.0
+      ],
+      "purpose": "北段外侧连接，保留西侧室内走廊"
+    },
+    {
+      "name": "third_east_north",
+      "mesh": "third_east_north.obj",
+      "falcon_min": [
+        3.28,
+        11.15,
+        5.49
+      ],
+      "falcon_max": [
+        3.4,
+        16.9,
+        8.0
+      ],
+      "purpose": "第三层北段外侧封闭"
+    },
+    {
+      "name": "third_north",
+      "mesh": "third_north.obj",
+      "falcon_min": [
+        -5.92,
+        16.78,
+        5.49
+      ],
+      "falcon_max": [
+        3.4,
+        16.9,
+        8.0
+      ],
+      "purpose": "第三层北侧虚拟外边界"
+    },
+    {
+      "name": "third_south",
+      "mesh": "third_south.obj",
+      "falcon_min": [
+        -5.92,
+        -1.55,
+        5.49
+      ],
+      "falcon_max": [
+        3.4,
+        -1.43,
+        8.0
+      ],
+      "purpose": "第三层南侧虚拟外边界"
+    },
+    {
+      "name": "third_west",
+      "mesh": "third_west.obj",
+      "falcon_min": [
+        -5.92,
+        -1.55,
+        5.49
+      ],
+      "falcon_max": [
+        -5.8,
+        16.9,
+        8.0
+      ],
+      "purpose": "第三层西侧虚拟外边界"
+    },
+    {
+      "name": "third_ceiling",
+      "mesh": "third_ceiling.obj",
+      "falcon_min": [
+        -5.92,
+        -1.55,
+        7.96
+      ],
+      "falcon_max": [
+        3.4,
+        16.9,
+        8.08
+      ],
+      "purpose": "按原天花板约7.96m补封顶，三层任务不开放第四层"
+    },
+    {
+      "name": "third_floor_south",
+      "mesh": "third_floor_south.obj",
+      "falcon_min": [
+        -5.92,
+        -1.55,
+        5.49
+      ],
+      "falcon_max": [
+        3.4,
+        7.85,
+        5.58
+      ],
+      "purpose": "在原三层地面下方补封闭底面，保留原地面显示"
+    },
+    {
+      "name": "third_floor_north",
+      "mesh": "third_floor_north.obj",
+      "falcon_min": [
+        -5.92,
+        9.1,
+        5.49
+      ],
+      "falcon_max": [
+        3.4,
+        16.9,
+        5.58
+      ],
+      "purpose": "补封闭底面北段"
+    },
+    {
+      "name": "third_floor_stair_west",
+      "mesh": "third_floor_stair_west.obj",
+      "falcon_min": [
+        -5.92,
+        7.85,
+        5.49
+      ],
+      "falcon_max": [
+        -4.95,
+        9.1,
+        5.58
+      ],
+      "purpose": "楼梯开口西侧底面"
+    },
+    {
+      "name": "third_floor_stair_east",
+      "mesh": "third_floor_stair_east.obj",
+      "falcon_min": [
+        0.35,
+        7.85,
+        5.49
+      ],
+      "falcon_max": [
+        3.4,
+        9.1,
+        5.58
+      ],
+      "purpose": "楼梯开口东侧底面；楼梯矩形x[-4.95,.35],y[7.85,9.10]不封闭"
+    }
+  ],
+  "note": "明确的虚拟场景封闭面；并非声称恢复原建筑精确外墙。原GLB与规划算法不变。"
+}

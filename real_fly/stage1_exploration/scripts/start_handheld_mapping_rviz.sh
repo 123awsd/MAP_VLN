@@ -11,9 +11,9 @@ senior-provided ekf_quat fusion node, the D435 RGB-D stream, and the checked-in
 RViz view. It never arms the aircraft or publishes motion commands.
 
 Close RViz or press Ctrl-C to stop only the processes started by this script.
-With --record, raw recording starts before a fresh FAST-LIO initialization so
-offline replay contains the complete stationary pre-roll. Output is stored
-below data/RUN_ID/raw/.
+With --record, RGB-D and both poses are recorded in data/RUN_ID/raw/.
+An online dense PCD, sparse measured rays, and calibration snapshots are saved
+in data/RUN_ID/online/. Wait for archive finalization after Ctrl-C.
 EOF
 }
 
@@ -97,8 +97,9 @@ source "$REALSENSE_PROFILE"
 
 owned_pids=()
 record_pid=""
+archive_pid=""
 cleanup() {
-  local pid priority_record_pid
+  local pid priority_record_pid bag_ok=0 archive_ok=0
   trap - EXIT INT TERM
   set +e
   # Stop rosbag first so derived topics are finalized while their publishers
@@ -106,18 +107,53 @@ cleanup() {
   priority_record_pid="$record_pid"
   if [[ -n "$priority_record_pid" ]]; then
     kill -INT "$priority_record_pid" 2>/dev/null || true
-    wait "$priority_record_pid" 2>/dev/null || true
+    if wait "$priority_record_pid" 2>/dev/null && [[ -s "$RECORD_DIR/raw/sensors.bag" ]]; then
+      bag_ok=1
+    fi
+  fi
+  if [[ -n "$archive_pid" ]]; then
+    echo "Finalizing online dense PCD; please wait before disconnecting power."
+    kill -INT "$archive_pid" 2>/dev/null || true
+    if wait "$archive_pid"; then
+      archive_ok=1
+    else
+      echo "ERROR: online archive failed; inspect $LOG_DIR/online_map.log" >&2
+    fi
   fi
   for ((idx=${#owned_pids[@]}-1; idx>=0; idx--)); do
     pid="${owned_pids[$idx]}"
     [[ "$pid" == "$priority_record_pid" ]] && continue
+    [[ "$pid" == "$archive_pid" ]] && continue
     kill -INT "$pid" 2>/dev/null || true
   done
   for ((idx=${#owned_pids[@]}-1; idx>=0; idx--)); do
     pid="${owned_pids[$idx]}"
     [[ "$pid" == "$priority_record_pid" ]] && continue
+    [[ "$pid" == "$archive_pid" ]] && continue
     wait "$pid" 2>/dev/null || true
   done
+  if [[ -n "$record_run_id" ]]; then
+    if [[ "$bag_ok" -eq 1 && "$archive_ok" -eq 1 ]] && \
+       python3 - "$RECORD_DIR/online/completion.json" "$record_run_id" <<'PY'
+import json
+import pathlib
+import sys
+path = pathlib.Path(sys.argv[1])
+report = json.loads(path.read_text())
+assert report.get('status') == 'complete' and report.get('run_id') == sys.argv[2]
+assert (path.parent / 'dense_map.pcd').is_file()
+assert (path.parent / 'mapping_outputs.bag').is_file()
+print('录制完成：' + str(path.parent.parent))
+print('稠密地图：' + str(path.parent / 'dense_map.pcd'))
+print('点数：' + str(report['points']))
+print('现在可以拷回主机。')
+PY
+    then
+      :
+    else
+      echo "录制未完成：请检查 $LOG_DIR/rosbag.log、$LOG_DIR/online_map.log 和完成标记；不要用这次数据处理。" >&2
+    fi
+  fi
   echo "Stopped only this launch's child processes. Logs: $LOG_DIR"
 }
 on_signal() {
@@ -128,7 +164,24 @@ trap cleanup EXIT
 trap on_signal INT TERM
 
 node_exists() {
-  rosnode list 2>/dev/null | grep -Fxq "$1"
+  # The master can retain dead registrations after Ctrl-C.  rosnode info and
+  # rosnode ping may return zero even when their XML-RPC contact fails, so
+  # ask the node itself for its PID before deciding it is safe to reuse.
+  python3 - "$1" <<'PY'
+import socket
+import sys
+import xmlrpc.client
+
+import rosgraph
+
+socket.setdefaulttimeout(2)
+try:
+    uri = rosgraph.Master('/stage1_node_check').lookupNode(sys.argv[1])
+    code, _, pid = xmlrpc.client.ServerProxy(uri).getPid('/stage1_node_check')
+    sys.exit(0 if code == 1 and isinstance(pid, int) and pid > 0 else 1)
+except (OSError, xmlrpc.client.Error, rosgraph.MasterError):
+    sys.exit(1)
+PY
 }
 
 wait_for_master() {
@@ -164,6 +217,16 @@ start_launch() {
   local log_file="$1"
   shift
   "$@" >"$LOG_DIR/$log_file" 2>&1 &
+  owned_pids+=("$!")
+}
+
+# Recording processes must not share the terminal's foreground process group.
+# Otherwise one Ctrl-C reaches them directly and cleanup sends a second SIGINT
+# while they are closing/indexing their Bags or writing completion.json.
+start_recorder() {
+  local log_file="$1"
+  shift
+  setsid "$@" >"$LOG_DIR/$log_file" 2>&1 &
   owned_pids+=("$!")
 }
 
@@ -267,8 +330,9 @@ if [[ -n "$record_run_id" ]]; then
 run_id=$record_run_id
 started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 ros_master_uri=$ROS_MASTER_URI
-lidar=/livox/lidar
-mapping_imu=/mavros/imu/data
+format=online_dense_map_rgbd_ekf_v1
+raw_lidar_recorded=false
+mapping_imu_recorded=false
 rgb=/camera/color/image_raw
 depth=/camera/aligned_depth_to_color/image_raw
 depth_raw=/camera/depth/image_rect_raw
@@ -277,28 +341,27 @@ rgb_auto_exposure=$REALSENSE_RGB_AUTO_EXPOSURE
 rgb_exposure=$REALSENSE_RGB_EXPOSURE
 odometry_raw=/Odometry
 odometry_ekf=/ekf_quat/ekf_odom
-registered_cloud=/cloud_registered
+registered_cloud_archive=online/mapping_outputs.bag
+dense_map=online/dense_map.pcd
+completion_marker=online/completion.json
 EOF
-  echo "Starting raw recording before FAST-LIO initialization"
-  start_launch rosbag.log rosbag record --lz4 \
-    -O "$RECORD_DIR/raw/sensors.bag" \
-    /livox/lidar /livox/imu /mavros/imu/data \
-    /camera/color/image_raw /camera/depth/image_rect_raw \
-    /camera/aligned_depth_to_color/image_raw \
-    /camera/color/camera_info /camera/depth/camera_info \
-    /camera/aligned_depth_to_color/camera_info \
-    /camera/extrinsics/depth_to_color \
-    /tf /tf_static /Odometry /ekf_quat/ekf_odom /cloud_registered \
-    /rgb_coverage/frustums /rgb_coverage/camera_path \
-    /rgb_coverage/current_frustum /rgb_coverage/count
+  start_recorder online_map.log python3 "$SCRIPT_DIR/record_online_map.py" \
+    --output "$RECORD_DIR/online" --run-id "$record_run_id" \
+    --fastlio-config "$STAGE1_ROOT/config/fast_lio_mid360_handheld.yaml" \
+    --camera-calibration "$STAGE1_ROOT/../calibration/config/calib_01_lidar_camera.json"
+  archive_pid="${owned_pids[-1]}"
+  echo "Recording paired RGB/raw-depth keyframes at 1 Hz and EKF poses at 20 Hz"
+  start_recorder rosbag.log python3 "$SCRIPT_DIR/record_semantic_bag.py" \
+    --output "$RECORD_DIR/raw/sensors.bag" --period 1.0 --max-pair-delta 0.08
   record_pid="${owned_pids[-1]}"
   sleep 2
   kill -0 "$record_pid" 2>/dev/null || {
     echo "rosbag recorder exited; inspect $LOG_DIR/rosbag.log" >&2
     exit 1
   }
+  kill -0 "$archive_pid" 2>/dev/null || { echo "Online archive failed to start" >&2; exit 1; }
   echo "RECORDING: $RECORD_DIR/raw/sensors.bag"
-  echo "Keep the rig stationary: capturing 8 seconds of raw initialization data."
+  echo "Keep the rig stationary until 'Mapping is ready'; FAST-LIO starts after this 8-second wait."
   sleep 8
 fi
 
@@ -334,7 +397,7 @@ if [[ "$with_camera" -eq 1 ]]; then
 fi
 
 echo
-echo "Mapping is ready. Keep the rig still for 5 seconds, then move slowly."
+echo "Mapping is ready; FAST-LIO IMU initialization completed. Keep still for 5 more seconds, then move slowly."
 echo "RViz: Fixed Frame=world, PointCloud2=/cloud_registered"
 echo "Starting read-only FAST-LIO coordinate display (/Odometry, 1 Hz)"
 python3 "$SCRIPT_DIR/monitor_handheld_pose.py" --topic /Odometry --rate-hz 1.0 &
@@ -345,5 +408,11 @@ if [[ "$with_rviz" -eq 1 ]]; then
   rviz -d "$RVIZ_CONFIG"
 else
   echo "Running without RViz. Press Ctrl-C to stop."
-  while :; do sleep 2; done
+  while :; do
+    sleep 2
+    if [[ -n "$archive_pid" ]]; then
+      kill -0 "$archive_pid" 2>/dev/null || { echo "Online archive stopped unexpectedly" >&2; exit 1; }
+      kill -0 "$record_pid" 2>/dev/null || { echo "RGB-D recorder stopped unexpectedly" >&2; exit 1; }
+    fi
+  done
 fi

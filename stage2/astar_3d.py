@@ -67,6 +67,13 @@ class CoarseAstar3D:
         self.minimum_clearance_zyx = trimmed.reshape(
             z, ratio, y, ratio, x, ratio
         ).min(axis=(1, 3, 5))
+        self._point_edge_cache = {}
+        self._point_center_distances = None
+        if voxel_map.collision_point_tree is not None:
+            indices = np.argwhere(self.free_zyx)
+            centers = self.origin + (indices[:, ::-1] + 0.5) * self.resolution
+            self._point_center_distances = np.zeros(self.free_zyx.shape)
+            self._point_center_distances[indices[:, 0], indices[:, 1], indices[:, 2]] = voxel_map.collision_point_tree.query(centers)[0]
 
     @property
     def shape_xyz(self) -> tuple[int, int, int]:
@@ -91,6 +98,7 @@ class CoarseAstar3D:
         return bool(self.free_zyx[z, y, x])
 
     def nearest_free(self, xyz: Iterable[float], radius_m: float | None = None) -> tuple[int, int, int] | None:
+        xyz = list(xyz)
         radius = self.voxel_map.profile.nearest_free_radius_m if radius_m is None else float(radius_m)
         center = self.world_to_cell(xyz)
         cells = int(math.ceil(radius / self.resolution))
@@ -103,6 +111,9 @@ class CoarseAstar3D:
                         continue
                     candidate = center[0] + dx, center[1] + dy, center[2] + dz
                     if self.is_free(candidate) and distance < best_distance:
+                        if (self.voxel_map.collision_point_tree is not None and
+                                not self.voxel_map.line_is_valid(xyz, self.cell_to_world(candidate))):
+                            continue
                         best, best_distance = candidate, distance
         return best
 
@@ -113,6 +124,21 @@ class CoarseAstar3D:
         neighbor = current[0] + dx, current[1] + dy, current[2] + dz
         if not self.is_free(neighbor):
             return False
+        if self.voxel_map.collision_point_tree is not None:
+            x, y, z = current
+            nx, ny, nz = neighbor
+            lower = min(self._point_center_distances[z, y, x], self._point_center_distances[nz, ny, nx])
+            half_length = math.sqrt(dx * dx + dy * dy + dz * dz) * self.resolution / 2
+            if lower - half_length < self.voxel_map.collision_point_clearance_m:
+                edge = tuple(sorted((current, neighbor)))
+                valid = self._point_edge_cache.get(edge)
+                if valid is None:
+                    valid = self.voxel_map.collision_point_line_is_valid(
+                        self.cell_to_world(current), self.cell_to_world(neighbor)
+                    )
+                    self._point_edge_cache[edge] = valid
+                if not valid:
+                    return False
         return all(
             self.is_free((current[0] + ox, current[1] + oy, current[2] + oz))
             for ox, oy, oz in self.swept_by_delta[(dx, dy, dz)]

@@ -47,7 +47,8 @@ package="$runtime_root/map_packages/$run_id"
 scene="$run_data/approved_scene_graph.json"
 voxel="$run_data/voxel_snapshot"
 planning_start="$run_data/planning_start.json"
-config="$stage2_dir/config/uav_3d_planning_real.yaml"
+config="$run_data/uav_3d_planning_real.yaml"
+if [[ ! -s "$config" ]]; then config="$stage2_dir/config/uav_3d_planning_real.yaml"; fi
 map="$run_data/fastlio_complete/handheld_map_${run_id}_complete.pcd"
 
 for path in "$scene" "$voxel/metadata.json" "$voxel/voxel_map.npz" \

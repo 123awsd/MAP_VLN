@@ -22,6 +22,8 @@ Options:
   --max-yaw-rate VALUE    Final yaw-rate limit in rad/s (default: 1.5).
   --static-demo           Freeze conditional tasks for a controlled fixed-layout demo.
   --visit-all-candidates  Exhaust all candidates of each task before the next task.
+  --controlled-outcomes FILE
+                          Attach auditable simulated outcomes and per-stop dwell.
   --no-cache              Do not reuse the Qwen parser cache.
   -h, --help              Show this help.
 
@@ -44,6 +46,7 @@ voxel_snapshot_override=""
 collision_clearance="0.25"
 speed_mps="0.6"
 max_yaw_rate="1.5"
+controlled_outcomes_source=""
 start_values=()
 
 while [[ $# -gt 0 ]]; do
@@ -66,6 +69,7 @@ while [[ $# -gt 0 ]]; do
     --max-yaw-rate) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; max_yaw_rate="$2"; shift 2 ;;
     --static-demo) static_demo=1; shift ;;
     --visit-all-candidates) visit_all_candidates=1; shift ;;
+    --controlled-outcomes) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; controlled_outcomes_source="$2"; shift 2 ;;
     --no-cache) no_cache=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
@@ -105,7 +109,8 @@ else
   echo "No approved room scene found; using the original single-room scene: $scene_graph"
 fi
 voxel_snapshot="$run_data/voxel_snapshot"
-planning_config="$stage2_dir/config/uav_3d_planning_real.yaml"
+planning_config="$run_data/uav_3d_planning_real.yaml"
+if [[ ! -s "$planning_config" ]]; then planning_config="$stage2_dir/config/uav_3d_planning_real.yaml"; fi
 if [[ -n "$voxel_snapshot_override" ]]; then voxel_snapshot="$(realpath "$voxel_snapshot_override")"; fi
 if [[ -n "$planning_config_override" ]]; then planning_config="$(realpath "$planning_config_override")"; fi
 planning_start="$run_data/planning_start.json"
@@ -227,6 +232,17 @@ mv "$planning_dir/mission_plan.json" "$raw_mission"
   --start-source "$start_source" \
   --output-mission "$mission" --output-audit "$audit"
 
+controlled_outcomes=""
+if [[ -n "$controlled_outcomes_source" ]]; then
+  controlled_outcomes_source="$(realpath "$controlled_outcomes_source")"
+  [[ -s "$controlled_outcomes_source" ]] || { echo "Missing controlled outcomes: $controlled_outcomes_source" >&2; exit 2; }
+  controlled_outcomes="$task_dir/controlled_outcomes.json"
+  cp "$controlled_outcomes_source" "$controlled_outcomes"
+  "$python" "$script_dir/apply_controlled_outcomes.py" \
+    --mission "$mission" --spec "$controlled_outcomes" --output "$mission.controlled"
+  mv "$mission.controlled" "$mission"
+fi
+
 bundle_eligible="$("$python" -c 'import json,sys; print("true" if json.load(open(sys.argv[1]))["motion_preview_bundle_eligible"] else "false")' "$audit")"
 if [[ "$bundle_eligible" == "true" ]]; then
   "$python" "$script_dir/export_full_smooth_route.py" \
@@ -239,7 +255,8 @@ if [[ "$bundle_eligible" == "true" ]]; then
   runtime_mission_dir="$(dirname "$runtime_bundle")"
   cp -a "$full_smooth_route" "$runtime_mission_dir/full_smooth_route.txt"
   bash "$script_dir/generate_final_minco.sh" "$run_id" "$task_id" \
-    "$collision_clearance" clearance_optimized "$speed_mps" "$max_yaw_rate"
+    "$collision_clearance" clearance_optimized "$speed_mps" "$max_yaw_rate" \
+    "$voxel_snapshot"
 else
   echo "Dynamic task preserved for preview, but no execution bundle was generated."
   echo "Reason: conditional/recovery motion requires the online perception/outcome executor."

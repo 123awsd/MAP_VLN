@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: containers/falcon_noetic/Dockerfile
       network: host
-    image: pre-map-vln/falcon-noetic:local
+    image: ${FALCON_IMAGE:-pre-map-vln/falcon-noetic:local}
     working_dir: /workspace/falcon_ws
     volumes:
       - ./outputs:/workspace/shared/outputs

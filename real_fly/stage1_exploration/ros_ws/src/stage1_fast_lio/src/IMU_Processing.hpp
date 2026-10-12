@@ -216,19 +216,15 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 
     N ++;
   }
   state_ikfom init_state = kf_state.get_x();
-  // Preserve the official FAST_LIO initialization convention for a LiDAR
-  // with an internal IMU: keep the initial body rotation and initialize the
-  // gravity state directly from the measured acceleration direction.
+  // Mapping uses the FCU IMU. Define the map's vertical axis from gravity,
+  // as the flight localization FAST-LIO does, so a slightly tilted handheld
+  // start cannot tilt the entire map. Keep an externally supplied initial
+  // pose unchanged when align_gravity is false.
+  M3D rot_gravity = Eye3d;
   if (align_gravity)
-  {
-    init_state.rot = Init_IMU_rot;
-    init_state.grav = S2(-mean_acc / mean_acc.norm() * G_m_s2);
-  }
-  else
-  {
-    init_state.rot = Init_IMU_rot;
-    init_state.grav = S2(V3D(0, 0, -1) * G_m_s2);
-  }
+    rot_gravity = Eigen::Quaterniond::FromTwoVectors(mean_acc, Eigen::Vector3d(0, 0, mean_acc.norm()));
+  init_state.rot = rot_gravity * Init_IMU_rot;
+  init_state.grav = S2(V3D(0, 0, -1) * G_m_s2);
   //state_inout.rot = Eye3d; // Exp(mean_acc.cross(V3D(0, 0, -1 / scale_gravity)));
   init_state.bg  = mean_gyr;
   init_state.offset_T_L_I = Lidar_T_wrt_IMU;

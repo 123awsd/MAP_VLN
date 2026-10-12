@@ -1,0 +1,32 @@
+--- a/falcon_planner/pathfinding/src/astar.cpp
++++ b/falcon_planner/pathfinding/src/astar.cpp
+@@ -3,1 +3,2 @@
+ #include "pathfinding/astar.h"
++#include "pathfinding/preview_geofence.h"
+@@ -10,1 +11,2 @@
+ bool previewClearanceSafe(const voxel_mapping::MapServer::Ptr &map, const Vector3d &p) {
++  if (!previewGeofenceAllowed(p)) return false;
+--- a/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
++++ b/falcon_planner/exploration_preprocessing/src/frontier_finder.cpp
+@@ -8,1 +8,2 @@
+ #include "pathfinding/path_cost_evaluator.h"
++#include "pathfinding/preview_geofence.h"
+@@ -20,1 +21,2 @@
+ bool alreadyScanned(const Vector3d &point) {
++  if (!previewGeofenceAllowed(point)) return true;
+--- a/falcon_planner/exploration_manager/src/exploration_manager.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_manager.cpp
+@@ -1,1 +1,2 @@
+ #include <fstream>
++#include "pathfinding/preview_geofence.h"
+@@ -1582,1 +1583,1 @@
+-    if (!next_pos.allFinite() || !map_server_->isInBox(next_pos) ||
++    if (!previewGeofenceAllowed(next_pos) || !next_pos.allFinite() || !map_server_->isInBox(next_pos) ||
+--- a/falcon_planner/exploration_manager/src/exploration_fsm.cpp
++++ b/falcon_planner/exploration_manager/src/exploration_fsm.cpp
+@@ -2,1 +2,2 @@
+ #include "exploration_manager/exploration_fsm.h"
++#include "pathfinding/preview_geofence.h"
+@@ -528,1 +529,1 @@
+-        if (!sample.allFinite() || !planner_manager_->map_server_->isInBox(sample)) {
++        if (!previewGeofenceAllowed(sample) || !sample.allFinite() || !planner_manager_->map_server_->isInBox(sample)) {

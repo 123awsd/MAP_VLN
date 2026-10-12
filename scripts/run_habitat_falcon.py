@@ -4,6 +4,7 @@
 import argparse
 import json
 import os
+import struct
 import time
 from pathlib import Path
 from typing import Optional
@@ -11,6 +12,7 @@ from typing import Optional
 import habitat_sim
 import numpy as np
 from habitat_sim.utils.common import quat_from_angle_axis
+from habitat_scene_repairs import load_scene_repair, mesh_safe_fraction
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -127,6 +129,8 @@ def follow_command(
     navmesh_constrained: bool = False,
     navmesh_path_follow: bool = False,
     allow_vertical_motion: bool = False,
+    scene_collision_check: bool = False,
+    collision_radius: float = 0.12,
 ) -> bool:
     agent = sim.get_agent(0)
     state = agent.get_state()
@@ -138,6 +142,8 @@ def follow_command(
         direction[1] = 0.0
     distance = float(np.linalg.norm(direction))
     moved = False
+    command["_geometry_blocked"] = False
+    command["_contact_points_falcon"] = []
     if distance > 1e-4:
         if navmesh_path_follow:
             path_step = navmesh_path_step(sim.pathfinder, current, target_h, 1.0 * dt)
@@ -155,6 +161,22 @@ def follow_command(
             # directly: Habitat's navmesh is for a walking cylinder and blocks
             # valid FALCON flight across railings, stairs and open voids.
             next_position = target_h
+        if scene_collision_check:
+            # FALCON odometry and sensor_pose use the optical sensor centre.
+            # Habitat's agent anchor is one metre below that centre in this rig.
+            sensor_current = np.asarray(state.sensor_states["depth"].position, dtype=np.float64)
+            step = next_position - current
+            contacts = []
+            fraction = mesh_safe_fraction(
+                sim, sensor_current, sensor_current + step, radius=collision_radius, contacts=contacts
+            )
+            command["_contact_points_falcon"] = [
+                (S_HABITAT_TO_FALCON @ (np.asarray(p) - origin_h)).tolist()
+                for p in contacts
+            ]
+            if fraction < 1.0:
+                command["_geometry_blocked"] = True
+                next_position = current + step * fraction
         state.position = next_position
         moved = bool(np.linalg.norm(next_position - current) > 1e-4)
         if not use_planner_yaw:
@@ -192,6 +214,8 @@ def main() -> None:
     )
     parser.add_argument("--duration", type=float, default=30.0)
     parser.add_argument("--hz", type=float, default=5.0)
+    parser.add_argument("--synchronized-frames", action="store_true",
+                        help="atomically exchange RGB-D and its measured pose in one frame bundle")
     parser.add_argument("--follow-falcon", action="store_true")
     parser.add_argument(
         "--navmesh-constrained",
@@ -241,6 +265,9 @@ def main() -> None:
         help="seconds to keep publishing frames after FALCON enters FINISH",
     )
     parser.add_argument("--result-file", type=Path, default=None)
+    parser.add_argument("--scene-repair-config", type=Path, default=None)
+    parser.add_argument("--scene-collision-check", action="store_true")
+    parser.add_argument("--collision-radius", type=float, default=0.12)
     args = parser.parse_args()
     if not args.scene.exists():
         raise FileNotFoundError(args.scene)
@@ -268,6 +295,10 @@ def main() -> None:
     agent_cfg.sensor_specifications = [sensor("rgb", habitat_sim.SensorType.COLOR), sensor("depth", habitat_sim.SensorType.DEPTH), sensor("semantic", habitat_sim.SensorType.SEMANTIC)]
 
     with habitat_sim.Simulator(habitat_sim.Configuration(sim_cfg, [agent_cfg])) as sim:
+        repair_objects = (
+            load_scene_repair(sim, args.scene_repair_config, args.scene)
+            if args.scene_repair_config is not None else []
+        )
         if not sim.pathfinder.is_loaded:
             raise RuntimeError("HM3D navmesh did not load")
         sim.pathfinder.seed(args.seed)
@@ -300,13 +331,20 @@ def main() -> None:
                     if args.navmesh_constrained
                     else "exact_falcon_command_tracking"
                 ),
+                "scene_repair_config": str(args.scene_repair_config) if args.scene_repair_config else None,
+                "scene_collision_check": args.scene_collision_check or args.scene_repair_config is not None,
+                "collision_radius_m": args.collision_radius,
             })
             manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
         period, started, sequence, idle_time = 1.0 / args.hz, time.monotonic(), 0, 0.0
         completion_seen = None
+        collision_blocked_frames = 0
+        last_blocked_trajectory = None
+        scene_collision_check = args.scene_collision_check or args.scene_repair_config is not None
         while time.monotonic() - started < args.duration:
             tick = time.monotonic()
+            command = None
             if args.completion_file is not None and args.completion_file.exists():
                 if completion_seen is None:
                     completion_seen = tick
@@ -329,7 +367,15 @@ def main() -> None:
                         navmesh_constrained=args.navmesh_constrained,
                         navmesh_path_follow=args.navmesh_path_follow,
                         allow_vertical_motion=args.allow_vertical_motion,
+                        scene_collision_check=scene_collision_check,
+                        collision_radius=args.collision_radius,
                     )
+                    if command.get("_geometry_blocked", False):
+                        collision_blocked_frames += 1
+                        trajectory_id = int(command.get("trajectory_id", -1))
+                        if last_blocked_trajectory != trajectory_id:
+                            print(f"scene_geometry_blocked trajectory={trajectory_id}", flush=True)
+                            last_blocked_trajectory = trajectory_id
                 idle_time = 0.0 if moved else idle_time + period
                 if (
                     not moved
@@ -366,12 +412,20 @@ def main() -> None:
             atomic_bytes(bridge_dir / "depth_u16.raw", depth_u16.tobytes())
             atomic_bytes(bridge_dir / "rgb_u8.raw", rgb.tobytes())
             atomic_bytes(bridge_dir / "semantic_i32.raw", semantic.tobytes())
-            atomic_json(bridge_dir / "state.json", {
+            frame_state = {
                 "sequence": sequence, "width": 640, "height": 480,
                 "position": position_f.tolist(), "orientation_xyzw": matrix_to_xyzw(rotation_f_opt),
                 "body_orientation_xyzw": matrix_to_xyzw(rotation_f_body),
                 "depth_unit": "millimeter", "rgb_encoding": "rgb8", "semantic_dtype": "int32",
-            })
+                "preview_motion_blocked": bool(command and command.get("_geometry_blocked", False)),
+                "blocked_trajectory_id": int(command.get("trajectory_id", -1)) if command else -1,
+                "preview_contact_points": command.get("_contact_points_falcon", []) if command else [],
+            }
+            if args.synchronized_frames:
+                header = json.dumps(frame_state).encode("utf-8")
+                atomic_bytes(bridge_dir / "frame_bundle.bin", struct.pack("<I", len(header))
+                             + header + depth_u16.tobytes() + rgb.tobytes())
+            atomic_json(bridge_dir / "state.json", frame_state)
             if args.record_dir is not None and sequence % args.record_every == 0:
                 np.savez_compressed(
                     args.record_dir / f"frame_{sequence:06d}.npz",
@@ -392,6 +446,9 @@ def main() -> None:
             "frames": sequence,
             "max_duration_seconds": args.duration,
             "finish_hold_seconds": args.finish_hold,
+            "scene_repair_config": str(args.scene_repair_config) if args.scene_repair_config else None,
+            "scene_collision_check": scene_collision_check,
+            "collision_blocked_frames": collision_blocked_frames,
         }
         if args.result_file is not None:
             args.result_file.parent.mkdir(parents=True, exist_ok=True)

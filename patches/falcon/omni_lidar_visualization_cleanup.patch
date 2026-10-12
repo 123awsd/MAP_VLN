@@ -1,0 +1,23 @@
+--- a/falcon_planner/exploration_utils/src/perception_utils/perception_utils.cpp
++++ b/falcon_planner/exploration_utils/src/perception_utils/perception_utils.cpp
+@@ -90,6 +90,7 @@
+ void PerceptionUtils::setPose(const Vector3d &pos, const double &yaw) {
+   pos_ = pos;
+   yaw_ = yaw;
++  if (fov_type_ == OMNI_LIDAR) return;
+ 
+   // Transform the normals of camera FOV
+   Eigen::Matrix3d R_wb;
+@@ -108,9 +109,10 @@
+ }
+ 
+ void PerceptionUtils::getFOV(vector<Vector3d> &list1, vector<Vector3d> &list2) {
++  list1.clear();
++  list2.clear();
+   if (fov_type_ == OMNI_LIDAR) {
+-    ROS_ERROR("[PerceptionUtils] Omni-lidar FOV visualization not implemented yet.");
+-    return;
++    ROS_DEBUG_THROTTLE(15.0, "[PerceptionUtils] Camera frustum visualization omitted for omni lidar");
+     return;
+   }
+   list1.clear();

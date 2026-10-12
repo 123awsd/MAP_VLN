@@ -1,0 +1,240 @@
+{
+  "status": "deleted_user_approved",
+  "directories": [
+    {
+      "directory": "视频制作/A点云_地板显示对比",
+      "files": 18,
+      "bytes": 4883455
+    },
+    {
+      "directory": "视频制作/三层探索_40秒节选",
+      "files": 4,
+      "bytes": 17320803
+    },
+    {
+      "directory": "视频制作/三层探索_FALCON俯视版",
+      "files": 7,
+      "bytes": 28751736
+    },
+    {
+      "directory": "视频制作/三层探索_FALCON灰色版",
+      "files": 8,
+      "bytes": 29627950
+    },
+    {
+      "directory": "视频制作/三层探索_二层去外部杂点",
+      "files": 10,
+      "bytes": 31850945
+    },
+    {
+      "directory": "视频制作/三层探索_优化试跑",
+      "files": 7,
+      "bytes": 30148989
+    },
+    {
+      "directory": "视频制作/三层探索_俯视主图三视角",
+      "files": 16,
+      "bytes": 68786759
+    },
+    {
+      "directory": "视频制作/三层探索_单主画面",
+      "files": 5,
+      "bytes": 31559024
+    },
+    {
+      "directory": "视频制作/三层探索_原三视图40秒",
+      "files": 4,
+      "bytes": 28778200
+    },
+    {
+      "directory": "视频制作/三层探索_原始深度点云版",
+      "files": 8,
+      "bytes": 32134507
+    },
+    {
+      "directory": "视频制作/三层探索_去停滞斜顶裁剪",
+      "files": 10,
+      "bytes": 28700643
+    },
+    {
+      "directory": "视频制作/三层探索_场景修复试跑",
+      "files": 8,
+      "bytes": 30205350
+    },
+    {
+      "directory": "视频制作/三层探索_局部恢复修复试跑",
+      "files": 8,
+      "bytes": 30024030
+    },
+    {
+      "directory": "视频制作/三层探索_延长720秒试跑",
+      "files": 8,
+      "bytes": 19839451
+    },
+    {
+      "directory": "视频制作/三层探索_当前层加总览",
+      "files": 7,
+      "bytes": 31811833
+    },
+    {
+      "directory": "视频制作/三层探索_方法优化试跑",
+      "files": 10,
+      "bytes": 27727772
+    },
+    {
+      "directory": "视频制作/三层探索_无体素采样版",
+      "files": 10,
+      "bytes": 32846396
+    },
+    {
+      "directory": "视频制作/三层探索_流畅稠密版",
+      "files": 6,
+      "bytes": 30557666
+    },
+    {
+      "directory": "视频制作/三层探索_稠密三视图40秒",
+      "files": 4,
+      "bytes": 15069990
+    },
+    {
+      "directory": "视频制作/三层探索_累计轨迹视锥版",
+      "files": 6,
+      "bytes": 30824273
+    },
+    {
+      "directory": "视频制作/三层探索_蓝青绿紫通透",
+      "files": 7,
+      "bytes": 16407419
+    },
+    {
+      "directory": "视频制作/三层探索_观测执行一致性试跑",
+      "files": 8,
+      "bytes": 27724287
+    },
+    {
+      "directory": "视频制作/三层探索_高度渐变版",
+      "files": 6,
+      "bytes": 30521686
+    },
+    {
+      "directory": "视频制作/俯视视锥样式对比",
+      "files": 10,
+      "bytes": 1284590
+    },
+    {
+      "directory": "视频制作/全三层斜俯视_静态方案",
+      "files": 14,
+      "bytes": 3879554
+    },
+    {
+      "directory": "视频制作/探索展示_六方案动态对比",
+      "files": 30,
+      "bytes": 146315556
+    },
+    {
+      "directory": "视频制作/探索点云展示调研",
+      "files": 3,
+      "bytes": 256627
+    },
+    {
+      "directory": "视频制作/点云形式对比",
+      "files": 93,
+      "bytes": 160193932
+    },
+    {
+      "directory": "视频制作/真实三层_渐变与遮挡调研",
+      "files": 23,
+      "bytes": 28461066
+    },
+    {
+      "directory": "视频制作/真实高度通透_配色对比",
+      "files": 6,
+      "bytes": 8065456
+    },
+    {
+      "directory": "视频制作/视角4_冷色渐变对比",
+      "files": 8,
+      "bytes": 7261841
+    }
+  ],
+  "extra_files": [
+    {
+      "path": "video_previews/00337_exploration_three_view_preview_v2.mp4",
+      "bytes": 7460789
+    },
+    {
+      "path": "video_previews/exploration_real_rviz_three_views_20fps_fixed.mp4",
+      "bytes": 72556267
+    },
+    {
+      "path": "video_previews/exploration_real_rviz_three_views_8x.mp4",
+      "bytes": 27567475
+    },
+    {
+      "path": "video_previews/exploration_real_rviz_three_views_20fps.mp4",
+      "bytes": 36896915
+    },
+    {
+      "path": "video_previews/exploration_real_rviz_three_views_20fps_virtual_final.mp4",
+      "bytes": 72338874
+    },
+    {
+      "path": "video_previews/00337_exploration_three_view_preview.mp4",
+      "bytes": 7686465
+    },
+    {
+      "path": "video_previews/exploration_real_rviz_three_views_20fps_virtual_fixed.mp4",
+      "bytes": 72518788
+    },
+    {
+      "path": "video_previews/exploration_real_rviz_three_views_20fps_virtual_final_white_gap.mp4",
+      "bytes": 77507873
+    },
+    {
+      "path": "video_previews/exploration_real_rviz_three_views_20fps_virtual.mp4",
+      "bytes": 72399636
+    }
+  ],
+  "deleted": [
+    "视频制作/A点云_地板显示对比",
+    "视频制作/三层探索_40秒节选",
+    "视频制作/三层探索_FALCON俯视版",
+    "视频制作/三层探索_FALCON灰色版",
+    "视频制作/三层探索_二层去外部杂点",
+    "视频制作/三层探索_优化试跑",
+    "视频制作/三层探索_俯视主图三视角",
+    "视频制作/三层探索_单主画面",
+    "视频制作/三层探索_原三视图40秒",
+    "视频制作/三层探索_原始深度点云版",
+    "视频制作/三层探索_去停滞斜顶裁剪",
+    "视频制作/三层探索_场景修复试跑",
+    "视频制作/三层探索_局部恢复修复试跑",
+    "视频制作/三层探索_延长720秒试跑",
+    "视频制作/三层探索_当前层加总览",
+    "视频制作/三层探索_方法优化试跑",
+    "视频制作/三层探索_无体素采样版",
+    "视频制作/三层探索_流畅稠密版",
+    "视频制作/三层探索_稠密三视图40秒",
+    "视频制作/三层探索_累计轨迹视锥版",
+    "视频制作/三层探索_蓝青绿紫通透",
+    "视频制作/三层探索_观测执行一致性试跑",
+    "视频制作/三层探索_高度渐变版",
+    "视频制作/俯视视锥样式对比",
+    "视频制作/全三层斜俯视_静态方案",
+    "视频制作/探索展示_六方案动态对比",
+    "视频制作/探索点云展示调研",
+    "视频制作/点云形式对比",
+    "视频制作/真实三层_渐变与遮挡调研",
+    "视频制作/真实高度通透_配色对比",
+    "视频制作/视角4_冷色渐变对比",
+    "video_previews/00337_exploration_three_view_preview_v2.mp4",
+    "video_previews/exploration_real_rviz_three_views_20fps_fixed.mp4",
+    "video_previews/exploration_real_rviz_three_views_8x.mp4",
+    "video_previews/exploration_real_rviz_three_views_20fps.mp4",
+    "video_previews/exploration_real_rviz_three_views_20fps_virtual_final.mp4",
+    "video_previews/00337_exploration_three_view_preview.mp4",
+    "video_previews/exploration_real_rviz_three_views_20fps_virtual_fixed.mp4",
+    "video_previews/exploration_real_rviz_three_views_20fps_virtual_final_white_gap.mp4",
+    "video_previews/exploration_real_rviz_three_views_20fps_virtual.mp4"
+  ]
+}

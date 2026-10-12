@@ -25,6 +25,39 @@ Visualization Manager:
     Name: Approved room map
     Marker Topic: /lab_rooms/map
     Queue Size: 100
+  - Alpha: 1
+    Buffer Length: 1
+    Class: rviz/Path
+    Color: 0; 255; 255
+    Enabled: true
+    Head Diameter: 0.30000001192092896
+    Head Length: 0.20000000298023224
+    Length: 0.30000001192092896
+    Line Style: Billboards
+    Line Width: 0.09
+    Name: Executed trajectory
+    Offset:
+      X: 0
+      Y: 0
+      Z: 0
+    Pose Color: 255; 85; 255
+    Pose Style: None
+    Queue Size: 10
+    Radius: 0.029999999329447746
+    Shaft Diameter: 0.10000000149011612
+    Shaft Length: 0.10000000149011612
+    Topic: /drone_room/animated_trajectory
+    Unreliable: false
+    Value: true
+  - Class: rviz/MarkerArray
+    Enabled: true
+    Value: true
+    Name: Drone camera
+    Marker Topic: /drone_room/animated_viewpoints
+    Namespaces:
+      candidate_viewpoints: false
+      current_camera_frustum: true
+    Queue Size: 100
   Enabled: true
   Global Options:
     Background Color: 35; 39; 45
@@ -45,11 +78,11 @@ Visualization Manager:
     Current:
       Class: rviz/TopDownOrtho
       Name: Current View
-      Target Frame: map
-      Scale: 13
+      Target Frame: drone_visual
+      Scale: 32
       Angle: 0
-      X: -11
-      Y: -4.5
+      X: 0
+      Y: 0
       Near Clip Distance: 0.01
     Saved: null
 Window Geometry:

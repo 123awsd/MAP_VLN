@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
 # Host-only, isolated ROS master; no hardware or command consumers.
 set -euo pipefail
-[[ $# -ge 2 && $# -le 6 ]] || { echo "Usage: $0 RUN_ID TASK_ID [CLEARANCE_M] [PATH_SOURCE] [SPEED_MPS] [MAX_YAW_RATE_RAD_S]" >&2; exit 2; }
+[[ $# -ge 2 && $# -le 7 ]] || { echo "Usage: $0 RUN_ID TASK_ID [CLEARANCE_M] [PATH_SOURCE] [SPEED_MPS] [MAX_YAW_RATE_RAD_S] [VOXEL_SNAPSHOT]" >&2; exit 2; }
 run=$1 task=$2 clearance="${3:-0.25}" path_source="${4:-clearance_optimized}"
 speed="${5:-0.6}" max_yaw_rate="${6:-1.5}"
 departure_validation=false
+seed_local_bottlenecks="${MINCO_SEED_LOCAL_BOTTLENECKS:-false}"
+corridor_extra_margin="${MINCO_CORRIDOR_EXTRA_MARGIN:-0.0}"
+python3 - "$corridor_extra_margin" <<'PY'
+import math, sys
+value = float(sys.argv[1])
+if not math.isfinite(value) or not 0 <= value <= 0.20:
+    raise SystemExit("MINCO_CORRIDOR_EXTRA_MARGIN must be in [0, 0.20] m")
+PY
+[[ "$seed_local_bottlenecks" == true || "$seed_local_bottlenecks" == false ]] || exit 2
 [[ "$run" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ && "$task" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || exit 2
 case "$path_source" in
   validated|clearance_optimized|astar|sparse|sparse_astar) ;;
@@ -29,13 +38,18 @@ if not math.isfinite(yaw_rate) or not 0.1 <= yaw_rate <= 3.0:
 PY
 root="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$root"
+voxel_snapshot="${7:-real_fly/stage2_offline/data/$run/voxel_snapshot}"
+[[ "$voxel_snapshot" = /* ]] || voxel_snapshot="$root/$voxel_snapshot"
 mission="real_fly/stage2_offline/data/$run/tasks/$task/planning/mission_plan.json"
 if [[ -s "real_fly/stage2_offline/data/$run/tasks/$task/departure_guide_report.json" ]]; then
   departure_validation=true
 fi
 map="real_fly/stage2_offline/data/$run/fastlio_complete/handheld_map_${run}_complete.pcd"
 dest="real_fly/stage2_runtime/missions/$run/$task"
-[[ -s "$mission" && -s "$map" ]] || { echo "Missing mission/map" >&2; exit 2; }
+[[ -s "$mission" && -s "$map" && -s "$voxel_snapshot/metadata.json" && -s "$voxel_snapshot/voxel_map.npz" ]] || {
+  echo "Missing mission/map/voxel snapshot" >&2
+  exit 2
+}
 [[ ! -e "$dest/final_minco_manifest.json" ]] || { echo "Final MINCO already exists; use a new task or archive it first." >&2; exit 2; }
 bash real_fly/stage2_offline/scripts/build_host_minco.sh
 mkdir -p "$dest"
@@ -62,8 +76,11 @@ PY
 sudo docker run --rm --network none --user "$(id -u):$(id -g)" \
   -v "$root:/workspace/project" -e JOB="/workspace/project/$job" \
   -e MAP="/workspace/project/$map" -e COLLISION_CLEARANCE="$clearance" \
+  -e VOXEL_SNAPSHOT="/workspace/project/${voxel_snapshot#"$root/"}" \
   -e MINCO_PATH_SOURCE="$path_source" -e MINCO_SPEED_MPS="$speed" \
   -e MINCO_MAX_YAW_RATE="$max_yaw_rate" \
+  -e MINCO_SEED_LOCAL_BOTTLENECKS="$seed_local_bottlenecks" \
+  -e MINCO_CORRIDOR_EXTRA_MARGIN="$corridor_extra_margin" \
   -e DEPARTURE_VALIDATION="$departure_validation" \
   pre-map-vln/real-minco:local bash -c '
 set -eo pipefail
@@ -72,11 +89,15 @@ source /workspace/project/real_fly/stage2_offline/runtime/minco_ws/devel/setup.b
 export ROS_MASTER_URI=http://127.0.0.1:11311 ROS_IP=127.0.0.1
 export ROS_HOME="$JOB/ros"
 python3 /workspace/project/real_fly/stage2_offline/scripts/export_full_smooth_route.py --mission "$JOB/source_mission.json" --output "$JOB/full_smooth_route.txt" --path-source "$MINCO_PATH_SOURCE" --speed "$MINCO_SPEED_MPS"
-python3 /workspace/project/real_fly/stage2_runtime/scripts/build_super_collision_pcd.py "$MAP" "$JOB/collision.pcd" --voxel 0.10 --min-points-per-voxel 100
+python3 /workspace/project/real_fly/stage2_runtime/scripts/build_super_collision_pcd.py \
+  "$MAP" "$JOB/collision.pcd" --voxel-snapshot "$VOXEL_SNAPSHOT" \
+  --snapshot-output-resolution 0.10
 roscore > "$JOB/roscore.log" 2>&1 & master=$!
 trap "kill $master 2>/dev/null || true" EXIT
 for i in $(seq 1 50); do rosparam list >/dev/null 2>&1 && break; sleep .1; done
 rosparam list >/dev/null
+# Clearance is measured to collision.pcd samples. Cube-surface distances are
+# reported separately; the artifact audit also rejects occupied-cell samples.
 timeout 900 rosrun mission_planner full_smooth_mission \
   _preview_only:=true _preview_start_at_first_route_point:=true _exit_after_preview:=true \
   _start_trigger_type:=3 _save_generated_trajectory:=true \
@@ -85,9 +106,11 @@ timeout 900 rosrun mission_planner full_smooth_mission \
   _use_super_safe_corridor:=true _super_use_recorded_guide_without_astar:=true \
   _super_static_map_only:=true _local_collision_replan_enabled:=false \
   _collision_clearance:="$COLLISION_CLEARANCE" _auto_land:=false \
+  _super_corridor_extra_margin:="$MINCO_CORRIDOR_EXTRA_MARGIN" \
   _max_acceleration:=6.0 _max_jerk:=90.0 _max_snap:=350.0 \
   _max_yaw_rate:="$MINCO_MAX_YAW_RATE" _max_yaw_lock_variation:=1.0 _max_jerk_discontinuity:=0.0001 \
   _narrow_corridor/enabled:=true _narrow_corridor/clearance_threshold:=0.40 \
+  _narrow_corridor/seed_local_candidates_only:="$MINCO_SEED_LOCAL_BOTTLENECKS" \
   _narrow_corridor/max_width:=1.00 _narrow_corridor/transition_length:=0.45 \
   _narrow_corridor/max_half_width:=0.18 _narrow_corridor/min_half_width:=0.10 \
   _narrow_corridor/margin:=0.03 _narrow_corridor/side_vertical_window:=0.35 \
@@ -107,9 +130,9 @@ if [[ "$DEPARTURE_VALIDATION" == true ]]; then
     --output "$JOB/departure_geometry_report.json"
 fi
 python3 /workspace/project/real_fly/stage2_runtime/scripts/saved_minco_artifact.py seal \
-  --directory "$JOB" --map "$MAP" --mission "$JOB/source_mission.json" --clearance "$COLLISION_CLEARANCE"
+  --directory "$JOB" --map "$MAP" --mission "$JOB/source_mission.json" --clearance "$COLLISION_CLEARANCE" --voxel-snapshot "$VOXEL_SNAPSHOT"
 '
-for name in final_minco.txt collision.pcd planner.yaml full_smooth_route.txt final_minco_preview.json narrow_corridor_report.json; do
+for name in final_minco.txt collision.pcd planner.yaml full_smooth_route.txt final_minco_preview.json narrow_corridor_report.json voxel_clearance_report.json; do
   cp "$job/$name" "$dest/$name"
 done
 if [[ -s "$job/departure_geometry_report.json" ]]; then
