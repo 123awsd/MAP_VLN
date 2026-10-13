@@ -102,7 +102,7 @@ class FileBridge:
                     return None
                 pixels = int(state["width"]) * int(state["height"])
                 offset = 4 + header_size
-                if len(payload) != offset + pixels * 5:
+                if len(payload) != offset + pixels * (2 if state.get("depth_only", False) else 5):
                     raise ValueError("Incomplete synchronized RGB-D frame")
                 return state, payload[offset:offset + pixels * 2], payload[offset + pixels * 2:], b""
             except (OSError, ValueError, KeyError, struct.error) as exc:
@@ -111,7 +111,7 @@ class FileBridge:
         state_path = self.root / "state.json"
         depth_path = self.root / "depth_u16.raw"
         rgb_path = self.root / "rgb_u8.raw"
-        if not state_path.exists() or not rgb_path.exists():
+        if not state_path.exists():
             return None
         try:
             state = json.loads(state_path.read_text(encoding="utf-8"))
@@ -122,14 +122,15 @@ class FileBridge:
             depth = depth_path.read_bytes() if sensor_model == "camera" else b""
             lidar_path = self.root / "lidar_xyz_f32.raw"
             lidar = lidar_path.read_bytes() if sensor_model == "mid360" else b""
-            rgb = rgb_path.read_bytes()
+            depth_only = bool(state.get("depth_only", False))
+            rgb = rgb_path.read_bytes() if not depth_only and rgb_path.exists() else b""
             if sensor_model == "camera" and len(depth) != int(state["width"]) * int(state["height"]) * 2:
                 rospy.logwarn_throttle(2.0, "Depth frame size mismatch")
                 return None
             if sensor_model == "mid360" and (not lidar or len(lidar) % 12):
                 rospy.logwarn_throttle(2.0, "MID-360 pointcloud frame size mismatch")
                 return None
-            if len(rgb) != int(state["width"]) * int(state["height"]) * 3:
+            if not depth_only and len(rgb) != int(state["width"]) * int(state["height"]) * 3:
                 rospy.logwarn_throttle(2.0, "RGB frame size mismatch")
                 return None
             return state, depth, rgb, lidar
@@ -299,12 +300,13 @@ class FileBridge:
             image.data = depth
             self.depth_pub.publish(image)
 
-        rgb_image = Image()
-        rgb_image.header.stamp, rgb_image.header.frame_id = stamp, "camera"
-        rgb_image.height, rgb_image.width = image.height, image.width
-        rgb_image.encoding, rgb_image.is_bigendian, rgb_image.step = "rgb8", False, image.width * 3
-        rgb_image.data = rgb
-        self.rgb_pub.publish(rgb_image)
+        if not state.get("depth_only", False):
+            rgb_image = Image()
+            rgb_image.header.stamp, rgb_image.header.frame_id = stamp, "camera"
+            rgb_image.height, rgb_image.width = image.height, image.width
+            rgb_image.encoding, rgb_image.is_bigendian, rgb_image.step = "rgb8", False, image.width * 3
+            rgb_image.data = rgb
+            self.rgb_pub.publish(rgb_image)
 
         pose = PoseStamped()
         pose.header = image.header

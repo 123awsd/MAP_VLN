@@ -131,11 +131,14 @@ def follow_command(
     allow_vertical_motion: bool = False,
     scene_collision_check: bool = False,
     collision_radius: float = 0.12,
+    max_flight_z: float = float("inf"),
 ) -> bool:
     agent = sim.get_agent(0)
     state = agent.get_state()
     current = np.asarray(state.position, dtype=np.float64)
-    target_f = np.asarray(command["position"], dtype=np.float64) - np.asarray([0.0, 0.0, 1.0])
+    sensor_target = np.asarray(command["position"], dtype=np.float64).copy()
+    sensor_target[2] = min(sensor_target[2], max_flight_z)
+    target_f = sensor_target - np.asarray([0.0, 0.0, 1.0])
     target_h = origin_h + S_HABITAT_TO_FALCON.T @ target_f
     direction = target_h - current
     if not allow_vertical_motion:
@@ -214,6 +217,7 @@ def main() -> None:
     )
     parser.add_argument("--duration", type=float, default=30.0)
     parser.add_argument("--hz", type=float, default=5.0)
+    parser.add_argument("--depth-only", action="store_true", help="create and publish only the depth sensor; intended for exploration, not video")
     parser.add_argument("--synchronized-frames", action="store_true",
                         help="atomically exchange RGB-D and its measured pose in one frame bundle")
     parser.add_argument("--follow-falcon", action="store_true")
@@ -268,6 +272,7 @@ def main() -> None:
     parser.add_argument("--scene-repair-config", type=Path, default=None)
     parser.add_argument("--scene-collision-check", action="store_true")
     parser.add_argument("--collision-radius", type=float, default=0.12)
+    parser.add_argument("--max-flight-z", type=float, default=float("inf"), help="Maximum FALCON sensor-centre flight height in metres; observations are not cropped")
     args = parser.parse_args()
     if not args.scene.exists():
         raise FileNotFoundError(args.scene)
@@ -292,7 +297,7 @@ def main() -> None:
     sim_cfg.scene_id, sim_cfg.scene_dataset_config_file = str(args.scene), str(args.scene_config)
     sim_cfg.enable_physics = True
     agent_cfg = habitat_sim.agent.AgentConfiguration()
-    agent_cfg.sensor_specifications = [sensor("rgb", habitat_sim.SensorType.COLOR), sensor("depth", habitat_sim.SensorType.DEPTH), sensor("semantic", habitat_sim.SensorType.SEMANTIC)]
+    agent_cfg.sensor_specifications = ([sensor("depth", habitat_sim.SensorType.DEPTH)] if args.depth_only else [sensor("rgb", habitat_sim.SensorType.COLOR), sensor("depth", habitat_sim.SensorType.DEPTH), sensor("semantic", habitat_sim.SensorType.SEMANTIC)])
 
     with habitat_sim.Simulator(habitat_sim.Configuration(sim_cfg, [agent_cfg])) as sim:
         repair_objects = (
@@ -369,6 +374,7 @@ def main() -> None:
                         allow_vertical_motion=args.allow_vertical_motion,
                         scene_collision_check=scene_collision_check,
                         collision_radius=args.collision_radius,
+                        max_flight_z=args.max_flight_z,
                     )
                     if command.get("_geometry_blocked", False):
                         collision_blocked_frames += 1
@@ -407,16 +413,16 @@ def main() -> None:
 
             depth = np.nan_to_num(np.asarray(obs["depth"], dtype=np.float32), nan=0.0, posinf=0.0)
             depth_u16 = np.clip(np.rint(depth * 1000.0), 0, 65535).astype("<u2")
-            rgb = np.asarray(obs["rgb"])[..., :3].astype(np.uint8)
-            semantic = np.asarray(obs["semantic"], dtype="<i4")
+            rgb = None if args.depth_only else np.asarray(obs["rgb"])[..., :3].astype(np.uint8)
+            semantic = None if args.depth_only else np.asarray(obs["semantic"], dtype="<i4")
             atomic_bytes(bridge_dir / "depth_u16.raw", depth_u16.tobytes())
-            atomic_bytes(bridge_dir / "rgb_u8.raw", rgb.tobytes())
-            atomic_bytes(bridge_dir / "semantic_i32.raw", semantic.tobytes())
+            if rgb is not None: atomic_bytes(bridge_dir / "rgb_u8.raw", rgb.tobytes())
+            if semantic is not None: atomic_bytes(bridge_dir / "semantic_i32.raw", semantic.tobytes())
             frame_state = {
                 "sequence": sequence, "width": 640, "height": 480,
                 "position": position_f.tolist(), "orientation_xyzw": matrix_to_xyzw(rotation_f_opt),
                 "body_orientation_xyzw": matrix_to_xyzw(rotation_f_body),
-                "depth_unit": "millimeter", "rgb_encoding": "rgb8", "semantic_dtype": "int32",
+                "depth_unit": "millimeter", "rgb_encoding": "none" if args.depth_only else "rgb8", "semantic_dtype": "none" if args.depth_only else "int32", "depth_only": bool(args.depth_only),
                 "preview_motion_blocked": bool(command and command.get("_geometry_blocked", False)),
                 "blocked_trajectory_id": int(command.get("trajectory_id", -1)) if command else -1,
                 "preview_contact_points": command.get("_contact_points_falcon", []) if command else [],
@@ -424,7 +430,7 @@ def main() -> None:
             if args.synchronized_frames:
                 header = json.dumps(frame_state).encode("utf-8")
                 atomic_bytes(bridge_dir / "frame_bundle.bin", struct.pack("<I", len(header))
-                             + header + depth_u16.tobytes() + rgb.tobytes())
+                             + header + depth_u16.tobytes() + (b"" if rgb is None else rgb.tobytes()))
             atomic_json(bridge_dir / "state.json", frame_state)
             if args.record_dir is not None and sequence % args.record_every == 0:
                 np.savez_compressed(
