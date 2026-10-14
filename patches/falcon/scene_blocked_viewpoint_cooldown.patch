@@ -1,0 +1,22 @@
+--- a/exploration_fsm.cpp
++++ b/exploration_fsm.cpp
+@@ -67,11 +67,18 @@
+   // Optional simulator execution feedback; exploration objectives are unchanged.
+   bool scene_feedback=false;
+   nh.param("/exploration_manager/preview_tracking_recovery",scene_feedback,false);
++  bool block_scene_goal=false;
++  nh.param("/exploration_manager/block_scene_failed_viewpoint",block_scene_goal,false);
+   if(scene_feedback){
+     static ros::Subscriber scene_block_sub=nh.subscribe<std_msgs::Int32>(
+-      "/preview/motion_blocked",1,[this](const std_msgs::Int32::ConstPtr&msg){
++      "/preview/motion_blocked",1,[this,block_scene_goal](const std_msgs::Int32::ConstPtr&msg){
+         if((state_!=EXEC_TRAJ && state_!=PUB_TRAJ) || msg->data!=planner_manager_->local_data_.traj_id_)return;
+         ROS_WARN("[SceneGeometryFeedback] trajectory %d blocked by scene; replan from actual odometry",msg->data);
++        if(block_scene_goal && executing_goal_valid_){
++          expl_manager_->blockViewpoint(executing_viewpoint_,20.0,
++              "actual execution blocked; try other viewpoints before retry");
++          executing_goal_valid_=false;
++        }
+         std_msgs::Int32 stop;stop.data=1;replan_pub_.publish(stop);
+         fd_->static_state_=true;
+         transitState(PLAN_TRAJ,"SceneGeometryFeedback");

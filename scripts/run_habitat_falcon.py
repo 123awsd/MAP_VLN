@@ -236,10 +236,18 @@ def main() -> None:
         action="store_true",
         help="track the full 3-D PositionCommand, including Habitat vertical motion",
     )
-    parser.add_argument(
+    yaw_policy = parser.add_mutually_exclusive_group()
+    yaw_policy.add_argument(
         "--use-planner-yaw",
         action="store_true",
-        help="use FALCON yaw instead of facing the actual movement direction",
+        default=True,
+        help="execute FALCON yaw during RGB-D acquisition (default)",
+    )
+    yaw_policy.add_argument(
+        "--legacy-motion-heading",
+        dest="use_planner_yaw",
+        action="store_false",
+        help="reproduce historical acquisition facing movement instead of planned yaw",
     )
     parser.add_argument(
         "--idle-scan-rate",
@@ -423,6 +431,8 @@ def main() -> None:
                 "position": position_f.tolist(), "orientation_xyzw": matrix_to_xyzw(rotation_f_opt),
                 "body_orientation_xyzw": matrix_to_xyzw(rotation_f_body),
                 "depth_unit": "millimeter", "rgb_encoding": "none" if args.depth_only else "rgb8", "semantic_dtype": "none" if args.depth_only else "int32", "depth_only": bool(args.depth_only),
+                "yaw_policy": "planner" if args.use_planner_yaw else "legacy_motion_heading",
+                "executed_command_yaw": float(command.get("yaw", 0.0)) if command and args.use_planner_yaw else None,
                 "preview_motion_blocked": bool(command and command.get("_geometry_blocked", False)),
                 "blocked_trajectory_id": int(command.get("trajectory_id", -1)) if command else -1,
                 "preview_contact_points": command.get("_contact_points_falcon", []) if command else [],

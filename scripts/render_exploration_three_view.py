@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render a low-overhead three-view exploration preview from timeline snapshots."""
+"""Render the archived original exploration video; shared projection helpers."""
 
 import argparse
 import math
@@ -110,67 +110,42 @@ def render_view(points, trajectory, width, height, yaw, pitch, center, span, see
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("timeline", type=Path)
-    parser.add_argument("rgb_dir", type=Path)
-    parser.add_argument("output", type=Path)
-    parser.add_argument("--fps", type=int, default=8)
-    parser.add_argument("--stride", type=int, default=1)
+    """Default to the archived Oct13 original layout; retain projection helpers."""
+    import shutil
+    parser = argparse.ArgumentParser(description="前天原版：无字、俯视主图、右上三层点云、右下规划yaw第一视角")
+    parser.add_argument("--trial-dir", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--cache-dir", type=Path, help="默认 trial-dir/video_cache")
+    parser.add_argument("--assets-dir", type=Path, help="默认 trial-dir/original_style_video；含本次几何及离线yaw素材")
     args = parser.parse_args()
-
-    data = np.load(args.timeline, allow_pickle=False)
-    all_traj = data["trajectory"].astype(np.float32)
-    traj_times = data["trajectory_times"].astype(float)
-    snapshot_times = data["snapshot_times"][:: max(1, args.stride)].astype(float)
-    cloud_indices = list(range(0, 101, max(1, args.stride)))
-    rgb_files = sorted(args.rgb_dir.glob("rgb_*.jpg"))
-    if len(rgb_files) != len(cloud_indices):
-        raise RuntimeError("RGB count %d does not match snapshot count %d" % (len(rgb_files), len(cloud_indices)))
-
-    # Fit once against the completed map so the camera stays fixed without wasting space.
-    final_cloud = data["cloud_100"].astype(np.float32)
-    combined = np.vstack([final_cloud, all_traj])
-    center = 0.5 * (combined.min(axis=0) + combined.max(axis=0))
-    oblique_pitch = 0.72
-    top_pitch = 0.0
-    oblique_span = fitted_span(combined, 3.95, oblique_pitch, center)
-    top_span = fitted_span(combined, 3.95, top_pitch, center)
-    command = [
-        "gst-launch-1.0", "-q", "fdsrc", "!",
-        "videoparse", "format=rgb", "width=%d" % W, "height=%d" % H,
-        "framerate=%d/1" % args.fps, "!", "videoconvert", "!",
-        "x264enc", "speed-preset=ultrafast", "tune=zerolatency", "bitrate=5000", "key-int-max=%d" % (args.fps * 2), "!",
-        "h264parse", "!", "mp4mux", "!", "filesink", "location=%s" % args.output,
-    ]
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    process = subprocess.Popen(command, stdin=subprocess.PIPE)
-    try:
-        for frame_no, (cloud_index, stamp, rgb_path) in enumerate(zip(cloud_indices, snapshot_times, rgb_files)):
-            points = data["cloud_%03d" % cloud_index].astype(np.float32)
-            trajectory = all_traj[traj_times <= stamp]
-            frame = Image.new("RGB", (W, H), BG)
-            first = fit_image(Image.open(rgb_path), LEFT_W, H - 72)
-            frame.paste(first, (0, 56))
-            oblique = render_view(points, trajectory, RIGHT_W, PANEL_H, 3.95, oblique_pitch, center, oblique_span, cloud_index)
-            top = render_view(points, trajectory, RIGHT_W, PANEL_H, 3.95, top_pitch, center, top_span, cloud_index + 1000)
-            frame.paste(oblique, (RIGHT_X, 56))
-            frame.paste(top, (RIGHT_X, 568))
-            draw = ImageDraw.Draw(frame)
-            draw.text((20, 14), "第一视角", font=TITLE_FONT, fill=(235, 242, 250))
-            draw.text((RIGHT_X + 18, 14), "斜俯视：三层探索结构", font=TITLE_FONT, fill=(235, 242, 250))
-            draw.rectangle((RIGHT_X, 568, W, 608), fill=BG)
-            draw.text((RIGHT_X + 18, 575), "正俯视：房间与轨迹", font=SMALL_FONT, fill=(235, 242, 250))
-            progress = min(1.0, max(0.0, (stamp - float(data["bag_start"])) / (float(data["bag_end"]) - float(data["bag_start"]))))
-            draw.rounded_rectangle((20, H - 34, W - 20, H - 18), radius=8, fill=(42, 58, 78))
-            draw.rounded_rectangle((20, H - 34, 20 + int((W - 40) * progress), H - 18), radius=8, fill=(45, 190, 220))
-            process.stdin.write(np.asarray(frame, dtype=np.uint8).tobytes())
-            print("rendered %d/%d" % (frame_no + 1, len(cloud_indices)), flush=True)
-    finally:
-        if process.stdin:
-            process.stdin.close()
-        code = process.wait()
-        if code:
-            raise RuntimeError("GStreamer exited with code %d" % code)
+    project = Path(__file__).resolve().parents[1]
+    workspace = project.parent
+    cache = (args.cache_dir or args.trial_dir/"video_cache").resolve()
+    assets = (args.assets_dir or args.trial_dir/"original_style_video").resolve()
+    archive = project/"visualization/current_video_snapshot/探索剪辑素材_无字30帧"
+    import json
+    config = assets/"生成配置.json"
+    settings = json.loads((config if config.exists() else archive/"生成配置.json").read_text())
+    required = [cache/"increments.npz", cache/"timeline.npz", cache/"camera_pose.npy", assets/"geometry.npz"]
+    if settings.get("yaw_matched_camera", False):
+        required += [assets/"yaw_matched_camera_pose.npy", assets/"yaw_matched_rgb"]
+    missing = [str(p) for p in required if not p.exists()]
+    if missing:
+        parser.error("原版素材尚未准备完成：" + ", ".join(missing))
+    config = assets/"生成配置.json"
+    if not config.exists():
+        shutil.copyfile(archive/"生成配置.json", config)
+    source = (archive/"render.py").read_text()
+    source = source.replace("ROOT=Path(__file__).resolve().parents[2]", "ROOT=Path(" + repr(str(workspace)) + ")")
+    source = source.replace("ROOT/'PRE_MAP_VLN/outputs/exploration_recovery_local_trial/round6_extended/preview_trimmed'", "Path(" + repr(str(cache)) + ")")
+    source = source.replace("np.load(Path(__file__).resolve().parent/'geometry.npz')", "np.load(Path(" + repr(str(assets/"geometry.npz")) + "))")
+    source = source.replace("OUT=ROOT/'视频制作/探索剪辑素材_无字30帧'", "OUT=Path(" + repr(str(assets)) + ")")
+    output = args.output.resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    source = source.replace("'04_合并版_无字_30fps.mp4'", repr(str(output)))
+    generated = assets/"render_default_original.py"
+    generated.write_text(source)
+    subprocess.run([__import__("sys").executable, str(generated)], check=True)
 
 
 if __name__ == "__main__":

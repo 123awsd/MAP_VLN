@@ -1,0 +1,93 @@
+map_config:
+  map_file: hm3d_00337_3d_generated
+  map_dimension: 3
+  init_x: 0.0
+  init_y: 0.0
+  init_z: 1.0
+  init_yaw: 0.0
+  map_size:
+    map_min_x: -9.0
+    map_min_y: -3.0
+    map_min_z: -2.0
+    map_max_x: 11.0
+    map_max_y: 19.0
+    map_max_z: 14.0
+    box_min_x: -8.5
+    box_min_y: -2.5
+    box_min_z: -1.5
+    box_max_x: 10.5
+    box_max_y: 18.5
+    box_max_z: 8.05
+    vbox_min_x: -8.5
+    vbox_min_y: -2.5
+    vbox_min_z: -1.5
+    vbox_max_x: 10.5
+    vbox_max_y: 18.5
+    vbox_max_z: 8.05
+  scale: 1.0
+  T_b_c:
+  - - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+  - - -1.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - -1.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+  T_m_w:
+  - - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+  - - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+frontier_finder:
+  viewpoint_height: -1.0
+  use_3d_viewpoints: true
+  cluster_min: 40
+  min_visib_num: 8
+  candidate_rmin: 0.5
+  candidate_rmax: 2.0
+  candidate_rnum: 4
+  min_candidate_clearance: 0.1
+  min_candidate_occupied_clearance: 0.3
+exploration_manager:
+  dormant_finish_block_threshold: 0
+  voxel_astar_fallback_enabled: true
+  voxel_astar_fallback_max_search_time: 0.5
+  fsm:
+    replan_thresh2: 1.0
+    replan_thresh3: 5
+  floor_crossing_penalty: 18
+  floor_candidate_limit: 40
+  floor_priority_enabled: true
+  preview_tracking_recovery: true
+  block_scene_failed_viewpoint: true
+traj_server:
+  init_dx: 0.0
+  init_dy: 0.0
+  init_dz: 0.0
+exploration_method:
+  min_unique_gain: 64
+  unknown_penetration: 1.0
+fast_planner:
+  observed_trajectory_guard: true
+  execution_clearance: 0.18
