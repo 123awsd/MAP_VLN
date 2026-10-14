@@ -17,5 +17,13 @@
   "path_m": 548.2801128417602,
   "blocked_frames": 4,
   "termination": "timeout",
-  "presentation": "first28s of original40s video; full bag retained; later building containment unresolved"
+  "presentation": "first28s of original40s video; full bag retained; later building containment unresolved",
+  "user_acceptance": "exploration stage accepted as baseline on2026-10-14",
+  "baseline_name": "exploration_accepted_yaw_baseline",
+  "accepted_source_cut_seconds": 503.9297003272,
+  "accepted_path_m": 437.3200409358,
+  "known_volume_at_cut_m3": 1129.302978515625,
+  "presentation_duration_seconds": 40,
+  "video": "outputs/exploration_yaw_consistent_trial/original_style_video/exploration_accepted_baseline_40s.mp4",
+  "acceptance_scope": "user accepts exploration stage; timeout and later excursion remain documented; not automatic full-coverage or building-containment certification"
 }
