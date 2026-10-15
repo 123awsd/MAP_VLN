@@ -1,0 +1,54 @@
+map_config:
+  map_file: "hm3d_example"
+  map_dimension: 2
+  init_x: 0.0
+  init_y: 0.0
+  init_z: 1.0
+  init_yaw: 0.0
+  map_size:
+    map_min_x: -30.0
+    map_min_y: -30.0
+    map_min_z: -5.0
+    map_max_x: 30.0
+    map_max_y: 30.0
+    map_max_z: 15.0
+    box_min_x: -25.0
+    box_min_y: -25.0
+    box_min_z: -2.0
+    box_max_x: 25.0
+    box_max_y: 25.0
+    box_max_z: 10.0
+    vbox_min_x: -25.0
+    vbox_min_y: -25.0
+    vbox_min_z: -2.0
+    vbox_max_x: 25.0
+    vbox_max_y: 25.0
+    vbox_max_z: 10.0
+  scale: 1.0
+  T_b_c:
+    - [0.0, 0.0, 1.0, 0.0]
+    - [-1.0, 0.0, 0.0, 0.0]
+    - [0.0, -1.0, 0.0, 0.0]
+    - [0.0, 0.0, 0.0, 1.0]
+  T_m_w:
+    - [1.0, 0.0, 0.0, 0.0]
+    - [0.0, 1.0, 0.0, 0.0]
+    - [0.0, 0.0, 1.0, 0.0]
+    - [0.0, 0.0, 0.0, 1.0]
+
+frontier_finder:
+  # Habitat VLN is ground navigation. FALCON upstream samples UAV viewpoints at
+  # each 3-D frontier's mean Z, which leaves indoor wall/ceiling frontiers dormant.
+  viewpoint_height: 1.0
+  cluster_min: 40
+  min_visib_num: 8
+  candidate_rmin: 0.5
+  candidate_rmax: 2.0
+  candidate_rnum: 4
+  min_candidate_clearance: 0.1
+  min_candidate_occupied_clearance: 0.3
+
+traj_server:
+  init_dx: 0.0
+  init_dy: 0.0
+  init_dz: 0.0

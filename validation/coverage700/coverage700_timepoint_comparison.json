@@ -1,0 +1,208 @@
+[
+  {
+    "case": "coverage_lifecycle_700_r1_20261016",
+    "capture_duration_s": 699.9123022556305,
+    "checkpoints": [
+      {
+        "elapsed_capture_wall_s": 300.0,
+        "latest_coverage_sample": [
+          299.7787253856659,
+          690.0449829101562
+        ],
+        "coverage_sample_lag_s": 0.22127461433410645,
+        "path_m": 263.223321095286,
+        "translation_time_s": 229.62671875953674,
+        "longest_adjacent_subcm_s": 3.2049994468688965,
+        "blocked_frames": 0,
+        "floor_volumes_at_checkpoint": "not recorded for historical checkpoints; final grids are not substitutes"
+      },
+      {
+        "elapsed_capture_wall_s": 503.0,
+        "latest_coverage_sample": [
+          502.9470474720001,
+          868.8209838867188
+        ],
+        "coverage_sample_lag_s": 0.05295252799987793,
+        "path_m": 420.4622695223819,
+        "translation_time_s": 380.1856110095978,
+        "longest_adjacent_subcm_s": 4.801910400390625,
+        "blocked_frames": 4,
+        "floor_volumes_at_checkpoint": "not recorded for historical checkpoints; final grids are not substitutes"
+      },
+      {
+        "elapsed_capture_wall_s": 504.0,
+        "latest_coverage_sample": [
+          503.9498567581177,
+          869.2009887695312
+        ],
+        "coverage_sample_lag_s": 0.05014324188232422,
+        "path_m": 420.556963282929,
+        "translation_time_s": 380.58453345298767,
+        "longest_adjacent_subcm_s": 4.801910400390625,
+        "blocked_frames": 4,
+        "floor_volumes_at_checkpoint": "not recorded for historical checkpoints; final grids are not substitutes"
+      },
+      {
+        "elapsed_capture_wall_s": 699.9123022556305,
+        "latest_coverage_sample": [
+          699.4419960975647,
+          1134.3480224609375
+        ],
+        "coverage_sample_lag_s": 0.4703061580657959,
+        "path_m": 580.9840547075753,
+        "translation_time_s": 533.7322037220001,
+        "longest_adjacent_subcm_s": 4.801910400390625,
+        "blocked_frames": 9,
+        "floor_volumes_at_checkpoint": "not recorded for historical checkpoints; final grids are not substitutes"
+      }
+    ]
+  },
+  {
+    "case": "consistency_R0_light_504_r1_20261015",
+    "capture_duration_s": 503.9377522468567,
+    "checkpoints": [
+      {
+        "elapsed_capture_wall_s": 300.0,
+        "latest_coverage_sample": [
+          299.41269969940186,
+          847.3729858398438
+        ],
+        "coverage_sample_lag_s": 0.5873003005981445,
+        "path_m": 266.98555120759056,
+        "translation_time_s": 210.47847771644592,
+        "longest_adjacent_subcm_s": 5.806708574295044,
+        "blocked_frames": 51,
+        "floor_volumes_at_checkpoint": "not recorded for historical checkpoints; final grids are not substitutes"
+      },
+      {
+        "elapsed_capture_wall_s": 503.0,
+        "latest_coverage_sample": [
+          502.8185164928436,
+          1184.0009765625
+        ],
+        "coverage_sample_lag_s": 0.18148350715637207,
+        "path_m": 444.9921864265086,
+        "translation_time_s": 336.4549379348755,
+        "longest_adjacent_subcm_s": 5.806708574295044,
+        "blocked_frames": 79,
+        "floor_volumes_at_checkpoint": "not recorded for historical checkpoints; final grids are not substitutes"
+      },
+      {
+        "elapsed_capture_wall_s": 503.9377522468567,
+        "latest_coverage_sample": [
+          503.14949321746826,
+          1184.0240478515625
+        ],
+        "coverage_sample_lag_s": 0.7882590293884277,
+        "path_m": 445.5593568136918,
+        "translation_time_s": 337.45106768608093,
+        "longest_adjacent_subcm_s": 5.806708574295044,
+        "blocked_frames": 79,
+        "floor_volumes_at_checkpoint": "not recorded for historical checkpoints; final grids are not substitutes"
+      }
+    ]
+  },
+  {
+    "case": "consistency_R0_light_504_r2_20261015",
+    "capture_duration_s": 504.63394117355347,
+    "checkpoints": [
+      {
+        "elapsed_capture_wall_s": 300.0,
+        "latest_coverage_sample": [
+          299.6528511047363,
+          797.0170288085938
+        ],
+        "coverage_sample_lag_s": 0.3471488952636719,
+        "path_m": 249.99512919917206,
+        "translation_time_s": 180.31139636039734,
+        "longest_adjacent_subcm_s": 3.40326189994812,
+        "blocked_frames": 71,
+        "floor_volumes_at_checkpoint": "not recorded for historical checkpoints; final grids are not substitutes"
+      },
+      {
+        "elapsed_capture_wall_s": 503.0,
+        "latest_coverage_sample": [
+          502.522935628891,
+          1007.3380126953125
+        ],
+        "coverage_sample_lag_s": 0.4770643711090088,
+        "path_m": 393.0128268825123,
+        "translation_time_s": 288.6421449184418,
+        "longest_adjacent_subcm_s": 16.015506267547607,
+        "blocked_frames": 206,
+        "floor_volumes_at_checkpoint": "not recorded for historical checkpoints; final grids are not substitutes"
+      },
+      {
+        "elapsed_capture_wall_s": 504.0,
+        "latest_coverage_sample": [
+          503.2762520313263,
+          1007.3380126953125
+        ],
+        "coverage_sample_lag_s": 0.723747968673706,
+        "path_m": 393.0128268825123,
+        "translation_time_s": 288.6421449184418,
+        "longest_adjacent_subcm_s": 17.016499280929565,
+        "blocked_frames": 206,
+        "floor_volumes_at_checkpoint": "not recorded for historical checkpoints; final grids are not substitutes"
+      },
+      {
+        "elapsed_capture_wall_s": 504.63394117355347,
+        "latest_coverage_sample": [
+          504.0285472869873,
+          1007.3380126953125
+        ],
+        "coverage_sample_lag_s": 0.6053938865661621,
+        "path_m": 393.0128268825123,
+        "translation_time_s": 288.6421449184418,
+        "longest_adjacent_subcm_s": 17.817286729812622,
+        "blocked_frames": 206,
+        "floor_volumes_at_checkpoint": "not recorded for historical checkpoints; final grids are not substitutes"
+      }
+    ]
+  },
+  {
+    "case": "consistency_A3_observation_lifecycle_504_final_20261016",
+    "capture_duration_s": 503.91217255592346,
+    "checkpoints": [
+      {
+        "elapsed_capture_wall_s": 300.0,
+        "latest_coverage_sample": [
+          299.8020851612091,
+          631.0670166015625
+        ],
+        "coverage_sample_lag_s": 0.19791483879089355,
+        "path_m": 206.59852345764625,
+        "translation_time_s": 198.97877883911133,
+        "longest_adjacent_subcm_s": 7.80690336227417,
+        "blocked_frames": 2,
+        "floor_volumes_at_checkpoint": "not recorded for historical checkpoints; final grids are not substitutes"
+      },
+      {
+        "elapsed_capture_wall_s": 503.0,
+        "latest_coverage_sample": [
+          502.7779281139374,
+          990.3610229492188
+        ],
+        "coverage_sample_lag_s": 0.22207188606262207,
+        "path_m": 323.58802323745584,
+        "translation_time_s": 305.87550497055054,
+        "longest_adjacent_subcm_s": 7.80690336227417,
+        "blocked_frames": 2,
+        "floor_volumes_at_checkpoint": "not recorded for historical checkpoints; final grids are not substitutes"
+      },
+      {
+        "elapsed_capture_wall_s": 503.91217255592346,
+        "latest_coverage_sample": [
+          503.29086542129517,
+          990.458984375
+        ],
+        "coverage_sample_lag_s": 0.6213071346282959,
+        "path_m": 323.9571394401515,
+        "translation_time_s": 306.872275352478,
+        "longest_adjacent_subcm_s": 7.80690336227417,
+        "blocked_frames": 2,
+        "floor_volumes_at_checkpoint": "not recorded for historical checkpoints; final grids are not substitutes"
+      }
+    ]
+  }
+]

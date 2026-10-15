@@ -13,6 +13,12 @@ if [[ -e "$trial_dir/result.json" || -e "$trial_dir/trial.bag" || -e "$trial_dir
   echo 'Trial already contains execution data; use a fresh directory.' >&2
   exit 2
 fi
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+while [[ ! -d "$project_root/ros_ws/src/pre_map_bridge" ]]; do
+  [[ "$project_root" != / ]] || { echo "Project root not found" >&2; exit 2; }
+  project_root="$(dirname "$project_root")"
+done
+python3 "$project_root/scripts/sync_exploration_runtime.py" "$trial_dir"
 roslaunch -p "$master_port" "$trial_dir/trial.launch" > "$trial_dir/run.log" 2>&1 &
 planner_pid=$!
 cleanup() {
@@ -22,6 +28,7 @@ cleanup() {
 trap cleanup EXIT
 python3 - "$trial_dir" <<'PY'
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -33,7 +40,7 @@ rospy.init_node('realtime_trial_trigger', anonymous=True)
 publisher = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=1, latch=True)
 started, triggered, sequence = time.monotonic(), False, -1
 with (out/'live_trajectory.jsonl').open('w') as stream:
-    while time.monotonic()-started < 720:
+    while time.monotonic()-started < float(os.environ.get("EXPLORATION_RESOURCE_DURATION", "720")):
         try:
             state = json.loads((out/'bridge/state.json').read_text())
         except (FileNotFoundError, json.JSONDecodeError):

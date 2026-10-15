@@ -1,0 +1,153 @@
+Panels: []
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.13
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 105; 130; 155
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Name: Previously Explored Floors
+      Position Transformer: XYZ
+      Queue Size: 3
+      Selectable: false
+      Size (Pixels): 1
+      Size (m): 0.02
+      Style: Points
+      Topic: /voxel_mapping/occupancy_grid_occupied
+      Unreliable: false
+      Use Fixed Frame: true
+    - Alpha: 0.96
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 0; 210; 230
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Name: Current Exploration Layer
+      Position Transformer: XYZ
+      Queue Size: 3
+      Selectable: false
+      Size (Pixels): 2
+      Size (m): 0.025
+      Style: Points
+      Topic: /pre_map_vln/roofless_map
+      Unreliable: false
+      Use Fixed Frame: true
+    - Alpha: 0.55
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 210; 0
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Name: Frontier Cells
+      Position Transformer: XYZ
+      Queue Size: 5
+      Selectable: false
+      Size (Pixels): 1
+      Size (m): 0.015
+      Style: Points
+      Topic: /planning_vis/frontier_pcl
+      Unreliable: false
+      Use Fixed Frame: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /pre_map_vln/current_plan
+      Name: Current Plan
+      Namespaces: {}
+      Queue Size: 10
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 20; 55; 175
+      Enabled: true
+      Head Diameter: 0.25
+      Head Length: 0.15
+      Length: 0.3
+      Line Style: Lines
+      Line Width: 0.018
+      Name: Executed Exploration Path
+      Offset: {X: 0, Y: 0, Z: 0}
+      Pose Color: 255; 90; 30
+      Pose Style: None
+      Radius: 0.03
+      Shaft Diameter: 0.08
+      Shaft Length: 0.15
+      Topic: /pre_map_vln/agent_path
+    - Angle Tolerance: 0.1
+      Class: rviz/Odometry
+      Enabled: true
+      Keep: 1
+      Name: UAV Pose
+      Position Tolerance: 0.1
+      Shape:
+        Alpha: 1
+        Axes Length: 0.5
+        Axes Radius: 0.05
+        Color: 255; 80; 20
+        Head Length: 0.2
+        Head Radius: 0.08
+        Shaft Length: 0.4
+        Shaft Radius: 0.04
+        Value: Arrow
+      Topic: /uav_simulator/odometry
+      Unreliable: false
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /pre_map_vln/camera_frustum
+      Name: Camera FoV
+      Namespaces: {}
+      Queue Size: 10
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /habitat/rgb
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: First Person
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Unreliable: false
+  Enabled: true
+  Global Options:
+    Background Color: 248; 250; 252
+    Default Light: true
+    Fixed Frame: world
+    Frame Rate: 20
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 23
+      Enable Stereo Rendering: false
+      Focal Point: {X: 1.5, Y: 2.0, Z: 4.5}
+      Name: Oblique Multi-floor Exploration
+      Near Clip Distance: 0.01
+      Pitch: 1.28
+      Target Frame: world
+      Yaw: 3.95
+Window Geometry:
+  Height: 1080
+  Width: 1920
+  X: 0
+  Y: 0
+  Hide Left Dock: false
+  Hide Right Dock: false
