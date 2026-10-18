@@ -62,6 +62,11 @@ class HabitatLoader(BaseLoader):
             "cam0": self.pinhole_from_K(w, h, fx, fy, cx, cy).float(),
             "T_world_rig0": PoseTW(pose_data.float()),
             "sdp_w": self.sdp_from_depth(depth, fx, fy, cx, cy, rotation, position),
+            "depth0": depth,
+            "depth_projection": {
+                "fx": fx, "fy": fy, "cx": cx, "cy": cy,
+                "rotation": rotation, "position": position,
+            },
             "time_ns0": time_ns,
             "bb2d0": torch.zeros(0, 4, dtype=torch.float32),
             "obbs": ObbTW(torch.zeros(0, 165)),

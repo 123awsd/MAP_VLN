@@ -33,3 +33,6 @@ __pycache__/
 /paper/main_zh.pdf
 /paper/main_en.pdf
 paper/system_overview
+
+# Downloaded model weights; metadata is versioned in config/.
+/models/
