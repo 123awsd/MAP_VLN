@@ -13,6 +13,10 @@ runtime/occusg/*
 runtime/baselines/*
 runtime/semantic_region_*_smoke/
 runtime/*.Xauthority
+# Reproducible optimisation copies; retain generator scripts and manifests.
+/runtime/consistency_validation_20261015/A3_hgrid_profile/
+/runtime/consistency_validation_20261015/A3_cost_buffers/
+/runtime/consistency_validation_20261015/A3_astar_closed_first/
 third_party/*
 
 !checkpoints/README.md

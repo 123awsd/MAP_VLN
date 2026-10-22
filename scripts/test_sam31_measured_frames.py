@@ -4,8 +4,8 @@ import sys,json,time,csv,random,argparse
 import numpy as np,torch
 from PIL import Image
 R=Path(__file__).resolve().parents[1];sys.path[:0]=[str(R/'third_party/sam3_source'),str(R/'boxer_ext'),str(R/'third_party/boxer')]
-parser=argparse.ArgumentParser();parser.add_argument('--full',action='store_true');parser.add_argument('--resume',action='store_true');args=parser.parse_args()
-O=R/('outputs/boxer/coverage700_sam31_20261018' if args.full else 'outputs/boxer/sam31_measured_smoke_20261018');O.mkdir(parents=True,exist_ok=True)
+parser=argparse.ArgumentParser();parser.add_argument('--full',action='store_true');parser.add_argument('--resume',action='store_true');parser.add_argument('--run-dir',type=Path);parser.add_argument('--labels-file',type=Path);args=parser.parse_args()
+O=args.run_dir or R/('outputs/boxer/coverage700_sam31_20261018' if args.full else 'outputs/boxer/sam31_measured_smoke_20261018');O.mkdir(parents=True,exist_ok=True)
 from safetensors.torch import load_file
 from sam3 import model_builder as mb
 from sam3.model.sam3_multiplex_detector import Sam3MultiplexDetector
@@ -13,6 +13,9 @@ from sam3.model.vl_combiner import SAM3VLBackboneTri
 from sam3.model.sam3_image_processor import Sam3Processor
 from torchvision.ops import batched_nms
 labels=['door','window','mirror','chair','armchair','stool','bench','sofa','bed','table','coffee table','dining table','desk','cabinet','wardrobe','dresser','nightstand','shelf','bookshelf','television','lamp','refrigerator','oven','microwave','sink','toilet','bathtub','shower','washing machine','plant']
+if args.labels_file:
+ labels=[line.strip().lower() for line in args.labels_file.read_text().splitlines() if line.strip() and not line.lstrip().startswith('#')]
+ assert len(labels)==len(set(labels)) and labels
 source=R/'outputs/boxer/coverage700_measured_20261017/episode';sequences=[80,260,990,1240,2000,2610,2870,2900]
 if args.full:sequences=[int(p.stem.split('_')[-1])for p in sorted(source.glob('frame_*.npz'))]
 random.seed(7);np.random.seed(7);torch.manual_seed(7)
@@ -24,6 +27,7 @@ model=Sam3MultiplexDetector(num_feature_levels=1,backbone=backbone,transformer=m
 all_weights=load_file(str(ckpt),device='cpu');weights={k[len('detector.'):]:v for k,v in all_weights.items()if k.startswith('detector.')};result=model.load_state_dict(weights,strict=True);del all_weights,weights
 model=model.cuda().eval();processor=Sam3Processor(model,device='cuda',confidence_threshold=.5);manifest={'model_source':json.loads((R/'models/sam31/manifest.json').read_text()),'code_source':json.loads((R/'third_party/sam3_source/source_revision.json').read_text())['revision'],'detector_weights_strict_load':True,'mode':'SAM3.1 checkpoint image detector; multiplex video tracker not exercised','labels':labels,'threshold':.5,'same_class_nms_iou':.5,'cross_class_near_identical_nms_iou':.9,'frames':[],'uses_gt':False}
 previous=json.loads((O/'manifest.json').read_text())if args.resume and (O/'manifest.json').exists()else {}
+if previous and previous.get('labels')!=labels:raise ValueError('resume labels do not match existing manifest')
 previous_frames={v['sequence']:v for v in previous.get('frames',[])}
 manifest['status']='running';manifest['frames_count']=len(sequences);manifest['source_episode']=str(source)
 for sequence in sequences:

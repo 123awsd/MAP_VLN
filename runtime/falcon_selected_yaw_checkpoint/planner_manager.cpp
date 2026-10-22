@@ -1,3 +1,4 @@
+#include "pathfinding/exploration_diagnostics.h"
 #include <cmath>
 #include <thread>
 
@@ -412,8 +413,8 @@ bool FastPlannerManager::checkTrajCollision() {
   // Keep the original check outside this isolated experiment.
   bool observed_guard=false;
   ros::param::param("/fast_planner/observed_trajectory_guard", observed_guard, false);
-  double clearance=0.18;
-  ros::param::param("/fast_planner/execution_clearance", clearance, 0.18);
+  double clearance=0.01;
+  ros::param::param("/fast_planner/execution_clearance", clearance, 0.01);
   const double t_now=std::max(0.0,std::min(local_data_.duration_,
       (ros::Time::now()-local_data_.start_time_).toSec()));
   const Eigen::Vector3d cur_pt=local_data_.position_traj_.evaluateDeBoorT(t_now);
@@ -431,7 +432,7 @@ bool FastPlannerManager::checkTrajCollision() {
       const Eigen::Vector3d contact(contact_flat[i],contact_flat[i+1],contact_flat[i+2]);
       const double d=(p-contact).norm();
       const double initial=(cur_pt-contact).norm();
-      if(d<0.18 && !((p-cur_pt).norm()<0.15 && d>=initial-0.005))return false;
+      if(d<clearance && !((p-cur_pt).norm()<0.15 && d>=initial-0.005))return false;
     }
     return true;
   };
@@ -453,6 +454,7 @@ bool FastPlannerManager::checkTrajCollision() {
       ROS_WARN("[ObservedTrajectoryGuard] rejected=(%.3f,%.3f,%.3f) occupancy=%d clearance=%.3f reason=%s",
           point.x(),point.y(),point.z(),int(occupancy),distance,
           occupied?"occupied":unknown?"unobserved":"body clearance");
+      diagnosticEvent("trajectory_rejected",diagnostic_plan_id_,-1,",\"trajectory_id\":"+std::to_string(local_data_.traj_id_)+",\"point\":"+diagnosticPosition(point)+",\"occupancy\":"+std::to_string(int(occupancy))+",\"esdf_m\":"+diagnosticNumber(distance)+",\"required_m\":"+diagnosticNumber(clearance)+",\"reason\":\""+(occupied?"occupied":unknown?"unobserved":too_close?"esdf_clearance":"contact_clearance")+"\"");
       return false;
     }
     // Original mode retains its original spatial horizon. The experimental

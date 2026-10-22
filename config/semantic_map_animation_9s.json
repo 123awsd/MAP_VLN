@@ -1,0 +1,24 @@
+{
+  "inputs": {
+    "point_cloud": "outputs/coverage_lifecycle_700_r1_20261016/original_style_video/geometry.npz",
+    "objects": "outputs/boxer/coverage700_sam31_20261018/fusion_fixed/boxer_summary.json",
+    "rooms": "outputs/coverage700_wall_room_preview/manual_room305_boundary",
+    "trajectory": "outputs/coverage_lifecycle_700_r1_20261016/video_cache/trajectory.npy"
+  },
+  "output_dir": "outputs/videos/semantic_map_9s_20261018",
+  "coordinate_system": "FALCON XYZ, metres, Z up",
+  "floor_z_m": [0.0, 2.75, 5.75],
+  "show_room_labels": false,
+  "show_object_labels": false,
+  "max_render_points": 320000,
+  "point_radius_m": 0.022,
+  "box_line_radius_m": 0.015,
+  "trajectory_line_radius_m": 0.009,
+  "room_opacity": 0.38,
+  "background_rgb": [0.955, 0.958, 0.966],
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "seconds": 9,
+  "render_samples": 4
+}

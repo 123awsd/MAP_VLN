@@ -1,3 +1,4 @@
+#include "pathfinding/exploration_diagnostics.h"
 #include <sstream>
 
 #include "pathfinding/astar.h"
@@ -92,6 +93,7 @@ void Astar::setProfile(const PROFILE &p) {
 
 int Astar::search(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt, const MODE &mode,
                   const Position &bbox_min, const Position &bbox_max) {
+  beginDiagnostic(start_pt,end_pt);
   auto isInBox = [&](const Position &p) {
     return p.x() > bbox_min.x() && p.x() < bbox_max.x() && p.y() > bbox_min.y() &&
            p.y() < bbox_max.y() && p.z() > bbox_min.z() && p.z() < bbox_max.z();
@@ -101,8 +103,8 @@ int Astar::search(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt
       map_server_->getOccupancyGrid()->positionToIndex(start_pt);
   bool observed_guard=false;
   ros::param::param("/fast_planner/observed_trajectory_guard", observed_guard, false);
-  double execution_clearance=0.18;
-  ros::param::param("/fast_planner/execution_clearance", execution_clearance, 0.18);
+  double execution_clearance=0.01;
+  ros::param::param("/fast_planner/execution_clearance", execution_clearance, 0.01);
   const double initial_clearance=map_server_->getESDF()->getDistance(start_pt);
 
   vector<double> contact_flat;
@@ -118,7 +120,7 @@ int Astar::search(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt
       const Eigen::Vector3d contact(contact_flat[i],contact_flat[i+1],contact_flat[i+2]);
       const double d=(p-contact).norm();
       const double initial=(start_pt-contact).norm();
-      if(d<0.18 && !((p-start_pt).norm()<0.15 && d>=initial-0.005))return false;
+      if(d<execution_clearance && !((p-start_pt).norm()<0.15 && d>=initial-0.005))return false;
     }
     return true;
   };
@@ -192,7 +194,7 @@ int Astar::search(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt
 
     if (reach_end) {
       backtrack(cur_node, end_pt);
-      return REACH_END;
+      return finishDiagnostic(REACH_END,"reached");
     }
 
     // Check if current node can reach the end point without collision
@@ -209,14 +211,14 @@ int Astar::search(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt
     }
     if (safe) {
       backtrack(cur_node, end_pt);
-      return REACH_END;
+      return finishDiagnostic(REACH_END,"reached");
     }
 
     // Early termination if time up
     if ((ros::Time::now() - t1).toSec() > config_.max_search_time_) {
       // ROS_WARN("[AStar] Early terminated, duration: %f", (ros::Time::now() - t1).toSec());
       // early_terminate_cost_ = cur_node->g_score + getDiagHeu(cur_node->position, end_pt);
-      return NO_PATH;
+      return finishDiagnostic(NO_PATH,"timeout");
     }
 
     open_set_.pop();
@@ -274,7 +276,7 @@ int Astar::search(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt
             if (use_node_num_ == config_.allocate_num_) {
               ROS_WARN("[AStar] Run out of node pool. Duration: %f",
                        (ros::Time::now() - t1).toSec());
-              return NO_PATH;
+              return finishDiagnostic(NO_PATH,"resource_limit");
             }
             neighbor->index = nbr_idx;
             neighbor->position = nbr_pos;
@@ -293,10 +295,11 @@ int Astar::search(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt
   // cout << "open set empty, no path!" << endl;
   // cout << "use node num: " << use_node_num_ << endl;
   // cout << "iter num: " << iter_num_ << endl;
-  return NO_PATH;
+  return finishDiagnostic(NO_PATH,"exhausted_no_path");
 }
 
 int Astar::search(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt) {
+  beginDiagnostic(start_pt,end_pt);
   AstarNode::Ptr cur_node = path_node_pool_[0];
   cur_node->parent = NULL;
   cur_node->position = start_pt;
@@ -316,8 +319,8 @@ int Astar::search(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt
       map_server_->getOccupancyGrid()->positionToIndex(start_pt);
   bool observed_guard=false;
   ros::param::param("/fast_planner/observed_trajectory_guard", observed_guard, false);
-  double execution_clearance=0.18;
-  ros::param::param("/fast_planner/execution_clearance", execution_clearance, 0.18);
+  double execution_clearance=0.01;
+  ros::param::param("/fast_planner/execution_clearance", execution_clearance, 0.01);
   const double initial_clearance=map_server_->getESDF()->getDistance(start_pt);
 
   vector<double> contact_flat;
@@ -333,7 +336,7 @@ int Astar::search(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt
       const Eigen::Vector3d contact(contact_flat[i],contact_flat[i+1],contact_flat[i+2]);
       const double d=(p-contact).norm();
       const double initial=(start_pt-contact).norm();
-      if(d<0.18 && !((p-start_pt).norm()<0.15 && d>=initial-0.005))return false;
+      if(d<execution_clearance && !((p-start_pt).norm()<0.15 && d>=initial-0.005))return false;
     }
     return true;
   };
@@ -363,7 +366,7 @@ int Astar::search(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt
 
     if (reach_end) {
       backtrack(cur_node, end_pt);
-      return REACH_END;
+      return finishDiagnostic(REACH_END,"reached");
     }
 
     // if (abs(cur_node->index(0) - end_index(0)) <= 1 &&
@@ -384,7 +387,7 @@ int Astar::search(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt
       }
       if (safe) {
         backtrack(cur_node, end_pt);
-        return REACH_END;
+        return finishDiagnostic(REACH_END,"reached");
       }
     }
 
@@ -392,7 +395,7 @@ int Astar::search(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt
     if ((ros::Time::now() - t1).toSec() > config_.max_search_time_) {
       // ROS_WARN("[AStar] Early terminated, duration: %f", (ros::Time::now() - t1).toSec());
       // early_terminate_cost_ = cur_node->g_score + getDiagHeu(cur_node->position, end_pt);
-      return NO_PATH;
+      return finishDiagnostic(NO_PATH,"timeout");
     }
 
     open_set_.pop();
@@ -454,7 +457,7 @@ int Astar::search(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt
             if (use_node_num_ == config_.allocate_num_) {
               ROS_WARN("[AStar] Run out of node pool. Duration: %f",
                        (ros::Time::now() - t1).toSec());
-              return NO_PATH;
+              return finishDiagnostic(NO_PATH,"resource_limit");
             }
             neighbor->index = nbr_idx;
             neighbor->position = nbr_pos;
@@ -473,11 +476,12 @@ int Astar::search(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt
   // cout << "open set empty, no path!" << endl;
   // cout << "use node num: " << use_node_num_ << endl;
   // cout << "iter num: " << iter_num_ << endl;
-  return NO_PATH;
+  return finishDiagnostic(NO_PATH,"exhausted_no_path");
 }
 
 int Astar::searchBBox(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt,
                       const Eigen::Vector3d &bbox_min, const Eigen::Vector3d &bbox_max) {
+  beginDiagnostic(start_pt,end_pt);
   AstarNode::Ptr cur_node = path_node_pool_[0];
   cur_node->parent = NULL;
   cur_node->position = start_pt;
@@ -497,8 +501,8 @@ int Astar::searchBBox(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &en
       map_server_->getOccupancyGrid()->positionToIndex(start_pt);
   bool observed_guard=false;
   ros::param::param("/fast_planner/observed_trajectory_guard", observed_guard, false);
-  double execution_clearance=0.18;
-  ros::param::param("/fast_planner/execution_clearance", execution_clearance, 0.18);
+  double execution_clearance=0.01;
+  ros::param::param("/fast_planner/execution_clearance", execution_clearance, 0.01);
   const double initial_clearance=map_server_->getESDF()->getDistance(start_pt);
 
   vector<double> contact_flat;
@@ -514,7 +518,7 @@ int Astar::searchBBox(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &en
       const Eigen::Vector3d contact(contact_flat[i],contact_flat[i+1],contact_flat[i+2]);
       const double d=(p-contact).norm();
       const double initial=(start_pt-contact).norm();
-      if(d<0.18 && !((p-start_pt).norm()<0.15 && d>=initial-0.005))return false;
+      if(d<execution_clearance && !((p-start_pt).norm()<0.15 && d>=initial-0.005))return false;
     }
     return true;
   };
@@ -544,7 +548,7 @@ int Astar::searchBBox(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &en
 
     if (reach_end) {
       backtrack(cur_node, end_pt);
-      return REACH_END;
+      return finishDiagnostic(REACH_END,"reached");
     }
 
     if (abs(cur_node->index(0) - end_index(0)) <= 1 &&
@@ -563,7 +567,7 @@ int Astar::searchBBox(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &en
       }
       if (safe) {
         backtrack(cur_node, end_pt);
-        return REACH_END;
+        return finishDiagnostic(REACH_END,"reached");
       }
     }
 
@@ -571,7 +575,7 @@ int Astar::searchBBox(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &en
     if ((ros::Time::now() - t1).toSec() > config_.max_search_time_) {
       // ROS_WARN("[AStar] Early terminated, duration: %f", (ros::Time::now() - t1).toSec());
       // early_terminate_cost_ = cur_node->g_score + getDiagHeu(cur_node->position, end_pt);
-      return NO_PATH;
+      return finishDiagnostic(NO_PATH,"timeout");
     }
 
     open_set_.pop();
@@ -641,7 +645,7 @@ int Astar::searchBBox(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &en
             if (use_node_num_ == config_.allocate_num_) {
               ROS_WARN("[AStar] Run out of node pool. Duration: %f",
                        (ros::Time::now() - t1).toSec());
-              return NO_PATH;
+              return finishDiagnostic(NO_PATH,"resource_limit");
             }
             neighbor->index = nbr_idx;
             neighbor->position = nbr_pos;
@@ -660,11 +664,12 @@ int Astar::searchBBox(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &en
   // cout << "open set empty, no path!" << endl;
   // cout << "use node num: " << use_node_num_ << endl;
   // cout << "iter num: " << iter_num_ << endl;
-  return NO_PATH;
+  return finishDiagnostic(NO_PATH,"exhausted_no_path");
 }
 
 // TODO: modify this function to search in unknown space with penalty
 int Astar::searchUnknown(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt) {
+  beginDiagnostic(start_pt,end_pt);
   AstarNode::Ptr cur_node = path_node_pool_[0];
   cur_node->parent = NULL;
   cur_node->position = start_pt;
@@ -690,7 +695,7 @@ int Astar::searchUnknown(const Eigen::Vector3d &start_pt, const Eigen::Vector3d 
 
     if (reach_end) {
       backtrack(cur_node, end_pt);
-      return REACH_END;
+      return finishDiagnostic(REACH_END,"reached");
     }
 
     if (abs(cur_node->index(0) - end_index(0)) <= 1 &&
@@ -710,7 +715,7 @@ int Astar::searchUnknown(const Eigen::Vector3d &start_pt, const Eigen::Vector3d 
       }
       if (safe) {
         backtrack(cur_node, end_pt);
-        return REACH_END;
+        return finishDiagnostic(REACH_END,"reached");
       }
     }
 
@@ -718,7 +723,7 @@ int Astar::searchUnknown(const Eigen::Vector3d &start_pt, const Eigen::Vector3d 
     if ((ros::Time::now() - t1).toSec() > config_.max_search_time_) {
       // ROS_WARN("[AStar] Early terminated, duration: %f", (ros::Time::now() - t1).toSec());
       // early_terminate_cost_ = cur_node->g_score + getDiagHeu(cur_node->position, end_pt);
-      return NO_PATH;
+      return finishDiagnostic(NO_PATH,"timeout");
     }
 
     open_set_.pop();
@@ -788,7 +793,7 @@ int Astar::searchUnknown(const Eigen::Vector3d &start_pt, const Eigen::Vector3d 
             if (use_node_num_ == config_.allocate_num_) {
               ROS_WARN("[AStar] Run out of node pool. Duration: %f",
                        (ros::Time::now() - t1).toSec());
-              return NO_PATH;
+              return finishDiagnostic(NO_PATH,"resource_limit");
             }
             neighbor->index = nbr_idx;
             neighbor->position = nbr_pos;
@@ -807,11 +812,12 @@ int Astar::searchUnknown(const Eigen::Vector3d &start_pt, const Eigen::Vector3d 
   // cout << "open set empty, no path!" << endl;
   // cout << "use node num: " << use_node_num_ << endl;
   // cout << "iter num: " << iter_num_ << endl;
-  return NO_PATH;
+  return finishDiagnostic(NO_PATH,"exhausted_no_path");
 }
 
 int Astar::searchUnknownBBox(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt,
                              const Eigen::Vector3d &bbox_min, const Eigen::Vector3d &bbox_max) {
+  beginDiagnostic(start_pt,end_pt);
   AstarNode::Ptr cur_node = path_node_pool_[0];
   cur_node->parent = NULL;
   cur_node->position = start_pt;
@@ -837,7 +843,7 @@ int Astar::searchUnknownBBox(const Eigen::Vector3d &start_pt, const Eigen::Vecto
 
     if (reach_end) {
       backtrack(cur_node, end_pt);
-      return REACH_END;
+      return finishDiagnostic(REACH_END,"reached");
     }
 
     if (abs(cur_node->index(0) - end_index(0)) <= 1 &&
@@ -858,7 +864,7 @@ int Astar::searchUnknownBBox(const Eigen::Vector3d &start_pt, const Eigen::Vecto
       }
       if (safe) {
         backtrack(cur_node, end_pt);
-        return REACH_END;
+        return finishDiagnostic(REACH_END,"reached");
       }
     }
 
@@ -866,7 +872,7 @@ int Astar::searchUnknownBBox(const Eigen::Vector3d &start_pt, const Eigen::Vecto
     if ((ros::Time::now() - t1).toSec() > config_.max_search_time_) {
       // ROS_WARN("[AStar] Early terminated, duration: %f", (ros::Time::now() - t1).toSec());
       // early_terminate_cost_ = cur_node->g_score + getDiagHeu(cur_node->position, end_pt);
-      return NO_PATH;
+      return finishDiagnostic(NO_PATH,"timeout");
     }
 
     open_set_.pop();
@@ -936,7 +942,7 @@ int Astar::searchUnknownBBox(const Eigen::Vector3d &start_pt, const Eigen::Vecto
             if (use_node_num_ == config_.allocate_num_) {
               ROS_WARN("[AStar] Run out of node pool. Duration: %f",
                        (ros::Time::now() - t1).toSec());
-              return NO_PATH;
+              return finishDiagnostic(NO_PATH,"resource_limit");
             }
             neighbor->index = nbr_idx;
             neighbor->position = nbr_pos;
@@ -955,11 +961,12 @@ int Astar::searchUnknownBBox(const Eigen::Vector3d &start_pt, const Eigen::Vecto
   // cout << "open set empty, no path!" << endl;
   // cout << "use node num: " << use_node_num_ << endl;
   // cout << "iter num: " << iter_num_ << endl;
-  return NO_PATH;
+  return finishDiagnostic(NO_PATH,"exhausted_no_path");
 }
 
 int Astar::searchUnknownOnlyBBox(const Eigen::Vector3d &start_pt, const Eigen::Vector3d &end_pt,
                                  const Eigen::Vector3d &bbox_min, const Eigen::Vector3d &bbox_max) {
+  beginDiagnostic(start_pt,end_pt);
   AstarNode::Ptr cur_node = path_node_pool_[0];
   cur_node->parent = NULL;
   cur_node->position = start_pt;
@@ -985,7 +992,7 @@ int Astar::searchUnknownOnlyBBox(const Eigen::Vector3d &start_pt, const Eigen::V
 
     if (reach_end) {
       backtrack(cur_node, end_pt);
-      return REACH_END;
+      return finishDiagnostic(REACH_END,"reached");
     }
 
     if (abs(cur_node->index(0) - end_index(0)) <= 1 &&
@@ -1007,7 +1014,7 @@ int Astar::searchUnknownOnlyBBox(const Eigen::Vector3d &start_pt, const Eigen::V
       }
       if (safe) {
         backtrack(cur_node, end_pt);
-        return REACH_END;
+        return finishDiagnostic(REACH_END,"reached");
       }
     }
 
@@ -1015,7 +1022,7 @@ int Astar::searchUnknownOnlyBBox(const Eigen::Vector3d &start_pt, const Eigen::V
     if ((ros::Time::now() - t1).toSec() > config_.max_search_time_) {
       // ROS_WARN("[AStar] Early terminated, duration: %f", (ros::Time::now() - t1).toSec());
       // early_terminate_cost_ = cur_node->g_score + getDiagHeu(cur_node->position, end_pt);
-      return NO_PATH;
+      return finishDiagnostic(NO_PATH,"timeout");
     }
 
     open_set_.pop();
@@ -1087,7 +1094,7 @@ int Astar::searchUnknownOnlyBBox(const Eigen::Vector3d &start_pt, const Eigen::V
             if (use_node_num_ == config_.allocate_num_) {
               ROS_WARN("[AStar] Run out of node pool. Duration: %f",
                        (ros::Time::now() - t1).toSec());
-              return NO_PATH;
+              return finishDiagnostic(NO_PATH,"resource_limit");
             }
             neighbor->index = nbr_idx;
             neighbor->position = nbr_pos;
@@ -1106,7 +1113,7 @@ int Astar::searchUnknownOnlyBBox(const Eigen::Vector3d &start_pt, const Eigen::V
   // cout << "open set empty, no path!" << endl;
   // cout << "use node num: " << use_node_num_ << endl;
   // cout << "iter num: " << iter_num_ << endl;
-  return NO_PATH;
+  return finishDiagnostic(NO_PATH,"exhausted_no_path");
 }
 
 void Astar::reset() {
@@ -1273,3 +1280,16 @@ void Astar::shortenPath(vector<Vector3d> &path) {
 }
 
 } // namespace fast_planner
+
+namespace fast_planner {
+void Astar::beginDiagnostic(const Eigen::Vector3d &start,const Eigen::Vector3d &goal) {
+  if(!diagnostic_enabled_)return;diagnostic_start_=start;diagnostic_goal_=goal;diagnostic_began_=ros::WallTime::now();
+}
+int Astar::finishDiagnostic(int result,const char *reason) {
+  if(diagnostic_enabled_) {
+    last_diagnostic_reason_=reason;
+    diagnosticEvent("search_result",diagnostic_plan_,diagnostic_candidate_,",\"stage\":\""+diagnostic_stage_+"\",\"reason\":\""+reason+"\",\"legacy_result\":"+std::to_string(result)+",\"start\":"+diagnosticPosition(diagnostic_start_)+",\"goal\":"+diagnosticPosition(diagnostic_goal_)+",\"resolution_m\":"+diagnosticNumber(config_.resolution_)+",\"budget_s\":"+diagnosticNumber(config_.max_search_time_)+",\"wall_elapsed_s\":"+diagnosticNumber((ros::WallTime::now()-diagnostic_began_).toSec())+",\"expanded\":"+std::to_string(iter_num_));
+  }
+  return result;
+}
+}

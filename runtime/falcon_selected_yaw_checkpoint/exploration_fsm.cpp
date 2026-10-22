@@ -1,3 +1,8 @@
+#include <map>
+#include <cerrno>
+#include <fstream>
+#include <sys/stat.h>
+#include "pathfinding/exploration_diagnostics.h"
 
 #include "exploration_manager/exploration_fsm.h"
 #include "exploration_manager/exploration_manager.h"
@@ -385,6 +390,7 @@ void ExplorationFSM::FSMCallback(const ros::TimerEvent &e) {
       }
     }
 
+    diagnosticEvent("replan_state",expl_manager_->diagnosticPlanId(),-1,",\"actual_position\":"+diagnosticPosition(fd_->odom_pos_)+",\"planned_start\":"+diagnosticPosition(fd_->start_pos_)+",\"actual_yaw\":"+diagnosticNumber(fd_->odom_yaw_)+",\"odom_stamp\":"+diagnosticNumber(diagnostic_last_odom_stamp_.toSec())+",\"trajectory_id\":"+std::to_string(planner_manager_->local_data_.traj_id_));
     // Inform traj_server the replanning
     std_msgs::Int32 replan_msg;
     replan_msg.data = 0;
@@ -424,6 +430,35 @@ void ExplorationFSM::FSMCallback(const ros::TimerEvent &e) {
 
     if (!safe) {
       ROS_ERROR("[FSM] Collision detected on the trajectory before publishing");
+      const char *snapshot_root=std::getenv("EXPLORATION_DIAGNOSTIC_SNAPSHOTS");
+      static unsigned snapshot_count=0;
+      static std::map<int,ros::WallTime> snapshot_last;
+      const int snapshot_band=int(std::floor(fd_->odom_pos_.z()/3.0));
+      const bool snapshot_due=!snapshot_last.count(snapshot_band) || (ros::WallTime::now()-snapshot_last[snapshot_band]).toSec()>10;
+      if(snapshot_root && snapshot_due) {
+        static std::map<int,unsigned> band_count;
+        const unsigned slot=band_count[snapshot_band]++%4;
+        const std::string directory=std::string(snapshot_root)+"/band_"+std::to_string(snapshot_band)+"_slot_"+std::to_string(slot);
+        if(mkdir(directory.c_str(),0755)==0 || errno==EEXIST) {
+          snapshot_last[snapshot_band]=ros::WallTime::now();
+          ++snapshot_count;
+          auto map=planner_manager_->map_server_;
+          std::lock_guard<std::mutex> lock(map->getMapMutex());
+          auto occupancy=map->getOccupancyGrid();auto esdf=map->getESDF();
+          std::ofstream occ(directory+"/occupancy.u8",std::ios::binary),dist(directory+"/esdf.f64",std::ios::binary);
+          const size_t count=occupancy->map_config_.map_size_idx_.prod();
+          for(size_t address=0;address<count;++address) {
+            const unsigned char state=static_cast<unsigned char>(occupancy->getVoxel(static_cast<VoxelAddress>(address)).value);
+            const double value=esdf->getVoxel(static_cast<VoxelAddress>(address)).value;
+            occ.write(reinterpret_cast<const char*>(&state),sizeof(state));dist.write(reinterpret_cast<const char*>(&value),sizeof(value));
+          }
+          occ.close();dist.close();
+          std::ofstream meta(directory+"/metadata.json");
+          meta<<"{\"plan\":"<<expl_manager_->diagnosticPlanId()<<",\"goal\":"<<diagnosticPosition(expl_manager_->ed_->next_pos_)<<",\"actual_position\":"<<diagnosticPosition(fd_->odom_pos_)<<",\"resolution_m\":"<<diagnosticNumber(map->getResolution())<<",\"origin\":"<<diagnosticPosition(map->getOrigin())<<",\"size_idx\":"<<diagnosticPosition(occupancy->map_config_.map_size_idx_.cast<double>())<<",\"map_depth_stamp\":"<<diagnosticNumber(map->latestIntegratedDepthStamp())<<",\"geometry_snapshot_only\":true}";
+          diagnosticEvent("failure_snapshot_saved",expl_manager_->diagnosticPlanId(),-1,",\"slot\":"+std::to_string(slot)+",\"height_band\":"+std::to_string(snapshot_band)+",\"generation\":"+std::to_string(snapshot_count));
+        }
+      }
+
 
       planner_manager_->local_data_.position_traj_ =
           planner_manager_->local_data_.init_traj_bspline_;
@@ -533,6 +568,7 @@ void ExplorationFSM::FSMCallback(const ros::TimerEvent &e) {
     double dt = (ros::Time::now() - fd_->newest_traj_.start_time).toSec();
     // ROS_BLUE_STREAM("[FSM] Traj dt: " << dt);
     if (dt > 0.0) {
+      diagnosticEvent("trajectory_published",expl_manager_->diagnosticPlanId(),-1,",\"trajectory_id\":"+std::to_string(bspline.traj_id)+",\"actual_position\":"+diagnosticPosition(fd_->odom_pos_)+",\"goal\":"+diagnosticPosition(expl_manager_->ed_->next_pos_)+",\"local_endpoint\":"+diagnosticPosition(info->end_pos_)+",\"start_ros_s\":"+diagnosticNumber(info->start_time_.toSec()));
       bspline_pub_.publish(fd_->newest_traj_);
       executing_viewpoint_ = expl_manager_->ed_->next_pos_;
       executing_trajectory_length_ = pos_traj_length;
@@ -601,6 +637,7 @@ void ExplorationFSM::FSMCallback(const ros::TimerEvent &e) {
         }
         }
         LOG(INFO) << "[FSM] Replan type: " << replan_type_str;
+        diagnosticEvent("replan_trigger",expl_manager_->diagnosticPlanId(),-1,",\"reason\":\""+replan_type_str+"\",\"goal\":"+diagnosticPosition(expl_manager_->ed_->next_pos_)+",\"actual_position\":"+diagnosticPosition(fd_->odom_pos_)+",\"goal_distance_m\":"+diagnosticNumber((fd_->odom_pos_-expl_manager_->ed_->next_pos_).norm())+",\"trajectory_id\":"+std::to_string(info->traj_id_));
 
         // Visualize replan type in Rviz
         visualization_->drawText(Eigen::Vector3d(12, 0, 0), replan_type_str, 1,
@@ -989,6 +1026,7 @@ void ExplorationFSM::safetyCallback(const ros::TimerEvent &e) {
 }
 
 void ExplorationFSM::odometryCallback(const nav_msgs::OdometryConstPtr &msg) {
+  diagnostic_last_odom_stamp_=msg->header.stamp;
   fd_->odom_pos_(0) = msg->pose.pose.position.x;
   fd_->odom_pos_(1) = msg->pose.pose.position.y;
   fd_->odom_pos_(2) = msg->pose.pose.position.z;

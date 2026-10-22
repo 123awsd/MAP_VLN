@@ -12,14 +12,14 @@ import matplotlib.pyplot as plt
 from matplotlib import font_manager,patheffects
 from matplotlib.patches import Polygon, Patch
 R=Path(__file__).resolve().parents[1];O=R/'outputs/boxer/coverage700_measured_20261017';D=O/'detections/episode'
-parser=argparse.ArgumentParser();parser.add_argument('--fixed',action='store_true');parser.add_argument('--run-dir',type=Path,default=O);parser.add_argument('--pipeline',default='Grounding DINO → SAM2深度前景 → BoxerNet');args=parser.parse_args();O=args.run_dir;D=O/'detections/episode';suffix='_fixed' if args.fixed else '';
+parser=argparse.ArgumentParser();parser.add_argument('--fixed',action='store_true');parser.add_argument('--run-dir',type=Path,default=O);parser.add_argument('--pipeline',default='Grounding DINO → SAM2深度前景 → BoxerNet');parser.add_argument('--room-dir',type=Path,default=R/'outputs/coverage700_wall_room_preview/manual_room305_boundary');args=parser.parse_args();O=args.run_dir;D=O/'detections/episode';suffix='_fixed' if args.fixed else '';
 if args.fixed:
  O=O/'fusion_fixed';O.mkdir(exist_ok=True)
 font_manager.fontManager.addfont('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc');plt.rcParams['font.family']='Noto Sans CJK JP';plt.rcParams['axes.unicode_minus']=False
 rows=list(csv.DictReader((D/f'boxer_3dbbs_fused{suffix}.csv').open()))
 raw=list(csv.DictReader((D/'boxer_3dbbs.csv').open()))
 cloud=np.load(R/'outputs/coverage_lifecycle_700_r1_20261016/original_style_video/geometry.npz')
-rooms=[np.load(R/f'outputs/coverage700_wall_room_preview/manual_room305_boundary/L{f}_constrained.npz') for f in (1,2,3)]
+rooms=[np.load(args.room_dir/f'L{f}_constrained.npz') for f in (1,2,3)]
 classes=sorted({a['name']for a in rows});colors={k:plt.get_cmap('tab20')(i%20)for i,k in enumerate(classes)}
 support=json.loads((D/f'fusion_support{suffix}.json').read_text());objects=[]
 for i,row in enumerate(rows,1):

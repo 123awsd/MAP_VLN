@@ -13,6 +13,7 @@ import habitat_sim
 import numpy as np
 from habitat_sim.utils.common import quat_from_angle_axis
 from habitat_scene_repairs import load_scene_repair, mesh_safe_fraction
+from repair_depth_validity import invalidate_safety_shell_depth
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -130,7 +131,7 @@ def follow_command(
     navmesh_path_follow: bool = False,
     allow_vertical_motion: bool = False,
     scene_collision_check: bool = False,
-    collision_radius: float = 0.12,
+    collision_radius: float = 0.10,
     max_flight_z: float = float("inf"),
 ) -> bool:
     agent = sim.get_agent(0)
@@ -279,7 +280,7 @@ def main() -> None:
     parser.add_argument("--result-file", type=Path, default=None)
     parser.add_argument("--scene-repair-config", type=Path, default=None)
     parser.add_argument("--scene-collision-check", action="store_true")
-    parser.add_argument("--collision-radius", type=float, default=0.12)
+    parser.add_argument("--collision-radius", type=float, default=0.01)
     parser.add_argument("--max-flight-z", type=float, default=float("inf"), help="Maximum FALCON sensor-centre flight height in metres; observations are not cropped")
     args = parser.parse_args()
     if not args.scene.exists():
@@ -312,6 +313,15 @@ def main() -> None:
             load_scene_repair(sim, args.scene_repair_config, args.scene)
             if args.scene_repair_config is not None else []
         )
+        # Explicit safety-shell policy; legacy manifests retain their original behavior.
+        safety_shells = []
+        if args.scene_repair_config is not None:
+            repair_policy = json.loads(Path(args.scene_repair_config).read_text())
+            for item in repair_policy["objects"]:
+                if item.get("observation_role") == "collision_only":
+                    if item.get("geometry_type") != "axis_aligned_box":
+                        raise ValueError("collision_only sensor masking requires a validated axis-aligned box")
+                    safety_shells.append((item["falcon_min"], item["falcon_max"]))
         if not sim.pathfinder.is_loaded:
             raise RuntimeError("HM3D navmesh did not load")
         sim.pathfinder.seed(args.seed)
@@ -327,6 +337,8 @@ def main() -> None:
         state.rotation = quat_from_angle_axis(0.0, np.asarray([0.0, 1.0, 0.0]))
         agent = sim.initialize_agent(0, state)
         initial_sensor_h = np.asarray(agent.get_state().sensor_states["depth"].position, dtype=np.float64)
+        if safety_shells and not np.allclose(initial_sensor_h, repair_policy["reference_initial_sensor_habitat_xyz"], atol=1e-5):
+            raise ValueError("Safety-shell bounds use a different FALCON origin; refusing invalid masking")
         if manifest_path is not None:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             manifest.update({
@@ -420,6 +432,8 @@ def main() -> None:
             rotation_f_body = S_HABITAT_TO_FALCON @ rotation_matrix(sensor_state.rotation) @ S_HABITAT_TO_FALCON.T
 
             depth = np.nan_to_num(np.asarray(obs["depth"], dtype=np.float32), nan=0.0, posinf=0.0)
+            depth, shell_invalid = invalidate_safety_shell_depth(
+                depth, position_f, rotation_f_opt, safety_shells)
             depth_u16 = np.clip(np.rint(depth * 1000.0), 0, 65535).astype("<u2")
             rgb = None if args.depth_only else np.asarray(obs["rgb"])[..., :3].astype(np.uint8)
             semantic = None if args.depth_only else np.asarray(obs["semantic"], dtype="<i4")
@@ -427,6 +441,8 @@ def main() -> None:
             if rgb is not None: atomic_bytes(bridge_dir / "rgb_u8.raw", rgb.tobytes())
             if semantic is not None: atomic_bytes(bridge_dir / "semantic_i32.raw", semantic.tobytes())
             frame_state = {
+                "safety_shell_invalid_pixels": int(shell_invalid.sum()),
+                "depth_validity_policy": "safety_shell_rays_unknown_v1",
                 "sequence": sequence, "width": 640, "height": 480,
                 "position": position_f.tolist(), "orientation_xyzw": matrix_to_xyzw(rotation_f_opt),
                 "body_orientation_xyzw": matrix_to_xyzw(rotation_f_body),

@@ -15,7 +15,15 @@ falcon = workspace / "src/FALCON"
 records = {}
 changed = False
 copied_sources = set()
-for source in sorted(checkpoint.iterdir()):
+sources = list(sorted(checkpoint.iterdir()))
+# The700 snapshot omitted this upstream dependency; restore its verified bytes on rollback.
+if checkpoint.name == "A3_observation_lifecycle" and not (checkpoint / "hierarchical_grid.cpp").exists():
+    dependency = checkpoint.parent / "shared_dependencies/hierarchical_grid.cpp"
+    expected = "2fca25380ba13bd1551ca5b767b8f079ec5890a65cc82a29adcf524765b08896"
+    if hashlib.sha256(dependency.read_bytes()).hexdigest() != expected:
+        raise RuntimeError("Verified700 HGrid rollback dependency changed")
+    sources.append(dependency)
+for source in sources:
     if source.suffix not in {".cpp", ".h"}:
         continue
     if source.name in {"execution_constraints.h", "exploration_diagnostics.h"}:

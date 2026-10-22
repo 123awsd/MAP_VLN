@@ -1,0 +1,58 @@
+# 00166-RaYrxWt5pR1: robust single-floor baseline after planner safety fixes.
+#
+# v3 keeps the validated ground-layer geometry from v1.  The Docker image
+# supplies the planner-side zero-length/optimizer/map-boundary safeguards; this
+# config does not change A* resolution and is therefore not a 3-D claim.
+
+map_config:
+  map_file: "hm3d_00166_ground_v3"
+  map_dimension: 2
+  init_x: 0.0
+  init_y: 0.0
+  init_z: 1.0
+  init_yaw: 0.0
+  map_size:
+    map_min_x: -8.0
+    map_min_y: -11.0
+    map_min_z: -0.5
+    map_max_x: 4.0
+    map_max_y: 2.0
+    map_max_z: 2.5
+    box_min_x: -7.7
+    box_min_y: -10.7
+    box_min_z: 0.65
+    box_max_x: 3.4
+    box_max_y: 1.6
+    box_max_z: 1.35
+    vbox_min_x: -7.7
+    vbox_min_y: -10.7
+    vbox_min_z: 0.65
+    vbox_max_x: 3.4
+    vbox_max_y: 1.6
+    vbox_max_z: 1.35
+  scale: 1.0
+  T_b_c:
+    - [0.0, 0.0, 1.0, 0.0]
+    - [-1.0, 0.0, 0.0, 0.0]
+    - [0.0, -1.0, 0.0, 0.0]
+    - [0.0, 0.0, 0.0, 1.0]
+  T_m_w:
+    - [1.0, 0.0, 0.0, 0.0]
+    - [0.0, 1.0, 0.0, 0.0]
+    - [0.0, 0.0, 1.0, 0.0]
+    - [0.0, 0.0, 0.0, 1.0]
+
+frontier_finder:
+  viewpoint_height: 1.0
+  cluster_min: 40
+  min_visib_num: 8
+  candidate_rmin: 0.5
+  candidate_rmax: 2.0
+  candidate_rnum: 4
+  min_candidate_clearance: 0.1
+  min_candidate_occupied_clearance: 0.3
+
+traj_server:
+  init_dx: 0.0
+  init_dy: 0.0
+  init_dz: 0.0

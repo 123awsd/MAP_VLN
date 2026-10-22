@@ -1,0 +1,38 @@
+--- a/owl/grounding_dino_wrapper.py
++++ b/owl/grounding_dino_wrapper.py
+@@ -75,6 +75,7 @@
+         boxes = []
+         scores = []
+         labels = []
++        self.last_unmapped_detections = []
+         target_sizes = torch.tensor([pil_image.size[::-1]], device=self.device)
+         for start in range(0, len(self.prompts), self.prompt_batch_size):
+             prompt_batch = self.prompts[start : start + self.prompt_batch_size]
+@@ -108,9 +109,17 @@
+                     continue
+                 if width > 0.95 * pil_image.width or height > 0.95 * pil_image.height:
+                     continue
++                normalized_label = str(label).strip().lower().rstrip(".")
++                if normalized_label not in self.prompts:
++                    self.last_unmapped_detections.append({
++                        "raw_label": normalized_label, "score": float(score),
++                        "bbox_xyxy": [x1, y1, x2, y2],
++                        "reason": "no exact prompt match; no fallback to first class",
++                    })
++                    continue
+                 boxes.append([x1, x2, y1, y2])
+                 scores.append(float(score))
+-                labels.append(str(label).strip().lower().rstrip("."))
++                labels.append(normalized_label)
+         if not boxes:
+             self.last_detections = []
+             return torch.zeros((0, 4)), torch.zeros(0), torch.zeros(0, dtype=torch.long), None
+@@ -143,7 +152,7 @@
+             for box, score, label in zip(boxes, scores, labels)
+         ]
+         label_indices = torch.tensor(
+-            [self.prompts.index(label) if label in self.prompts else 0 for label in labels],
++            [self.prompts.index(label) for label in labels],
+             dtype=torch.long,
+         )
+         masks = None

@@ -17,9 +17,9 @@ FrontierFinder::FrontierFinder(ros::NodeHandle &nh, const shared_ptr<MapServer> 
   nh.param("/frontier_finder/cluster_size_xy", cluster_size_xy_, -1.0);
   nh.param("/frontier_finder/cluster_size_z", cluster_size_z_, -1.0);
   nh.param("/frontier_finder/min_candidate_dist", min_candidate_dist_, -1.0);
-  nh.param("/frontier_finder/min_candidate_clearance", min_candidate_clearance_, -1.0);
+  nh.param("/frontier_finder/min_candidate_clearance", min_candidate_clearance_, 0.01);
   nh.param("/frontier_finder/min_candidate_occupied_clearance", min_candidate_occupied_clearance_,
-           -1.0);
+           0.01);
   nh.param("/frontier_finder/candidate_dphi", candidate_dphi_, -1.0);
   nh.param("/frontier_finder/candidate_rmax", candidate_rmax_, -1.0);
   nh.param("/frontier_finder/candidate_rmin", candidate_rmin_, -1.0);
@@ -1251,10 +1251,22 @@ int FrontierFinder::evaluateObservation(const Vector3d &pos,double yaw, std::vec
   for(const auto&k:cells)unknown.emplace_back(std::get<0>(k),std::get<1>(k),std::get<2>(k));
   return unknown.size();
 }
-void FrontierFinder::getObservationCandidates(vector<Vector3d>&points,vector<double>&yaws) {
+void FrontierFinder::getObservationCandidates(vector<Vector3d>&points,vector<double>&yaws,const Vector3d* current_position) {
   points.clear();yaws.clear();
-  for(const auto&f:frontiers_){int count=0;for(const auto&v:f.viewpoints_){
-    bool duplicate=false;for(size_t i=0;i<points.size();++i)if((points[i]-v.pos_).norm()<.35 && fabs(atan2(sin(yaws[i]-v.yaw_),cos(yaws[i]-v.yaw_)))<.35){duplicate=true;break;}
-    if(duplicate)continue;points.push_back(v.pos_);yaws.push_back(v.yaw_);if(++count>=4)break;
-  }}
+  bool diverse=false;ros::param::param("/frontier_finder/diverse_observation_candidates",diverse,false);
+  auto append = [&](const Viewpoint &view){
+    for(size_t i=0;i<points.size();++i)
+      if((points[i]-view.pos_).norm()<.35 && fabs(atan2(sin(yaws[i]-view.yaw_),cos(yaws[i]-view.yaw_)))<.35)return false;
+    points.push_back(view.pos_);yaws.push_back(view.yaw_);return true;
+  };
+  for(const auto &frontier:frontiers_){
+    int count=0;
+    for(const auto &view:frontier.viewpoints_)if(append(view) && ++count>=4)break;
+    if(diverse && current_position){
+      vector<const Viewpoint*> nearest;
+      for(const auto &view:frontier.viewpoints_)nearest.push_back(&view);
+      std::sort(nearest.begin(),nearest.end(),[&](const Viewpoint*a,const Viewpoint*b){return (a->pos_-*current_position).squaredNorm()<(b->pos_-*current_position).squaredNorm();});
+      int added=0;for(const auto *view:nearest)if(append(*view) && ++added>=2)break;
+    }
+  }
 }

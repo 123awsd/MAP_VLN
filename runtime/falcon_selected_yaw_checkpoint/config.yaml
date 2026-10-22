@@ -60,16 +60,19 @@ map_config:
     - 0.0
     - 1.0
 frontier_finder:
+  diverse_observation_candidates: true
   viewpoint_height: -1.0
   use_3d_viewpoints: true
-  cluster_min: 40
-  min_visib_num: 8
+  cluster_min: 10
+  min_visib_num: 4
   candidate_rmin: 0.5
   candidate_rmax: 2.0
   candidate_rnum: 4
-  min_candidate_clearance: 0.1
-  min_candidate_occupied_clearance: 0.3
+  min_candidate_clearance: 0.01
+  min_candidate_occupied_clearance: 0.01
 exploration_manager:
+  entry_refine: true
+  entry_observe: true
   dormant_finish_block_threshold: 0
   voxel_astar_fallback_enabled: true
   voxel_astar_fallback_max_search_time: 0.5
@@ -89,5 +92,6 @@ exploration_method:
   min_unique_gain: 64
   unknown_penetration: 1.0
 fast_planner:
+  consistent_path_clearance: true
   observed_trajectory_guard: true
-  execution_clearance: 0.18
+  execution_clearance: 0.01

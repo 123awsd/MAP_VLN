@@ -131,11 +131,12 @@ def group_stairwells(links: list[dict], maximum_shared_floor_gap_m: float) -> li
     return stairwells
 
 
-def apply_qwen(graph: dict, classifier: QwenRoomSemanticClassifier) -> tuple[list[dict], dict]:
+def apply_qwen(graph: dict, classifier: QwenRoomSemanticClassifier,
+               room_images: dict[str, list[Path]] | None = None) -> tuple[list[dict], dict]:
     ordinary = [room for room in graph.get("rooms", []) if room.get("space_role") != "transition_space"]
     if not ordinary:
         return [], {"classifier": "qwen_llm", "skipped": True, "reason": "no ordinary rooms"}
-    decisions, provenance = classifier.classify(ordinary)
+    decisions, provenance = classifier.classify(ordinary, room_images)
     by_id = {int(item["room_id"]): item for item in decisions}
     for room in ordinary:
         decision = by_id[int(room["id"])]
@@ -264,10 +265,15 @@ def main() -> None:
     parser.add_argument("--max-floor", type=int, default=3)
     parser.add_argument("--budget-cny", type=float, default=20.0)
     parser.add_argument("--confidence-threshold", type=float, default=0.65)
+    parser.add_argument("--room-image-manifest", type=Path,
+                        help="Optional floor:room_id -> 1-2 measured RGB paths; enables Qwen-VL")
     parser.add_argument("--stairwell-join-gap", type=float, default=0.30)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     classifier = QwenRoomSemanticClassifier(args.budget_cny, args.confidence_threshold)
+    image_manifest = None
+    if args.room_image_manifest:
+        image_manifest = json.loads(args.room_image_manifest.read_text(encoding="utf-8"))
     graphs, floor_grids, all_links, floor_semantics = {}, {}, [], []
     for floor in range(1, args.max_floor + 1):
         raw = args.transition_room_dir / f"L{floor}_regions_raw.json"
@@ -289,7 +295,12 @@ def main() -> None:
         graph = json.loads(graph_path.read_text(encoding="utf-8"))
         transition_data = json.loads(aware.read_text(encoding="utf-8"))
         all_links.extend(overlay_transition_roles(graph, transition_data, floor))
-        decisions, provenance = apply_qwen(graph, classifier)
+        floor_images = None
+        if image_manifest is not None:
+            floor_images = {str(room['id']): [Path(p) if Path(p).is_absolute() else args.room_image_manifest.parent / p
+                                             for p in image_manifest.get(f"{floor}:{room['id']}", [])]
+                            for room in graph.get('rooms', []) if room.get('space_role') != 'transition_space'}
+        decisions, provenance = apply_qwen(graph, classifier, floor_images)
         graph["floor_id"] = floor
         graph["room_semantics"] = {
             "format": "pre_map_vln.room_semantics_qwen.v2",

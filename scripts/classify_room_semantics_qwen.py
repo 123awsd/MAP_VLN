@@ -10,6 +10,7 @@ not allowed to create rooms, move objects, or generate coordinates.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import re
@@ -23,7 +24,9 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 MODEL = "qwen3.7-plus"
+VISION_MODEL = "qwen3-vl-plus"
 PROMPT_VERSION = "stage1-room-semantic-v2"
+VISION_PROMPT_VERSION = "stage1-room-semantic-multiview-v1"
 INPUT_CNY_PER_MILLION = 2.0
 OUTPUT_CNY_PER_MILLION = 8.0
 ROOM_TYPES = {
@@ -61,6 +64,8 @@ SYSTEM_PROMPT = """你是室内场景图的房间语义分类器。几何分割�
 - 只输出严格 JSON，不要 Markdown。
 格式：
 {"rooms":[{"room_id":"3","room_type":"bedroom","confidence":0.88,"evidence_object_ids":["boxer_2"],"alternative_types":["office"],"reason":"bed and nightstand are strong bedroom evidence"}]}"""
+
+VISION_SYSTEM_PROMPT = """你是室内场景图的房间语义分类器。输入含同一个已分割房间的最多两张实测RGB和该房间关联的Boxer物体清单。必须联合核对图片与物体：检测物体可能误检，照片可能只覆盖房间一部分。不得按room_id猜语义，不得修改几何、物体或坐标。只输出严格JSON：{"rooms":[{"room_id":"205","room_type":"bedroom","confidence":0.8,"evidence_object_ids":["O042"],"evidence_image_indices":[1,2],"alternative_types":[],"reason":"简短可见证据和冲突说明"}]}。允许类型：bedroom、living_room、kitchen、dining_room、bathroom、office、laundry_utility、entry_hall、corridor、unknown。图像与物体冲突或证据不足时输出unknown。"""
 
 
 def atomic_json(path: Path, value: dict[str, Any]) -> None:
@@ -152,6 +157,8 @@ def normalize_decisions(
             "confidence": confidence,
             "accepted": bool(room_type != "unknown" and confidence >= confidence_threshold),
             "evidence_object_ids": evidence,
+            "evidence_image_indices": [int(i) for i in raw.get("evidence_image_indices", [])
+                                       if isinstance(i, int) and i > 0],
             "alternative_types": alternatives,
             "reason": reason or "model returned no explanation",
         }
@@ -163,6 +170,7 @@ def normalize_decisions(
                 "confidence": 0.0,
                 "accepted": False,
                 "evidence_object_ids": [],
+                "evidence_image_indices": [],
                 "alternative_types": [],
                 "reason": "model omitted this room; fail-safe unknown",
             }
@@ -177,7 +185,9 @@ class QwenRoomSemanticClassifier:
         self.cache_dir = ROOT / "outputs/stage1/room_semantic_cache"
         self.ledger_path = ROOT / "outputs/stage1/api_usage.json"
 
-    def classify(self, rooms: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    def classify(self, rooms: list[dict[str, Any]], room_images: dict[str, list[Path]] | None = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        if room_images is not None:
+            return self._classify_multiview(rooms, room_images)
         payload_rooms = room_payload(rooms)
         cache_payload = {
             "prompt_version": PROMPT_VERSION,
@@ -270,6 +280,67 @@ class QwenRoomSemanticClassifier:
         atomic_json(cache_path, {"rooms": raw["rooms"], "provenance": provenance})
         return decisions, provenance
 
+    def _classify_multiview(self, rooms: list[dict[str, Any]], room_images: dict[str, list[Path]]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Classify existing regions independently so image/room identity cannot mix."""
+        if not self.api_key_path.is_file():
+            raise FileNotFoundError(self.api_key_path)
+        api_key = self.api_key_path.read_text(encoding="utf-8").strip()
+        if not api_key:
+            raise RuntimeError("empty DashScope API key")
+        decisions, calls = [], []
+        for room in rooms:
+            room_id = str(room["id"])
+            images = [Path(p).resolve() for p in room_images.get(room_id, [])]
+            if not 1 <= len(images) <= 2:
+                raise ValueError(f"room {room_id} requires one or two RGB views")
+            for path in images:
+                if not path.is_file() or path.suffix.lower() not in {".jpg", ".jpeg", ".png"}:
+                    raise ValueError(f"invalid room image: {path}")
+            payload = room_payload([room])[0]
+            identity = {"model": VISION_MODEL, "prompt_version": VISION_PROMPT_VERSION,
+                        "room": payload, "image_sha256": [hashlib.sha256(p.read_bytes()).hexdigest() for p in images]}
+            digest = hashlib.sha256(json.dumps(identity, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+            cache_path = self.cache_dir / f"multiview_{digest}.json"
+            if cache_path.is_file():
+                body = json.loads(cache_path.read_text(encoding="utf-8"))
+                raw = body["response"]
+                calls.append({"room_id": room_id, "cache_hit": True, "usage": body.get("usage", {})})
+            else:
+                content: list[dict[str, Any]] = [{"type": "text", "text": "房间几何与Boxer物体清单：\n" + json.dumps(payload, ensure_ascii=False)}]
+                for index, path in enumerate(images, 1):
+                    mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
+                    content.extend([{"type": "text", "text": f"同一房间实测视角 {index}"},
+                                    {"type": "image_url", "image_url": {"url":
+                                     f"data:{mime};base64,{base64.b64encode(path.read_bytes()).decode('ascii')}"}}])
+                request_payload = {"model": VISION_MODEL,
+                    "messages": [{"role": "system", "content": VISION_SYSTEM_PROMPT},
+                                 {"role": "user", "content": content}],
+                    "response_format": {"type": "json_object"}, "enable_thinking": False,
+                    "temperature": 0.0, "max_tokens": 700}
+                request = urllib.request.Request(ENDPOINT,
+                    data=json.dumps(request_payload, ensure_ascii=False).encode("utf-8"),
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    method="POST")
+                try:
+                    with urllib.request.urlopen(request, timeout=180) as response:
+                        answer = json.load(response)
+                except urllib.error.HTTPError as error:
+                    raise RuntimeError(f"DashScope HTTP {error.code}: {error.read().decode('utf-8', 'replace')[:1000]}") from error
+                raw = extract_json(answer["choices"][0]["message"]["content"])
+                # Validate before caching; an image index cannot refer to another room.
+                normalized = normalize_decisions(raw, [room], self.confidence_threshold)
+                if any(i > len(images) for i in normalized[0]["evidence_image_indices"]):
+                    raise ValueError(f"room {room_id} returned an unavailable image index")
+                atomic_json(cache_path, {"identity": identity, "response": raw, "usage": answer.get("usage", {})})
+                calls.append({"room_id": room_id, "cache_hit": False, "usage": answer.get("usage", {})})
+            normalized = normalize_decisions(raw, [room], self.confidence_threshold)
+            if any(i > len(images) for i in normalized[0]["evidence_image_indices"]):
+                raise ValueError(f"room {room_id} returned an unavailable image index")
+            decisions.extend(normalized)
+        return decisions, {"classifier": "qwen_vl_multiview", "model": VISION_MODEL,
+                           "prompt_version": VISION_PROMPT_VERSION, "calls": calls,
+                           "confidence_threshold": self.confidence_threshold}
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -278,13 +349,20 @@ def main() -> None:
     parser.add_argument("--output-decisions", type=Path, required=True)
     parser.add_argument("--budget-cny", type=float, default=20.0)
     parser.add_argument("--confidence-threshold", type=float, default=0.65)
+    parser.add_argument("--room-image-manifest", type=Path,
+                        help="Optional room_id -> 1-2 measured RGB paths; enables Qwen-VL multimodal classification")
     args = parser.parse_args()
     graph = json.loads(args.scene_graph.read_text(encoding="utf-8"))
     rooms = graph.get("rooms", [])
     if not rooms:
         raise ValueError("scene graph contains no rooms")
     classifier = QwenRoomSemanticClassifier(args.budget_cny, args.confidence_threshold)
-    decisions, provenance = classifier.classify(rooms)
+    room_images = None
+    if args.room_image_manifest:
+        raw_images = json.loads(args.room_image_manifest.read_text(encoding="utf-8"))
+        room_images = {str(key): [Path(p) if Path(p).is_absolute() else args.room_image_manifest.parent / p
+                                  for p in paths] for key, paths in raw_images.items()}
+    decisions, provenance = classifier.classify(rooms, room_images)
     by_id = {int(item["room_id"]): item for item in decisions}
     graph = json.loads(json.dumps(graph, ensure_ascii=False))
     for room in graph["rooms"]:

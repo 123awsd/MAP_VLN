@@ -9,10 +9,20 @@ source /workspace/falcon_ws/devel/setup.bash
 set -u
 export ROS_MASTER_URI="http://127.0.0.1:${master_port}"
 export ROS_HOSTNAME=127.0.0.1
+export EXPLORATION_TRIAL_DIR="$trial_dir"
+export EXPLORATION_DIAGNOSTIC_TRACE="$trial_dir/decision_trace.jsonl"
+mkdir -p "$trial_dir/failure_snapshots"
+export EXPLORATION_DIAGNOSTIC_SNAPSHOTS="$trial_dir/failure_snapshots"
 if [[ -e "$trial_dir/result.json" || -e "$trial_dir/trial.bag" || -e "$trial_dir/trial.bag.active" || -e "$trial_dir/bridge/command.json" ]]; then
   echo 'Trial already contains execution data; use a fresh directory.' >&2
   exit 2
 fi
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+while [[ ! -d "$project_root/ros_ws/src/pre_map_bridge" ]]; do
+  [[ "$project_root" != / ]] || { echo "Project root not found" >&2; exit 2; }
+  project_root="$(dirname "$project_root")"
+done
+python3 "$project_root/scripts/sync_exploration_runtime.py" "$trial_dir"
 roslaunch -p "$master_port" "$trial_dir/trial.launch" > "$trial_dir/run.log" 2>&1 &
 planner_pid=$!
 cleanup() {
@@ -37,7 +47,7 @@ with (out/'live_trajectory.jsonl').open('w') as stream:
         try:
             state = json.loads((out/'bridge/state.json').read_text())
         except (FileNotFoundError, json.JSONDecodeError):
-            time.sleep(.1)
+            time.sleep(.02)
             continue
         if state['sequence'] != sequence:
             sequence = state['sequence']
@@ -53,6 +63,6 @@ with (out/'live_trajectory.jsonl').open('w') as stream:
             print('Triggered exploration at sequence', sequence, flush=True)
         if (out/'result.json').exists():
             break
-        time.sleep(.1)
+        time.sleep(.02)
 print('Monitor exited, triggered=', triggered, flush=True)
 PY

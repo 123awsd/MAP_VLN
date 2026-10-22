@@ -269,11 +269,12 @@ void MapServer::depthCallback(const sensor_msgs::ImageConstPtr &image_msg) {
     publishInterpolatedPose(sensor_pose, img_stamp);
 
     TicToc tic2;
-    std::thread tsdf_thread([this, pointcloud]() {
+    std::thread tsdf_thread([this, pointcloud, img_stamp]() {
       this->map_update_counter_++;
       TicToc tic3;
       std::lock_guard<std::mutex> lock(this->map_mutex_);
       this->tsdf_->inputPointCloud(pointcloud);
+      this->integrated_depth_stamp_.store(img_stamp.toSec());
       if (config_.verbose_time_) {
         ROS_INFO("[MapServer] inputPointCloud thread time: %fs", tic3.toc());
       }

@@ -1,3 +1,4 @@
+#include "pathfinding/exploration_diagnostics.h"
 #include <set>
 #include <tuple>
 #include <fstream>
@@ -378,6 +379,30 @@ int ExplorationManager::planExploreMotionHGrid(const Vector3d &pos, const Vector
                                                      const Vector3d &acc, const Vector3d &yaw) {
   ros::Time t1 = ros::Time::now();
   const ros::Time plan_start_time = t1;
+  ++diagnostic_plan_id_;
+  planner_manager_->diagnostic_plan_id_=diagnostic_plan_id_;
+  diagnosticEvent("plan_begin",diagnostic_plan_id_,-1,",\"planned_start\":"+diagnosticPosition(pos)+",\"velocity\":"+diagnosticPosition(vel)+",\"map_depth_stamp\":"+diagnosticNumber(map_server_->latestIntegratedDepthStamp()));
+  double local_refinement_seconds=0.0;
+  auto local_candidate_cost = [&](const Vector3d &start,const Vector3d &goal,
+      double start_yaw,double goal_yaw,const Vector3d &start_vel,double yaw_rate,
+      vector<Vector3d> &route) {
+    double cost=PathCostEvaluator::computeCost(start,goal,start_yaw,goal_yaw,start_vel,yaw_rate,route);
+    bool enabled=false;ros::param::param("/exploration_manager/unified_local_reachability",enabled,false);
+    if(!enabled || cost<499.0 || (start-goal).norm()>4.0 || local_refinement_seconds>=0.09)return cost;
+    const ros::WallTime began=ros::WallTime::now();
+    auto search=planner_manager_->path_finder_;search->reset();search->setProfile(Astar::PROFILE::FINE);
+    search->setMaxSearchTime(std::min(0.03,0.09-local_refinement_seconds));
+    const int result=search->search(start,goal);
+    if(result==Astar::REACH_END)route=search->getPath();
+    search->setProfile(Astar::PROFILE::DEFAULT);
+    local_refinement_seconds+=(ros::WallTime::now()-began).toSec();
+    if(result==Astar::REACH_END){
+      const double length=search->pathLength(route);
+      ROS_INFO("[LocalReachability] rescued target=(%.2f,%.2f,%.2f) path=%.2f",goal.x(),goal.y(),goal.z(),length);
+      return PathCostEvaluator::computePathCost(start,goal,start_yaw,goal_yaw,start_vel,yaw_rate,route,length);
+    }
+    return cost;
+  };
 
   // Sample the real executed 3-D odometry path. Recovery targets are never
   // replayed commands: every historical pose is rechecked against the current
@@ -389,6 +414,12 @@ int ExplorationManager::planExploreMotionHGrid(const Vector3d &pos, const Vector
     executed_safe_pose_history_.erase(executed_safe_pose_history_.begin());
 
   using ObservationKey=std::tuple<int,int,int>;
+  bool exact_failure_memory=false;
+  ros::param::param("/exploration_manager/exact_failure_memory",exact_failure_memory,false);
+  auto observation_key = [&](const Eigen::Vector3i &idx) {
+    return exact_failure_memory ? ObservationKey(idx.x(),idx.y(),idx.z()) :
+      ObservationKey(int(floor(idx.x()/5.0)),int(floor(idx.y()/5.0)),int(floor(idx.z()/5.0)));
+  };
   struct ObservationAttempt { Vector3d position;double yaw;std::vector<Eigen::Vector3i> predicted;ros::Time started;bool active=false; };
   static ObservationAttempt pending;
   static std::vector<std::set<ObservationKey>> failed_observations;
@@ -396,7 +427,7 @@ int ExplorationManager::planExploreMotionHGrid(const Vector3d &pos, const Vector
     int revealed=0;std::set<ObservationKey> unresolved;
     for(const auto&idx:pending.predicted) {
       if(map_server_->getOccupancyGrid()->getVoxel(idx).value!=voxel_mapping::OccupancyType::UNKNOWN)++revealed;
-      else unresolved.emplace(int(floor(idx.x()/5.0)),int(floor(idx.y()/5.0)),int(floor(idx.z()/5.0)));
+      else unresolved.insert(observation_key(idx));
     }
     ROS_INFO("[ObservationOutcome] predicted=%zu revealed=%d fraction=%.4f",pending.predicted.size(),revealed,double(revealed)/std::max(size_t(1),pending.predicted.size()));
     if(revealed<.10*pending.predicted.size())failed_observations.push_back(std::move(unresolved));
@@ -974,7 +1005,7 @@ int ExplorationManager::planExploreMotionHGrid(const Vector3d &pos, const Vector
         // If the frontier's average is in the next grid cell, evaluate its cost from current
         // position
         vector<Eigen::Vector3d> path;
-        double cost = PathCostEvaluator::computeCost(pos, ed_->points_[i], yaw[0], ed_->yaws_[i],
+        double cost = local_candidate_cost(pos, ed_->points_[i], yaw[0], ed_->yaws_[i],
                                                      vel, yaw[1], path);
         if (cost > 499.0) {
           ROS_WARN("[ExplorationManager] Frontier %d average is in the next grid cell but "
@@ -1005,7 +1036,7 @@ int ExplorationManager::planExploreMotionHGrid(const Vector3d &pos, const Vector
           // If the frontier's average is in the next grid cell, evaluate its cost from current
           // position
           vector<Eigen::Vector3d> path;
-          double cost = PathCostEvaluator::computeCost(pos, ed_->points_[i], yaw[0], ed_->yaws_[i],
+          double cost = local_candidate_cost(pos, ed_->points_[i], yaw[0], ed_->yaws_[i],
                                                        vel, yaw[1], path);
           if (cost > 499.0) {
             ROS_WARN("[ExplorationManager] Frontier %d average is in the next grid cell but "
@@ -1071,7 +1102,8 @@ int ExplorationManager::planExploreMotionHGrid(const Vector3d &pos, const Vector
           attempted.push_back(std::move(record));
         };
         auto unchanged_attempt = [&](const Position &centre) {
-          for(auto &record:attempted){
+          for(size_t record_index=0;record_index<attempted.size();++record_index){
+            auto &record=attempted[record_index];
             if((record.centre-centre).norm()>=0.75)continue;
             const auto states=snapshot(record.centre);int newly_known=0,topology_changes=0;
             for(size_t k=0;k<states.size();++k){
@@ -1083,6 +1115,9 @@ int ExplorationManager::planExploreMotionHGrid(const Vector3d &pos, const Vector
             }
             if(newly_known>=64){
               ROS_INFO("[LocalRecovery] region revalidated: new=%d topology=%d",newly_known,topology_changes);
+              // Consume the old failure snapshot. A new attempt records a fresh
+              // snapshot through remember(); unchanged evidence cannot revalidate forever.
+              attempted.erase(attempted.begin()+record_index);
               return false;
             }
             return true;
@@ -1092,7 +1127,7 @@ int ExplorationManager::planExploreMotionHGrid(const Vector3d &pos, const Vector
         if(committed && (pos-destination).norm()<0.45){remember(destination);committed=false;}
         if(committed){
           vector<Position> path;
-          const double cost=PathCostEvaluator::computeCost(pos,destination,yaw[0],destination_yaw,vel,yaw[1],path);
+          const double cost=local_candidate_cost(pos,destination,yaw[0],destination_yaw,vel,yaw[1],path);
           if(!isTemporarilyBlocked(destination) && std::isfinite(cost) && cost<499.0){
             next_pos=destination;
             const Position movement=destination-pos;
@@ -1109,7 +1144,7 @@ int ExplorationManager::planExploreMotionHGrid(const Vector3d &pos, const Vector
              map_server_->getOccupancy(centre)!=voxel_mapping::OccupancyType::FREE || unchanged_attempt(centre))return;
           for(const auto &other:pool)if((other.position-centre).norm()<0.75)return;
           vector<Position> path;
-          const double cost=PathCostEvaluator::computeCost(pos,centre,yaw[0],yaw[0],vel,yaw[1],path);
+          const double cost=local_candidate_cost(pos,centre,yaw[0],yaw[0],vel,yaw[1],path);
           if(std::isfinite(cost) && cost<499.0)pool.push_back({centre,cost});
         };
         for(size_t i=1;i<ed_->grid_tour2_.size();++i){
@@ -1203,9 +1238,52 @@ int ExplorationManager::planExploreMotionHGrid(const Vector3d &pos, const Vector
       vector<Eigen::Vector3d> path;
       double cost = selected_reposition_center
                         ? 0.0
-                        : PathCostEvaluator::computeCost(
-                              pos, ed_->points_[min_cost_id], yaw[0], ed_->yaws_[min_cost_id],
+                        : local_candidate_cost(pos, ed_->points_[min_cost_id], yaw[0], ed_->yaws_[min_cost_id],
                               vel, yaw[1], path);
+      bool entry_refine=false, entry_observe=false;
+      ros::param::param("/exploration_manager/entry_refine",entry_refine,false);
+      ros::param::param("/exploration_manager/entry_observe",entry_observe,false);
+      if(cost>499.0 && entry_refine && min_cost_id>=0 &&
+         (pos-ed_->points_[min_cost_id]).norm()<4.0){
+        const Position target=ed_->points_[min_cost_id];
+        auto fine_path = [&](const Position &goal, vector<Position> &route){
+          auto search=planner_manager_->path_finder_;
+          search->reset();search->setProfile(Astar::PROFILE::FINE);
+          search->setMaxSearchTime(0.03);
+          const int result=search->search(pos,goal);
+          if(result==Astar::REACH_END)route=search->getPath();
+          search->setProfile(Astar::PROFILE::DEFAULT);
+          return result==Astar::REACH_END;
+        };
+        if(fine_path(target,path)){
+          cost=0.0;
+          ROS_INFO("[EntryRecovery] selected target reachable by fine search (%.2f,%.2f,%.2f)",target.x(),target.y(),target.z());
+        } else if(entry_observe){
+          static vector<Position> attempted_entry_poses;
+          Position best;double best_yaw=0,best_score=0;
+          const double bearing=atan2(target.y()-pos.y(),target.x()-pos.x());
+          int current_gain=0;vector<Eigen::Vector3i> current_unknown;
+          current_gain=frontier_finder_->evaluateObservation(pos,bearing,current_unknown);
+          for(double radius: {0.4,0.8,1.2})for(double angle: {-1.05,-0.52,0.0,0.52,1.05}){
+            Position candidate=pos+Position(radius*cos(bearing+angle),radius*sin(bearing+angle),0.0);
+            if(map_server_->getOccupancy(candidate)!=voxel_mapping::OccupancyType::FREE || isTemporarilyBlocked(candidate))continue;
+            bool repeated=false;for(const auto &old:attempted_entry_poses)if((old-candidate).norm()<0.4){repeated=true;break;}
+            if(repeated)continue;
+            const double view_yaw=atan2(target.y()-candidate.y(),target.x()-candidate.x());
+            vector<Eigen::Vector3i> unknown;
+            const int gain=frontier_finder_->evaluateObservation(candidate,view_yaw,unknown);
+            if(gain<64 || gain<current_gain+16)continue;
+            vector<Position> route;if(!fine_path(candidate,route))continue;
+            const double score=double(gain-current_gain)/(1.0+radius+(candidate-target).norm());
+            if(score>best_score){best=candidate;best_yaw=view_yaw;best_score=score;}
+          }
+          if(best_score>0){
+            attempted_entry_poses.push_back(best);
+            next_pos=best;next_yaw=best_yaw;selected_reposition_center=true;cost=0.0;
+            ROS_INFO("[EntryRecovery] reachable observation pose=(%.2f,%.2f,%.2f) for target=(%.2f,%.2f,%.2f)",best.x(),best.y(),best.z(),target.x(),target.y(),target.z());
+          }
+        }
+      }
       if (cost > 499.0) {
         ROS_WARN("[ExplorationManager] Frontier %d average is near next cell but not "
                   "reachable from current position",
@@ -1220,7 +1298,7 @@ int ExplorationManager::planExploreMotionHGrid(const Vector3d &pos, const Vector
             continue;
           // Find a nearest viewpoint from current position
           vector<Eigen::Vector3d> path;
-          double cost = PathCostEvaluator::computeCost(pos, ed_->points_[i], yaw[0], ed_->yaws_[i],
+          double cost = local_candidate_cost(pos, ed_->points_[i], yaw[0], ed_->yaws_[i],
                                                        vel, yaw[1], path);
 
           if (!std::isfinite(cost) || cost > 499.0) {
@@ -1292,7 +1370,7 @@ int ExplorationManager::planExploreMotionHGrid(const Vector3d &pos, const Vector
       int min_cost_id = -1;
       vector<Vector3d> tmp_path;
       for (int i = 0; i < ed_->n_points_[0].size(); ++i) {
-        auto tmp_cost = PathCostEvaluator::computeCost(pos, ed_->n_points_[0][i], yaw[0],
+        auto tmp_cost = local_candidate_cost(pos, ed_->n_points_[0][i], yaw[0],
                                                        ed_->n_yaws_[0][i], vel, yaw[1], tmp_path);
         if (tmp_cost < min_cost) {
           min_cost = tmp_cost;
@@ -1464,35 +1542,48 @@ int ExplorationManager::planExploreMotionHGrid(const Vector3d &pos, const Vector
   ed_->next_yaw_ = next_yaw;
   // Final action selection uses the same unique unknown-volume objective for all active views.
   vector<Vector3d> observation_points;vector<double> observation_yaws;
-  frontier_finder_->getObservationCandidates(observation_points,observation_yaws);
+  frontier_finder_->getObservationCandidates(observation_points,observation_yaws,&pos);
   observation_points.push_back(next_pos);observation_yaws.push_back(next_yaw);
   if(pending.active){observation_points.push_back(pending.position);observation_yaws.push_back(pending.yaw);}
   double best_utility=0;Vector3d best_point=next_pos;double best_yaw=next_yaw;
   std::vector<Eigen::Vector3i> best_unknown;
   int min_gain;ros::param::param<int>("/exploration_method/min_unique_gain",min_gain,64);
   for(size_t i=0;i<observation_points.size();++i){
-    const auto&candidate=observation_points[i];if(isTemporarilyBlocked(candidate)||!candidate.allFinite())continue;
+    const auto&candidate=observation_points[i];
+    auto trace_candidate=[&](const char *reason,int gain,double cost) {
+      diagnosticEvent("candidate_result",diagnostic_plan_id_,int(i),",\"xyz\":"+diagnosticPosition(candidate)+",\"yaw\":"+diagnosticNumber(observation_yaws[i])+",\"reason\":\""+reason+"\",\"gain\":"+std::to_string(gain)+",\"cost\":"+diagnosticNumber(cost)+",\"previous_goal\":"+(pending.active&&(candidate-pending.position).norm()<.2 ? "true":"false"));
+    };
+    if(!candidate.allFinite()){trace_candidate("invalid",-1,0);continue;}
+    if(isTemporarilyBlocked(candidate)){trace_candidate("cooldown",-1,0);continue;}
     std::vector<Eigen::Vector3i> unknown;int gain=frontier_finder_->evaluateObservation(candidate,observation_yaws[i],unknown);
-    if(gain<min_gain)continue;
+    if(gain<min_gain){trace_candidate("unique_gain",gain,min_gain);continue;}
     double reliability=1;
-    for(const auto&failed:failed_observations){int overlap=0;for(const auto&k:unknown)if(failed.count(ObservationKey(int(floor(k.x()/5.0)),int(floor(k.y()/5.0)),int(floor(k.z()/5.0)))))++overlap;
-      reliability*=1-.9*double(overlap)/std::max(size_t(1),unknown.size());
+    for(const auto&failed:failed_observations){int overlap=0;for(const auto&k:unknown)if(failed.count(observation_key(k)))++overlap;
+      const double penalty=1-.9*double(overlap)/std::max(size_t(1),unknown.size());
+      if(exact_failure_memory)reliability=std::min(reliability,penalty);else reliability*=penalty;
     }
-    vector<Vector3d> path;double travel=PathCostEvaluator::computeCost(pos,candidate,yaw[0],observation_yaws[i],vel,yaw[1],path);
-    if(!std::isfinite(travel)||travel>=499)continue;
+    PathCostEvaluator::astar_->setDiagnosticContext(diagnostic_plan_id_,int(i),"travel");
+    planner_manager_->path_finder_->setDiagnosticContext(diagnostic_plan_id_,int(i),"travel_refine");
+    vector<Vector3d> path;double travel=local_candidate_cost(pos,candidate,yaw[0],observation_yaws[i],vel,yaw[1],path);
+    PathCostEvaluator::astar_->setDiagnosticsEnabled(false);
+    planner_manager_->path_finder_->setDiagnosticsEnabled(false);
+    if(!std::isfinite(travel)||travel>=499){trace_candidate("travel_rejected",gain,travel);continue;}
     double floor_cost=(floor_priority_enabled_ && classifyFloorCandidate(candidate)!=0)?floor_crossing_penalty_:0;
     // Insert the observation into the existing global regional route.
     // Costs beyond known space are estimates only, never used as executable paths.
     vector<Vector3d> onward_path;
     double onward=0;
     if((candidate-next_pos).norm()>.2) {
+      PathCostEvaluator::astar_->setDiagnosticContext(diagnostic_plan_id_,int(i),"onward");
       onward=PathCostEvaluator::computeCostUnknown(candidate,next_pos,observation_yaws[i],next_yaw,Vector3d::Zero(),0,onward_path);
-      if(!std::isfinite(onward)||onward>=499)continue;
+      PathCostEvaluator::astar_->setDiagnosticsEnabled(false);
+      if(!std::isfinite(onward)||onward>=499){trace_candidate("onward_rejected",gain,onward);continue;}
     }
     double utility=gain*reliability/(2+std::max(0.0,travel)+std::max(0.0,onward)+floor_cost);
     // Keep an unfinished observation unless another action is substantially better.
     if(pending.active&&(candidate-pending.position).norm()<.2)utility*=1.15;
     ROS_INFO("[ObservationDecision] xyz=(%.2f,%.2f,%.2f) gain=%d confidence=%.4f travel=%.3f onward=%.3f utility=%.3f",candidate.x(),candidate.y(),candidate.z(),gain,reliability,travel,onward,utility);
+    trace_candidate("scored",gain,utility);
     if(utility>best_utility){best_utility=utility;best_point=candidate;best_yaw=observation_yaws[i];best_unknown=std::move(unknown);}
   }
   if(best_utility>0){
@@ -1508,6 +1599,13 @@ int ExplorationManager::planExploreMotionHGrid(const Vector3d &pos, const Vector
   LOG(INFO) << "[ExplorationManager] Next pos: " << next_pos[0] << ", " << next_pos[1] << ", "
             << next_pos[2] << ", yaw: " << next_yaw;
 
+  static Vector3d diagnostic_previous_goal=Vector3d::Zero();
+  static bool diagnostic_have_goal=false;
+  if(diagnostic_have_goal && (diagnostic_previous_goal-next_pos).norm()>.2)
+    diagnosticEvent("goal_changed",diagnostic_plan_id_,-1,",\"old_goal\":"+diagnosticPosition(diagnostic_previous_goal)+",\"new_goal\":"+diagnosticPosition(next_pos)+",\"reason\":\"global_reselection\"");
+  diagnostic_previous_goal=next_pos;diagnostic_have_goal=true;
+  diagnosticEvent("goal_selected",diagnostic_plan_id_,-1,",\"goal\":"+diagnosticPosition(next_pos)+",\"yaw\":"+diagnosticNumber(next_yaw)+",\"utility\":"+diagnosticNumber(best_utility));
+  planner_manager_->path_finder_->setDiagnosticContext(diagnostic_plan_id_,-1,"trajectory");
   // Local planner
   // Require next_pos, next_yaw from global planner
   // pos, vel, acc, yaw: current states
@@ -2025,8 +2123,8 @@ bool ExplorationManager::planSafeAstarPrefix(const Vector3d &pos, const double y
       const Vector3d point = pos + delta * (double(sample) / double(sample_count));
       bool observed_guard=false;
       ros::param::param("/fast_planner/observed_trajectory_guard",observed_guard,false);
-      double clearance=0.18;
-      ros::param::param("/fast_planner/execution_clearance",clearance,0.18);
+      double clearance=0.01;
+      ros::param::param("/fast_planner/execution_clearance",clearance,0.01);
       const double distance=map_server_->getESDF()->getDistance(point);
       const bool close_to_start=(point-pos).norm()<0.15;
       const bool escaping_start=close_to_start && distance>=map_server_->getESDF()->getDistance(pos)-0.01;

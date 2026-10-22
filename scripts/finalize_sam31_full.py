@@ -1,9 +1,11 @@
 """Validate full measured-frame coverage and compare output counts, not GT accuracy."""
 from pathlib import Path
-import json,csv,os
+import json,csv,os,argparse
 from collections import Counter
 import numpy as np
-R=Path(__file__).resolve().parents[1];O=R/'outputs/boxer/coverage700_sam31_20261018';m=json.loads((O/'manifest.json').read_text());assert m['status']=='completed'and m['frames_count']==350 and len(m['frames'])==350
+R=Path(__file__).resolve().parents[1]
+parser=argparse.ArgumentParser();parser.add_argument('--run-dir',type=Path,default=R/'outputs/boxer/coverage700_sam31_20261018');args=parser.parse_args()
+O=args.run_dir;m=json.loads((O/'manifest.json').read_text());assert m['status']=='completed'and m['frames_count']==350 and len(m['frames'])==350
 assert len({v['time_ns']for v in m['frames']})==350
 count=0
 for row in m['frames']:

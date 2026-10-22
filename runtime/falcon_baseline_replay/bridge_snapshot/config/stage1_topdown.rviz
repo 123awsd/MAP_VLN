@@ -1,0 +1,138 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.25
+      Cell Size: 1
+      Class: rviz/Grid
+      Color: 100; 100; 100
+      Enabled: true
+      Name: Metric Grid
+      Plane: XY
+      Reference Frame: world
+    - Alpha: 0.9
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 0; 210; 230
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Name: FUEL-style Roofless Map
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: false
+      Size (Pixels): 2
+      Size (m): 0.025
+      Style: Points
+      Topic: /pre_map_vln/roofless_map
+      Unreliable: false
+      Use Fixed Frame: true
+    - Alpha: 0.72
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 210; 0
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Name: Frontier Cells
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: false
+      Size (Pixels): 1
+      Size (m): 0.015
+      Style: Points
+      Topic: /planning_vis/frontier_pcl
+      Unreliable: false
+      Use Fixed Frame: true
+    - Class: rviz/Marker
+      Enabled: false
+      Marker Topic: /planning_vis/frontier
+      Name: Frontier Labels (Optional)
+      Namespaces: {}
+      Queue Size: 100
+    - Class: rviz/Marker
+      Enabled: false
+      Marker Topic: /planning/travel_traj
+      Name: Executed Trajectory
+      Namespaces: {}
+      Queue Size: 30
+    - Alpha: 0.9
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 15; 45; 150
+      Enabled: true
+      Head Diameter: 0.15
+      Head Length: 0.1
+      Length: 0.2
+      Line Style: Lines
+      Line Width: 0.012
+      Name: Agent Path
+      Offset: {X: 0, Y: 0, Z: 0}
+      Pose Color: 255; 90; 30
+      Pose Style: None
+      Radius: 0.02
+      Shaft Diameter: 0.04
+      Shaft Length: 0.1
+      Topic: /pre_map_vln/agent_path
+    - Angle Tolerance: 0.1
+      Class: rviz/Odometry
+      Enabled: true
+      Keep: 1
+      Name: Agent Pose
+      Position Tolerance: 0.1
+      Shape:
+        Alpha: 0.85
+        Axes Length: 0.25
+        Axes Radius: 0.025
+        Color: 255; 80; 20
+        Head Length: 0.12
+        Head Radius: 0.05
+        Shaft Length: 0.24
+        Shaft Radius: 0.025
+        Value: Arrow
+      Topic: /uav_simulator/odometry
+      Unreliable: false
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /pre_map_vln/camera_frustum
+      Name: Camera FoV
+      Namespaces: {}
+      Queue Size: 10
+  Enabled: true
+  Global Options:
+    Background Color: 255; 255; 255
+    Default Light: true
+    Fixed Frame: world
+    Frame Rate: 15
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+  Views:
+    Current:
+      Angle: -1.5708
+      Class: rviz/TopDownOrtho
+      Enable Stereo Rendering: false
+      Invert Z Axis: false
+      Name: Top-down Exploration
+      Near Clip Distance: 0.01
+      Scale: 75
+      Target Frame: world
+      X: 1.5
+      Y: 2.5
+Window Geometry:
+  Height: 900
+  Width: 760
+  X: 1110
+  Y: 40

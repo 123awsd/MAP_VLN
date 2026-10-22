@@ -1,0 +1,45 @@
+# Original 30 classes are retained. Extra prompts improve visible object variety.
+door
+window
+mirror
+chair
+armchair
+stool
+bench
+sofa
+bed
+table
+coffee table
+dining table
+desk
+cabinet
+wardrobe
+dresser
+nightstand
+shelf
+bookshelf
+television
+lamp
+refrigerator
+oven
+microwave
+sink
+toilet
+bathtub
+shower
+washing machine
+plant
+curtain
+pillow
+rug
+painting
+clock
+trash can
+faucet
+stove
+range hood
+laptop
+computer monitor
+kettle
+towel
+chandelier

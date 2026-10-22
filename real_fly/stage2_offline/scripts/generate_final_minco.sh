@@ -86,6 +86,7 @@ sudo docker run --rm --network none --user "$(id -u):$(id -g)" \
 set -eo pipefail
 source /opt/ros/noetic/setup.bash
 source /workspace/project/real_fly/stage2_offline/runtime/minco_ws/devel/setup.bash
+NARROW_CLEARANCE_THRESHOLD=$(python3 -c "import os; print(max(0.40, float(os.environ[\"COLLISION_CLEARANCE\"]) + 0.10))")
 export ROS_MASTER_URI=http://127.0.0.1:11311 ROS_IP=127.0.0.1
 export ROS_HOME="$JOB/ros"
 python3 /workspace/project/real_fly/stage2_offline/scripts/export_full_smooth_route.py --mission "$JOB/source_mission.json" --output "$JOB/full_smooth_route.txt" --path-source "$MINCO_PATH_SOURCE" --speed "$MINCO_SPEED_MPS"
@@ -109,7 +110,7 @@ timeout 900 rosrun mission_planner full_smooth_mission \
   _super_corridor_extra_margin:="$MINCO_CORRIDOR_EXTRA_MARGIN" \
   _max_acceleration:=6.0 _max_jerk:=90.0 _max_snap:=350.0 \
   _max_yaw_rate:="$MINCO_MAX_YAW_RATE" _max_yaw_lock_variation:=1.0 _max_jerk_discontinuity:=0.0001 \
-  _narrow_corridor/enabled:=true _narrow_corridor/clearance_threshold:=0.40 \
+  _narrow_corridor/enabled:=true _narrow_corridor/clearance_threshold:="$NARROW_CLEARANCE_THRESHOLD" \
   _narrow_corridor/seed_local_candidates_only:="$MINCO_SEED_LOCAL_BOTTLENECKS" \
   _narrow_corridor/max_width:=1.00 _narrow_corridor/transition_length:=0.45 \
   _narrow_corridor/max_half_width:=0.18 _narrow_corridor/min_half_width:=0.10 \

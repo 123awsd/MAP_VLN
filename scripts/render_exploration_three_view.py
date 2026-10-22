@@ -140,6 +140,14 @@ def main():
     source = source.replace("ROOT/'PRE_MAP_VLN/outputs/exploration_recovery_local_trial/round6_extended/preview_trimmed'", "Path(" + repr(str(cache)) + ")")
     source = source.replace("np.load(Path(__file__).resolve().parent/'geometry.npz')", "np.load(Path(" + repr(str(assets/"geometry.npz")) + "))")
     source = source.replace("OUT=ROOT/'视频制作/探索剪辑素材_无字30帧'", "OUT=Path(" + repr(str(assets)) + ")")
+    if settings.get("exact_sampled_camera", False):
+        # Original acquired RGB and its optical pose must use the same keyframe.
+        # Keep old layouts/colours intact; do not interpolate or rerender the camera.
+        source = source.replace("np.searchsorted(poses[:,0],stamp)-1", "np.searchsorted(poses[:,0],stamp,side='right')-1")
+        source = source.replace("rgbidx=int(np.argmin(np.abs(targets-stamp)))", "rgbidx=idx")
+        source = source.replace("def render(idx,stamp):\n", "def render(idx,stamp):\n stamp=float(targets[idx])\n")
+    if settings.get("pixel_format") == "I420":
+        source = source.replace("'videoconvert','!','x264enc'", "'videoconvert','!','video/x-raw,format=I420','!','x264enc'")
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     source = source.replace("'04_合并版_无字_30fps.mp4'", repr(str(output)))

@@ -75,9 +75,15 @@ echo "Inferred $actual_floor_count floor(s); requested maximum was $max_floor"
   --max-floor "$actual_floor_count" --decomp-threshold 1.8 \
   --occusg-output-group "$name/transition_rooms"
 
+room_image_args=()
+if [[ -n "${PRE_MAP_VLN_ROOM_IMAGE_MANIFEST:-}" ]]; then
+  [[ -f "$PRE_MAP_VLN_ROOM_IMAGE_MANIFEST" ]] || { echo "missing room image manifest: $PRE_MAP_VLN_ROOM_IMAGE_MANIFEST" >&2; exit 2; }
+  room_image_args=(--room-image-manifest "$PRE_MAP_VLN_ROOM_IMAGE_MANIFEST")
+fi
 .envs/habitat/bin/python scripts/classify_multifloor_rooms_qwen.py \
   "$transition_dir" "$floor_dir" "$wall_dir" "$semantic_dir" \
-  --max-floor "$actual_floor_count" --budget-cny "${PRE_MAP_VLN_QWEN_BUDGET_CNY:-20}"
+  --max-floor "$actual_floor_count" --budget-cny "${PRE_MAP_VLN_QWEN_BUDGET_CNY:-20}" \
+  "${room_image_args[@]}"
 
 mkdir -p "$prepared_dir"
 .envs/habitat/bin/python scripts/prepare_multifloor_stage2_scene.py \

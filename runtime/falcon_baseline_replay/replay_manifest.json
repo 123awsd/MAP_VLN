@@ -1,0 +1,33 @@
+{
+  "baseline": "/home/uav/map_VLN/PRE_MAP_VLN/outputs/exploration_baseline_restore_504",
+  "duration_s": 504,
+  "algorithm_changes": false,
+  "recording": "async decision/path/astar/FSM trace; rejection-local occupancy+ESDF; full RGB-D and published maps in bag; simulator sampled command and clipping",
+  "limits": [
+    "local rejection maps are sampled queries, not a complete internal TSDF checkpoint",
+    "async logging overhead not benchmarked per user request"
+  ],
+  "source_sha256": {
+    "map_server.cpp": "fa73ed267cc2c4422bf95d6e710cba8518f2908bb04dd825120dd820bb864af7",
+    "run_habitat_falcon.py": "1d3cf2c2566745c5ecc91bbbfca729b2959ee81ddb326c4511b5c8b9e556e1ad",
+    "planner_manager.cpp": "597f708c440ea64075ddf651b9b1658251a61528a2137dc3b85cb0c2a6185175",
+    "map_server.h": "9e05b84a6811670033b8fa3fbc8ec2120ffb86e2959d31a3f1f9525b5a820491",
+    "exploration_diagnostics.h": "fb827c94f0982c9bf88acac10b7f795a29b66db7c4f76363a83e39265ef1f2c4",
+    "astar.h": "98cf3e87b62efa6d5476bbce6122d78c4cbebb8a2bb2f84257dd9bbfdc0d3c91",
+    "execution_constraints.h": "c7629142e7173ffe46352816540f264079d67394649af5dbdb751b09ee2136bf",
+    "exploration_fsm.cpp": "7532eadb51d03d8db918aeb772e438176754529c404403cc7ff9d23744972cf7",
+    "astar.cpp": "d984346bf9729ce036fe0c26ce29b2435a8a5997a060bebf6eef108d2f33d6e6",
+    "traj_server.cpp": "074a829a8d05baf248447acb03b4a749cb82b66b799aa4bdbe92740d85a461f5",
+    "frontier_finder.cpp": "8cc408d1fae2da9a1cb7f4ac91cc81fba74bce222f88ca6a138731f6de0719c5",
+    "path_cost_evaluator.h": "36746b3cbe5d71684276a1cca8d9ff10be89320b36c212cc9725fa15350cd6ce",
+    "exploration_node.cpp": "0167bb45afa7ade9bcae4be367787207a6d5ee91e0c918b5defcd6808e38e4d2",
+    "config.yaml": "8775f9ae64b8be4bf4d02100d0e652f8ea75c2b77c965c6bd927f6559acc75b3",
+    "frontier_finder.h": "d5306aa308e24c50871f4d9b91bde7e8d22912e75a4c8785057888ed75cde36d",
+    "exploration_manager.cpp": "1730bdd3944ce9ac71957119cd7a8107e493d9647bd10d9f48bf313271017d1e",
+    "planner_manager.h": "205944478f8019d98f9c32b5f6f5d98cd36187e90b7c446f6d59aa7f7fa49f80",
+    "path_cost_evaluator.cpp": "0f91965667a3aa60957132a7e76e3929c1c9623c2973f638de5d68ac7cb44e84",
+    "exploration_fsm.h": "07cf64ff066ac61d9f2c921ad70a32cfcd88656125a35d87117e533390476ccd",
+    "exploration_manager.h": "5468998acc7ddd9f87176dcf2fba9b2ed50a21d51d9f73a14c8fe84d58e60d04",
+    "habitat_scene_repairs.py": "229d2abcc483c89c3801ae433da78d798c9dcf6eb4939e32a104373e1fc69bcc"
+  }
+}

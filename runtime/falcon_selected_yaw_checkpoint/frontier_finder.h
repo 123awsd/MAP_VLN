@@ -69,7 +69,7 @@ public:
   ~FrontierFinder();
 
   int evaluateObservation(const Vector3d&,double,std::vector<Eigen::Vector3i>&);
-  void getObservationCandidates(vector<Vector3d>&,vector<double>&);
+  void getObservationCandidates(vector<Vector3d>&,vector<double>&,const Vector3d* current_position=nullptr);
   void searchFrontiers();
   void computeFrontiersToVisit();
 

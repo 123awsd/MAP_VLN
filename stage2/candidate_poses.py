@@ -539,6 +539,12 @@ def generate_candidates(
                         "between_distance_m": between_distance if constraints.get("relation") == "between" else None,
                         "terminal_cost": terminal_score,
                     })
+    # Reviewed candidates must survive diversity pruning before the planner
+    # applies the same allowlist to its final pool.
+    allowlist = task.get("candidate_allowlist")
+    if allowlist is not None:
+        allowed = {str(value) for value in allowlist}
+        candidates = [item for item in candidates if item["id"] in allowed]
     candidates.sort(key=lambda item: (item["terminal_cost"], -float(item["line_of_sight"]), item["id"]))
     if max_candidates <= 0:
         return []

@@ -33,6 +33,8 @@
     <param name="super_static_map_only" value="true"/>
     <param name="local_collision_replan_enabled" value="false"/>
     <param name="collision_clearance" value="$(arg collision_clearance)"/>
+    <param name="narrow_corridor/clearance_threshold"
+           value="$(eval max(0.40, float(arg('collision_clearance')) + 0.10))"/>
     <param name="super_config_path"
            value="$(arg config_path)"/>
 

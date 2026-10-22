@@ -1,0 +1,7 @@
+{
+  "baseline": "runtime/falcon_oct12_round5_checkpoint",
+  "change": "ROS parameter /fast_planner/preserve_short_waypoint; default true preserves baseline, false permits optimizer",
+  "source_sha256": "296d78df5541e48c4291a8f620fe47615c351f32dbbc784db3a0cab74a068aec",
+  "selected_as_final": false,
+  "requires_runtime_ablation": true
+}

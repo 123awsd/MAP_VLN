@@ -1,0 +1,14 @@
+{
+  "baseline": "falcon_oct12_round5_checkpoint",
+  "change": "optional read-only diagnostic at no finite frontier/relocation failure, 10s rate limit",
+  "source_sha256": "9541da858df1f06beba85042b5d39cb6373e4b8f099371f9418d806b5fa7c573",
+  "patch": "patches/falcon/stall_planning_state_diagnostic.patch",
+  "build_log": "outputs/exploration_oct12_stall_state_trial/build.log",
+  "build_session": 22346,
+  "algorithm_changed": false,
+  "full_pipeline_complete": false,
+  "build_exit_code": 0,
+  "active_trial": "outputs/exploration_oct12_stall_state_trial",
+  "planner_session": 12663,
+  "simulator_session": 40941
+}
