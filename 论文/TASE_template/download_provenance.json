@@ -1,0 +1,9 @@
+{
+  "download_date": "2026-10-22",
+  "journal": "IEEE Transactions on Automation Science and Engineering",
+  "author_guidelines": "https://www.ieee-ras.org/publications/t-ase/information-for-authors/",
+  "official_template_selector": "https://template-selector.ieee.org/secure/templateSelector/publicationType",
+  "download_url": "https://journals.ieeeauthorcenter.ieee.org/wp-content/uploads/sites/7/IEEE-Transactions-LaTeX2e-templates-and-instructions.zip",
+  "sha256": "68e922ec3134efbae53a54f5cfd757adc15b1dfd8b147616d6d469c17abf3099",
+  "note": "Official template selector could not be retrieved; downloaded the IEEE Transactions LaTeX bundle directly from IEEE Author Center. Uses bare_jrnl / IEEEtran journal mode with T-ASE additions."
+}

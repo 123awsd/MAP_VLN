@@ -1,0 +1,90 @@
+# Evidence ledger for the English draft
+
+Audit date: September 9, 2026. The paper describes the current working-tree implementation and separately reports the frozen September 7 benchmark. Historical runs were not rerun, and a full source-commit match for every frozen episode has not been established.
+
+## Main experimental evidence
+
+Primary sources:
+
+- `VLN_Benchmark/数据统计汇总0908.md`
+- `VLN_Benchmark/2026_0907/map_vln/manifest.json` (60 selected case IDs)
+- Formal per-episode `native_result.json` records under `VLN_Benchmark/2026_0907/SCENE/TASK_SET/METHOD/CASE/env_seedN/runN/`.
+- `VLN_Benchmark/完善测评.md`
+- `VLN_Benchmark/map_vln_2026_0907/{prepare,run_episode,evaluate}.py`
+
+`python3 audit_results.py` recomputes success counts, TL/NE/SPL/CT means, and coverage from 2,160 records and checks every table value to its printed precision. It passed. The saved audit is `tmp/english_qa/table_audit.json`. Filtering by the selected manifest is essential: extra non-selected MAP-VLN cases exist in the result tree. An unrestricted recursive aggregate does not reproduce the paper.
+
+Our counts are 168/180 single-target and 128/180 multi-target successes. Multi-target trajectory coverage is 177; NE/SPL coverage is 144. Those 144 records comprise 122 successes and 22 failures. There are 33 trajectory-bearing absence cases excluded from NE/SPL, including six successes. Three multi-target records are infrastructure failures. The other methods' counts and metrics were also checked by the same script.
+
+Per-scene own-method success counts, each with 30 planned episodes per family (not an additional experiment):
+
+| Scene | Single | Multi |
+|---|---:|---:|
+| 00070 | 24 | 16 |
+| 00166 | 24 | 22 |
+| 00273 | 30 | 24 |
+| 00290 | 30 | 12 |
+| 00337 | 30 | 30 |
+| 00409 | 30 | 24 |
+
+The paper uses the historical summary's CT definition: process time over successes only. Some older `comparison.md` files instead display mean runtime over completed records under a completion-time label; those auxiliary means are not substituted into the paper.
+
+## Input and evaluator qualifications
+
+- `prepare.py` constructs native task graphs from authored case specifications. `run_episode.py` invokes `run_stage2_habitat.py --task-graph ...`. The formal results therefore do not measure online language-to-CPTG parsing.
+- Native interfaces, geometric success rules, and action spaces are heterogeneous. Shared tasks and model settings do not make this a controlled common-input planner comparison.
+- `evaluate.py:required_task_ids` uses the first source-task verification outcome. The executor may retry before a final task outcome. The paper explicitly distinguishes first-observation evaluation from task-level branch execution.
+- `evaluate.py:oracle_length` calls the weighted `plan_joint_mission` and returns the chosen route's geometric length. It does not separately minimize pure continuous path length. The paper calls this an implementation-defined reference route, not an exact continuous shortest-path oracle.
+- OSGP supports temporal task planning, but the benchmark runtime lacks online target recognition for the applicable branch/recovery/absence protocol. Four other integrations declare the full multi-target interface unsupported. These are capability limitations of this integration, not blanket claims about the source papers.
+
+## Methods-to-code correspondence
+
+| Manuscript element | Source |
+|---|---|
+| CPTG schema, validation, parsing | `MAP_VLN/stage2/task_graph.py`, `vlm_task_parser.py` |
+| Processed versus successful task states | `MAP_VLN/stage2/mission_executor.py` |
+| Candidate geometry and exact ordinary terminal score | `MAP_VLN/stage2/candidate_poses.py` |
+| DP state, recurrence, weights | `MAP_VLN/stage2/joint_planner.py` |
+| Motion path caching | `MAP_VLN/stage2/motion_cost_oracle.py` |
+| Snapping, A*, clearance preference, segment recheck | `MAP_VLN/stage2/astar_3d.py` |
+| Three-task window, executable subset, 1/2/all representatives | `MAP_VLN/scripts/run_stage2_habitat.py` |
+| Per-location representative score | `MAP_VLN/stage2/representative_viewpoints.py` |
+| Endpoint anchoring and smoothing | `MAP_VLN/stage2/bspline_3d.py` |
+| Region hypotheses and negative coverage updates | `MAP_VLN/stage2/semantic_recovery.py`, `semantic_region_search.py` |
+| Zero-radius sensor, 0.10 m hard clearance, 0.20 m grid | `MAP_VLN/config/uav_3d_planning_habitat.yaml` |
+
+The time formula intentionally uses 3D `path.length_m`, matching the current caller of `_motion_time`, even though the parameter name says horizontal length. Vertical motion uses endpoint height difference, not cumulative ascent. No energy or real quadrotor safety guarantee is stated.
+
+DP optimality is only for the finite supplied tasks/candidates and fixed oracle costs. The runner's task and representative preselection are heuristic. One candidate per task makes that solve's viewpoint choice degenerate. Paths are generated by the oracle and smoothed after selection, so the title names task ordering and viewpoint selection rather than claiming three independently optimized variable classes.
+
+## Historical and qualitative evidence
+
+- `MAP_VLN/docs/第三阶段实验评测.md`: 270 historical trials, three scenes, three seeds, five settings, six variants. Real navmesh geometry, synthetic feasible anchors, earlier single-floor/2.5D planner. `MAP_VLN/outputs/stage2/paper_benchmark/` is absent. The table is explicitly provisional and not a current-3D ablation.
+- `MAP_VLN/docs/第四阶段开放词表感知.md`: 144 pilot frames; only 00861 has quantitative semantic-ground-truth scoring in that pilot. Presence-level F1 is not detection mAP; thresholds were explored on this pilot.
+- `MAP_VLN/docs/第六阶段语义恢复搜索.md`: six state-machine demos; controlled and semantic-GT outcomes cannot count as independent real detector recovery successes.
+- Figure files remain under `MAP_VLN/docs/assets/system_overview/`. Their captions explicitly identify qualitative placeholder status. They are not presented as newly generated experiments or mutually matched episode observations.
+
+## Literature and format
+
+Added verified primary-source references:
+
+- S-Nav: https://arxiv.org/abs/2307.01613
+- AirHunt: https://arxiv.org/abs/2601.12742
+- Scene-graph TAMP: https://arxiv.org/abs/2403.08094
+- Long-horizon VLN: https://arxiv.org/abs/2412.09082
+- SayPlan bibliographic pagination checked at https://proceedings.mlr.press/v229/rana23a.html
+
+Submission length was checked against the ICRA 2027 technical-paper call: https://2027.ieee-icra.org/contribute/call-for-icra-2027-papers-now-accepting-submissions/ . Its eight-page limit includes references. The draft uses the repository's unmodified class/margins, 10-point two-column Letter layout, seven pages of body and one page of references. No font shrinking or margin compression was used to reach eight pages.
+
+## Remaining submission work
+
+Viewer-compatibility update: after an IDE garbling report, the manuscript was rebuilt with XeLaTeX and embedded Unicode OpenType text fonts. Independent Poppler rendering and text extraction were normal on the original PDF; the IDE-specific cause was not reproduced. Both `root.pdf` and `paper_english.pdf` contain the new eight-page version. Engine selection is recorded in the source and `.latexmkrc`.
+
+1. Add authors, affiliations, and any funding statement; adjust anonymization to the final chosen submission requirements.
+2. Record hardware/software metadata tied to the frozen runs and freeze a source revision.
+3. Recover or rerun historical raw trials; run matched ablations of the current 3D pipeline.
+4. Align and test branch-event timing if the intended contract should use task-final rather than first-view outcomes.
+5. Consider a separately minimized geometric reference for SPL; changing it requires reevaluation, not relabeling existing values.
+6. Evaluate language parsing separately from compiled-graph execution.
+7. Replace placeholder visuals with publication-scale English figures and measured outcomes.
+8. Add paired uncertainty analysis, map-cost amortization, task-scale tests, and physical vehicle validation as warranted.

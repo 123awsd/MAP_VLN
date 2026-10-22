@@ -1,0 +1,195 @@
+% !TeX program = xelatex
+\RequirePackage[OT1]{fontenc}
+\documentclass[letterpaper,10pt,conference]{ieeeconf}
+\IEEEoverridecommandlockouts
+\overrideIEEEmargins
+\usepackage{fontspec}
+\setmainfont{TeX Gyre Termes}
+\setsansfont{TeX Gyre Heros}
+\setmonofont{TeX Gyre Cursor}
+\usepackage{amsmath,amssymb,bm,graphicx,booktabs,tabularx,array,url,cite,balance,float}
+\graphicspath{{../../docs/assets/system_overview/}}
+\newcommand{\pose}{\bm{q}}
+\newcommand{\NA}{N/A}
+\makeatletter
+\bibcite{anderson2018r2r}{1}
+\bibcite{krantz2020vlnce}{2}
+\bibcite{shridhar2020alfred}{3}
+\bibcite{krantz2023ivln}{4}
+\bibcite{huang2023vlmaps}{5}
+\bibcite{gu2024conceptgraphs}{6}
+\bibcite{werby2024hovsg}{7}
+\bibcite{song2024lhvln}{8}
+\bibcite{kremer2023snav}{9}
+\bibcite{rana2023sayplan}{10}
+\bibcite{dai2024osgp}{11}
+\bibcite{ku2020rxr}{12}
+\bibcite{qi2020reverie}{13}
+\bibcite{zhu2021soon}{14}
+\bibcite{chen2021hamt}{15}
+\bibcite{chen2022duet}{16}
+\bibcite{hao2020prevalent}{17}
+\bibcite{wang2023scalevln}{18}
+\bibcite{rosinol2020dsg}{19}
+\bibcite{hughes2022hydra}{20}
+\bibcite{peng2023openscene}{21}
+\bibcite{ray2024tamp}{22}
+\bibcite{huang2023innermonologue}{23}
+\bibcite{shah2023lmnav}{24}
+\bibcite{yu2023l3mvn}{25}
+\bibcite{zhou2024navgpt}{26}
+\bibcite{chen2024mapgpt}{27}
+\bibcite{zhang2026spatialnav}{28}
+\bibcite{bhatt2025vlnzero}{29}
+\bibcite{qiao2025opennav}{30}
+\bibcite{jiang2025spatialgpt}{31}
+\bibcite{zhang2024falcon}{32}
+\bibcite{minderer2023owlv2}{33}
+\bibcite{detone2026boxer}{34}
+\bibcite{cueto2026occusg}{35}
+\bibcite{ramakrishnan2021hm3d}{36}
+\bibcite{xu2021fastlio}{37}
+\makeatother
+\begin{document}
+\pagestyle{plain}
+\setcounter{section}{2}
+\setcounter{figure}{2}
+\section{Method}
+
+\textbf{LogicFly} grounds language instructions in a hierarchical semantic--geometric representation. A \textbf{Conditional Partial-Order Task Graph (CPTG)} separates precedence constraints from observation-dependent activation. \textbf{Joint Task--Viewpoint Planning (JTVP)} jointly selects task order and task-conditioned 3D observation poses using collision-aware costs. Online evidence updates task states and search beliefs for recovery and replanning; newly detected instances are fused online and added to the scene graph after execution.
+
+\subsection{Hierarchical Semantic--Geometric Representation}
+\label{sec:semantic-representation}
+
+The robot first explores the unknown environment and constructs a reusable hierarchical semantic--geometric representation. Its geometric component $\mathcal M_g$ records occupied, observed-free, and unknown 3D space; its semantic component $\mathcal M_s$ organizes floors, rooms, cross-floor transitions, and open-vocabulary object instances in a shared global frame. FALCON~\cite{zhang2024falcon} supplies exploration trajectories for acquiring RGB-D observations, camera poses, and occupancy evidence. OWLv2~\cite{minderer2023owlv2} provides open-vocabulary 2D detections, Boxer~\cite{detone2026boxer} lifts them into 3D instances, and OccuSG~\cite{cueto2026occusg} organizes rooms. The resulting representation provides semantic entities and regions for task grounding, free space for navigation, and spatial context for viewpoint generation. Figure~\ref{fig:semantic-map-construction} summarizes its construction.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{../MAP_VLN素材/探索_无损超清_裁边.png}
+\caption{Hierarchical semantic--geometric representation constructed from exploration data by integrating floor/room geometry and 3D object instances.}
+\label{fig:semantic-map-construction}
+\end{figure}
+
+\subsection{Conditional Partial-Order Task Graph}
+\label{sec:cptg}
+
+Given instruction $I$, the parser grounds navigation anchors and room/floor scopes in mapped entities and regions, while specifying semantic targets and verification predicates. These subtasks form a \textbf{Conditional Partial-Order Task Graph}
+\begin{equation}
+\mathcal G_T=(\mathcal V,\mathcal E_{\mathrm{prec}},\mathcal R_{\mathrm{cond}}),
+\end{equation}
+where $\mathcal V$ denotes language-grounded subtasks, $\mathcal E_{\mathrm{prec}}$ stores mandatory edges whose transitive closure induces a strict partial order over $\mathcal V$, and $\mathcal R_{\mathrm{cond}}$ contains observation-dependent activation and skip rules. Each task stores its action, semantic target, navigation anchor, verification predicate, spatial constraints, room/floor scope, prerequisites, and search policy. Invalid entity references, inconsistent dependencies, or a cycle in the precedence relation cause rejection before execution. Figure~\ref{fig:cptg} illustrates this representation.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\columnwidth]{../MAP_VLN素材/偏序任务图裁剪.png}
+\caption{From a natural-language instruction to a CPTG. The task parser constructs task nodes with navigation anchors, semantic targets, and verification predicates; precedence and conditional edges encode mandatory ordering and observation-dependent activation.}
+\label{fig:cptg}
+\end{figure}
+
+For each task, the \textbf{navigation anchor} defines the observation region, the \textbf{semantic target} specifies the entity to detect, and the \textbf{verification predicate} defines the requested evidence. Spatial relations constrain grounding and candidate generation; their satisfaction is recorded geometrically and required by the strict full-task evaluator.
+
+Let $\mathcal R_t$ contain tasks with resolved outcomes, including negative outcomes, and $\mathcal A_t$ the active pending tasks. With $\operatorname{pred}(i)$ denoting the required predecessors of task $i$, the executable set is
+\begin{equation}
+\mathcal E_t=
+\left\{i\in\mathcal A_t:
+\operatorname{pred}(i)\subseteq\mathcal R_t\right\}.
+\end{equation}
+The rules $\mathcal R_{\mathrm{cond}}$ activate or skip downstream tasks from resolved outcomes. Depending on its observation policy, a conditional source is resolved at the first designated viewpoint or after terminal search. These rules remain separate from mandatory precedence. CPTG supplies executable tasks to JTVP for joint ordering and viewpoint selection.
+
+\subsection{Receding-Horizon Joint Task--Viewpoint Planning}
+\label{sec:jtvp}
+
+\textbf{Task-conditioned viewpoints.} For task $i$, its navigation anchor and spatial constraints define a 3D observation region, such as an object, support surface, surrounding area, lower region, or relation-defined area. JTVP generates candidate poses for joint task ordering and viewpoint selection.
+
+The $k$th candidate observation pose is $q_i^k=(x_i^k,y_i^k,z_i^k,\psi_i^k)$, where $(x_i^k,y_i^k,z_i^k)$ is the camera position and $\psi_i^k$ is yaw. Candidates are sampled at multiple distances, azimuths, and feasible heights, with yaw oriented toward the observation region; vertical visibility is handled by candidate height and the camera field of view.
+
+Let $\mathcal P_i$ denote samples from the observation region and $\mathcal V_i(q)\subseteq\mathcal P_i$ the samples visible from $q$ under camera field-of-view and line-of-sight constraints. Geometric coverage is
+\begin{equation}
+Q_i(q)=\frac{|\mathcal V_i(q)|}{\max(1,|\mathcal P_i|)}.
+\end{equation}
+Candidates violating occupancy, flight-height, spatial-relation, or required-visibility constraints are discarded. The remaining poses are scored by
+\begin{equation}
+\begin{aligned}
+C_i^{\mathrm{view}}(q)={}&
+\beta_d\frac{|d-d_i^{\mathrm{pref}}|}{\ell_0}
++\beta_Q[1-Q_i(q)]\\
+&+\beta_z\frac{|z-\bar z_i|}{\ell_0}
++\beta_r\frac{d_i^{\mathrm{ref}}}{\ell_0}
++\beta_b\frac{d_i^{\mathrm{between}}}{\ell_0}.
+\end{aligned}
+\label{eq:view-cost}
+\end{equation}
+where $d$ is the sampling distance, $d_i^{\mathrm{pref}}$ is the preferred observation distance, $\bar z_i$ is the mean observation-region height, $d_i^{\mathrm{ref}}$ and $d_i^{\mathrm{between}}$ encode task-dependent spatial relations, and $\ell_0$ is a reference length. Inapplicable terms are zero. Hard feasibility is enforced before scoring so that a low soft cost cannot compensate for an unsafe or unobservable pose. All weights are nonnegative, and their implementation values are reported in Section~IV-A. The retained set $\mathcal Q_i=\{q_i^1,\ldots,q_i^{K_i}\}$ preserves diverse feasible viewpoints.
+
+\textbf{Collision-aware transition costs.} For poses $q_a$ and $q_b$, 3D A$^*$ returns a collision-free polyline $P_t(q_a,q_b)=\{p_1,\ldots,p_N\}$ when reachable. Let $\Delta\psi_{ab}=\operatorname{wrap}(\psi_b-\psi_a)$. Its length and motion-time proxy are
+\begin{equation}
+\begin{aligned}
+L_t(q_a,q_b)&=\sum_{u=1}^{N-1}\|p_{u+1}-p_u\|_2,\\
+\widehat T_t(q_a,q_b)&=\max\left\{
+\frac{L_t(q_a,q_b)}{v_{xy}},
+\frac{|z_b-z_a|}{v_z},
+\frac{|\Delta\psi_{ab}|}{\omega_\psi}
+\right\}.
+\end{aligned}
+\label{eq:motion-cost}
+\end{equation}
+Here, $v_{xy}$ is the nominal translational speed used by the route-length proxy, while $v_z$ and $\omega_\psi$ parameterize vertical and yaw motion.
+
+Figure~\ref{fig:jtvp-illustration} illustrates task-conditioned viewpoint generation and joint selection.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.88\columnwidth]{../MAP_VLN素材/联合规划裁剪.png}
+\caption{Task-conditioned viewpoint generation and joint task--viewpoint planning. Candidate observation poses are generated from semantic and spatial constraints, after which JTVP jointly selects task order, observation poses, and the collision-aware route.}
+\label{fig:jtvp-illustration}
+\end{figure}
+
+\textbf{Receding-horizon joint optimization.} From CPTG's executable set $\mathcal E_t$, a lightweight estimate using the current robot pose and terminal observation cost selects a window $\mathcal W_t\subseteq\mathcal E_t$, with $|\mathcal W_t|\leq H$ and $H=3$ in the current implementation.
+
+Candidate poses are grouped by physical location and prioritized using current-pose distance, motion-time estimate, and observation score. The retained set $\widetilde{\mathcal Q}_{i,t}\subseteq\mathcal Q_i$ maintains representative viewpoints across semantic locations and is progressively augmented when alternatives are needed.
+
+Given $m=|\mathcal W_t|$, JTVP jointly selects a task ordering $\pi=(\pi_1,\ldots,\pi_m)$ and one observation pose $q_r=q_{\pi_r}^{k_r}$ for each selected task, with $q_0=q_t^{\mathrm{robot}}$. Let $\iota(q)$ denote the task associated with candidate $q$. We use the dimensionless transition score
+\begin{equation}
+c_t(q_a,q_b)=
+\eta_L\frac{L_t(q_a,q_b)}{\ell_0}
++\eta_T\frac{\widehat T_t(q_a,q_b)}{\tau_0}
++\eta_V C_{\iota(q_b)}^{\mathrm{view}}(q_b),
+\label{eq:transition-score}
+\end{equation}
+where $\tau_0$ is a reference time. JTVP solves
+\begin{equation}
+\begin{aligned}
+\min_{\pi,\mathbf k}\quad
+&\sum_{r=1}^{m}c_t(q_{r-1},q_r)\\
+\mathrm{s.t.}\quad
+&q_r\in\widetilde{\mathcal Q}_{\pi_r,t},\qquad
+L_t(q_{r-1},q_r)<+\infty .
+\end{aligned}
+\label{eq:jtvp}
+\end{equation}
+The joint planning problem is solved using subset dynamic programming. Let $D(S,i,k)$ be the minimum accumulated cost of visiting task subset $S\subseteq\mathcal W_t$ and ending at candidate $k$ of task $i$. The initialization, recurrence, and final cost are
+\begin{equation}
+\begin{aligned}
+D(\{i\},i,k)&=c_t(q_0,q_i^k),\\
+D(S\cup\{j\},j,\ell)&=
+\min_{i\in S,k}\left[D(S,i,k)+c_t(q_i^k,q_j^\ell)\right],\\
+J_t^\star&=\min_{i\in\mathcal W_t,\;k}D(\mathcal W_t,i,k).
+\end{aligned}
+\label{eq:subset-dp}
+\end{equation}
+Backtracking returns the task order and observation poses. Only the first visit is executed before replanning from the updated robot pose, task state, candidate set, and semantic evidence, preserving multi-task lookahead while adapting later visits to new observations.
+
+\subsection{Closed-Loop Execution with Observation-Driven Semantic Map Updates and Replanning}
+\label{sec:recovery}
+
+After JTVP selects the next task and observation pose, the corresponding A$^*$ route is converted into a collision-checked cubic B-spline trajectory. RGB observations acquired during motion contribute semantic evidence, while terminal RGB-D observations provide open-vocabulary detections, depth-based 3D projections, and geometric verification cues. A positive online verification advances the task state. A negative terminal observation is handled according to the task-specific not-found policy: it may trigger another local viewpoint, bounded semantic recovery, a terminal absence result, or an observation-dependent branch.
+
+Detections are lifted into the global frame using depth and camera pose. Spatial consistency associates same-category observations with mapped instances; unmatched detections accumulate across views for scene-graph revision.
+
+For tasks configured for semantic recovery, LogicFly distinguishes three levels of negative evidence. A \textbf{pose-level miss} removes the attempted candidate while keeping the task active. \textbf{Region-level exhaustion} invokes alternative room--functional-region hypotheses grounded in the hierarchy; these hypotheses become geometric observation regions and are ranked using semantic relevance, coverage, and travel cost. A \textbf{task-level negative outcome} is produced when the task-specific stopping condition is reached, after which CPTG updates downstream logic. Within semantic recovery, newly covered portions of an unproductive region reduce its belief, shifting search toward alternative hypotheses.
+
+Novel detections are accumulated online through spatially consistent multi-view fusion and materialized in the updated scene graph after execution. Thus, task states and semantic-region beliefs can affect replanning within the current execution, whereas newly created object instances support later use of the revised map.
+
+After each terminal verification, the system updates the task state, candidate poses, and semantic search prior, recomputes $\mathcal E_t$, and invokes JTVP from the current robot pose. When a task reaches a task-level outcome, CPTG additionally updates $\mathcal R_t$ and evaluates $\mathcal R_{\mathrm{cond}}$ to activate or skip downstream conditional tasks. This closes the loop among task logic, 3D observation, geometric motion, and online semantic evidence.
+
+\end{document}

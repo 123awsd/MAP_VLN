@@ -33,4 +33,20 @@ __pycache__/
 /paper/main_en.pdf
 paper/system_overview
 
-论文/
+# Version the manuscript and template directories; keep raw materials local.
+/论文/*
+!/论文/ICRA2027_英文初稿/
+!/论文/TASE_英文初稿/
+!/论文/TASE_template/
+!/论文/ICRA2027_template/
+
+# LaTeX intermediate files and local preview caches.
+/论文/**/tmp/
+/论文/**/*.aux
+/论文/**/*.bbl
+/论文/**/*.blg
+/论文/**/*.log
+/论文/**/*.fls
+/论文/**/*.fdb_latexmk
+/论文/**/*.synctex.gz
+/论文/**/*.xdv
