@@ -1,0 +1,185 @@
+{
+  "preview_only": true,
+  "reference": "https://www.nature.com/articles/s41467-026-74358-5/figures/3",
+  "english_word_count": 36,
+  "labels": [
+    {
+      "text": "“Find a cushion; check the bedroom armchair first.”",
+      "x": 22,
+      "y": 46,
+      "size": 32
+    },
+    {
+      "text": "Illustrative sequence",
+      "x": 2338,
+      "y": 45,
+      "size": 25
+    },
+    {
+      "text": "Start",
+      "x": 743.3651509892397,
+      "y": 626.7144510223357,
+      "size": 25
+    },
+    {
+      "text": "1",
+      "x": 173.79312738632416,
+      "y": 416.2559094826101,
+      "size": 27
+    },
+    {
+      "text": "2",
+      "x": 272.6450885109337,
+      "y": 353.8433926661203,
+      "size": 27
+    },
+    {
+      "text": "3",
+      "x": 402.4640749739674,
+      "y": 470.6403353646696,
+      "size": 27
+    },
+    {
+      "text": "4",
+      "x": 333.7219715376606,
+      "y": 335.86439859385655,
+      "size": 27
+    },
+    {
+      "text": "Not found",
+      "x": 1025.0,
+      "y": 87,
+      "size": 28
+    },
+    {
+      "text": "1",
+      "x": 875,
+      "y": 149,
+      "size": 27
+    },
+    {
+      "text": "Local limit",
+      "x": 1401.0,
+      "y": 87,
+      "size": 28
+    },
+    {
+      "text": "2",
+      "x": 1251,
+      "y": 149,
+      "size": 27
+    },
+    {
+      "text": "New location",
+      "x": 1777.0,
+      "y": 87,
+      "size": 28
+    },
+    {
+      "text": "3",
+      "x": 1627,
+      "y": 149,
+      "size": 27
+    },
+    {
+      "text": "Verified",
+      "x": 2153.0,
+      "y": 87,
+      "size": 28
+    },
+    {
+      "text": "4",
+      "x": 2003,
+      "y": 149,
+      "size": 27
+    },
+    {
+      "text": "Bedroom armchair",
+      "x": 1213.0,
+      "y": 686,
+      "size": 27
+    },
+    {
+      "text": "Living-room sofa",
+      "x": 1965.0,
+      "y": 686,
+      "size": 27
+    },
+    {
+      "text": "1",
+      "x": 973,
+      "y": 854,
+      "size": 27
+    },
+    {
+      "text": "2",
+      "x": 1142,
+      "y": 854,
+      "size": 27
+    },
+    {
+      "text": "Seen",
+      "x": 1228,
+      "y": 739,
+      "size": 25
+    },
+    {
+      "text": "New",
+      "x": 1369,
+      "y": 739,
+      "size": 25
+    },
+    {
+      "text": "New coverage lowers",
+      "x": 1202,
+      "y": 798,
+      "size": 28
+    },
+    {
+      "text": "search confidence.",
+      "x": 1202,
+      "y": 832,
+      "size": 28
+    },
+    {
+      "text": "Consistent observations",
+      "x": 1965,
+      "y": 733,
+      "size": 27
+    },
+    {
+      "text": "After execution",
+      "x": 2027,
+      "y": 793,
+      "size": 25
+    },
+    {
+      "text": "Sofa",
+      "x": 1815.5,
+      "y": 857,
+      "size": 27
+    },
+    {
+      "text": "+ Cushion",
+      "x": 2066,
+      "y": 857,
+      "size": 28
+    }
+  ],
+  "scene_and_rgb": "Existing HM3D scene and native Habitat camera images; RGB pixels are not retouched. Station 3 is rendered at an authored pose, recorded in assets/recovery_observation.json.",
+  "route": "Illustrative, navmesh-guided; not output of the paper planner.",
+  "coverage": "Ray-tested illustrative horizontal search slice, at authored poses and fixed pitch; not planner output or measured belief.",
+  "coverage_limit": "Existing display mesh clipped at 1.3 m; not a full-sensor evaluation",
+  "assumptions": [
+    "Local limit reached after the second illustrated view.",
+    "The cushion is initially unmapped in this mechanism example.",
+    "Positive verification resolves the same task online; novel-instance insertion occurs after execution."
+  ],
+  "removed": [
+    "Four section titles",
+    "Repeated RGB target crops",
+    "Redundant route legend",
+    "Repeated task-state descriptions",
+    "Thick white path outline"
+  ]
+}

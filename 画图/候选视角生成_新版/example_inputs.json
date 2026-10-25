@@ -1,0 +1,3239 @@
+{
+  "scene": "New illustrative analytic furniture scene; not experimental measurements",
+  "source": "/home/uav/map_VLN/PRE_MAP_VLN/stage2/candidate_poses.py",
+  "source_sha256": "1e700efe1770f5e89766c4dcd7021410a3347cb3ae09f4c0ead4fd3cb4b03760",
+  "task": {
+    "id": "search_below",
+    "target": {
+      "label": "table",
+      "object_id": "table_anchor"
+    },
+    "verification_label": "backpack",
+    "spatial_constraints": {
+      "relation": "below",
+      "region_type": "below_region",
+      "visibility_required": true,
+      "observation_detail": "normal",
+      "horizontal_fov_deg": 90.0,
+      "vertical_fov_deg": 70.0
+    }
+  },
+  "room": {
+    "id": "new_illustrative_scene",
+    "floor_id": 0,
+    "semantic_type": "dining room",
+    "camera_height_band_m": [
+      0.65,
+      1.6
+    ],
+    "objects": [
+      {
+        "id": "table_anchor",
+        "label": "table",
+        "center_xyz_m": [
+          0,
+          0,
+          0.45
+        ],
+        "size_xyz_m": [
+          1.36,
+          0.92,
+          0.9
+        ],
+        "orientation_wxyz": [
+          1,
+          0,
+          0,
+          0
+        ],
+        "probability": 1.0
+      }
+    ]
+  },
+  "rows": [
+    {
+      "xyz": [
+        1.1709750300709518,
+        0.0,
+        0.65
+      ],
+      "theta": 0.0,
+      "yaw": -3.141592653589793,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        1.1310750234851508,
+        0.3030706391218593,
+        0.65
+      ],
+      "theta": 0.2617993877991494,
+      "yaw": -2.879793265790644,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        1.0140941232386913,
+        0.5854875150354758,
+        0.65
+      ],
+      "theta": 0.5235987755982988,
+      "yaw": -2.6179938779914944,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        0.8280043843632915,
+        0.8280043843632914,
+        0.65
+      ],
+      "theta": 0.7853981633974483,
+      "yaw": -2.356194490192345,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        0.585487515035476,
+        1.014094123238691,
+        0.65
+      ],
+      "theta": 1.0471975511965976,
+      "yaw": -2.0943951023931957,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        0.3030706391218593,
+        1.1310750234851508,
+        0.65
+      ],
+      "theta": 1.3089969389957472,
+      "yaw": -1.8325957145940461,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        7.170154112289334e-17,
+        1.1709750300709518,
+        0.65
+      ],
+      "theta": 1.5707963267948966,
+      "yaw": -1.5707963267948968,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -0.3030706391218591,
+        1.1310750234851508,
+        0.65
+      ],
+      "theta": 1.832595714594046,
+      "yaw": -1.3089969389957474,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -0.5854875150354757,
+        1.0140941232386913,
+        0.65
+      ],
+      "theta": 2.0943951023931953,
+      "yaw": -1.0471975511965979,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -0.8280043843632914,
+        0.8280043843632915,
+        0.65
+      ],
+      "theta": 2.356194490192345,
+      "yaw": -0.7853981633974484,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -1.0140941232386913,
+        0.5854875150354758,
+        0.65
+      ],
+      "theta": 2.6179938779914944,
+      "yaw": -0.5235987755982988,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -1.1310750234851505,
+        0.3030706391218596,
+        0.65
+      ],
+      "theta": 2.8797932657906435,
+      "yaw": -0.26179938779914974,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -1.1709750300709518,
+        1.4340308224578667e-16,
+        0.65
+      ],
+      "theta": 3.141592653589793,
+      "yaw": -1.2246467991473532e-16,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -1.1310750234851508,
+        -0.30307063912185933,
+        0.65
+      ],
+      "theta": 3.4033920413889427,
+      "yaw": 0.26179938779914946,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -1.0140941232386915,
+        -0.5854875150354756,
+        0.65
+      ],
+      "theta": 3.665191429188092,
+      "yaw": 0.5235987755982985,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -0.8280043843632919,
+        -0.8280043843632909,
+        0.65
+      ],
+      "theta": 3.926990816987241,
+      "yaw": 0.7853981633974477,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -0.5854875150354765,
+        -1.0140941232386909,
+        0.65
+      ],
+      "theta": 4.1887902047863905,
+      "yaw": 1.0471975511965972,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -0.3030706391218591,
+        -1.1310750234851508,
+        0.65
+      ],
+      "theta": 4.4505895925855405,
+      "yaw": 1.3089969389957474,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -2.1510462336868e-16,
+        -1.1709750300709518,
+        0.65
+      ],
+      "theta": 4.71238898038469,
+      "yaw": 1.5707963267948963,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        0.3030706391218587,
+        -1.131075023485151,
+        0.65
+      ],
+      "theta": 4.974188368183839,
+      "yaw": 1.8325957145940455,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        0.585487515035476,
+        -1.014094123238691,
+        0.65
+      ],
+      "theta": 5.235987755982989,
+      "yaw": 2.0943951023931957,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        0.8280043843632913,
+        -0.8280043843632916,
+        0.65
+      ],
+      "theta": 5.497787143782138,
+      "yaw": 2.356194490192345,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        1.0140941232386909,
+        -0.5854875150354765,
+        0.65
+      ],
+      "theta": 5.759586531581287,
+      "yaw": 2.617993877991494,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        1.1310750234851505,
+        -0.3030706391218602,
+        0.65
+      ],
+      "theta": 6.021385919380436,
+      "yaw": 2.879793265790643,
+      "distance": 0.35,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        1.4209750300709518,
+        0.0,
+        0.65
+      ],
+      "theta": 0.0,
+      "yaw": -3.141592653589793,
+      "distance": 0.6,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        1.372556480057418,
+        0.36777540039748946,
+        0.65
+      ],
+      "theta": 0.2617993877991494,
+      "yaw": -2.879793265790644,
+      "distance": 0.6,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        1.230600474184801,
+        0.7104875150354758,
+        0.65
+      ],
+      "theta": 0.5235987755982988,
+      "yaw": -2.6179938779914944,
+      "distance": 0.6,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        1.0047810796599284,
+        1.0047810796599281,
+        0.65
+      ],
+      "theta": 0.7853981633974483,
+      "yaw": -2.356194490192345,
+      "distance": 0.6,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        0.710487515035476,
+        1.230600474184801,
+        0.65
+      ],
+      "theta": 1.0471975511965976,
+      "yaw": -2.0943951023931957,
+      "distance": 0.6,
+      "status": "valid",
+      "visible": [
+        3,
+        4
+      ]
+    },
+    {
+      "xyz": [
+        0.36777540039748946,
+        1.372556480057418,
+        0.65
+      ],
+      "theta": 1.3089969389957472,
+      "yaw": -1.832595714594046,
+      "distance": 0.6,
+      "status": "valid",
+      "visible": [
+        7
+      ]
+    },
+    {
+      "xyz": [
+        8.700962611223526e-17,
+        1.4209750300709518,
+        0.65
+      ],
+      "theta": 1.5707963267948966,
+      "yaw": -1.5707963267948968,
+      "distance": 0.6,
+      "status": "occlusion",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -0.3677754003974893,
+        1.372556480057418,
+        0.65
+      ],
+      "theta": 1.832595714594046,
+      "yaw": -1.3089969389957474,
+      "distance": 0.6,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "xyz": [
+        -0.7104875150354756,
+        1.230600474184801,
+        0.65
+      ],
+      "theta": 2.0943951023931953,
+      "yaw": -1.0471975511965979,
+      "distance": 0.6,
+      "status": "valid",
+      "visible": [
+        3,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        -1.0047810796599281,
+        1.0047810796599284,
+        0.65
+      ],
+      "theta": 2.356194490192345,
+      "yaw": -0.7853981633974484,
+      "distance": 0.6,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -1.230600474184801,
+        0.7104875150354758,
+        0.65
+      ],
+      "theta": 2.6179938779914944,
+      "yaw": -0.5235987755982988,
+      "distance": 0.6,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -1.3725564800574177,
+        0.36777540039748985,
+        0.65
+      ],
+      "theta": 2.8797932657906435,
+      "yaw": -0.2617993877991497,
+      "distance": 0.6,
+      "status": "collision",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -1.4209750300709518,
+        1.740192522244705e-16,
+        0.65
+      ],
+      "theta": 3.141592653589793,
+      "yaw": -1.2246467991473532e-16,
+      "distance": 0.6,
+      "status": "collision",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -1.372556480057418,
+        -0.3677754003974895,
+        0.65
+      ],
+      "theta": 3.4033920413889427,
+      "yaw": 0.26179938779914946,
+      "distance": 0.6,
+      "status": "valid",
+      "visible": [
+        4,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        -1.2306004741848011,
+        -0.7104875150354755,
+        0.65
+      ],
+      "theta": 3.665191429188092,
+      "yaw": 0.5235987755982985,
+      "distance": 0.6,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -1.0047810796599288,
+        -1.0047810796599277,
+        0.65
+      ],
+      "theta": 3.926990816987241,
+      "yaw": 0.7853981633974477,
+      "distance": 0.6,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        -0.7104875150354766,
+        -1.2306004741848005,
+        0.65
+      ],
+      "theta": 4.1887902047863905,
+      "yaw": 1.0471975511965972,
+      "distance": 0.6,
+      "status": "valid",
+      "visible": [
+        3,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        -0.3677754003974893,
+        -1.372556480057418,
+        0.65
+      ],
+      "theta": 4.4505895925855405,
+      "yaw": 1.3089969389957474,
+      "distance": 0.6,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        -2.6102887833670574e-16,
+        -1.4209750300709518,
+        0.65
+      ],
+      "theta": 4.71238898038469,
+      "yaw": 1.5707963267948963,
+      "distance": 0.6,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        0.3677754003974888,
+        -1.372556480057418,
+        0.65
+      ],
+      "theta": 4.974188368183839,
+      "yaw": 1.8325957145940455,
+      "distance": 0.6,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        0.710487515035476,
+        -1.230600474184801,
+        0.65
+      ],
+      "theta": 5.235987755982989,
+      "yaw": 2.0943951023931957,
+      "distance": 0.6,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "xyz": [
+        1.0047810796599281,
+        -1.0047810796599286,
+        0.65
+      ],
+      "theta": 5.497787143782138,
+      "yaw": 2.356194490192345,
+      "distance": 0.6,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        1.2306004741848005,
+        -0.7104875150354766,
+        0.65
+      ],
+      "theta": 5.759586531581287,
+      "yaw": 2.617993877991494,
+      "distance": 0.6,
+      "status": "height",
+      "visible": []
+    },
+    {
+      "xyz": [
+        1.3725564800574175,
+        -0.3677754003974906,
+        0.65
+      ],
+      "theta": 6.021385919380436,
+      "yaw": 2.879793265790643,
+      "distance": 0.6,
+      "status": "valid",
+      "visible": [
+        1,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        2.2209750300709517,
+        0.0,
+        0.65
+      ],
+      "theta": 0.0,
+      "yaw": -3.141592653589793,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        2.1452971410886725,
+        0.5748306364795059,
+        0.65
+      ],
+      "theta": 0.2617993877991494,
+      "yaw": -2.879793265790644,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        1.9234207972123518,
+        1.1104875150354756,
+        0.65
+      ],
+      "theta": 0.5235987755982988,
+      "yaw": -2.6179938779914944,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        1.5704665046091664,
+        1.5704665046091661,
+        0.65
+      ],
+      "theta": 0.7853981633974483,
+      "yaw": -2.356194490192345,
+      "distance": 1.4,
+      "status": "collision",
+      "visible": []
+    },
+    {
+      "xyz": [
+        1.110487515035476,
+        1.9234207972123516,
+        0.65
+      ],
+      "theta": 1.0471975511965976,
+      "yaw": -2.0943951023931957,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4
+      ]
+    },
+    {
+      "xyz": [
+        0.5748306364795059,
+        2.1452971410886725,
+        0.65
+      ],
+      "theta": 1.3089969389957472,
+      "yaw": -1.832595714594046,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        5
+      ]
+    },
+    {
+      "xyz": [
+        1.3599549807812937e-16,
+        2.2209750300709517,
+        0.65
+      ],
+      "theta": 1.5707963267948966,
+      "yaw": -1.5707963267948968,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        4,
+        5
+      ]
+    },
+    {
+      "xyz": [
+        -0.5748306364795057,
+        2.1452971410886725,
+        0.65
+      ],
+      "theta": 1.832595714594046,
+      "yaw": -1.3089969389957474,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        3,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        -1.1104875150354754,
+        1.9234207972123518,
+        0.65
+      ],
+      "theta": 2.0943951023931953,
+      "yaw": -1.0471975511965979,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "xyz": [
+        -1.5704665046091661,
+        1.5704665046091664,
+        0.65
+      ],
+      "theta": 2.356194490192345,
+      "yaw": -0.7853981633974484,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        -1.9234207972123518,
+        1.1104875150354756,
+        0.65
+      ],
+      "theta": 2.6179938779914944,
+      "yaw": -0.5235987755982987,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        -2.145297141088672,
+        0.5748306364795066,
+        0.65
+      ],
+      "theta": 2.8797932657906435,
+      "yaw": -0.2617993877991497,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        -2.2209750300709517,
+        2.7199099615625875e-16,
+        0.65
+      ],
+      "theta": 3.141592653589793,
+      "yaw": -1.2246467991473532e-16,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1
+      ]
+    },
+    {
+      "xyz": [
+        -2.1452971410886725,
+        -0.5748306364795062,
+        0.65
+      ],
+      "theta": 3.4033920413889427,
+      "yaw": 0.26179938779914946,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        3,
+        4,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        -1.923420797212352,
+        -1.1104875150354752,
+        0.65
+      ],
+      "theta": 3.665191429188092,
+      "yaw": 0.5235987755982985,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        -1.570466504609167,
+        -1.5704665046091653,
+        0.65
+      ],
+      "theta": 3.926990816987241,
+      "yaw": 0.7853981633974477,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        -1.1104875150354767,
+        -1.9234207972123512,
+        0.65
+      ],
+      "theta": 4.1887902047863905,
+      "yaw": 1.0471975511965972,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        -0.5748306364795057,
+        -2.1452971410886725,
+        0.65
+      ],
+      "theta": 4.4505895925855405,
+      "yaw": 1.3089969389957474,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        3,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        -4.079864942343881e-16,
+        -2.2209750300709517,
+        0.65
+      ],
+      "theta": 4.71238898038469,
+      "yaw": 1.5707963267948963,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        0.574830636479505,
+        -2.1452971410886725,
+        0.65
+      ],
+      "theta": 4.974188368183839,
+      "yaw": 1.8325957145940457,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "xyz": [
+        1.110487515035476,
+        -1.9234207972123516,
+        0.65
+      ],
+      "theta": 5.235987755982989,
+      "yaw": 2.0943951023931957,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        1.570466504609166,
+        -1.5704665046091666,
+        0.65
+      ],
+      "theta": 5.497787143782138,
+      "yaw": 2.356194490192345,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        1.9234207972123512,
+        -1.1104875150354767,
+        0.65
+      ],
+      "theta": 5.759586531581287,
+      "yaw": 2.617993877991494,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        5,
+        7
+      ]
+    },
+    {
+      "xyz": [
+        2.1452971410886716,
+        -0.5748306364795078,
+        0.65
+      ],
+      "theta": 6.021385919380436,
+      "yaw": 2.879793265790643,
+      "distance": 1.4,
+      "status": "valid",
+      "visible": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ]
+    }
+  ],
+  "samples": [
+    [
+      -0.544,
+      -0.36800000000000005,
+      0.08
+    ],
+    [
+      -0.544,
+      0.0,
+      0.08
+    ],
+    [
+      -0.544,
+      0.36800000000000005,
+      0.08
+    ],
+    [
+      0.0,
+      -0.36800000000000005,
+      0.08
+    ],
+    [
+      0.0,
+      0.0,
+      0.08
+    ],
+    [
+      0.0,
+      0.36800000000000005,
+      0.08
+    ],
+    [
+      0.544,
+      -0.36800000000000005,
+      0.08
+    ],
+    [
+      0.544,
+      0.0,
+      0.08
+    ],
+    [
+      0.544,
+      0.36800000000000005,
+      0.08
+    ]
+  ],
+  "selected": [
+    {
+      "id": "search_below__table_anchor__r1.00__000",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": 1.4209750300709518,
+        "y": 0.0,
+        "z": 0.65,
+        "yaw": 3.141592653589793
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 0.6,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 0.0,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ],
+      "view_quality": 0.5555555555555556,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 0.5014444444444445
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__009",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": -2.6102887833670574e-16,
+        "y": -1.4209750300709518,
+        "z": 0.65,
+        "yaw": 1.5707963267948963
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 0.6,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 4.71238898038469,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ],
+      "view_quality": 0.5555555555555556,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 0.5014444444444445
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__021",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": -1.5704665046091661,
+        "y": 1.5704665046091664,
+        "z": 0.65,
+        "yaw": -0.7853981633974484
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 2.356194490192345,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        4,
+        5,
+        7
+      ],
+      "view_quality": 0.4444444444444444,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.4125555555555556
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__027",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": -1.570466504609167,
+        "y": -1.5704665046091653,
+        "z": 0.65,
+        "yaw": 0.7853981633974477
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 3.926990816987241,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4,
+        7
+      ],
+      "view_quality": 0.4444444444444444,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.4125555555555556
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__033",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": 1.570466504609166,
+        "y": -1.5704665046091666,
+        "z": 0.65,
+        "yaw": 2.356194490192345
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 5.497787143782138,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4,
+        7
+      ],
+      "view_quality": 0.4444444444444444,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.4125555555555556
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__016",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": 1.110487515035476,
+        "y": 1.9234207972123516,
+        "z": 0.65,
+        "yaw": -2.0943951023931957
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 1.0471975511965976,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4
+      ],
+      "view_quality": 0.3333333333333333,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.5236666666666667
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__018",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": 1.3599549807812937e-16,
+        "y": 2.2209750300709517,
+        "z": 0.65,
+        "yaw": -1.5707963267948968
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 1.5707963267948966,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        4,
+        5
+      ],
+      "view_quality": 0.3333333333333333,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.5236666666666667
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__024",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": -2.2209750300709517,
+        "y": 2.7199099615625875e-16,
+        "z": 0.65,
+        "yaw": -1.2246467991473532e-16
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 3.141592653589793,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1
+      ],
+      "view_quality": 0.1111111111111111,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.7458888888888886
+    }
+  ],
+  "best_per_azimuth": [
+    {
+      "id": "search_below__table_anchor__r1.00__000",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": 1.4209750300709518,
+        "y": 0.0,
+        "z": 0.65,
+        "yaw": 3.141592653589793
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 0.6,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 0.0,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ],
+      "view_quality": 0.5555555555555556,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 0.5014444444444445
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__008",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": -0.3677754003974893,
+        "y": -1.372556480057418,
+        "z": 0.65,
+        "yaw": 1.3089969389957474
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 0.6,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 4.4505895925855405,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ],
+      "view_quality": 0.5555555555555556,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 0.5014444444444445
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__009",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": -2.6102887833670574e-16,
+        "y": -1.4209750300709518,
+        "z": 0.65,
+        "yaw": 1.5707963267948963
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 0.6,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 4.71238898038469,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ],
+      "view_quality": 0.5555555555555556,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 0.5014444444444445
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__010",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": 0.3677754003974888,
+        "y": -1.372556480057418,
+        "z": 0.65,
+        "yaw": 1.8325957145940455
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 0.6,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 4.974188368183839,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ],
+      "view_quality": 0.5555555555555556,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 0.5014444444444445
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__004",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": -0.3677754003974893,
+        "y": 1.372556480057418,
+        "z": 0.65,
+        "yaw": -1.3089969389957474
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 0.6,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 1.832595714594046,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4,
+        5
+      ],
+      "view_quality": 0.4444444444444444,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 0.6125555555555556
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__005",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": -0.7104875150354756,
+        "y": 1.230600474184801,
+        "z": 0.65,
+        "yaw": -1.0471975511965979
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 0.6,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 2.0943951023931953,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        3,
+        4,
+        5,
+        7
+      ],
+      "view_quality": 0.4444444444444444,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 0.6125555555555556
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__014",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": 2.1452971410886725,
+        "y": 0.5748306364795059,
+        "z": 0.65,
+        "yaw": -2.879793265790644
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 0.2617993877991494,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ],
+      "view_quality": 0.5555555555555556,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.3014444444444444
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__028",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": -1.1104875150354767,
+        "y": -1.9234207972123512,
+        "z": 0.65,
+        "yaw": 1.0471975511965972
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 4.1887902047863905,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ],
+      "view_quality": 0.5555555555555556,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.3014444444444444
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__032",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": 1.110487515035476,
+        "y": -1.9234207972123516,
+        "z": 0.65,
+        "yaw": 2.0943951023931957
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 5.235987755982989,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ],
+      "view_quality": 0.5555555555555556,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.3014444444444444
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__035",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": 2.1452971410886716,
+        "y": -0.5748306364795078,
+        "z": 0.65,
+        "yaw": 2.879793265790643
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 6.021385919380436,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ],
+      "view_quality": 0.5555555555555556,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.3014444444444444
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__015",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": 1.9234207972123518,
+        "y": 1.1104875150354756,
+        "z": 0.65,
+        "yaw": -2.6179938779914944
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 0.5235987755982988,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        5,
+        7
+      ],
+      "view_quality": 0.4444444444444444,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.4125555555555556
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__021",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": -1.5704665046091661,
+        "y": 1.5704665046091664,
+        "z": 0.65,
+        "yaw": -0.7853981633974484
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 2.356194490192345,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        4,
+        5,
+        7
+      ],
+      "view_quality": 0.4444444444444444,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.4125555555555556
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__022",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": -1.9234207972123518,
+        "y": 1.1104875150354756,
+        "z": 0.65,
+        "yaw": -0.5235987755982987
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 2.6179938779914944,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        5,
+        7
+      ],
+      "view_quality": 0.4444444444444444,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.4125555555555556
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__023",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": -2.145297141088672,
+        "y": 0.5748306364795066,
+        "z": 0.65,
+        "yaw": -0.2617993877991497
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 2.8797932657906435,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        4,
+        5,
+        7
+      ],
+      "view_quality": 0.4444444444444444,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.4125555555555556
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__026",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": -1.923420797212352,
+        "y": -1.1104875150354752,
+        "z": 0.65,
+        "yaw": 0.5235987755982985
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 3.665191429188092,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        5,
+        7
+      ],
+      "view_quality": 0.4444444444444444,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.4125555555555556
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__027",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": -1.570466504609167,
+        "y": -1.5704665046091653,
+        "z": 0.65,
+        "yaw": 0.7853981633974477
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 3.926990816987241,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4,
+        7
+      ],
+      "view_quality": 0.4444444444444444,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.4125555555555556
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__033",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": 1.570466504609166,
+        "y": -1.5704665046091666,
+        "z": 0.65,
+        "yaw": 2.356194490192345
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 5.497787143782138,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4,
+        7
+      ],
+      "view_quality": 0.4444444444444444,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.4125555555555556
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__034",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": 1.9234207972123512,
+        "y": -1.1104875150354767,
+        "z": 0.65,
+        "yaw": 2.617993877991494
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 5.759586531581287,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        5,
+        7
+      ],
+      "view_quality": 0.4444444444444444,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.4125555555555556
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__016",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": 1.110487515035476,
+        "y": 1.9234207972123516,
+        "z": 0.65,
+        "yaw": -2.0943951023931957
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 1.0471975511965976,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        3,
+        4
+      ],
+      "view_quality": 0.3333333333333333,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.5236666666666667
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__018",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": 1.3599549807812937e-16,
+        "y": 2.2209750300709517,
+        "z": 0.65,
+        "yaw": -1.5707963267948968
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 1.5707963267948966,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        4,
+        5
+      ],
+      "view_quality": 0.3333333333333333,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.5236666666666667
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__025",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": -2.1452971410886725,
+        "y": -0.5748306364795062,
+        "z": 0.65,
+        "yaw": 0.26179938779914946
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 3.4033920413889427,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        3,
+        4,
+        7
+      ],
+      "view_quality": 0.3333333333333333,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.5236666666666667
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__017",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": 0.5748306364795059,
+        "y": 2.1452971410886725,
+        "z": 0.65,
+        "yaw": -1.832595714594046
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 1.3089969389957472,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1,
+        5
+      ],
+      "view_quality": 0.2222222222222222,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.6347777777777777
+    },
+    {
+      "id": "search_below__table_anchor__r1.00__024",
+      "task_id": "search_below",
+      "object_id": "table_anchor",
+      "object_label": "table",
+      "room_id": "new_illustrative_scene",
+      "room_type": "dining room",
+      "floor_id": 0,
+      "pose": {
+        "x": -2.2209750300709517,
+        "y": 2.7199099615625875e-16,
+        "z": 0.65,
+        "yaw": -1.2246467991473532e-16
+      },
+      "target_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_center_xyz_m": [
+        0.0,
+        0.0,
+        0.45
+      ],
+      "search_region_size_xyz_m": [
+        1.36,
+        0.92,
+        0.9
+      ],
+      "anchor_object_id": null,
+      "location_hypothesis_id": "table_anchor",
+      "distance_to_box_surface_m": 1.4,
+      "preferred_observation_distance_m": 0.6,
+      "observation_distance_source": "geometry_fov_auto",
+      "line_of_sight": true,
+      "candidate_angle_rad": 3.141592653589793,
+      "region_type": "below_region",
+      "region_sample_count": 9,
+      "visible_region_sample_ids": [
+        1
+      ],
+      "view_quality": 0.1111111111111111,
+      "vertical_fov_deg": 70.0,
+      "horizontal_fov_deg": 90.0,
+      "height_fov_validated": true,
+      "height_generation": "region_fov_interval",
+      "height_collision_validated": true,
+      "collision_validation": "falcon_raw_free_3d",
+      "reference_distance_m": null,
+      "reference_object_ids": [],
+      "reference_visible": [],
+      "target_reference_relation": null,
+      "between_distance_m": null,
+      "terminal_cost": 1.7458888888888886
+    }
+  ],
+  "radii": [
+    1.1709750300709518,
+    1.4209750300709518,
+    2.2209750300709517
+  ],
+  "distances": [
+    0.35,
+    0.6,
+    1.4
+  ],
+  "counts": {
+    "height": 32,
+    "valid": 36,
+    "occlusion": 1,
+    "collision": 3
+  },
+  "clearance": 0.12,
+  "geometry": [
+    {
+      "name": "table_top",
+      "lo": [
+        -0.68,
+        -0.46,
+        0.8
+      ],
+      "hi": [
+        0.68,
+        0.46,
+        0.9
+      ]
+    },
+    {
+      "name": "table_leg",
+      "lo": [
+        -0.615,
+        -0.39499999999999996,
+        0.0
+      ],
+      "hi": [
+        -0.5249999999999999,
+        -0.305,
+        0.8
+      ]
+    },
+    {
+      "name": "table_leg",
+      "lo": [
+        -0.615,
+        0.305,
+        0.0
+      ],
+      "hi": [
+        -0.5249999999999999,
+        0.39499999999999996,
+        0.8
+      ]
+    },
+    {
+      "name": "table_leg",
+      "lo": [
+        0.5249999999999999,
+        -0.39499999999999996,
+        0.0
+      ],
+      "hi": [
+        0.615,
+        -0.305,
+        0.8
+      ]
+    },
+    {
+      "name": "table_leg",
+      "lo": [
+        0.5249999999999999,
+        0.305,
+        0.0
+      ],
+      "hi": [
+        0.615,
+        0.39499999999999996,
+        0.8
+      ]
+    },
+    {
+      "name": "chair_back_seat",
+      "lo": [
+        -0.13,
+        0.65,
+        0.4
+      ],
+      "hi": [
+        0.33,
+        1.11,
+        0.48
+      ]
+    },
+    {
+      "name": "chair_back_back",
+      "lo": [
+        -0.15,
+        1.04,
+        0.44
+      ],
+      "hi": [
+        0.35,
+        1.11,
+        1.01
+      ]
+    },
+    {
+      "name": "chair_back_leg",
+      "lo": [
+        -0.095,
+        0.6849999999999999,
+        0.02
+      ],
+      "hi": [
+        -0.045000000000000005,
+        0.735,
+        0.4
+      ]
+    },
+    {
+      "name": "chair_back_leg",
+      "lo": [
+        -0.095,
+        1.0250000000000001,
+        0.02
+      ],
+      "hi": [
+        -0.045000000000000005,
+        1.075,
+        0.4
+      ]
+    },
+    {
+      "name": "chair_back_leg",
+      "lo": [
+        0.24500000000000002,
+        0.6849999999999999,
+        0.02
+      ],
+      "hi": [
+        0.29500000000000004,
+        0.735,
+        0.4
+      ]
+    },
+    {
+      "name": "chair_back_leg",
+      "lo": [
+        0.24500000000000002,
+        1.0250000000000001,
+        0.02
+      ],
+      "hi": [
+        0.29500000000000004,
+        1.075,
+        0.4
+      ]
+    },
+    {
+      "name": "chair_left_seat",
+      "lo": [
+        -1.3599999999999999,
+        -0.21000000000000002,
+        0.4
+      ],
+      "hi": [
+        -0.8999999999999999,
+        0.25,
+        0.48
+      ]
+    },
+    {
+      "name": "chair_left_back",
+      "lo": [
+        -1.3599999999999999,
+        -0.23,
+        0.44
+      ],
+      "hi": [
+        -1.2899999999999998,
+        0.27,
+        1.01
+      ]
+    },
+    {
+      "name": "chair_left_leg",
+      "lo": [
+        -1.3249999999999997,
+        -0.17500000000000002,
+        0.02
+      ],
+      "hi": [
+        -1.275,
+        -0.12500000000000003,
+        0.4
+      ]
+    },
+    {
+      "name": "chair_left_leg",
+      "lo": [
+        -1.3249999999999997,
+        0.165,
+        0.02
+      ],
+      "hi": [
+        -1.275,
+        0.215,
+        0.4
+      ]
+    },
+    {
+      "name": "chair_left_leg",
+      "lo": [
+        -0.9849999999999999,
+        -0.17500000000000002,
+        0.02
+      ],
+      "hi": [
+        -0.9349999999999998,
+        -0.12500000000000003,
+        0.4
+      ]
+    },
+    {
+      "name": "chair_left_leg",
+      "lo": [
+        -0.9849999999999999,
+        0.165,
+        0.02
+      ],
+      "hi": [
+        -0.9349999999999998,
+        0.215,
+        0.4
+      ]
+    },
+    {
+      "name": "sofa_base",
+      "lo": [
+        0.98,
+        0.88,
+        0.13
+      ],
+      "hi": [
+        2.27,
+        1.63,
+        0.46
+      ]
+    },
+    {
+      "name": "sofa_back",
+      "lo": [
+        0.98,
+        1.46,
+        0.4
+      ],
+      "hi": [
+        2.27,
+        1.65,
+        1.02
+      ]
+    },
+    {
+      "name": "sofa_arm_l",
+      "lo": [
+        0.98,
+        0.88,
+        0.38
+      ],
+      "hi": [
+        1.12,
+        1.46,
+        0.7
+      ]
+    },
+    {
+      "name": "sofa_arm_r",
+      "lo": [
+        2.13,
+        0.88,
+        0.38
+      ],
+      "hi": [
+        2.27,
+        1.46,
+        0.7
+      ]
+    }
+  ],
+  "notes": [
+    "Furniture collision geometry uses conservative AABBs.",
+    "The table is shown as a visual cutaway only; collision and LOS treat it as solid.",
+    "No known backpack pose is used.",
+    "Camera pitch is fixed; candidate state is x,y,z,yaw.",
+    "Local feasibility does not imply path reachability."
+  ]
+}

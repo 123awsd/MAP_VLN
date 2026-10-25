@@ -1,0 +1,78 @@
+{
+  "source_scene": "/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/train/00166-RaYrxWt5pR1/RaYrxWt5pR1.basis.glb",
+  "scene_render": "Blender Cycles; real textured mesh; ceiling and upper wall cutaway at 1.30 m; saturation 0.68",
+  "route": "Display route guided by the official navmesh, artistically simplified and smoothed; not output of the paper algorithm",
+  "new_instance": "The cushion is assumed absent from the initial object map for the mechanism illustration; no claim that the source episode inserted this instance",
+  "source_logs_modified": false,
+  "manuscript_modified": false,
+  "geometry_check": {
+    "purpose": "Display route geometry check only; not a navigation experiment",
+    "routes": {
+      "approach": {
+        "max_horizontal_offset_from_walkable_surface_m": 0.0002,
+        "samples": 640
+      },
+      "local": {
+        "max_horizontal_offset_from_walkable_surface_m": 0.0,
+        "samples": 320
+      },
+      "recovery": {
+        "max_horizontal_offset_from_walkable_surface_m": 0.0002,
+        "samples": 640
+      }
+    }
+  },
+  "kind": "English process-first mechanism illustration",
+  "date": "2026-10-24",
+  "scene_asset": "../multiroom_redraw/assets/cutaway.png",
+  "physical_size_mm": [
+    184.00000915527343,
+    98.1333296034071
+  ],
+  "source_observations": [
+    {
+      "path": "/home/uav/map_VLN/画图/Habitat长指令执行/keyframes/00166_cushion_recovery_20261024/obs_000000.png",
+      "crop_xywh": [
+        350,
+        480,
+        1100,
+        704
+      ]
+    },
+    {
+      "path": "/home/uav/map_VLN/画图/Habitat长指令执行/keyframes/00166_cushion_recovery_20261024/obs_000001.png",
+      "crop_xywh": [
+        350,
+        480,
+        1100,
+        704
+      ]
+    },
+    {
+      "path": "/home/uav/map_VLN/画图/Habitat长指令执行/keyframes/00166_cushion_recovery_20261024/obs_000003.png",
+      "crop_xywh": [
+        730,
+        530,
+        760,
+        486.4
+      ]
+    }
+  ],
+  "layout_check": {
+    "page_size_mm": [
+      184.00000915527343,
+      98.1333296034071
+    ],
+    "minimum_pdf_font_pt": 7.388671875,
+    "text_bounds_overlaps": [],
+    "pdf_reopened": true,
+    "all_labels_english": true,
+    "native_pdf_text_spans": 40
+  },
+  "outputs_sha256": {
+    "fig8_process_en.pdf": "f5da354220835ec5267e68490217454284d85d606f990eef24155f070ecdd37e",
+    "compose_figure.py": "f3f3f702b1903ca28403ce89f4d52623975d89ad45a03b277c55ea7e594d064f",
+    "fig8_process_en.svg": "dcb86a921f08e5a584a360e5bffaca370e29afe9f81e124620a2115e336480f5",
+    "caption.tex": "18fe2a01a58f0b895437794e811c82bf9fd5ff82954bc5e97f8f338843a4477b"
+  }
+}

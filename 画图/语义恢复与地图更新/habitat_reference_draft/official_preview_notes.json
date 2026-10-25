@@ -1,0 +1,35 @@
+{
+  "preview_only": true,
+  "scene": "00166-RaYrxWt5pR1",
+  "base_map": "Official HM3D topdown_floors.png, unchanged raster, displayed at 0.68 opacity.",
+  "source": "https://habitatwebsite.s3.amazonaws.com/website-visualization/00166-RaYrxWt5pR1/topdown_floors.png",
+  "source_page": "https://aihabitat.org/datasets/hm3d/00166-RaYrxWt5pR1/",
+  "registration": {
+    "method": "SIFT + similarity RANSAC; nadir render used only for calibration; official pixels retained",
+    "matches": 1325,
+    "inliers": 1240,
+    "median_px": 0.3412756025791168,
+    "p95_px": 1.1404156923294064
+  },
+  "route": "Authored explanatory route, not algorithm output.",
+  "qwen": "Illustrative candidate statement; no Qwen inference was run for this preview.",
+  "rgb": "Native Habitat observations at q2 and q3; original pixels, viewport crops only.",
+  "qwen_icon_source": "https://github.com/QwenLM/Qwen3/blob/main/README.md",
+  "labels": [
+    "Find a cushion.",
+    "Illustrative sequence",
+    "Start",
+    "1",
+    "1  Not seen",
+    "2  Found",
+    "Qwen",
+    "Most likely:",
+    "living-room sofa",
+    "Start",
+    "1",
+    "Not seen",
+    "Found",
+    "Replan"
+  ],
+  "english_word_count": 20
+}

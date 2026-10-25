@@ -1,0 +1,17 @@
+{
+  "purpose": "Display route geometry check only; not a navigation experiment",
+  "routes": {
+    "approach": {
+      "max_horizontal_offset_from_walkable_surface_m": 0.0002,
+      "samples": 640
+    },
+    "local": {
+      "max_horizontal_offset_from_walkable_surface_m": 0.0,
+      "samples": 320
+    },
+    "recovery": {
+      "max_horizontal_offset_from_walkable_surface_m": 0.0002,
+      "samples": 640
+    }
+  }
+}

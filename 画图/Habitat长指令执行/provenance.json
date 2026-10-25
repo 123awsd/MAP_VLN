@@ -1,0 +1,679 @@
+{
+  "kind": "Three-scene qualitative preview: archived multi-task episode; newly executed offline-reasoned recovery and explicit conditional episodes",
+  "scenes": [
+    "00337-CFVBbU9Rsyb",
+    "00166-RaYrxWt5pR1",
+    "00070-w7QyjJ3H9Bp"
+  ],
+  "paper_updated": false,
+  "typography": "Centered quoted instructions in black; only target nouns are bold. No a/b/c labels or frame captions.",
+  "presentation": "Complete 4:3 camera fields of view, natively replayed at 1600x1200 from recorded poses; no cropping, retouching, upscaling, artificial assets or model-generated pixels. Colored corner marks use the original recorded 640x480 OWLv2 detections, mapped to the same FoV.",
+  "ordering": "Left to right in actual execution order. Selected frames, not equally spaced timestamps.",
+  "replay_manifest_sha256": "8d7d9f2229cfa59668cb4e3f7015f1f003a0eb4ace06fd572ddb359876903abf",
+  "episodes": [
+    {
+      "run": "outputs/stage2_3d/tasks/00337_all_found_showcase_v1_20260830",
+      "scene": "/home/uav/map_VLN/PRE_MAP_VLN/data/versioned_data/hm3d-0.2/hm3d/example/00337-CFVBbU9Rsyb/CFVBbU9Rsyb.basis.glb",
+      "task_graph_sha256": "ec453177fd7cd93c2ccf363d41b22f379e52229fd355e7c7adf6f18ae1b1d0bc",
+      "execution_log_sha256": "4d7fe3a0bad930b94b8f618eebdba5ac2a9401ea9279a226ab1ff55604faa529",
+      "instruction_original": "朋友快到了，帮我看看二楼厨房台面附近的微波炉、二楼客厅沙发旁的茶几和三楼客厅的电视是不是都还在原位，再顺路确认一下二楼卫生间马桶旁还有没有厕纸，先后顺序你自己安排。",
+      "verification_mode": "owlv2",
+      "status": "complete",
+      "controlled_outcomes": false,
+      "recovery_planner": null,
+      "selected_frames": [
+        {
+          "image": "outputs/stage2_3d/tasks/00337_all_found_showcase_v1_20260830/execution/frames/frame_000150.jpg",
+          "image_sha256": "277dd7e3d2efe54154ab6b2a802e9695174f29d9bd774ba26e301ede7d65d18d",
+          "display_image": "keyframes/00337_all_found_showcase_v1_20260830/frame_000150.png",
+          "display_image_sha256": "4625236521cb98d5efc4a9576a9570e260c2599b0c0d0232d4a5c68add44fe0b",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 150,
+          "observation_sequence": null,
+          "selection_description": "Floor 2",
+          "frame_caption_displayed": false,
+          "detector_boxes": [],
+          "detector_box_selection": "highest recorded score",
+          "pose": [
+            -1.143284730745975,
+            6.5593378109559755,
+            1.4885824664455498,
+            2.2455933903423273
+          ]
+        },
+        {
+          "image": "outputs/stage2_3d/tasks/00337_all_found_showcase_v1_20260830/execution/frames/terminal_00_check_microwave_kitchen_l2.jpg",
+          "image_sha256": "8dc7f2fb4b6626ef7963802424ffd4043d23fd3a36dd22cf51c5b06d1ece4350",
+          "display_image": "keyframes/00337_all_found_showcase_v1_20260830/obs_000000.png",
+          "display_image_sha256": "58eb9f1015d8e56ddd60df93062815c9e8f36f75feb0f866a1ebc811d4dcdc51",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 381,
+          "observation_sequence": 0,
+          "selection_description": "Microwave",
+          "frame_caption_displayed": false,
+          "detector_boxes": [
+            {
+              "label": "microwave",
+              "score": 0.798187,
+              "bbox_xyxy": [
+                387.66,
+                136.52,
+                447.34,
+                178.48
+              ]
+            }
+          ],
+          "detector_box_selection": "highest recorded score",
+          "task_id": "check_microwave_kitchen_l2",
+          "outcome": "found",
+          "verification_outcome": "found",
+          "pose": [
+            3.1371557979413467,
+            8.687638732927184,
+            3.478182,
+            2.356194490192345
+          ],
+          "recovery_reason": "target_found",
+          "location_exhausted": false
+        },
+        {
+          "image": "outputs/stage2_3d/tasks/00337_all_found_showcase_v1_20260830/execution/frames/terminal_01_check_toilet_paper_bath_l2.jpg",
+          "image_sha256": "1a04eeee7254f59c33852a6b3ef5ef212dde15e9a61b3768e410e4f40a3bda3f",
+          "display_image": "keyframes/00337_all_found_showcase_v1_20260830/obs_000001.png",
+          "display_image_sha256": "4b3d649b7848a5e0823c0f044cd6dedf7114565f7b6dd10a98ce7e8df618ef38",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 452,
+          "observation_sequence": 1,
+          "selection_description": "Toilet paper",
+          "frame_caption_displayed": false,
+          "detector_boxes": [
+            {
+              "label": "toilet paper",
+              "score": 0.42919,
+              "bbox_xyxy": [
+                433.44,
+                236.48,
+                476.56,
+                296.02
+              ]
+            }
+          ],
+          "detector_box_selection": "highest recorded score",
+          "task_id": "check_toilet_paper_bath_l2",
+          "outcome": "found",
+          "verification_outcome": "found",
+          "pose": [
+            3.2728345155114074,
+            5.46943998336792,
+            3.15,
+            3.141592653589793
+          ],
+          "recovery_reason": "target_found",
+          "location_exhausted": false
+        },
+        {
+          "image": "outputs/stage2_3d/tasks/00337_all_found_showcase_v1_20260830/execution/frames/terminal_02_check_coffee_table_living_l2.jpg",
+          "image_sha256": "0bab24b7326a100b91ee703b0839b9ffd550e34bad81d2621abfdf634ca0711f",
+          "display_image": "keyframes/00337_all_found_showcase_v1_20260830/obs_000002.png",
+          "display_image_sha256": "428b861ded0d9b24f7fc56e6cd96e121ad211d355c1d631a2e9f58f974fd6859",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 669,
+          "observation_sequence": 2,
+          "selection_description": "Coffee table",
+          "frame_caption_displayed": false,
+          "detector_boxes": [
+            {
+              "label": "coffee table",
+              "score": 0.253861,
+              "bbox_xyxy": [
+                130.0,
+                285.47,
+                565.0,
+                479.53
+              ]
+            }
+          ],
+          "detector_box_selection": "highest recorded score",
+          "task_id": "check_coffee_table_living_l2",
+          "outcome": "found",
+          "verification_outcome": "found",
+          "pose": [
+            2.1554679870605464,
+            13.552802757558467,
+            3.15,
+            1.5707963267948963
+          ],
+          "recovery_reason": "target_found",
+          "location_exhausted": false
+        },
+        {
+          "image": "outputs/stage2_3d/tasks/00337_all_found_showcase_v1_20260830/execution/frames/frame_000900.jpg",
+          "image_sha256": "7ff4d38332067b05c132c586534c19f6210c1ec0be3baae5490fcd07c849767e",
+          "display_image": "keyframes/00337_all_found_showcase_v1_20260830/frame_000900.png",
+          "display_image_sha256": "27624149f1666cd9a5d4602f99bd2c3a32afda2c1d571c7a02bdb20838eaee28",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 900,
+          "observation_sequence": null,
+          "selection_description": "Floor 3",
+          "frame_caption_displayed": false,
+          "detector_boxes": [],
+          "detector_box_selection": "highest recorded score",
+          "pose": [
+            0.48200925462788197,
+            9.914707264687024,
+            6.499173632545634,
+            1.6112490493020366
+          ]
+        },
+        {
+          "image": "outputs/stage2_3d/tasks/00337_all_found_showcase_v1_20260830/execution/frames/terminal_03_check_tv_living_l3.jpg",
+          "image_sha256": "b1dfb5fc15b689763de91cf4eecc6adf548827c9b9d843c8e42e35db82f9a977",
+          "display_image": "keyframes/00337_all_found_showcase_v1_20260830/obs_000003.png",
+          "display_image_sha256": "4c3f4ba03072727b189ab7cc3e7b5b564cbbb8288242d30398b2b4805a4be957",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 983,
+          "observation_sequence": 3,
+          "selection_description": "TV",
+          "frame_caption_displayed": false,
+          "detector_boxes": [
+            {
+              "label": "television",
+              "score": 0.817574,
+              "bbox_xyxy": [
+                207.5,
+                179.53,
+                437.5,
+                319.22
+              ]
+            }
+          ],
+          "detector_box_selection": "highest recorded score",
+          "task_id": "check_tv_living_l3",
+          "outcome": "found",
+          "verification_outcome": "found",
+          "pose": [
+            2.0768518764045565,
+            13.111264201319774,
+            6.429568,
+            -1.0471975511965979
+          ],
+          "recovery_reason": "target_found",
+          "location_exhausted": false
+        }
+      ],
+      "instruction_display_note": "Short English summary for display. All target room and floor scopes retained; fine anchor qualifiers and social preamble omitted. The original complete request is retained in this manifest."
+    },
+    {
+      "run": "outputs/stage2_3d/tasks/00166_cushion_recovery_20261024",
+      "scene": "/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/train/00166-RaYrxWt5pR1/RaYrxWt5pR1.basis.glb",
+      "task_graph_sha256": "26b611c16f0e201471bfb6496dce5604fe891243b860526f4c4d27006f606c0d",
+      "execution_log_sha256": "6220eeb4af6c84968b85e68d2d3637d82c4f1921e3bed75bbd4f4b816ff62ca9",
+      "instruction_original": "Find a cushion on the bedroom armchair; if it is missing, search other rooms until found.",
+      "verification_mode": "owlv2",
+      "status": "complete",
+      "controlled_outcomes": false,
+      "recovery_planner": "offline_fixture",
+      "selected_frames": [
+        {
+          "image": "outputs/stage2_3d/tasks/00166_cushion_recovery_20261024/execution/frames/frame_000205.jpg",
+          "image_sha256": "b4387473410d50dd04347f845dc80f4b6168337b282b3e74d746871d60f24fe8",
+          "display_image": "keyframes/00166_cushion_recovery_20261024/frame_000205.png",
+          "display_image_sha256": "213fdaf2caf4c3dea53d9697973e8c15750b7437bf52976c03ef0e6c72e34d84",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 205,
+          "observation_sequence": null,
+          "selection_description": "Enter the bedroom",
+          "frame_caption_displayed": false,
+          "detector_boxes": [],
+          "detector_box_selection": "highest recorded score",
+          "pose": [
+            -1.8839193969712114,
+            -7.610560804608685,
+            0.998494877152671,
+            -2.230798462593225
+          ]
+        },
+        {
+          "image": "outputs/stage2_3d/tasks/00166_cushion_recovery_20261024/execution/frames/terminal_00_find_cushion_bedroom_chair.jpg",
+          "image_sha256": "b64219a472effb9f986e9a4e5c759c348bffbd88cd11a587f433d9d3abfe673c",
+          "display_image": "keyframes/00166_cushion_recovery_20261024/obs_000000.png",
+          "display_image_sha256": "12a7116265650e66b127ab4ae96924d7210ab4032343e9a3a5f0673c1e396dae",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 238,
+          "observation_sequence": 0,
+          "selection_description": "Armchair: first negative observation",
+          "frame_caption_displayed": false,
+          "detector_boxes": [],
+          "detector_box_selection": "highest recorded score",
+          "task_id": "find_cushion_bedroom_chair",
+          "outcome": "retry",
+          "verification_outcome": "not_found",
+          "pose": [
+            -3.453012195584808,
+            -7.552765429019928,
+            0.933523,
+            3.141592653589793
+          ],
+          "recovery_reason": "alternative_viewpoint_available",
+          "location_exhausted": false
+        },
+        {
+          "image": "outputs/stage2_3d/tasks/00166_cushion_recovery_20261024/execution/frames/frame_000245.jpg",
+          "image_sha256": "e33ca97db58fb0e8897436661501300c8c7bdd5420d94d13773d0c4aed5deaf8",
+          "display_image": "keyframes/00166_cushion_recovery_20261024/frame_000245.png",
+          "display_image_sha256": "fd3c5e7586b3cd936b988dc886bce0c8d7509b9336e8a2b33e3d2ace01e95673",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 245,
+          "observation_sequence": null,
+          "selection_description": "Armchair: local viewpoint change",
+          "frame_caption_displayed": false,
+          "detector_boxes": [],
+          "detector_box_selection": "highest recorded score",
+          "pose": [
+            -3.6705580902634174,
+            -7.610006858553649,
+            1.0112088704625066,
+            3.0859115436909383
+          ]
+        },
+        {
+          "image": "outputs/stage2_3d/tasks/00166_cushion_recovery_20261024/execution/frames/frame_000380.jpg",
+          "image_sha256": "d3efc6c1bb5552bb3a10ff816a982f2af887d01290d22401e2d6180b28fc4760",
+          "display_image": "keyframes/00166_cushion_recovery_20261024/frame_000380.png",
+          "display_image_sha256": "1b469bcb96bebf280c7beabd51a6e47ddb4ce7e43b1035afd5bfb10124ea6fdb",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 380,
+          "observation_sequence": null,
+          "selection_description": "Search another room after local exhaustion",
+          "frame_caption_displayed": false,
+          "detector_boxes": [],
+          "detector_box_selection": "highest recorded score",
+          "pose": [
+            -1.8321102656101236,
+            -7.656229911809787,
+            1.0000053684315395,
+            0.9315341116777339
+          ]
+        },
+        {
+          "image": "outputs/stage2_3d/tasks/00166_cushion_recovery_20261024/execution/frames/frame_000420.jpg",
+          "image_sha256": "f042c011b5f866cf2b868159dcc5dcf2370ec188d7d50298ad2e2c8cf133fbc0",
+          "display_image": "keyframes/00166_cushion_recovery_20261024/frame_000420.png",
+          "display_image_sha256": "536fb7c7241fc1e9f13d8621e0341f3346bb1c5eb0a498f7c77f1da2cf14ba23",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 420,
+          "observation_sequence": null,
+          "selection_description": "Approach the living-room sofa",
+          "frame_caption_displayed": false,
+          "detector_boxes": [],
+          "detector_box_selection": "highest recorded score",
+          "pose": [
+            -2.741895701082024,
+            -6.055385167682132,
+            0.999964352618214,
+            2.3440369508238725
+          ]
+        },
+        {
+          "image": "outputs/stage2_3d/tasks/00166_cushion_recovery_20261024/execution/frames/terminal_03_find_cushion_bedroom_chair.jpg",
+          "image_sha256": "86ebf065df30cd09673e15288dc2f2d71e46e31b3af4433ddbfa3a48ab06c383",
+          "display_image": "keyframes/00166_cushion_recovery_20261024/obs_000003.png",
+          "display_image_sha256": "b820f961c90e2284a599bbf1d22fd37080fcfab4555b1d8dc1edf1842524b8c1",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 462,
+          "observation_sequence": 3,
+          "selection_description": "Cushion found",
+          "frame_caption_displayed": false,
+          "detector_boxes": [
+            {
+              "label": "cushion",
+              "score": 0.360264,
+              "bbox_xyxy": [
+                380.94,
+                241.41,
+                464.06,
+                317.34
+              ]
+            }
+          ],
+          "detector_box_selection": "visually reviewed recorded detection 2; coordinates unchanged",
+          "task_id": "find_cushion_bedroom_chair",
+          "outcome": "found",
+          "verification_outcome": "found",
+          "pose": [
+            -4.121729095333092,
+            -5.286912059342127,
+            0.837351,
+            1.8325957145940455
+          ],
+          "recovery_reason": "target_found",
+          "location_exhausted": false
+        }
+      ],
+      "instruction_display_note": "The actual English input, enclosed in quotation marks. Recovery stays within one task, rather than an explicit conditional-task branch.",
+      "task_and_recovery_input": "Assistant-authored offline task graph and recovery hypotheses, authorized by the user for visualization; no Qwen call. Candidate generation, execution and OWLv2 verification ran locally.",
+      "run_manifest": "outputs/stage2_3d/tasks/00166_cushion_recovery_20261024/run_manifest.json",
+      "omitted_terminal_observation_sequences": [
+        1,
+        2
+      ],
+      "recovery_trigger": {
+        "sequence": 2,
+        "task_id": "find_cushion_bedroom_chair",
+        "missing_target": "cushion",
+        "failed_expected_object_id": "boxer_131",
+        "plan": {
+          "target_label": "cushion",
+          "hypotheses": [
+            {
+              "id": "recovery_1",
+              "room_id": 8,
+              "anchor_object_id": "boxer_26",
+              "anchor_label": "sofa",
+              "relation": "on",
+              "semantic_region": "support_surface",
+              "relevance": "high",
+              "historical_confidence": 0.63,
+              "source": "semantic_anchor",
+              "reason": "The living-room sofa is a plausible cushion support in another room."
+            },
+            {
+              "id": "recovery_2",
+              "room_id": 8,
+              "anchor_object_id": "boxer_43",
+              "anchor_label": "cushion",
+              "relation": "near",
+              "semantic_region": "instance_region",
+              "relevance": "high",
+              "historical_confidence": 0.54,
+              "source": "historical_target_box",
+              "reason": "The map records a cushion by the living-room sofa."
+            },
+            {
+              "id": "recovery_3",
+              "room_id": 8,
+              "anchor_object_id": "boxer_65",
+              "anchor_label": "armchair",
+              "relation": "on",
+              "semantic_region": "support_surface",
+              "relevance": "medium",
+              "historical_confidence": 0.7,
+              "source": "semantic_anchor",
+              "reason": "A living-room armchair provides another plausible cushion location."
+            }
+          ],
+          "provenance": {
+            "planner": "offline_fixture",
+            "external_call": false
+          }
+        },
+        "generated_candidate_ids": [
+          "find_cushion_bedroom_chair__region_8__boxer_26__support_surface__v00",
+          "find_cushion_bedroom_chair__region_8__boxer_26__support_surface__v01",
+          "find_cushion_bedroom_chair__region_8__boxer_26__support_surface__v02",
+          "find_cushion_bedroom_chair__region_8__boxer_43__instance_region__v00",
+          "find_cushion_bedroom_chair__region_8__boxer_43__instance_region__v02",
+          "find_cushion_bedroom_chair__region_8__boxer_26__support_surface__v03",
+          "find_cushion_bedroom_chair__region_8__boxer_43__instance_region__v01",
+          "find_cushion_bedroom_chair__region_8__boxer_43__instance_region__v03",
+          "find_cushion_bedroom_chair__region_8__boxer_65__support_surface__v00",
+          "find_cushion_bedroom_chair__region_8__boxer_65__support_surface__v01",
+          "find_cushion_bedroom_chair__region_8__boxer_65__support_surface__v02",
+          "find_cushion_bedroom_chair__region_8__boxer_65__support_surface__v03"
+        ]
+      }
+    },
+    {
+      "run": "outputs/stage2_3d/tasks/00070_pillow_conditional_20261024",
+      "scene": "/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/train/00070-w7QyjJ3H9Bp/w7QyjJ3H9Bp.basis.glb",
+      "task_graph_sha256": "02c607992194f31bef01abc672a4ed13001120bcde6de18a5083e3eda051f278",
+      "execution_log_sha256": "28e7c67924ca6d20a730fb560ad26bbafaa518210e2d4c81523880e96803f447",
+      "instruction_original": "Check the study chair for a pillow. If one is found, check the bedroom bed for another pillow.",
+      "verification_mode": "owlv2",
+      "status": "complete",
+      "controlled_outcomes": false,
+      "recovery_planner": null,
+      "selected_frames": [
+        {
+          "image": "outputs/stage2_3d/tasks/00070_pillow_conditional_20261024/execution/frames/frame_000160.jpg",
+          "image_sha256": "9b93220c22e4890767d9aae1cd772b8434e906dfbcae5a3239b82b20f0d9881a",
+          "display_image": "keyframes/00070_pillow_conditional_20261024/frame_000160.png",
+          "display_image_sha256": "f3f51ecc5b3a14c08a4b1f9c4c2b18696556ee2f7e40325ecfa8bc43a9acdea9",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 160,
+          "observation_sequence": null,
+          "selection_description": "Enter the study",
+          "frame_caption_displayed": false,
+          "detector_boxes": [],
+          "detector_box_selection": "highest recorded score",
+          "pose": [
+            -0.15040391909672446,
+            -1.7130779802423124,
+            3.3344505079720568,
+            -2.2973884232941466
+          ]
+        },
+        {
+          "image": "outputs/stage2_3d/tasks/00070_pillow_conditional_20261024/execution/frames/frame_000210.jpg",
+          "image_sha256": "8b1af54e39645c258f009e069c6b91be3727b15828ca6c93508fc20bc79159af",
+          "display_image": "keyframes/00070_pillow_conditional_20261024/frame_000210.png",
+          "display_image_sha256": "20a0d6f9df19111f42347d889fa72b4c349ea922dc66cdf3044182d38fac9fd1",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 210,
+          "observation_sequence": null,
+          "selection_description": "Approach the study chair",
+          "frame_caption_displayed": false,
+          "detector_boxes": [],
+          "detector_box_selection": "highest recorded score",
+          "pose": [
+            -0.7564637705749598,
+            -3.772947651203453,
+            3.9853599344519273,
+            -2.2078375955047687
+          ]
+        },
+        {
+          "image": "outputs/stage2_3d/tasks/00070_pillow_conditional_20261024/execution/frames/terminal_00_check_study_pillow.jpg",
+          "image_sha256": "0cca2dc69ca5b76eb5457e5f6988ff1c6287833d7ecc0cf4a8d6951a35104e79",
+          "display_image": "keyframes/00070_pillow_conditional_20261024/obs_000000.png",
+          "display_image_sha256": "1a5368b3eb120eb9f2fbaf4f03238e17cc8bd98fca60cd80e07e13f91322119a",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 215,
+          "observation_sequence": 0,
+          "selection_description": "Pillow found; activate the bedroom task",
+          "frame_caption_displayed": false,
+          "detector_boxes": [
+            {
+              "label": "pillow",
+              "score": 0.38769,
+              "bbox_xyxy": [
+                282.19,
+                293.2,
+                355.31,
+                408.05
+              ]
+            }
+          ],
+          "detector_box_selection": "highest recorded score",
+          "task_id": "check_study_pillow",
+          "outcome": "found",
+          "verification_outcome": "found",
+          "pose": [
+            -0.8766305661414162,
+            -3.864231448979302,
+            3.905152,
+            -2.0943951023931957
+          ],
+          "recovery_reason": "target_found",
+          "location_exhausted": false
+        },
+        {
+          "image": "outputs/stage2_3d/tasks/00070_pillow_conditional_20261024/execution/frames/frame_000310.jpg",
+          "image_sha256": "110389d0910c89ca75aadd857350b0d45ab82e6fdd6cee69b54d210097517575",
+          "display_image": "keyframes/00070_pillow_conditional_20261024/frame_000310.png",
+          "display_image_sha256": "4896cabfe1c8d20f76ea7a466a3d3ab92b55e94252d43fb3e73513652ec9f2d4",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 310,
+          "observation_sequence": null,
+          "selection_description": "Enter the bedroom after condition matched",
+          "frame_caption_displayed": false,
+          "detector_boxes": [],
+          "detector_box_selection": "highest recorded score",
+          "pose": [
+            1.772469886845113,
+            -1.9073511625294424,
+            3.597481428311196,
+            -1.279860255994144
+          ]
+        },
+        {
+          "image": "outputs/stage2_3d/tasks/00070_pillow_conditional_20261024/execution/frames/frame_000324.jpg",
+          "image_sha256": "6caeeef07238cd52164e685f5ec85053c10e70cbe8f46664f5b5901ad43674ff",
+          "display_image": "keyframes/00070_pillow_conditional_20261024/frame_000324.png",
+          "display_image_sha256": "11992a52c63f146a70a898a3debef658ace46fd9b8a38966a7c7e94f96740d9f",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 324,
+          "observation_sequence": null,
+          "selection_description": "Approach the bedroom bed",
+          "frame_caption_displayed": false,
+          "detector_boxes": [],
+          "detector_box_selection": "highest recorded score",
+          "pose": [
+            1.8127483024360775,
+            -2.6197530490232888,
+            3.6020354292618544,
+            -1.6105987203318075
+          ]
+        },
+        {
+          "image": "outputs/stage2_3d/tasks/00070_pillow_conditional_20261024/execution/frames/terminal_01_check_bedroom_pillow.jpg",
+          "image_sha256": "8f8487f45526da3316e9ae8080de59519a10b950fd6d71033ab14e12140e25c9",
+          "display_image": "keyframes/00070_pillow_conditional_20261024/obs_000001.png",
+          "display_image_sha256": "64a7d70f80fdde1c8020be4c7106244654894b9254273d1ec3b53176ba55d43e",
+          "display_image_resolution_wh": [
+            1600,
+            1200
+          ],
+          "display_image_source": "Native Habitat replay at the exact logged camera pose and FoV",
+          "frame_index": 352,
+          "observation_sequence": 1,
+          "selection_description": "Another pillow found",
+          "frame_caption_displayed": false,
+          "detector_boxes": [
+            {
+              "label": "pillow",
+              "score": 0.636127,
+              "bbox_xyxy": [
+                220.78,
+                238.95,
+                269.22,
+                274.8
+              ]
+            }
+          ],
+          "detector_box_selection": "highest recorded score",
+          "task_id": "check_bedroom_pillow",
+          "outcome": "found",
+          "verification_outcome": "found",
+          "pose": [
+            2.0493163400009555,
+            -3.7612303308846498,
+            3.651772,
+            -0.26179938779914974
+          ],
+          "recovery_reason": "target_found",
+          "location_exhausted": false
+        }
+      ],
+      "instruction_display_note": "The actual English input, enclosed in quotation marks. The second task is initially inactive and is activated only by a positive first-task result.",
+      "task_input": "Assistant-authored offline task graph, authorized by the user; no Qwen call. Conditional activation, candidate generation, execution and OWLv2 verification ran locally.",
+      "run_manifest": "outputs/stage2_3d/tasks/00070_pillow_conditional_20261024/run_manifest.json",
+      "conditional_trigger": {
+        "event": "task_finished",
+        "task_id": "check_study_pillow",
+        "outcome": "found",
+        "state_changes": [
+          {
+            "task_id": "check_bedroom_pillow",
+            "status": "pending",
+            "reason": "condition_matched"
+          }
+        ]
+      }
+    }
+  ],
+  "generator_sha256": "184f508d8be689bcfdb74d69fe3fa781962d639c9c139eb2292a158269751dcc",
+  "outputs_sha256": {
+    ".svg": "778eeea4865a9366572d7b37ec76b05c9743f28f29be4c35bce6fe489998fee9",
+    ".pdf": "195181e1ad94e687468eb376012f88b6509982aa101c7b0dc95ff21362b5c6a5",
+    ".png": "a5f7d728f67538dc64b96f4b839ad6188cff3b124a59e351784f5a39612125af"
+  }
+}

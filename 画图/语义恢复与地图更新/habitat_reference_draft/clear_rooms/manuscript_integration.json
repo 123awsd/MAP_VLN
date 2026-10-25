@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-24",
+  "manuscript": "PRE_MAP_VLN/论文/TASE_英文初稿/root.tex",
+  "figure_number": 8,
+  "figure_page": 9,
+  "installed_figure": "PRE_MAP_VLN/论文/TASE_英文初稿/figures/semantic_recovery_en.pdf",
+  "caption_source": "画图/语义恢复与地图更新/habitat_reference_draft/clear_rooms/caption.tex",
+  "publication_kind": "Mechanism illustration",
+  "changed_bundle_entries": [
+    "root.tex",
+    "figures/semantic_recovery_en.pdf"
+  ],
+  "figure_sha256": "d1d14a9b3800a522acc7e8002378a9a9e972da3f2b0ebff9f00141eb9c6946a2",
+  "source_bundle": "PRE_MAP_VLN/论文/TASE_英文初稿/LogicFly_TASE_source.zip",
+  "backup": "画图/语义恢复与地图更新/habitat_reference_draft/clear_rooms/manuscript_backup_20261024",
+  "original_provenance_retained": true,
+  "validation": {
+    "build": "make pdf passed",
+    "pages": 11,
+    "figure_number": 8,
+    "page": 9,
+    "undefined_references": false,
+    "overfull_boxes": false,
+    "source_bundle_verified": true
+  },
+  "latest_revision": "Instruction is bold, enclosed in quotation marks, on one line; user icon removed; other layout unchanged."
+}

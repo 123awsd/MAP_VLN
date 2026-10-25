@@ -1,0 +1,258 @@
+{
+  "scope": "Synthetic mechanism fixture; no live VLM, detector, trajectory or experiment. Same task across recovery locations. Hypotheses supplied offline and validated by production code.",
+  "local_retry": [
+    {
+      "retry": true,
+      "attempt_index": 1,
+      "maximum_attempts": null,
+      "viewpoint_attempt_index": 1,
+      "location_attempt_index": 1,
+      "maximum_locations": null,
+      "attempted_candidate_ids": [
+        "old_0"
+      ],
+      "remaining_candidate_ids": [
+        "old_1",
+        "old_2"
+      ],
+      "location_hypothesis_id": "old_location",
+      "direction": 1,
+      "location_exhausted": false,
+      "reason": "alternative_viewpoint_available"
+    },
+    {
+      "retry": true,
+      "attempt_index": 2,
+      "maximum_attempts": null,
+      "viewpoint_attempt_index": 2,
+      "location_attempt_index": 1,
+      "maximum_locations": null,
+      "attempted_candidate_ids": [
+        "old_0",
+        "old_1"
+      ],
+      "remaining_candidate_ids": [
+        "old_2"
+      ],
+      "location_hypothesis_id": "old_location",
+      "direction": 1,
+      "location_exhausted": false,
+      "reason": "alternative_viewpoint_available"
+    },
+    {
+      "retry": false,
+      "attempt_index": 3,
+      "maximum_attempts": null,
+      "viewpoint_attempt_index": 3,
+      "location_attempt_index": 1,
+      "maximum_locations": null,
+      "attempted_candidate_ids": [
+        "old_0",
+        "old_1",
+        "old_2"
+      ],
+      "remaining_candidate_ids": [],
+      "location_hypothesis_id": "old_location",
+      "direction": null,
+      "location_exhausted": true,
+      "reason": "candidate_pool_exhausted"
+    }
+  ],
+  "validated_hypotheses": {
+    "target_label": "backpack",
+    "hypotheses": [
+      {
+        "id": "recovery_1",
+        "room_id": "lounge",
+        "anchor_object_id": "table",
+        "anchor_label": "table",
+        "relation": "under",
+        "semantic_region": "below_region",
+        "relevance": "high",
+        "historical_confidence": 0.9,
+        "source": "semantic_anchor",
+        "reason": ""
+      },
+      {
+        "id": "recovery_2",
+        "room_id": "lounge",
+        "anchor_object_id": "sofa",
+        "anchor_label": "sofa",
+        "relation": "near",
+        "semantic_region": "surrounding_region",
+        "relevance": "medium",
+        "historical_confidence": 0.9,
+        "source": "semantic_anchor",
+        "reason": ""
+      }
+    ]
+  },
+  "negative_updates": [
+    {
+      "type": "semantic_region_belief",
+      "semantic_region_id": "table",
+      "old_belief": 0.8,
+      "new_belief": 0.48,
+      "incremental_coverage": 0.5,
+      "cumulative_coverage": 0.5,
+      "view_quality": 1.0,
+      "negative_observation": true
+    },
+    {
+      "type": "semantic_region_belief",
+      "semantic_region_id": "table",
+      "old_belief": 0.48,
+      "new_belief": 0.48,
+      "incremental_coverage": 0.0,
+      "cumulative_coverage": 0.5,
+      "view_quality": 1.0,
+      "negative_observation": true
+    },
+    {
+      "type": "semantic_region_belief",
+      "semantic_region_id": "table",
+      "old_belief": 0.48,
+      "new_belief": 0.288,
+      "incremental_coverage": 0.5,
+      "cumulative_coverage": 1.0,
+      "view_quality": 1.0,
+      "negative_observation": true
+    }
+  ],
+  "positive_update": {
+    "type": "semantic_region_belief",
+    "semantic_region_id": "sofa",
+    "old_belief": 0.6,
+    "new_belief": 1.0,
+    "incremental_coverage": 0.5,
+    "cumulative_coverage": 0.5,
+    "view_quality": 1.0,
+    "negative_observation": false
+  },
+  "confirmed_tracks": [
+    {
+      "id": "online_0000",
+      "label": "backpack",
+      "center": [
+        8.05,
+        2.0,
+        0.4
+      ],
+      "size": [
+        0.3,
+        0.2,
+        0.4
+      ],
+      "score": 0.9,
+      "support_count": 2,
+      "first_frame": 0,
+      "last_frame": 1,
+      "associated_object_id": null,
+      "source": "online_novel",
+      "confirmed": true
+    }
+  ],
+  "materialized_novel_ids": [
+    "online_0000"
+  ],
+  "final_task_status": {
+    "find_backpack": "completed"
+  },
+  "source_sha256": {
+    "stage2/viewpoint_recovery.py": "e32fe30676df7f3b8a8afe8508293ed63f3f1ba49a06c7a0c46c76dfcff4e8c1",
+    "stage2/semantic_region_search.py": "581776fb6a95109458426edd2564bf0bd8aa822fd558e305311e9ef6830236ce",
+    "stage2/semantic_recovery.py": "698886955a68be28dbe10d4a9290a88da06f5798a7251502730799a5c1060829",
+    "stage2/semantic_fusion.py": "72e32a4f1700c6a0aae0e4e70d4c64436f4c72a521fb4c0d87e3607c040027b7",
+    "stage2/mission_executor.py": "c11f0d932fcc926fc1c7d00fc137e910ba40bbabf4153aaab567192f94a096e4",
+    "scripts/run_stage2_habitat.py": "55c8d2cc634a72ddf8b863f13c043bd7bd0ae9aac2a5b24dee7f872c87d0e2da"
+  },
+  "timing": "Region beliefs and task state change online. Novel tracks accumulate online; new scene-graph instances are materialized after execution.",
+  "not_shown": "Optional room-frontier details, known-target confidence updates, conditional-rule activation, and semantic hypothesis contents.",
+  "abstract_rule_checks": {
+    "positive_exit": {
+      "retry": false,
+      "attempt_index": 1,
+      "maximum_attempts": null,
+      "viewpoint_attempt_index": 1,
+      "location_attempt_index": 1,
+      "maximum_locations": null,
+      "attempted_candidate_ids": [
+        "old_0"
+      ],
+      "remaining_candidate_ids": [
+        "old_1",
+        "old_2"
+      ],
+      "location_hypothesis_id": "old_location",
+      "direction": null,
+      "location_exhausted": false,
+      "reason": "target_found"
+    },
+    "budget_can_prevent_retry_despite_remaining_views": {
+      "retry": false,
+      "attempt_index": 1,
+      "maximum_attempts": 1,
+      "viewpoint_attempt_index": 1,
+      "location_attempt_index": 1,
+      "maximum_locations": null,
+      "attempted_candidate_ids": [
+        "old_0"
+      ],
+      "remaining_candidate_ids": [
+        "old_1",
+        "old_2"
+      ],
+      "location_hypothesis_id": "old_location",
+      "direction": 1,
+      "location_exhausted": false,
+      "reason": "viewpoint_budget_exhausted"
+    },
+    "local_limit_allows_other_location": {
+      "retry": true,
+      "attempt_index": 1,
+      "maximum_attempts": null,
+      "viewpoint_attempt_index": 1,
+      "location_attempt_index": 1,
+      "maximum_locations": 2,
+      "attempted_candidate_ids": [
+        "old_0"
+      ],
+      "remaining_candidate_ids": [
+        "old_1",
+        "old_2",
+        "alternative_0"
+      ],
+      "location_hypothesis_id": "old_location",
+      "direction": null,
+      "location_exhausted": true,
+      "reason": "alternative_location_available"
+    },
+    "terminal_negative_task_state": {
+      "find_backpack": "completed"
+    },
+    "negative_find_task_result": "completed_with_unresolved_tasks",
+    "negative_absence_task_result": "complete"
+  },
+  "figure": {
+    "size_mm": [
+      88,
+      45
+    ],
+    "layout": "single abstract region-and-view illustration; no scene construction or stage cards",
+    "semantic_object_examples_shown": false,
+    "graphic_elements": [
+      "region samples",
+      "camera frusta",
+      "miss and verification markers",
+      "detection boxes",
+      "graph insertion"
+    ],
+    "minimum_text_pt": 5.9,
+    "paper_updated_by_renderer": false,
+    "geometry_is_illustrative": true,
+    "motion_planner_executed": false,
+    "arrows_show_search_order_not_a_flight_trajectory": true,
+    "region_recovery_guard": "location exhausted and recovery permitted with feasible continuation",
+    "not_shown": "task-level terminal not-found outcome; optional fallback details; conditional task activation"
+  }
+}

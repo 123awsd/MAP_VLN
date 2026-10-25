@@ -1,0 +1,104 @@
+{
+  "preview_only": true,
+  "reference": "BSC-Nav Fig. 4c",
+  "reference_url": "https://www.nature.com/articles/s41467-026-74358-5/figures/4",
+  "layout": "Top instruction band; left RGB floor and route; upper subgoal cues; shared flag axis; aligned native Habitat top-down maps and RGB; right legend.",
+  "scene": "00337-CFVBbU9Rsyb, floor 2",
+  "rgb": "1600 × 1000 CPU Blender renders of original HM3D mesh and RGB textures at authored poses, 74-degree horizontal FoV; no generative retouching.",
+  "map": {
+    "api": "habitat_sim.PathFinder.get_topdown_view",
+    "resolution_m": 0.04,
+    "height_habitat": -0.0005380153656004971,
+    "shape": [
+      381,
+      437
+    ],
+    "lower_habitat": [
+      -6.845894813537598,
+      -2.8005380630493164,
+      -11.154319763183594
+    ],
+    "role": "Static native navigability reference"
+  },
+  "route": "Authored task and guide sequence. Fixed-time MINCO S4NU equations transcribed from project backend. Not the complete production corridor/time optimization pipeline.",
+  "qwen": "Illustrative candidate, not a recorded Qwen inference.",
+  "target_cues": "Illustrative crops of original-scene RGB renders, not generated predictions or recorded memory retrieval.",
+  "official_plate": "Crop (0, 1266, 1280, 2382) from PRE_MAP_VLN/docs/assets/system_overview/official_scene/topdown_floors.png; floor 2.",
+  "curve_checks": {
+    "all_sampled_ground_projections_navigable": true,
+    "max_sample_spacing_m": 0.02408424340339965
+  },
+  "registration": {
+    "falcon_xy_to_pixel": [
+      [
+        0.003907063178611137,
+        -73.10051672254242,
+        1211.161751925114
+      ],
+      [
+        -73.10051672254242,
+        -0.003907063178611137,
+        641.9640815911245
+      ]
+    ],
+    "inliers": 1655,
+    "median_px": 0.32176756858825684,
+    "p95_px": 0.9946231365203853
+  },
+  "final_pose_distance_to_earlier_route_m": 11.181199396983885,
+  "route_length_m": 22.03067289174945,
+  "task_semantics": {
+    "intent": "Household object verification",
+    "ordered_targets": [
+      "kettle on kitchen counter",
+      "cushion initially on dining chair",
+      "lamp between twin beds"
+    ],
+    "recovery": {
+      "target": "cushion",
+      "initial_anchor": "dining chair",
+      "candidate_anchor": "sofa",
+      "trigger": "Local chair viewpoints exhausted without observing the cushion",
+      "candidate_room": "eastern living room"
+    },
+    "color_attributes_required": false
+  },
+  "labels": [
+    "Navigation Instruction",
+    "“Guests are arriving. Check the kettle on the kitchen counter, then look for a cushion on the dining chairs. If it is not there, keep looking nearby. Finally, check the lamp between the beds in the twin bedroom.”",
+    "Cushion found",
+    "Subgoal",
+    "planning",
+    "Semantic",
+    "recovery",
+    "Subgoal 1",
+    "Kettle on counter",
+    "Subgoal 2",
+    "Cushion on chair",
+    "Revised subgoal",
+    "Cushion on sofa",
+    "Subgoal 3",
+    "Bedside lamp",
+    "Recovery",
+    "Qwen",
+    "No cushion seen.",
+    "Likely: sofa in the",
+    "east living room",
+    "Habitat top-down maps",
+    "RGB observations",
+    "Start",
+    "Kettle verified",
+    "Not seen",
+    "Local recheck",
+    "Cushion found",
+    "Lamp verified",
+    "Starting",
+    "Subgoal",
+    "Not seen",
+    "Recovered",
+    "Final goal",
+    "Path",
+    "Illustrative",
+    "execution"
+  ]
+}

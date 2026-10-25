@@ -1,0 +1,15 @@
+{
+  "manuscript": "/home/uav/map_VLN/PRE_MAP_VLN/论文/TASE_英文初稿/root.tex",
+  "installed_figure": "/home/uav/map_VLN/PRE_MAP_VLN/论文/TASE_英文初稿/figures/real_world_execution.png",
+  "source_figure": "/home/uav/map_VLN/画图/主图/local_vggt/logicfly_no_fpv_tilted_figure/main_figure.png",
+  "backup": "/home/uav/map_VLN/画图/主图/local_vggt/logicfly_no_fpv_tilted_figure/manuscript_backup_20261025",
+  "caption": "Real-world execution of a single multi-task language instruction by LogicFly. The global reconstruction shows the continuous recorded camera trajectory and observation frusta. Each row pairs a local reconstruction with third-person views of laptop search and recovery, toolbox verification, microwave inspection, or cup verification. Reconstructions fuse VGGT depth with prior mapping RGB-D and LiDAR support; trajectories use onboard EKF odometry with approximate video alignment.",
+  "validation": {
+    "build": "make pdf passed",
+    "figure_page": 2,
+    "pages": 11,
+    "undefined_references": false,
+    "overfull_boxes": false,
+    "source_bundle_verified": true
+  }
+}

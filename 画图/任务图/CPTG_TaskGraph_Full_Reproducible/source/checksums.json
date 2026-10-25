@@ -1,0 +1,20 @@
+{
+  "svg_sha256": "1123e5b1b10ce5cf38260b977596c0e6eda115ae06bfa10521658897eca13b5a",
+  "png_sha256": "4bc884978237558415c3d70a65eaebe1c837c624dd5b82ec22afd9535a632081",
+  "size_px": [
+    1640,
+    772
+  ],
+  "embedded_image_assets": [
+    "parser_icon.png",
+    "t1_kettle_stove.png",
+    "t2_water_bottle_desk.png",
+    "t3_tissue_sink.png",
+    "t4_backpack_coffee_table.png",
+    "t5_book_living_room.png",
+    "t5_book_bedroom.png"
+  ],
+  "template_placeholder_count": 7,
+  "svg_file": "CPTG_TaskGraph.svg",
+  "png_file": "CPTG_TaskGraph.png"
+}

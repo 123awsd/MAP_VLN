@@ -1,0 +1,311 @@
+{
+  "reference": {
+    "title": "Brain-inspired spatial intelligence for embodied agents",
+    "figure": "3b",
+    "url": "https://www.nature.com/articles/s41467-026-74358-5/figures/3",
+    "borrowing": "Whole-scene route beside chronological observations; no source figure content reused."
+  },
+  "provenance": {
+    "scene": "/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/train/00166-RaYrxWt5pR1/RaYrxWt5pR1.basis.glb",
+    "rgb_directory": "/home/uav/map_VLN/画图/Habitat长指令执行/keyframes/00166_cushion_recovery_20261024",
+    "illustrative": [
+      "route and selected visits",
+      "local limit after two visits",
+      "initially unmapped cushion and graph insertion",
+      "editorial target rectangle"
+    ],
+    "coverage": "Ray-tested illustrative horizontal search slice, at authored poses and fixed pitch; not planner output or measured belief.",
+    "coverage_geometry_limit": "Existing display mesh clipped at 1.3 m; not a full-sensor evaluation"
+  },
+  "preview_only": true,
+  "labels": [
+    {
+      "text": "Find a cushion. Check the bedroom armchair first.",
+      "x": 28,
+      "y": 51,
+      "size": 32
+    },
+    {
+      "text": "Illustrative search sequence",
+      "x": 2292,
+      "y": 51,
+      "size": 24
+    },
+    {
+      "text": "a",
+      "x": 28,
+      "y": 125,
+      "size": 31
+    },
+    {
+      "text": "Search and recovery",
+      "x": 65,
+      "y": 125,
+      "size": 29
+    },
+    {
+      "text": "b",
+      "x": 1080,
+      "y": 125,
+      "size": 31
+    },
+    {
+      "text": "Observations along the route",
+      "x": 1118,
+      "y": 125,
+      "size": 29
+    },
+    {
+      "text": "1",
+      "x": 241.02649822533124,
+      "y": 529.9988071024418,
+      "size": 25
+    },
+    {
+      "text": "2",
+      "x": 335.88377175927155,
+      "y": 473.4495831131935,
+      "size": 25
+    },
+    {
+      "text": "3",
+      "x": 441.0899545371532,
+      "y": 444.08658120036125,
+      "size": 25
+    },
+    {
+      "text": "Cushion",
+      "x": 613.4519126236438,
+      "y": 544.4412008821964,
+      "size": 25
+    },
+    {
+      "text": "Armchair",
+      "x": 246.02649822533124,
+      "y": 347.6917371749878,
+      "size": 25
+    },
+    {
+      "text": "Bedroom",
+      "x": 118,
+      "y": 664,
+      "size": 26
+    },
+    {
+      "text": "Living room",
+      "x": 535,
+      "y": 740,
+      "size": 26
+    },
+    {
+      "text": "Change location",
+      "x": 388,
+      "y": 689,
+      "size": 25
+    },
+    {
+      "text": "Local retry",
+      "x": 120,
+      "y": 1122,
+      "size": 24
+    },
+    {
+      "text": "Same-task recovery",
+      "x": 375,
+      "y": 1122,
+      "size": 24
+    },
+    {
+      "text": "1",
+      "x": 1100,
+      "y": 204,
+      "size": 25
+    },
+    {
+      "text": "Inspect",
+      "x": 1131,
+      "y": 204,
+      "size": 29
+    },
+    {
+      "text": "2",
+      "x": 1512,
+      "y": 204,
+      "size": 25
+    },
+    {
+      "text": "Retry",
+      "x": 1543,
+      "y": 204,
+      "size": 29
+    },
+    {
+      "text": "3",
+      "x": 1924,
+      "y": 204,
+      "size": 25
+    },
+    {
+      "text": "Verify",
+      "x": 1955,
+      "y": 204,
+      "size": 29
+    },
+    {
+      "text": "Target absent",
+      "x": 1274.0,
+      "y": 551,
+      "size": 27
+    },
+    {
+      "text": "Local limit reached",
+      "x": 1686.0,
+      "y": 551,
+      "size": 27
+    },
+    {
+      "text": "Target verified",
+      "x": 2098.0,
+      "y": 551,
+      "size": 27
+    },
+    {
+      "text": "Bedroom armchair · task remains active",
+      "x": 1480.0,
+      "y": 607,
+      "size": 24
+    },
+    {
+      "text": "Living-room sofa · task resolved",
+      "x": 2098.0,
+      "y": 607,
+      "size": 24
+    },
+    {
+      "text": "Recover to another mapped location",
+      "x": 1655,
+      "y": 656,
+      "size": 23
+    },
+    {
+      "text": "c",
+      "x": 1080,
+      "y": 739,
+      "size": 30
+    },
+    {
+      "text": "Coverage-aware evidence",
+      "x": 1117,
+      "y": 739,
+      "size": 28
+    },
+    {
+      "text": "d",
+      "x": 1744,
+      "y": 739,
+      "size": 30
+    },
+    {
+      "text": "Map update",
+      "x": 1781,
+      "y": 739,
+      "size": 28
+    },
+    {
+      "text": "1",
+      "x": 1213.564505772875,
+      "y": 1070.2579549827324,
+      "size": 23
+    },
+    {
+      "text": "2",
+      "x": 1257.0556545636514,
+      "y": 990.8689259914372,
+      "size": 23
+    },
+    {
+      "text": "Newly seen",
+      "x": 1396,
+      "y": 825,
+      "size": 24
+    },
+    {
+      "text": "Previously seen",
+      "x": 1396,
+      "y": 879,
+      "size": 24
+    },
+    {
+      "text": "Only new coverage",
+      "x": 1363,
+      "y": 949,
+      "size": 25
+    },
+    {
+      "text": "reduces search belief.",
+      "x": 1363,
+      "y": 982,
+      "size": 25
+    },
+    {
+      "text": "Anchor stays in the map.",
+      "x": 1363,
+      "y": 1042,
+      "size": 23
+    },
+    {
+      "text": "Local search region",
+      "x": 1203,
+      "y": 1125,
+      "size": 23
+    },
+    {
+      "text": "3D",
+      "x": 2143,
+      "y": 846,
+      "size": 26
+    },
+    {
+      "text": "Consistent observations",
+      "x": 1867,
+      "y": 932,
+      "size": 24
+    },
+    {
+      "text": "Track",
+      "x": 2143,
+      "y": 932,
+      "size": 24
+    },
+    {
+      "text": "After execution",
+      "x": 2078,
+      "y": 980,
+      "size": 23
+    },
+    {
+      "text": "Living room",
+      "x": 1831.5,
+      "y": 1057,
+      "size": 24
+    },
+    {
+      "text": "Sofa",
+      "x": 2008,
+      "y": 1057,
+      "size": 24
+    },
+    {
+      "text": "+ Cushion",
+      "x": 2194.5,
+      "y": 1057,
+      "size": 25
+    },
+    {
+      "text": "Confirmed novel instance",
+      "x": 2018,
+      "y": 1125,
+      "size": 23
+    }
+  ]
+}

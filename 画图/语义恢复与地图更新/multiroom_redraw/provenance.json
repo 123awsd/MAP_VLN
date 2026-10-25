@@ -1,0 +1,115 @@
+{
+  "kind": "Mechanism illustration in a real textured multi-room HM3D scene",
+  "date": "2026-10-24",
+  "source_scene": "/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/train/00166-RaYrxWt5pR1/RaYrxWt5pR1.basis.glb",
+  "scene_render": "Blender Cycles; real textured mesh; ceiling and upper wall cutaway at 1.30 m; saturation 0.68",
+  "scene_pixel_resolution": [
+    3200,
+    2400
+  ],
+  "raster_preview_resolution": [
+    2500,
+    1810
+  ],
+  "physical_size_mm": [
+    184,
+    133.216
+  ],
+  "minimum_font_pt": 6.265,
+  "route": "Display route guided by the official navmesh, artistically simplified and smoothed; not output of the paper algorithm",
+  "coverage": "Illustrative samples and view footprints, not measured coverage or calibrated camera volumes",
+  "new_instance": "The cushion is assumed absent from the initial object map for the mechanism illustration; no claim that the source episode inserted this instance",
+  "source_observations": [
+    {
+      "path": "/home/uav/map_VLN/画图/Habitat长指令执行/keyframes/00166_cushion_recovery_20261024/obs_000000.png",
+      "sha256": "12a7116265650e66b127ab4ae96924d7210ab4032343e9a3a5f0673c1e396dae",
+      "crop_xywh": [
+        420,
+        500,
+        1080,
+        700
+      ]
+    },
+    {
+      "path": "/home/uav/map_VLN/画图/Habitat长指令执行/keyframes/00166_cushion_recovery_20261024/obs_000001.png",
+      "sha256": "99e55734084a95bd35237353a2a368236eb4ec9ec63886ada9d68ad74b43d0cc",
+      "crop_xywh": [
+        420,
+        500,
+        1080,
+        700
+      ]
+    },
+    {
+      "path": "/home/uav/map_VLN/画图/Habitat长指令执行/keyframes/00166_cushion_recovery_20261024/obs_000003.png",
+      "sha256": "b820f961c90e2284a599bbf1d22fd37080fcfab4555b1d8dc1edf1842524b8c1",
+      "crop_xywh": [
+        400,
+        500,
+        1080,
+        700
+      ]
+    },
+    {
+      "path": "/home/uav/map_VLN/画图/Habitat长指令执行/keyframes/00166_cushion_recovery_20261024/frame_000420.png",
+      "sha256": "536fb7c7241fc1e9f13d8621e0341f3346bb1c5eb0a498f7c77f1da2cf14ba23",
+      "crop_xywh": [
+        955,
+        632,
+        300,
+        300
+      ]
+    },
+    {
+      "path": "/home/uav/map_VLN/画图/Habitat长指令执行/keyframes/00166_cushion_recovery_20261024/obs_000003.png",
+      "sha256": "b820f961c90e2284a599bbf1d22fd37080fcfab4555b1d8dc1edf1842524b8c1",
+      "crop_xywh": [
+        926,
+        566,
+        300,
+        300
+      ]
+    }
+  ],
+  "camera_crops": "SVG crops of original Habitat-rendered images; no generative retouching",
+  "source_logs_modified": false,
+  "manuscript_modified": false,
+  "geometry_check": {
+    "purpose": "Display route geometry check only; not a navigation experiment",
+    "routes": {
+      "approach": {
+        "max_horizontal_offset_from_walkable_surface_m": 0.0002,
+        "samples": 640
+      },
+      "local": {
+        "max_horizontal_offset_from_walkable_surface_m": 0.0,
+        "samples": 320
+      },
+      "recovery": {
+        "max_horizontal_offset_from_walkable_surface_m": 0.0002,
+        "samples": 640
+      }
+    }
+  },
+  "layout_check": {
+    "languages": [
+      "en",
+      "zh"
+    ],
+    "overlapping_text_bounds": 0,
+    "pdf_reopened_and_rendered": true,
+    "minimum_font_pt": 6.26
+  },
+  "outputs_sha256": {
+    "render_scene.py": "7781dd840b9080c66e5722ed607580377036c0e44d4c2c1d3283dce3432f03ae",
+    "fig8_multiroom_zh.svg": "51896b0e48c37b09841f1ed19e187b6e800c5a5b260637979d73e4c877e26882",
+    "fig8_multiroom_en.svg": "067f5546bbffd8f790c410ed1024aadb8f2c46237f5b47aa814f60646537aeec",
+    "fig8_textured_scene.blend": "afc232639470ce64671265dfa80eed9970a5ad12ce99ab4818c7b7fcfa5bdc92",
+    "fig8_multiroom_en.png": "4f03fd788a7061b6db60e9873beeb7cc4f00dba7124acf719b6fab4714c9c78d",
+    "fig8_multiroom_en.pdf": "c9292f8d2ce98701d90e8b9fa9d5d6571553ea6761294b588fde4ac3a5211a01",
+    "compose_figure.py": "6d0e172f3f4f2a3b2290d2ac16803edf261931d6602bba74b06ddbd6e5337e82",
+    "fig8_multiroom_zh.png": "2c0d214f5cbbf62429ea0bdbccafbad354b01b060b6ec7585d4988e8af8d83e4",
+    "fig8_multiroom_zh.pdf": "cacea02e23cc237a67d1c3818054d00f75d27f4864df70fda60045c25d06f34c",
+    "caption.tex": "403af626836a452be8913083892a1092a9e1ec829b72e576a7427290fcc17eee"
+  }
+}
