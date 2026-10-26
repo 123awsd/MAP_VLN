@@ -154,7 +154,12 @@ Spatial relations constrain anchor grounding and observation-region construction
 JTVP converts each executable task into a finite set of camera poses and jointly chooses the visit order and one pose per admitted task. The generation and selection procedures preserve alternatives needed for local recovery while limiting the size of the global discrete optimization.
 
 \subsubsection{Task-conditioned candidate generation}
-An anchor and its relation define an observation region, represented by samples $\mathcal P_i=\{s_u\}$ on an object, a support surface, a surrounding neighborhood, or a below-object region. Candidate horizontal positions are sampled over azimuths and stand-off distances. Distances account for region geometry, requested observation detail, and horizontal field of view (FoV), subject to any explicit distance constraints. Candidate yaw faces the region center.
+An anchor and its relation define an observation region, represented by samples $\mathcal P_i=\{s_u\}$ on an object, a support surface, a surrounding neighborhood, or a below-object region. Candidate horizontal positions are sampled over azimuths and stand-off distances. Without an explicit distance constraint, let $R_i$ be half the horizontal diagonal of the region anchor's bounding box and $\alpha_h$ the horizontal field of view (FoV). We sample three center distances
+\begin{equation}
+D_i(\eta)=\frac{R_i}{\sin(\eta\alpha_h/2)},\qquad
+\eta\in\{1,\,0.75,\,0.5\}.
+\end{equation}
+The bounding circle then subtends a fraction $\eta$ of the horizontal angular FoV. These fixed angular sampling levels provide near, intermediate, and far views while scaling with box size; they do not denote image-pixel coverage or guarantee visibility. Stand-off distances are $d_i(\eta)=D_i(\eta)-R_i$. The intermediate distance is preferred for normal observation, while fine observation prefers the near distance and retains all three rings. Each ring samples 24 azimuths, and candidate yaw faces the region center. Explicit distance constraints override the automatic ring construction. Height, collision, and visibility checks determine feasibility.
 
 For a sampled horizontal position $\bm x$, let $\rho_u=\|\bm x-s_{u,xy}\|_2$ and let $\alpha_v$ denote vertical FoV. For a level camera, vertical inclusion of every region sample gives the height interval
 \begin{equation}
