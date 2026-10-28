@@ -5,7 +5,9 @@ import unittest
 
 import numpy as np
 
-from stage2.candidate_poses import generate_all_candidates, generate_candidates
+from stage2.candidate_poses import (
+    _automatic_observation_profile, generate_all_candidates, generate_candidates,
+)
 from stage2.grid_map import OccupancyGrid
 
 
@@ -239,7 +241,53 @@ class CandidatePoseTest(unittest.TestCase):
         candidates = generate_candidates(self.grid, self.scene, task, max_candidates=4)
         self.assertTrue(candidates)
         self.assertTrue(all(item["observation_distance_source"] == "geometry_fov_auto" for item in candidates))
-        self.assertTrue(all(item["distance_to_box_surface_m"] >= 0.35 for item in candidates))
+        radius = 0.5 * math.hypot(0.6, 0.4)
+        expected_angles = [math.radians(45.0 * fraction) for fraction in (1.0, 0.75, 0.5)]
+        for item in candidates:
+            pose = item["pose"]
+            distance = math.hypot(pose["x"] - 10.0, pose["y"] - 10.0)
+            self.assertAlmostEqual(distance, radius + item["distance_to_box_surface_m"])
+            angle = math.asin(radius / distance)
+            self.assertTrue(any(abs(angle - expected) < 1e-9 for expected in expected_angles))
+
+    def test_automatic_rings_cover_requested_angular_scales(self):
+        for size in ([0.1, 0.1, 0.1], [2.0, 1.0, 1.0], [20.0, 10.0, 2.0]):
+            for fov in (30.0, 90.0, 120.0):
+                with self.subTest(size=size, fov=fov):
+                    near, far, middle = _automatic_observation_profile(size, fov)
+                    self.assertLess(near, middle)
+                    self.assertLess(middle, far)
+                    radius = 0.5 * math.hypot(*size[:2])
+                    for offset, fraction in zip((near, middle, far), (1.0, 0.75, 0.5)):
+                        self.assertAlmostEqual(
+                            2.0 * math.degrees(math.asin(radius / (radius + offset))),
+                            fraction * fov,
+                        )
+
+    def test_automatic_rings_scale_with_box_and_widen_for_narrow_fov(self):
+        base = _automatic_observation_profile([2.0, 1.0, 1.0], 90.0)
+        larger = _automatic_observation_profile([4.0, 2.0, 1.0], 90.0)
+        narrower = _automatic_observation_profile([2.0, 1.0, 1.0], 60.0)
+        for original, scaled, narrow in zip(base, larger, narrower):
+            self.assertAlmostEqual(scaled, 2.0 * original)
+            self.assertGreater(narrow, original)
+
+    def test_automatic_fine_preference_uses_near_ring(self):
+        task = self.task(constraints={"distance_m": None, "observation_detail": "fine"})
+        candidates = generate_candidates(self.grid, self.scene, task, max_candidates=4)
+        self.assertTrue(candidates)
+        near, _, _ = _automatic_observation_profile([0.6, 0.4, 0.8], 90.0)
+        self.assertTrue(all(
+            abs(item["preferred_observation_distance_m"] - near) < 1e-9
+            for item in candidates
+        ))
+
+    def test_automatic_profile_rejects_invalid_geometry(self):
+        for fov in (0.0, 180.0, float("nan")):
+            with self.assertRaises(ValueError):
+                _automatic_observation_profile([2.0, 1.0, 1.0], fov)
+        with self.assertRaises(ValueError):
+            _automatic_observation_profile([0.0, 0.0, 1.0], 90.0)
 
     def test_each_matching_instance_has_independent_candidate_pool_on_requested_floor(self):
         for index, center in enumerate(([6.0, 6.0, 0.5], [18.0, 18.0, 0.5])):

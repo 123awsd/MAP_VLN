@@ -206,30 +206,27 @@ def _preferred_observation_distance(
 
 
 def _automatic_observation_profile(
-    size: list[float], region_type: str, observation_detail: str,
-    horizontal_fov_deg: float,
+    size: list[float], horizontal_fov_deg: float,
 ) -> tuple[float, float, float]:
-    """Derive a soft surface-distance profile from geometry, not language defaults."""
-    box_radius = max(0.08, 0.5 * math.hypot(size[0], size[1]))
-    half_fov = max(math.radians(10.0), math.radians(horizontal_fov_deg) * 0.5)
-    # A circumscribed horizontal circle fits in the image when the camera
-    # center is at least r/sin(FoV/2) from the region center.
-    fit_surface_distance = box_radius * (1.0 / max(0.15, math.sin(half_fov)) - 1.0)
-    preferred_floor = {
-        "support_surface": 0.75,
-        "below_region": 0.60,
-        "surrounding_region": 1.05,
-        "instance_region": 0.70,
-        "between_region": 0.85,
-    }.get(region_type, 0.80)
-    minimum = max(0.35, fit_surface_distance)
-    preferred = max(minimum, preferred_floor)
-    if observation_detail == "fine":
-        # Fine inspection prefers a larger image footprint, but this remains a
-        # soft preference. Farther collision-free/FoV-valid views are retained.
-        preferred = max(minimum, 0.70 * preferred)
-    maximum = min(3.5, max(preferred + 0.8, minimum + 1.0))
-    return minimum, maximum, preferred
+    """Return near, far and middle offsets from the horizontal bounding circle.
+
+    At center distance D, a circle of radius R subtends a half-angle
+    asin(R / D). Sample 100%, 75% and 50% of the horizontal half-FoV,
+    giving D = R / sin(eta * half_fov). The caller adds R to each offset.
+    These are angular fractions, not fractions of image pixels. Collision
+    clearance and vertical inclusion remain separate feasibility checks.
+    """
+    box_radius = 0.5 * math.hypot(size[0], size[1])
+    if not math.isfinite(box_radius) or box_radius <= 0.0:
+        raise ValueError("observation box must have a positive finite horizontal radius")
+    if not math.isfinite(horizontal_fov_deg) or not 0.0 < horizontal_fov_deg < 180.0:
+        raise ValueError("horizontal FoV must be finite and between 0 and 180 degrees")
+    half_fov = math.radians(horizontal_fov_deg) * 0.5
+    near, middle, far = (
+        box_radius * (1.0 / math.sin(fraction * half_fov) - 1.0)
+        for fraction in (1.0, 0.75, 0.5)
+    )
+    return near, far, middle
 
 
 def _height_candidates_for_view(
@@ -421,8 +418,7 @@ def generate_candidates(
         explicit_distance = constraints.get("distance_m")
         if explicit_distance is None:
             minimum, maximum, preferred_distance = _automatic_observation_profile(
-                region_size, constraints_region,
-                str(constraints.get("observation_detail", "normal")), horizontal_fov,
+                region_size, horizontal_fov,
             )
             distance_source = "geometry_fov_auto"
         else:
@@ -433,6 +429,10 @@ def generate_candidates(
             )
             distance_source = "user_constraint"
         radii = sorted(set([minimum, preferred_distance, maximum]))
+        if explicit_distance is None and str(constraints.get("observation_detail", "normal")) == "fine":
+            # Favor detail at the near ring without removing the middle ring
+            # or introducing a separate metric distance prior.
+            preferred_distance = minimum
         if distance_scale != 1.0:
             radii = [value * distance_scale for value in radii]
         region_samples = _region_samples(
