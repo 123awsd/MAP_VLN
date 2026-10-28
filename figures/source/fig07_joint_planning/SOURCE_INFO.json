@@ -1,0 +1,8 @@
+{
+  "number": 7,
+  "final": "figures/final/joint_task_viewpoint_planning_en.pdf",
+  "source": "figures/source/fig07_joint_planning",
+  "original_source": "画图/联合任务视角规划",
+  "final_sha256": "d596f54547e3281e215106ec9165de7e8affb61194c9ae437b3f24dd899efd7d",
+  "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+}

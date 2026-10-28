@@ -1,0 +1,882 @@
+
+--- PDF PAGE 1 ---
+arXiv:2304.05501v2  [cs.RO]  25 Dec 2023
+L3MVN: Leveraging Large Language Models for
+Visual Target Navigation
+Bangguo Yu, Hamidreza Kasaei, Ming Cao
+Abstract— Visual target navigation in unknown environments
+is a crucial problem in robotics. Despite extensive investigation
+of classical and learning-based approaches in the past, robots
+lack common-sense knowledge about household objects and
+layouts. Prior state-of-the-art approaches to this task rely on
+learning the priors during the training and typically require
+signiﬁcant expensive resources and time for learning. To address
+this, we propose a new framework for visual target navigation
+that leverages Large Language Models (LLM) to impart com-
+mon sense for object searching. Speciﬁcally, we introduce two
+paradigms: (i) zero-shot and (ii) feed-forward approaches that
+use language to ﬁnd the relevant frontier from the semantic
+map as a long-term goal and explore the environment efﬁciently.
+Our analysis demonstrates the notable zero-shot generalization
+and transfer capabilities from the use of language. Experiments
+on Gibson and Habitat-Matterport 3D (HM3D) demonstrate
+that the proposed framework signiﬁcantly outperforms existing
+map-based methods in terms of success rate and generalization.
+Ablation analysis also indicates that the common-sense knowl-
+edge from the language model leads to more efﬁcient semantic
+exploration. Finally, we provide a real robot experiment to ver-
+ify the applicability of our framework in real-world scenarios.
+The supplementary video and code can be accessed via the
+following link: https://sites.google.com/view/l3mvn.
+I. INTRODUCTION
+Human performance in complex and dynamic environ-
+ments is partly attributed to their innate knowledge of the
+physical world, which is also crucial for intelligent agents in
+embodied tasks. Visual target navigation, a task that involves
+autonomous exploration in unknown environments, requires
+robots to possess semantic reasoning abilities. In this task,
+the robot is provided with the name of an object, such as
+”toilet,” and it must efﬁciently explore a 3D environment to
+locate any instance of the object.
+The last few years have witnessed the development of
+large-scale photorealistic 3D scene datasets [1] [2], fast
+simulators for embodied navigation [3] [4] [2], reinforcement
+learning [5] [6], and approaches for perception [7] [8], cu-
+mulatively leading to huge progress for this task. Traditional
+methods for robot navigation depend on the geometric maps
+building for path planning, which struggle to generalize to
+new instructions due to the lack of scene priors. With the
+development of machine learning, learning-based methods
+directly optimize for navigation policies grounded in end-to-
+end or module methods, which gained close attention and
+made great progress on this task. Most of the learning-based
+methods formulate this task as a reinforcement learning (RL)
+This work of Yu is supported in part by the China Scholarship Council.
+All authors are with the Faculty of Science and Engineering, Uni-
+versity of Groningen, 9747 AG Groningen, the Netherlands. {b.yu,
+hamidreza.kasaei, m.cao}@rug.nl
+explore
+Find TV
+Large Language Models
+bed
+sofa
+table
+sink 
+table
+0.3
+0.5
+0.2
+Fig. 1: Visual target navigation example. The robot explores
+the environment and uses language models to ﬁnd more
+relevant frontier (shown in green, with the highest score)
+based on the observation and the target.
+problem and develop many useful presentations of the scene
+feature. For the end-to-end models, the ﬁrst framework [3]
+uses deep reinforcement learning to ﬁnd an object as the
+appointed category in an unknown environment based on
+current observable images. Later, the framework is expanded
+by many researchers to improve the navigation performance
+[9] [10] [11] [12]. Meanwhile, module-based methods [13]
+[14] [15] attempt to use the explicit spatial map as scene
+memory and learns the semantic priors through deep rein-
+forcement learning to determine the next step.
+Visual target navigation methods that rely on learning
+typically demand substantial computational resources to ac-
+quire and employ scene priors. This motivates us to explore
+alternative approaches for obtaining scene priors that do
+not necessitate extensive learning processes. Recent related
+works have explored interaction-free learning [15] and imita-
+tion learning [16] to deal with this problem and signiﬁcantly
+decrease the training cost. Another promising approach is to
+leverage large pre-trained models to transfer knowledge pri-
+ors, such as zero-shot learning based on contrastive language
+image pretraining (CLIP) [17]. While this approach shows
+
+
+--- PDF PAGE 2 ---
+potential, there is still signiﬁcant room for improvement, as
+there remains a large gap between different tasks.
+This study focuses on efﬁcient navigation and searching
+for an object category in an environment based on visual
+observations. Our proposed approach employs large language
+models to develop a policy for exploration and search, with
+language serving as a general tool for inferring relevance
+from observed objects. Specially, we leverage language to
+describe the contents of the frontiers in the map and employ
+language models to either perform zero-shot inference of
+which frontier best ﬁts the description or embed the de-
+scription as input for target-speciﬁc classiﬁers. An illustra-
+tive example of visual target navigation for ﬁnding TV is
+shown in Fig 1. After scanning the environment, the robot
+need to select the next frontier to explore. Based on the
+objects around each frontier and our target object (tv), the
+large language model is adopted to ﬁnd the most relevant
+frontier. Our model is evaluated on the Habitat simulation
+platform [4] and compared to previous map-based navigation
+approaches. We conduct experiments on the photorealistic
+3D environments of Gibson [2] and HM3D [1]. In sharp
+contrast to many other map-based methods, our framework
+uses the language models as knowledge priors for exploration
+direction selection, leading to reduced learning costs and
+improved the generalization of the scene priors. Ablation
+experiments demonstrate the effectiveness of the language
+model. Futhermore, we also showcase the application of our
+method in real-world settings.
+Our contributions are summarized as follows:
+• We propose a framework that can build the environment
+map and select the long-term goal based on the frontiers
+with the inference of large language models to achieve
+efﬁcient exploration and searching.
+• We analysis two paradigms (i) zero-shot and (ii) feed-
+forward approaches for semantic reasoning about the
+objects using language models.
+• We evaluate the performance of our model in the real-
+world setting using a robot platform and discuss the
+gap between simulation and reality for visual target
+navigation tasks.
+II. RELATED WORK
+A. Visual Navigation
+Visual navigation is a key task for intelligent robots,
+inspired by human behavior. Classical approaches to visual
+navigation rely on building the environment map based on
+visual observation. These approaches plan a path using the
+map, which the robot follows to complete the navigation task.
+However, the accuracy of the environment map greatly af-
+fects navigation performance and classical methods struggle
+with unexplored or changing scenes, which require frontier-
+based exploration [18]. Recent works have proposed more vi-
+sual navigation tasks, such as PointNav [19], ImageNav [3],
+ObjectNav [13], and visual-language navigation [20]. Here,
+we focus on the ObjectNav task in unknown environments
+using a novel framework.
+B. Navigational Policy Learning
+In the visual target navigation task, [3] proposed an end-to-
+end framework that used a pre-trained ResNet to encode the
+input observation and target image, which were then fused
+into an Asynchronous Advantage Actor-Critic (A3C) [5]
+model. To further enhance navigation performance, several
+methods have been proposed, such as knowledge graphs
+[9] [10] or object relation graphs [11], large-scale training
+[19], human demonstrations [16], data augmentation [21],
+and auxiliary tasks [12]. These methods aim to improve the
+efﬁciency of the end-to-end navigational policy and enhance
+its generalization to novel scenes.
+Compare to end-to-end methods that rely on past images
+[3] [9] [11] or RNN [10] [11] [19] to remember the scene
+features, map-based method has a strong ability to capture
+long-term dependencies using the map representation. These
+methods focus on the global policy of selecting waypoints
+on the environment map, and use classical path planners
+as the local policy to achieve navigation tasks. The global
+policy is learned from the different feature representations,
+such as topological graph [22], geometry [14] and semantic
+[13] map, or potential functions [15]. Recently, supervised
+learning has been used to learn potential functions and
+predict frontiers as long-term goals, resulting in improved
+performance and reduced computational costs for training,
+as demonstrated in [15].
+While deep reinforcement end-to-end and module-based
+techniques have achieved success in the visual navigation
+task, they still require learning scene priors from scene
+datasets. In contrast, our framework obtains scene priors
+from language models, enabling more general performance
+and reducing the learning process compared to prior work.
+C. Learning from Pretrained Models
+Recent advances in large pretrained vision and language
+models have shown their effectiveness in various domains,
+such as semantic segmentation [23], scene understanding
+[24], and robot navigation [25] [20]. Researchers have ex-
+plored the use of these models for visual target navigation,
+including using CLIP [17] as a visual enconder in RL [26],
+object location [25], and learning from other tasks [27] [28].
+However, [25] only uses CLIP to locate the target object,
+and [26] [27] [28] still require learning navigational policies
+using reinforcement learning. Our approach proposes a novel
+strategy for the semantic exploration module that leverages
+strong prior knowledge in language models, enabling zero-
+shot learning and ﬁne-tuning-based learning for the visual
+target navigation task.
+There are a number of recent works that relate to our
+approach, such as [15] and [24]. [15] uses the potential
+functions with interaction-free learning to explores frontiers.
+[24] achieves more general and zero-shot room classiﬁcation
+using the priors of large language models. Our method
+speciﬁcally addresses the problem of learning a frontier-
+based navigation policy from large language models for
+visual target navigation. To the best of our knowledge,
+
+
+--- PDF PAGE 3 ---
+comparison
+Environment
+ܽ௧
+RGBD Image
+Semantic Map
+Pose
+Long-term 
+goal
+Local Policy
+Semantic Map
+Goal object
+Language 
+Semantic
+Priors / 
+Exploration
+frontier
+frontiers
+Fig. 2: The architecture of the target navigation framework. The framework takes RGB-D images as input to generate a
+semantic map and frontiers, and selects a long-term goal based on the maps and object category using the inference of the
+language model. Once the long-term goal is reached, a local policy guides the ﬁnal action for the robot.
+natural language processing tools have not been previously
+used for this task.
+III. THE PROPOSED METHOD
+In this section, we describe the deﬁnition of the target
+navigation task and two paradigms with large language
+models.
+A. Task Deﬁnition
+The visual target navigation task involves the agent nav-
+igating an environment to ﬁnd an object belonging to an
+appointed category. The category set is described by C =
+{c0, . . . , cm}, and the scene can be represented by S =
+{s0, . . . , sm}. Each episode begins with the agent being
+initialized at a random position pi in the scene si, and
+receives the target object category ci. Thus, an episode can
+be denoted as Ti = {si, ci, pi}. At each time step t, the
+agent observes the environment and takes an action at. The
+observation includes RGB-D images, the agent’s location
+and orientation, and the target object category. The action
+space, denoted by A, includes six actions: move forward,
+turn left, turn right, look up, look down, and stop. The
+move forward action agent moves 25 cm, while the
+turn left, turn right, look up, or look down actions ro-
+tate the agent 30 degrees. The stop action is used when the
+agent is close to the target object. If the agent takes the stop
+action when the distance to the target is less than 0.1m, the
+episode is considered successful. The maximum number of
+time steps in an episode is 500.
+B. Overview
+Our framework is illustrated in Fig 2. Firstly, the agent
+obtains the observation of the environment to build the
+semantic map. The frontier map is extracted from the ex-
+plored map and obstacle map. Secondly, a long-term goal
+is selected from all the frontiers based on the relevance
+score between our target object and the observations. Large
+language models are used to infer the semantic relevance.
+After getting the long-term goal, the local policy plans a
+path and takes the action to explore the environment and
+search for the target object.
+C. Map Representation
+1) Semantic Map: We construct the semantic map using
+RGB-D images and the agent’s position, similar to [13]. It’s
+represented as a K × M × M tensor with M × M as map
+size and K = Cn + 2 channels. The map is initialized with
+zeros at each episode’s start, and the agent is placed at the
+center. Point clouds are generated from visual input using
+a geometric method, which is projected onto a top-down
+2D map. The map contains obstacles and explored channels
+from depth images, and semantic channels from semantic
+segmentation. The semantic mask is aligned with the point
+clouds, and each channel is projected onto its corresponding
+position on the semantic map.
+2) Frontier Map: We obtain the frontier map from the
+explored map and obstacle map, following the method in
+[15]. First, we extract the explored edge by identifying the
+maximum contours from the explored map. Then, by dilating
+the edge of the obstacle map, we generate the frontier map
+as the difference between the explored and obstacle maps.
+Next, we use connected neighborhoods to identify and cluster
+frontier cells in chains. We remove clusters that are too
+small. To score the frontier cells from the frontier map, we
+use the cost-utility approach proposed in [29]. The subset
+of candidate destinations F is composed of the cells in the
+center of the remaining cluster chains. So for each frontier
+cell f ∈F, we can get the score SCU(a)
+SCU(a) = U(a) −λCUC(a)
+(1)
+where U(a) is a utility function, C(a) is a cost function and
+the constant λCU adjusts the relative importance between
+both factors.
+D. Global Policy
+After getting the semantic map and frontiers, we select
+a search window around each frontier and capture all the
+
+
+--- PDF PAGE 4 ---
+semantic objects as the frontier information, which are shown
+as blue circles in Figure 2. We present two paradigms to use
+the knowledge of the large language models and apply them
+for selecting of the frontiers. Both two paradigms summarize
+a frontier’s contents in a query sentence, then process the
+sentence in the following ways:
+• Zero-shot: A pre-trained language model scores which
+object category is best described by the query.
+• Feed-forward:
+The query string is embedded by a
+pre-trained language model. Then, a ﬁne-tuned neural
+network outputs a distribution over object categories
+given that embedding.
+Entropy
+Entropy 
+Objects 
+List
+Other 
+Objects
+Contained 
+Objects in 
+different 
+Frontiers
+“This frontier area contains 
+sink, bathtubs, and toilet”
+“This frontier area contains 
+sink, bathtubs, and bed”
+“This frontier area contains 
+sink, bathtubs, and tv”
+Language 
+Model
+Query Strings
+Predicted 
+Object Scores
+0.6
+0.3
+0.1
+toilet
+bed
+tv
+Fig. 3: Example of zero-shot approach.
+“This frontier area contains 
+sink and bathtubs”
+“This frontier area contains 
+drawers and pillows”
+“This frontier area contains 
+sofa and plants”
+Language 
+Model
+Fine-tuned 
+Head 
+Network
+瀖
+瀖
+瀖
+toilet
+bed
+tv
+chair
+Sentence 
+Embeddings
+瀖
+Select objects from 
+top entropy list 
+Fig. 4: Example of the ﬁne-tuning-based feed-forward ap-
+proach.
+1) Preprocessing for Language Model: We want to use
+a sentence to describe the semantic information around the
+frontier, and then use the language model to score the
+description. To assess the relevance between a frontier and
+a target object, masked language models (MLMs) is used
+to score a string W based on semantic and grammatical
+sensibility as [24], such as the score of the sentence “This
+frontier area contains sink, bathtubs, and toilet.” is higher
+than the sentence “This frontier area contains sink, bathtubs,
+and tv.” Based on the scores of strings containing common-
+sense facts, a proxy measure can be obtained for how likely
+it is for the fact to be true. Additionally, we utilize the high-
+dimensional embeddings of the language model, denoted
+as Emb(W), to represent the meaning and grammatical
+structure of the text. By ﬁne-tuning the language model, we
+aim to learn a mapping from the embeddings to a prediction
+score for each target object, thus providing a quantitative
+measure of the relevance between the frontier and the object.
+To account for the complexity of the environment, we
+calculate the entropy of each object category, as proposed in
+[24], in order to mitigate the inﬂuence of uninformative and
+ubiquitous objects (e.g., doors and windows). Speciﬁcally,
+objects that appear less frequently across the target object
+categories are deemed more informative, as their presence
+tends to imply certain target categories. This is reﬂected in
+their non-uniform conditional distributions p(tj|oi), where
+oi ∈LO represents the object category, tj ∈LT represents
+the target category, and LT and LO are the sets of target
+object and object categories, respectively. In our task, LT ⊆
+LO implies that some target objects may also be informative
+object categories. We compute these conditional probabilities
+using ground-truth co-occurrences from publicly available
+semantic annotated scene datasets [1] containing of 1,000
+high-resolution 3D scans of indoor spaces. Speciﬁcally, we
+count the number of times each object category appears
+around each target category, and normalize the counts over
+targets to obtain p(tj|oi). Once we have access to p(tj|oi),
+we can calculate the entropy using the following formula:
+HOi = −
+X
+tj∈LT
+p(tj|oi) log p(tj|oi)
+(2)
+Entropy is maximized when the considered distribution is
+uniform and minimized when it is one-hot, meaning more
+semantically-informative objects have lower corresponding
+entropy. We create a top entropy list of the 15 lowest-scoring
+objects and restrict the composition of the input string W to
+only include objects from this list, which differs from [24].
+We use the resulting string to infer relevance between the
+frontier and target objects.
+2) Zero-shot Approach: For the zero-shot approach, we
+construct |LT | query strings for each frontier fi, one per
+target category:
+W fi
+tj = “A frontier area containing
+o1, o2, · · · , ok, tj.” ∀tj ∈LT
+(3)
+where o1···k are the objects detected from the frontier area
+fi, and tj is the target object. All these queries are scored
+via language model, with the ﬁnal estimated frontier f being
+whichever one yields the highest query sentence probability
+for the target tj. The score for each frontier is:
+SLLM
+fi
+= log p(W fi
+tj )
+(4)
+3) Feed-forward Approach: For the feed-forward ap-
+proach, we create a single query string of the form for each
+frontier fi:
+W fi = “This frontier contains o1, · · · , and ok.”
+(5)
+This string is then fed into a language model to produce a
+summary embedding vector. Finally, the embedding is fed
+into a ﬁne-tuned neural network head, which produces a
+|LT |-dimensional vector of prediction logits corresponding to
+the target categories, with the inferred frontier being the one
+corresponding to the maximum value of the target object’s
+output. The score for each frontier is:
+SLLM
+fi
+= [fθ(Emb(W fi))]tj
+(6)
+where fθ : Emb(W fi) →RLT is a neural network that takes
+in query embeddings and outputs prediction logits. We use
+three-layer network for this mapping.
+
+
+--- PDF PAGE 5 ---
+TABLE I: Results of Comparative Study.
+Method
+Gibson
+HM3D
+Success
+SPL
+DTG
+Success
+SPL
+DTG
+Random Walking
+0.030
+0.030
+2.580
+0.000
+0.000
+7.600
+Frontier Based Method [18]
+0.417
+0.214
+2.634
+0.237
+0.123
+5.414
+Random Sample on Map
+0.544
+0.288
+1.918
+0.300
+0.143
+4.761
+SemExp [13]
+0.652
+0.336
+1.520
+0.379
+0.188
+2.943
+PONI [15]
+0.736
+0.410
+1.250
+-
+-
+-
+L3MVN (Zero-Shot)
+0.761
+0.377
+1.101
+0.504
+0.231
+4.427
+L3MVN (Feed-forward)
+0.769
+0.388
+1.008
+0.542
+0.255
+3.934
+(a) step 10
+(b) step 60
+(c) step 110
+(d) step 169
+Fig. 5: The visual target navigation experiment process in the Habitat platform for ﬁnding a bed. The gray channel represents
+the barrier, the blue spot and the circle denote the long-term goal selected by our policy, the red thick line represents the
+trajectory of the robot, the red thin line denotes the frontiers, and other colors represent the semantic objects.
+4) Exploration: The sparsity of semantic information in
+indoor environments can result in frontier areas that lack
+informative objects or contain unrelated objects (e.g., a sofa
+in a toilet). To address this, we integrate the frontier map
+score SCU with the language model score SLLM. We set
+a score bound B for the frontier and normalize SCU to
+ﬁt within this range. We then select the frontier using the
+following strategy:
+f = arg max
+fi
+
+
+
+
+
+
+
+
+
+SLLM
+fi
+,
+if max[SLLM] > sup(B)
+(SLLM
+fi
+, SCU
+fi ),
+if max[SLLM] ∈B
+SCU
+fi ,
+if max[SLLM] < inf(B)
+(7)
+E. Local Policy
+In order to navigate from the agent’s current location to
+a long-term goal, we employ the Fast Marching Method
+(FMM) [30]. Subsequently, the agent selects a local goal
+within a restricted range of its current position and executes
+the ﬁnal action at ∈A to reach it. At each step, the local
+map and local goal are updated based on new observations.
+This approach, which employs module policies, enhances
+training efﬁciency and obviates the necessity of learning
+obstacle avoidance from scratch, as is required in the end-
+to-end approach.
+IV. EXPERIMENTS
+In this section, we evaluate the performance of our method
+by comparing it with other map-based baselines in a sim-
+ulated environment. Additionally, we apply our method in
+a real-world robot platform to validate its practicality for
+navigational tasks.
+A. Simulation Experiment
+1) Dataset: Our experiments are conducted on two high-
+resolution photorealistic 3D reconstructions of real-world
+environments: HM3D [1] and Gibson [2]. The Gibson dataset
+comprises 25 training and 5 validation scenes from the
+Gibson tiny split, which come with associated semantic
+annotations. The HM3D dataset is in the habitat format, and
+we use the standard splits of 75 training and 20 validation
+scenes. There are 6 object goal categories deﬁned [13]: chair,
+couch, potted plant, bed, toilet, and TV.
+2) Experiment Details: We conducted our evaluation on
+the 3D indoor simulator Habitat platform [4], using an
+observation space consisting of 480 × 640 RGBD images,
+a base odometry sensor, and a goal object represented as an
+integer. We utilized the ﬁnetuned RedNet model [8] to predict
+all categories as in [12]. Our implementation was based on
+publicly available code from [13] and [24], using the PyTorch
+framework. We set the score range for the frontier to be
+between 0 and 1, with a bound of B = [0.15, 0.3].
+• For the zero-shot approach, we utilized the pre-trained
+language model RoBERTa-large [31] to evaluate the
+query strings that were generated based on the semantic
+observation around each frontier and the target object.
+• For the feed-forward approach, we ﬁnetune RoBERTa-
+large as our sentence embedder and train head networks
+on HM3D datasets. We extract all the objects in each
+room of the HM3D scenes and check if the room
+contains the target objects. If so, we split the target
+object as the label and other objects as the sample to
+create the dataset. Finally, we train the ﬁnetuned models
+with RoBERTa embeddings on the entire dataset and
+evaluate the query strings for each frontier.
+
+
+--- PDF PAGE 6 ---
+(a) step 10
+(b) step 25
+(c) step 40
+(d) step 58
+Fig. 6: The process of visual target navigation experiment in the real world to ﬁnd a sofa.
+3) Evaluation Metrics: We follow [32] to evaluate our
+method using Success Rate, Success weighted by Path
+Length (SPL), and Distance to Goal (DTG). SR is deﬁned
+as
+1
+N
+PN
+i=1 Si, and SPL is deﬁned as
+1
+N
+PN
+i=1 Si
+li
+max(li,pi),
+where N is the number of episodes, Si is 1 if the episode
+is successful, else is 0, li is the shortest trajectory length
+between the start position and one of the success position,
+pi is the trajectory length of the current episode i. The DTG
+is the distance between the agent and the target goal when
+the episode ends.
+4) Baselines: In order to evaluate the navigation perfor-
+mance of our model, we considered several baselines.
+• Randomly Walking: At each step, the agent selects an
+action uniformly at random from the action space A.
+• Frontier-based Policy [18]: This baseline method em-
+ploys a classical robotics pipeline for mapping and a
+frontier-based exploration algorithm.
+• Randomly Sampling on Map: We randomly sample
+the long-term goal from the map, and use the local
+planner method to select the ﬁnal action.
+• SemExp [13]: We follow [13] as the baseline to explore
+and search for the target using semantic map.
+• PONI [15]: Potential function [13] is the newest map-
+based work and can be set as baseline of interaction-free
+learning method. We can only get the results on Gibson
+datasets from the published work.
+5) Result and Discussion: The quantitative results of the
+comparison study are reported in TABLE I. As indicated
+by the results, random walking without any specialized
+navigation policy fails in almost all episodes. However, when
+we utilize the map-based framework to randomly sample the
+long-term goal, the performance is even superior to that of
+the classical frontier-based method [18]. This indicates the
+signiﬁcant advantage of the map-based method in allowing
+the robot to quickly and roughly explore the environment.
+Furthermore, the signiﬁcant improvement achieved by Sem-
+Exp [13] highlights the importance of semantic information
+in efﬁcient exploration. PONI [15] further enhances the
+performance and reduces computational costs, demonstrat-
+ing the capacity for learning semantic priors in a distinct
+way from other reinforcement learning approaches. Our
+framework consistently outperforms all baselines across both
+datasets, achieving notable improvement over the SemExp
+[13] and PONI [15] baselines. The comparison between the
+feed-forward and zero-shot approaches indicates that feed-
+forward method learns more accurate relevance in large
+indoor scenes. The process of ﬁnding a bed is illustrated
+in Fig 5.
+TABLE II: Results of Ablation Study in HM3D.
+L3MVN ablation
+HM3D results
+Near
+Exp
+LLM
+GT Seg
+Success↑
+SPL↑
+DTG↓
+✓
+✓
+0.490
+0.231
+4.335
+✓
+0.518
+0.244
+4.084
+✓
+✓
+0.542
+0.255
+3.934
+✓
+✓
+✓
+0.664
+0.364
+3.195
+6) Ablation study: To assess the relative importance of the
+various modules within our framework, we have performed
+the ablations using the HM3D dataset: the cost-utility explo-
+ration module (Exp), the feed-forward approach for language
+module (LLM), the nearest frontier module (Near) that
+only used for LLM ablation, and the ground-truth semantic
+segmentation (GT Seg). The results in TABLE II show that
+our complete model achieves the best performance (row 3,
+TABLE II), and the LLM and exploration policy are crucial
+for achieving good performance. Removing the LLM (row
+2, TABLE II) decreases both success rate and SPL but still
+higher than the zero-shot approach, and replacing cost-utility
+exploration with the nearest frontier policy (row 1, TABLE
+II) leads to a further drop in performance, which shows
+the importance of exploration for this task. Augmenting
+our complete model with GT Seg improves performance
+on all cases, as semantic segmentation impacts the semantic
+mapping, which is also the main reason for the failures.
+B. Real World Experiment
+We utilized ROS and the Jackal Robot hardware platform
+with Realsense D455 camera and Ouster lidar to implement
+and test our policy in the real world. To minimize the gap
+between the simulation and the real-world scenarios, we
+attempted to keep the sensor data consistent with the simu-
+lation environment. Speciﬁcally, we set the same height and
+range of the depth image for the robot’s RGB-D camera as in
+the simulation environment, and used the lidar to construct a
+real-time geometric map to improve the robot’s localization
+accuracy. The RGB-D images, location, and object category
+were then fed into our model, which produced an action
+output. As shown in Fig 6, the long-term goal selected by
+our model (represented by a blue spot) guided the robot to
+efﬁciently explore the environment and locate the goal.
+The RGB-D images and location are the primary differ-
+ences between the simulation and the real world, as the
+depth image is affected by factors such as illumination
+and hardware quality. Furthermore, the lidar and odometry
+measurements in the real world are not as accurate as in the
+
+
+--- PDF PAGE 7 ---
+simulation, leading to noisy points around objects and walls.
+But the module-based framework has the advantage in real-
+world transfer since it takes the scene map as input rather
+than direct images with noise. This reduces the impact of
+noise, allowing us to deploy the model on the robot platform
+with minimal ﬁne-tuning.
+V. CONCLUSIONS
+We presented L3MVN, a novel module framework that
+leverages large language models to facilitate visual target
+navigation by examining two paradigms that infer the seman-
+tic relevance from the observed frontiers. By implementing
+experiments in Gibson and HM3D datasets, we demonstrate
+that our approach signiﬁcantly improves the success rate
+and efﬁciency while avoiding large-scale learning processes.
+Ablation studies demonstrated that our language models and
+cost-utility exploration lead to more efﬁcient navigation. We
+also validate the effectiveness in a real-world experiment,
+highlighting the practical applicability of our method. Our
+ﬁndings suggest that large language models hold immense
+potential in aiding robots in such tasks by providing useful
+knowledge. Future research should consider the design of the
+interaction between the robot and LLM.
+REFERENCES
+[1] S. K. Ramakrishnan, A. Gokaslan, E. Wijmans, O. Maksymets,
+A. Clegg, J. Turner, E. Undersander, W. Galuba, A. Westbury, A. X.
+Chang, M. Savva, Y. Zhao, and D. Batra, “Habitat-Matterport 3D
+Dataset (HM3D): 1000 Large-scale 3D Environments for Embodied
+AI,” arXiv, sep 2021.
+[2] F. Xia, A. R. Zamir, Z. He, A. Sax, J. Malik, and S. Savarese,
+“Gibson Env: Real-World Perception for Embodied Agents,” in 2018
+IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+pp. 9068–9079, IEEE, jun 2018.
+[3] Y. Zhu, R. Mottaghi, E. Kolve, J. J. Lim, A. Gupta, L. Fei-Fei, and
+A. Farhadi, “Target-driven visual navigation in indoor scenes using
+deep reinforcement learning,” in Proceedings - IEEE International
+Conference on Robotics and Automation, pp. 3357–3364, IEEE, may
+2017.
+[4] M. Savva, A. Kadian, O. Maksymets, Y. Zhao, E. Wijmans, B. Jain,
+J. Straub, J. Liu, V. Koltun, J. Malik, D. Parikh, and D. Batra,
+“Habitat: A Platform for Embodied AI Research,” in 2019 IEEE/CVF
+International Conference on Computer Vision (ICCV), vol. 2019-
+Octob, pp. 9338–9346, IEEE, oct 2019.
+[5] V. Mnih, A. Puigdom`enech Badia, M. Mirza, T. Harley, T. P. Lillicrap,
+D. Silver, and K. Kavukcuoglu, “Asynchronous Methods for Deep
+Reinforcement Learning Volodymyr,” International Conference on
+Machine Learning, vol. 48, 2013.
+[6] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov,
+“Proximal Policy Optimization Algorithms,” ArXiv, 2017.
+[7] K. He, G. Gkioxari, P. Dollar, and R. Girshick, “Mask R-CNN,” in
+2017 IEEE International Conference on Computer Vision (ICCV),
+vol. 2017-Octob, pp. 2980–2988, IEEE, oct 2017.
+[8] J. Jiang, L. Zheng, F. Luo, and Z. Zhang, “RedNet: Residual Encoder-
+Decoder Network for indoor RGB-D Semantic Segmentation,” arXiv,
+jun 2018.
+[9] W. Yang, X. Wang, A. Farhadi, A. Gupta, and R. Mottaghi, “Visual se-
+mantic navigation using scene priors,” in 7th International Conference
+on Learning Representations, ICLR 2019, pp. 1–14, 2019.
+[10] Y. Lyu, Y. Shi, and X. Zhang, “Improving Target-driven Visual Navi-
+gation with Attention on 3D Spatial Relationships,” Neural Processing
+Letters, vol. 54, no. 5, pp. 3979–3998, 2022.
+[11] R. Druon, Y. Yoshiyasu, A. Kanezaki, and A. Watt, “Visual object
+search by learning spatial context,” IEEE Robotics and Automation
+Letters, vol. 5, no. 2, pp. 1279–1286, 2020.
+[12] J. Ye, D. Batra, A. Das, and E. Wijmans, “Auxiliary Tasks and
+Exploration Enable ObjectGoal Navigation,” Proceedings of the IEEE
+International Conference on Computer Vision, pp. 16097–16106,
+2021.
+[13] D. S. Chaplot, D. Gandhi, A. Gupta, and R. Salakhutdinov, “Object
+goal navigation using goal-oriented semantic exploration,” Advances
+in Neural Information Processing Systems, vol. 2020-December,
+no. NeurIPS, pp. 1–12, 2020.
+[14] D. S. Chaplot, D. Gandhi, S. Gupta, A. Gupta, and R. Salakhutdinov,
+“Learning to Explore using Active Neural SLAM,” in International
+Conference on Learning Representations (ICLR), apr 2020.
+[15] S. K. Ramakrishnan, D. S. Chaplot, Z. Al-Halah, J. Malik, and
+K. Grauman, “PONI: Potential Functions for ObjectGoal Navigation
+with Interaction-free Learning,” Proceedings of the IEEE Computer
+Society Conference on Computer Vision and Pattern Recognition,
+vol. 2022-June, pp. 18868–18878, 2022.
+[16] R. Ramrakhya, E. Undersander, D. Batra, and A. Das, “Habitat-Web:
+Learning Embodied Object-Search Strategies from Human Demon-
+strations at Scale,” Proceedings of the IEEE Computer Society Con-
+ference on Computer Vision and Pattern Recognition, vol. 2022-June,
+pp. 5163–5173, apr 2022.
+[17] A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agarwal,
+G. Sastry, A. Askell, P. Mishkin, J. Clark, G. Krueger, and I. Sutskever,
+“Learning Transferable Visual Models From Natural Language Super-
+vision,” Proceedings of the 38th International Conference on Machine
+Learning, vol. 139, pp. 8748–8763, feb 2021.
+[18] B. Yamauchi, “Frontier-based approach for autonomous exploration,”
+Proceedings of IEEE International Symposium on Computational
+Intelligence in Robotics and Automation, CIRA, pp. 146–151, 1997.
+[19] E. Wijmans, A. Kadian, A. Morcos, S. Lee, I. Essa, D. Parikh,
+M. Savva, and D. Batra, “DD-PPO: Learning Near-Perfect PointGoal
+Navigators from 2.5 Billion Frames,” arXiv, nov 2019.
+[20] C. Huang, O. Mees, A. Zeng, and W. Burgard, “Visual Language Maps
+for Robot Navigation,” arXiv, oct 2022.
+[21] O. Maksymets, V. Cartillier, A. Gokaslan, E. Wijmans, W. Galuba,
+S. Lee, and D. Batra, “THDA: Treasure Hunt Data Augmentation
+for Semantic Navigation,” Proceedings of the IEEE International
+Conference on Computer Vision, pp. 15354–15363, 2021.
+[22] D. S. Chaplot, R. Salakhutdinov, A. Gupta, and S. Gupta, “Neural
+topological SLAM for visual navigation,” in Proceedings of the
+IEEE Computer Society Conference on Computer Vision and Pattern
+Recognition, pp. 12872–12881, 2020.
+[23] B. Li, K. Q. Weinberger, S. Belongie, V. Koltun, and R. Ranftl,
+“Language-driven Semantic Segmentation,” arXiv, pp. 1–13, jan 2022.
+[24] W. Chen, S. Hu, R. Talak, and L. Carlone, “Leveraging Large
+Language Models for Robot 3D Scene Understanding,” arXiv, sep
+2022.
+[25] S. Y. Gadre, M. Wortsman, G. Ilharco, L. Schmidt, and S. Song, “CLIP
+on Wheels: Zero-Shot Object Navigation as Object Localization and
+Exploration,” arXiv, pp. 1–22, mar 2022.
+[26] A. Khandelwal, L. Weihs, R. Mottaghi, and A. Kembhavi, “Simple but
+Effective: CLIP Embeddings for Embodied AI,” in 2022 IEEE/CVF
+Conference on Computer Vision and Pattern Recognition (CVPR),
+pp. 14809–14818, IEEE, jun 2022.
+[27] Z. Al-Halah, S. K. Ramakrishnan, and K. Grauman, “Zero Experience
+Required: Plug & Play Modular Transfer Learning for Semantic
+Visual Navigation,” Proceedings of the IEEE Computer Society Con-
+ference on Computer Vision and Pattern Recognition, vol. 2022-June,
+pp. 17010–17020, 2022.
+[28] S. Y. Min, Y.-H. H. Tsai, W. Ding, A. Farhadi, R. Salakhutdinov,
+Y. Bisk, and J. Zhang, “Object Goal Navigation with End-to-End Self-
+Supervision,” arXiv, dec 2022.
+[29] M. Juli´a, A. Gil, and O. Reinoso, “A comparison of path planning
+strategies for autonomous exploration and mapping of unknown envi-
+ronments,” Autonomous Robots, vol. 33, no. 4, pp. 427–444, 2012.
+[30] J. A. Sethian, “A fast marching level set method for monotonically
+advancing fronts,” Proceedings of the National Academy of Sciences
+of the United States of America, vol. 93, no. 4, pp. 1591–1595, 1996.
+[31] Y. Liu, M. Ott, N. Goyal, J. Du, M. Joshi, D. Chen, O. Levy, M. Lewis,
+L. Zettlemoyer, and V. Stoyanov, “RoBERTa: A Robustly Optimized
+BERT Pretraining Approach,” arXiv, jul 2019.
+[32] P. Anderson, A. Chang, D. S. Chaplot, A. Dosovitskiy, S. Gupta,
+V. Koltun, J. Kosecka, J. Malik, R. Mottaghi, M. Savva, and A. R.
+Zamir, “On Evaluation of Embodied Navigation Agents,” arXiv, jul
+2018.

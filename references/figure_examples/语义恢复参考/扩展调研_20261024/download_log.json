@@ -1,0 +1,222 @@
+[
+  {
+    "id": "ETPNav",
+    "url": "https://arxiv.org/pdf/2304.03047",
+    "arxiv": "2304.03047",
+    "pages": 15,
+    "sha256": "e1be190af6b06bc3739bcfa2a3db0746273fc49d26ba4319406986cb850e5594",
+    "status": "ok"
+  },
+  {
+    "id": "BEVBert",
+    "url": "https://arxiv.org/pdf/2212.04385",
+    "arxiv": "2212.04385",
+    "pages": 17,
+    "sha256": "c09af750b387aa2b8289a7c410e1b87822f055df2929b6cd396878324449b4b0",
+    "status": "ok"
+  },
+  {
+    "id": "CA-Nav",
+    "url": "https://arxiv.org/pdf/2412.10137",
+    "arxiv": "2412.10137",
+    "pages": 18,
+    "sha256": "e6f4daaba4fee87dd134e3b50d775fac93f0ed30b5fec5a0f619db85bcbf6529",
+    "status": "ok"
+  },
+  {
+    "id": "InstructNav",
+    "url": "https://arxiv.org/pdf/2406.04882",
+    "arxiv": "2406.04882",
+    "pages": 12,
+    "sha256": "491e7fef88ae44cd15a8c5561aaa33476c2b95a678603941af71f976f188e356",
+    "status": "ok"
+  },
+  {
+    "id": "Open-Nav",
+    "url": "https://arxiv.org/pdf/2409.18794",
+    "arxiv": "2409.18794",
+    "pages": 8,
+    "sha256": "198051566c0e9f4997ef574188a5036a069dadcf9f000a5896fe66f0cbc84fcf",
+    "status": "ok"
+  },
+  {
+    "id": "MapNav",
+    "url": "https://arxiv.org/pdf/2502.13451",
+    "arxiv": "2502.13451",
+    "pages": 25,
+    "sha256": "dd5923246958e3b1f0ca8d91d7a3509b5cf3b044213c0557693e254e43203561",
+    "status": "ok"
+  },
+  {
+    "id": "VLN-CE",
+    "url": "https://arxiv.org/pdf/2004.02857",
+    "arxiv": "2004.02857",
+    "pages": 18,
+    "sha256": "8c62871ffb3d266f38ee2fea944583645f74dbe10ac85213ad536486c18cb1a3",
+    "status": "ok"
+  },
+  {
+    "id": "DUET",
+    "url": "https://arxiv.org/pdf/2202.11742",
+    "arxiv": "2202.11742",
+    "pages": 15,
+    "sha256": "c88f98b2378f5250d82fc3b44c3e195f5c38be59a91dcfb18f3f47db3ee8685b",
+    "status": "ok"
+  },
+  {
+    "id": "RegretfulAgent",
+    "url": "https://arxiv.org/pdf/1903.01602",
+    "arxiv": "1903.01602",
+    "pages": 16,
+    "sha256": "443fcbc83d667c12efcf49f7d248b7c571a83d9ad36a5ec87caea1bf87aba7bf",
+    "status": "ok"
+  },
+  {
+    "id": "FAST",
+    "url": "https://arxiv.org/pdf/1903.02547",
+    "arxiv": "1903.02547",
+    "pages": 13,
+    "sha256": "d42a8ad3218ee4552c51ce7ba520265b46b979e2a4d416adf3cebbeea98d4666",
+    "status": "ok"
+  },
+  {
+    "id": "Meta-Explore",
+    "url": "https://arxiv.org/pdf/2303.04077",
+    "arxiv": "2303.04077",
+    "pages": 19,
+    "sha256": "75a3563851a234d701ec845bfc8e6586fa8172a23b432934e806af452c493cdc",
+    "status": "ok"
+  },
+  {
+    "id": "ESC",
+    "url": "https://arxiv.org/pdf/2301.13166",
+    "arxiv": "2301.13166",
+    "pages": 14,
+    "sha256": "dab6de67ea80487475934e3d4c6a89906fa86fe002fbebfc9f1dd7d396e988ab",
+    "status": "ok"
+  },
+  {
+    "id": "L3MVN",
+    "url": "https://arxiv.org/pdf/2304.05501",
+    "arxiv": "2304.05501",
+    "pages": 7,
+    "sha256": "e741d34f0af7eaf81b67468dc2a28b8c2aa9313459eaeef65614ee90678fcbe7",
+    "status": "ok"
+  },
+  {
+    "id": "ConceptGraphs",
+    "url": "https://arxiv.org/pdf/2309.16650",
+    "arxiv": "2309.16650",
+    "pages": 11,
+    "sha256": "1435b96cea1e15a8e1c07ea75a5805c8520925a176817aa78a5a5a178a4b2002",
+    "status": "ok"
+  },
+  {
+    "id": "HOV-SG",
+    "url": "https://arxiv.org/pdf/2403.17846",
+    "arxiv": "2403.17846",
+    "pages": 20,
+    "sha256": "c921e6697889f42bfc4210b1faa1306316faad48c8cfeb4eee180f75f1c04cab",
+    "status": "ok"
+  },
+  {
+    "id": "VLMaps",
+    "url": "https://arxiv.org/pdf/2210.05714",
+    "arxiv": "2210.05714",
+    "pages": 11,
+    "sha256": "c7bb57c0defb3761526f740d187d215980b6a757eec14c7948d2d8c73c7b421d",
+    "status": "ok"
+  },
+  {
+    "id": "SEEK",
+    "url": "https://arxiv.org/pdf/2405.09822",
+    "arxiv": "2405.09822",
+    "pages": 15,
+    "sha256": "6e335dd4cda24db9e311637748790f1622534e86b2d38aceea7f345dec5211da",
+    "status": "ok"
+  },
+  {
+    "id": "CARe",
+    "url": "https://arxiv.org/pdf/2409.04837",
+    "arxiv": "2409.04837",
+    "pages": 15,
+    "sha256": "91ab7fe327af39ece839b8d5f30eed9b33cdcea52530bdf9a5c25ceef2a755a1",
+    "status": "ok"
+  },
+  {
+    "id": "VLFM",
+    "url": "https://arxiv.org/pdf/2312.03275v1",
+    "reused": true,
+    "pages": 7,
+    "sha256": "07f1f60fae11be46c488c1fbf5581c8f6d44904ac39ebb6071050d44d731efce",
+    "status": "ok"
+  },
+  {
+    "id": "BeliefMapNav",
+    "url": "https://arxiv.org/pdf/2506.06487v1",
+    "reused": true,
+    "pages": 20,
+    "sha256": "88a9c2ce82325ebacd33c2546cf7a168a95270afbdaad71061025c3f0581cc05",
+    "status": "ok"
+  },
+  {
+    "id": "SG-Nav",
+    "url": "https://arxiv.org/pdf/2410.08189v1",
+    "reused": true,
+    "pages": 17,
+    "sha256": "c79eb95338ef42030d6b64423f2cd908406695ce195bc81dd87e3fe1077c005c",
+    "status": "ok"
+  },
+  {
+    "id": "DovSG",
+    "url": "https://arxiv.org/pdf/2410.11989v6",
+    "reused": true,
+    "pages": 8,
+    "sha256": "b1a04ccc43de4ded903a30ab1ac734ee30e0f57f521e619603e3ea10ff758ee0",
+    "status": "ok"
+  },
+  {
+    "id": "SayPlan",
+    "url": "https://proceedings.mlr.press/v229/rana23a/rana23a.pdf",
+    "reused": true,
+    "pages": 50,
+    "sha256": "4f6406e6d0b295e9d6c720b365f2e1740856f9a016c157bca813f2a8cd679171",
+    "status": "ok"
+  },
+  {
+    "id": "InnerMonologue",
+    "url": "https://proceedings.mlr.press/v205/huang23c/huang23c.pdf",
+    "reused": true,
+    "pages": 14,
+    "sha256": "a8edfa05bef6ea6ad5021bf2bd63283c1eeb865452c81aa9f00566761c5f3f1e",
+    "status": "ok"
+  },
+  {
+    "id": "OpenFMNav",
+    "url": "https://arxiv.org/pdf/2402.10670",
+    "reused": true,
+    "pages": 14,
+    "sha256": "e6210e34678ed0be94337ca8a7eed94dd5dc2433bc7185ff0f6615113ba810e9",
+    "status": "ok"
+  },
+  {
+    "id": "UniGoal",
+    "url": "https://arxiv.org/pdf/2503.10630",
+    "pages": 12,
+    "sha256": "86654c940baec0f9556064ad9b5c1cace09a5bde8a54cd4ec43ab1f2cc320ade",
+    "status": "ok"
+  },
+  {
+    "id": "BSC-Nav",
+    "url": "https://www.nature.com/articles/s41467-026-74358-5.pdf",
+    "status": "ok",
+    "pages": 18,
+    "sha256": "6b69725c37b98cb1afce1a004ef8a1ee21dc450ab0a436d37e3febd7a5095b6c"
+  },
+  {
+    "id": "AECNav",
+    "url": "https://arxiv.org/pdf/2608.10817",
+    "status": "failed",
+    "error": "HTTPSConnectionPool(host='arxiv.org', port=443): Read timed out."
+  }
+]

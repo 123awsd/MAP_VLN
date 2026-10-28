@@ -1,7 +1,0 @@
-<launch>
-<include file="$(find pre_map_bridge)/launch/habitat_falcon.launch">
-<arg name="map_config" value="@TRIAL_DIR@/config.yaml"/>
-<arg name="bridge_dir" value="@TRIAL_DIR@/bridge"/>
-</include>
-<node pkg="rosbag" type="record" name="trial_recorder" args="--lz4 -O @TRIAL_DIR@/trial.bag /habitat/rgb /uav_simulator/depth_image /uav_simulator/odometry /uav_simulator/sensor_pose /pre_map_vln/exploration_status /planning/replan /planning/bspline /voxel_mapping/map_coverage /planning_vis/frontier /preview/motion_blocked /planning/pos_cmd"/>
-</launch>

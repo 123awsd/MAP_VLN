@@ -1,0 +1,8 @@
+{
+  "number": 3,
+  "final": "figures/final/stage1_mapping_pipeline.jpg",
+  "source": "figures/source/fig03_mapping_pipeline",
+  "original_source": "素材处理后/第一阶段/阶段对照",
+  "final_sha256": "a2fbcfcf326b4c64b5de3315acea979d968062f83affc07911e1d72e15fc4f63",
+  "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+}

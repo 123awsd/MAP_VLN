@@ -1,0 +1,26 @@
+{
+  "papers": 27,
+  "figures": 57,
+  "groups": {
+    "A": 19,
+    "D": 13,
+    "C": 8,
+    "B": 17
+  },
+  "pdfs": {
+    "Fig8_完整参考图集_57项.pdf": {
+      "pages": 57,
+      "megabytes": 14.78
+    },
+    "Fig8_优先12项详解.pdf": {
+      "pages": 12,
+      "megabytes": 4.45
+    },
+    "Fig8_分类速览.pdf": {
+      "pages": 8,
+      "megabytes": 9.26
+    }
+  },
+  "errors": [],
+  "verification": "All image files decode, source hashes match, PDFs open, local links resolve; figure pages contain notes and source links."
+}

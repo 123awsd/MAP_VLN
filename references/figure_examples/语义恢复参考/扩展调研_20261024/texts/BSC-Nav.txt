@@ -1,0 +1,2063 @@
+--- PDF PAGE 1 ---
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Brain-inspired spatial intelligence for
+embodied agents
+Shouwei Ruan
+1,2,4, Liyuan Wang
+1,3,4, Caixin Kang2, Qihui Zhu2, Songming Liu1,
+Xingxing Wei2
+& Hang Su1
+Spatial cognition enables adaptive goal-directed behavior through struc-
+tured internal models of space. Robust biological systems consolidate spa-
+tial knowledge into three interconnected forms: landmarks for salient cues,
+route knowledge for movement trajectories, and survey knowledge for map-
+like representations. While recent advances in multi-modal large language
+models (MLLMs) have enabled visual-language reasoning in embodied
+agents, these efforts lack structured spatial memory and instead operate
+reactively, limiting their generalization and adaptability in complex real-
+world environments. Here we present Brain-inspired Spatial Cognition for
+Navigation (BSC-Nav), a uniﬁed framework for constructing and leveraging
+structured spatial memory in embodied agents. BSC-Nav builds allocentric
+cognitive maps from egocentric trajectories and contextual cues, and
+dynamically retrieves spatial knowledge aligned with semantic goals. Inte-
+grated with powerful MLLMs, BSC-Nav achieves state-of-the-art efﬁcacy and
+efﬁciency across diverse embodied navigation tasks (e.g., improving success
+weighted by path length from 17.6% to 44.9% in instance-level navigation and
+from 42.7% to 53.1% in zero-shot long-horizon instruction-following), while
+also supporting versatile embodied behaviors in the real physical world.
+These results highlight a scalable path toward general-purpose spatial
+intelligence.
+Spatial cognition, the ability to acquire, organize, exploit, and update
+knowledge about external space, is fundamental to both human beings
+and artiﬁcialintelligence (AI)1,2. It underlies not only sensorimotor skills
+such as navigation and manipulation but also supports higher-level
+cognitive functions, including abstraction, planning, and reasoning. In
+humans, generalizable spatial representations support interpretation
+of sensory input, anticipation of future events, and ﬂexible adaptation
+to changing environments, from brewing coffee in a familiar kitchen to
+navigating an unfamiliar city3–5. Given its broad relevance in embodied
+interaction with the real physical world, spatial cognition has emerged
+as a central theme across disciplines, driving advances in robotics6,
+urban simulation7, and planetary-scale modeling8, while increasingly
+recognized as a foundational component of artiﬁcial general intelli-
+gence (AGI)3,9,10.
+Despite the rapid progress in multi-modal large language mod-
+els (MLLMs) and growing efforts to equip embodied agents with
+visual-language reasoning11–13, current artiﬁcial systems remain fun-
+damentally limited in large-scale spatial cognition14, especially in
+tasks requiring long-horizon navigation and mobile manipulation. A
+central bottleneck lies in the lack of structured spatial memory15–17, a
+mechanism for persistently encoding, organizing, and retrieving
+spatial knowledge about the environment. Most existing methods,
+whether based on end-to-end reinforcement learning18–20 or modular
+pipelines with powerful MLLMs21,22, process observations in a reactive
+Received: 13 October 2025
+Accepted: 2 June 2026
+Check for updates
+1Department of Computer Science and Technology, Institute for AI, BNRist Center, Tsinghua-Bosch Joint ML Center, THBI Lab, Tsinghua University,
+Beijing, China. 2Institute of Artiﬁcial Intelligence, Beihang University, Beijing, China. 3Department of Psychological and Cognitive Sciences, Tsinghua Uni-
+versity, Beijing, China. 4These authors contributed equally: Shouwei Ruan, Liyuan Wang.
+e-mail: xxwei@buaa.edu.cn; suhangss@mail.tsinghua.edu.cn
+Nature Communications|
+(2026) 17:8061
+1
+1234567890():,;
+1234567890():,;
+
+--- PDF PAGE 2 ---
+and stateless manner. Without durable internal models of external
+space, agents struggle to consolidate coherent spatial representa-
+tions or perform reasoning beyond immediate stimuli, resulting in
+fragmented knowledge, short-sighted planning, and poor general-
+ization. Addressing these limitations requires a paradigm shift from
+reactive processing to memory-centric spatial cognition, which
+supports persistent representations and compositional reasoning
+over time and space.
+Compared to artiﬁcial systems, biological spatial cognition
+offers a robust and compelling template. Decades of neuroscience
+research revealed that organisms consolidate spatial knowledge into
+three distinct yet interconnected forms16,17 (Fig. 1a): landmarks, which
+encode stable associations of salient environmental cues to support
+localization and contextual understanding23,24; route knowledge,
+which captures egocentric movement trajectories between land-
+marks for habitual navigation and path integration25; and survey
+knowledge, which integrates multiple routes into allocentric, map-
+like representations that support ﬂexible inference, shortcut dis-
+covery, and detour planning26. These spatial representations are
+accessed and coordinated via working memory27, especially visual-
+spatial working memory28,29, enabling adaptive retrieval, composi-
+tion, and generalization based on task demands and environmental
+familiarity.
+Motivated by these biological principles, we introduce Brain-
+inspired Spatial Cognition for Navigation (BSC-Nav), a uniﬁed frame-
+work that instantiates cognitive spatial intelligence in embodied
+agents via structured spatial memory (Fig. 1b). BSC-Nav explicitly
+constructs spatial knowledge via two synergistic branches: a landmark
+memory module, which encodes durable associations between salient
+environmental cues and 3D spatial locations to instantiate landmarks;
+and a cognitive map module, which accumulates egocentric observa-
+tions along movement trajectories as route knowledge and then
+organizes the voxelized trajectories into allocentric, map-like repre-
+sentations as survey knowledge. Compared to previous embodied
+navigation frameworks conﬁned to localized modeling with a single
+granularity, such as purely dense grids30,31 or sparse topologies32,33, the
+hierarchical spatial architecture of BSC-Nav achieves the decoupling of
+spatial knowledge while incorporating targeted adaptive update
+mechanisms. This allows spatial knowledge to continuously evolve as
+the agent explores external environments, overcoming the limitations
+of singular, static spatial representations.
+BSC-Nav further incorporates a working memory module that
+dynamically retrieves and combines spatial representations from
+landmark memory and the cognitive map, thereby aligning semantic
+goals with grounded spatial actions. Each component interfaces
+seamlessly with large-scale foundation models: visual foundation
+Fig. 1 | The BSC-Nav framework for cognitive spatial intelligence. a Structured
+spatial memory in biological brains, comprising landmarks, route knowledge, and
+survey knowledge. b The BSC-Nav framework instantiates structured spatial
+memory in embodied agents. Environment observations (RGB-D images and agent
+poses) are processed by (i) a landmark memory module encodes and retrieves
+durable associations of multi-modal environmental cues as the landmarks; and (ii) a
+cognitive map module accumulates and organizes movement trajectories as the
+route knowledge into allocentric, map-like representations as the survey
+knowledge. Upon task invocation, (iii) a working memory module dynamically
+composes relevant spatial knowledge for adaptive planning and reasoning.
+c Structured spatial memory enables not only universal navigation but also higher-
+level spatial-aware skills. The human and brain illustrations in (a) were adapted
+(with added layers and annotations) from SciDraw artwork, licensed under CC-BY
+4.0 (https://creativecommons.org/licenses/by/4.0/). Sources: https://doi.org/10.
+5281/zenodo.3925989,https://doi.org/10.5281/zenodo.3926189.
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+2
+
+--- PDF PAGE 3 ---
+models like DINOv234,35 provide perceptual grounding of environ-
+mental cues, while MLLMs like GPT-4V21 guide high-level semantic
+interpretation and goal-conditioned reasoning. Unlike previous end-
+to-end action-planning navigation frameworks11,30,36, which are highly
+susceptible to data distribution shifts between training and testing
+environments, BSC-Nav leverages the explicit retrieval mechanism of
+its working memory to achieve a complete decoupling of high-level
+semantic goal planning from low-level physical motion control,
+thereby paving the way toward zero-shot, general-purpose embodied
+navigation.
+By integrating MLLM-based embodied agents with structured
+spatial memory, BSC-Nav achieves robust spatial cognition cap-
+abilities, supporting long-horizon reasoning, experience reuse, and
+ﬂexible transitions between local and global policies. BSC-Nav achieves
+state-of-the-art performance across a broad spectrum of navigation
+tasks, including object-goal, open-vocabulary, and instance-level
+navigation, while also demonstrating strong spatial generalization in
+instruction following, embodied question answering, and mobile
+manipulation. These results position BSC-Nav as a scalable path that
+complements MLLMs’ vision-language reasoning with cognitive spatial
+intelligence, enabling more capable, adaptable, and cognitively
+informed AI operating in the real physical world.
+Results
+We begin by presenting the BSC-Nav framework, which instantiates
+brain-inspired structured spatial memory in embodied agents. We
+then systematically evaluate its performance across both simulated
+and real-world scenarios, highlighting: (i) universal navigation cap-
+abilities in foundational tasks; (ii) higher-level spatially aware skills in
+instruction-driven visual-language navigation and active embodied
+question answering; and (iii) real-world efﬁcacy in navigation and
+mobile manipulation.
+Construction and exploitation of structured spatial memory in
+embodied agents
+Structured spatial memory is essential for guiding goal-directed
+behavior in complex real-world environments3–5, yet remains largely
+absent from current embodied agents. Drawing inspiration from the
+robust
+spatial
+representations
+in
+biological
+systems,
+namely,
+landmarks23,24, route knowledge25, and survey knowledge26, BSC-Nav
+implements a modular architecture that explicitly constructs and
+exploits analogous memory structures to achieve spatial cognition
+capabilities (Fig. 1b, detailed in Methods).
+BSC-Nav comprises two branches that are continuously updated
+to accumulate and organize spatial knowledge during environment
+exploration. First, a landmark memory module encodes salient envir-
+onmental cues as associative triplets comprising spatial coordinates,
+semantic categories, and contextual descriptions, consolidating land-
+marks of the surroundings. This design yields abstract and sparse
+representations that prioritize salient instances, enabling efﬁcient
+retrieval and forming a ﬂexible, interpretable scaffold of the external
+space (detailed in Methods). Meanwhile, a cognitive map module
+accumulates egocentric observations along movement trajectories as
+route knowledge, which are then voxelized and organized into per-
+sistent allocentric representations as survey knowledge (detailed in
+Methods). Motivated by the broad idea in free-energy37,38 and
+predictive-processing39,40 accounts, that biological systems update
+internal representations in response to mismatches between obser-
+vation and expectation, we implement a surprise-driven update strat-
+egy
+that
+selectively
+integrates
+novel
+or
+unexpected
+spatial
+observations. Here, this mechanism refers to a heuristic computational
+design, rather than a strict implementation of variational free-energy
+optimization41.
+To exploit structured spatial memory during task execution, BSC-
+Nav further incorporates a working memory module that adaptively
+retrieves landmarks, route knowledge, and survey knowledge for goal
+localization and trajectory planning (detailed in Methods). Analogous
+to visual-spatial working memory in biological systems28,29, this mod-
+ule dynamically composes spatial representations based on task
+demands and environmental familiarity.
+We propose a hierarchical retrieval strategy guided by the com-
+plexity of the goal. For simple targets, the agent leverages MLLMs22,42 in
+a text-only form to reason over semantic associations and contextual
+cues within the landmark memory (Fig. 1c). For more complex or
+ambiguous instructions, BSC-Nav activates association-enhanced
+retrieval over the cognitive map. In this process, MLLMs enrich the
+initial goal descriptions by inferring object-speciﬁc attributes and
+scene-level priors, transforming vague commands into semantically
+detailed representations. These enriched descriptions are then ren-
+dered into imagined visual prototypes using a text-to-image diffusion
+model43. The generated images are encoded and matched against
+dense visual features stored in the cognitive map to localize candidate
+target regions. This hierarchical retrieval strategy allows BSC-Nav to
+access complementary forms of spatial memory in response to target
+complexities (category-level and instance-level) and modalities (text
+and image), supporting precise localization for universal goal-directed
+navigation (Fig. 2).
+Working memory retrieval often produces multiple candidate
+coordinates, each associated with a conﬁdence score and relative
+distance. In scenarios with multiple valid targets (e.g., category-level
+navigation), conﬁdence scores alone may not reliably indicate cor-
+rectness. Rather than greedily selecting the candidate with the highest
+conﬁdence, BSC-Nav employs a composite ranking strategy that inte-
+grates distance- and conﬁdence-based scores to determine an efﬁ-
+cient, adaptive exploration sequence. Candidate targets are then
+sequentially visited and veriﬁed using online visual-semantic obser-
+vations parsed by the MLLM until the goal is conﬁrmed. A more
+detailed illustration of candidate generation, ranking, and veriﬁcation
+is provided in Supplementary Fig. 1. Low-level movement policies are
+generated using heuristic planning along this sequence. During
+execution, MLLMs continuously parse spatial-semantic context from
+observations, verify landmark proximity, and conﬁrm goal arrival,
+enabling affordance-aware action generation. Upon reaching the
+appropriate target locations, agents can invoke additional skills, such
+as grasping objects or answering questions, to accomplish more
+complex, task-driven objectives (Fig. 1c).
+Universal navigation across modalities and granularities
+Through brain-inspired spatial cognition that incorporates the three
+types of spatial knowledge, BSC-Nav demonstrates strong general-
+ization across diverse navigation tasks and consistently outperforms
+recent strong baselines in both success rate and navigation efﬁciency.
+We conduct systematic evaluations across 8195 episodes in 62
+indoor scenes from physically reconstructed environments (MP3D44
+and HM3D45 datasets) in the Habitat simulator46, covering four repre-
+sentative navigation tasks (Fig. 3): Object-Goal Navigation (OGN)18,47,48,
+Open-Vocabulary Object Navigation (OVON)49, Text-Instance Naviga-
+tion (TIN)50, and Image-Instance Navigation (IIN)51. In each episode,
+agents initialized at random positions execute discrete actions (for-
+ward 25 cm, turn left 30∘, turn right 30∘, and stop)52. Following standard
+protocols52, navigation succeeds only when agents execute a stop
+within 1.0 m of goals. Evaluation metrics include the Success Rate
+(SR)53, deﬁned as the fraction of completed episodes for efﬁcacy; and
+the Success weighted by Path Length (SPL)53, which scales the binary
+success by the ratio of the shortest path distance to the agent’s actual
+trajectory length for efﬁciency (detailed in Sec. 4.2). We compare BSC-
+Nav with end-to-end methods (PixNav11, DAgRL49, PSL50) and modular
+methods that instantiate only analogous landmark memory (VLFM13,
+MOD-IIN54, UniGoal33, GOAT36). Figure 3a summarizes the quantitative
+benchmark results for category-level and instance-level navigation,
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+3
+
+--- PDF PAGE 4 ---
+while Fig. 3b presents a representative example of navigation trajec-
+tories and target veriﬁcation.
+As shown in Fig. 3a, BSC-Nav demonstrates superior spatial gen-
+eralization in category-level navigation (OGN and OVON). For common
+targets in OGN tasks, BSC-Nav achieves 78.5% SR on HM3D (6 cate-
+gories) and 56.5% on MP3D (20 categories with larger areas), sur-
+passing the state-of-the-art method UniGoal by 24.0% and 15.5%,
+respectively. Unlike UniGoal, which organizes only landmark memory
+with abstract goals and scene graphs, BSC-Nav leverages structured
+spatial memory and thus obtains signiﬁcant performance gains. In the
+more challenging OVON tasks involving 79 everyday objects (e.g.,
+“kitchen lower cabinet”), BSC-Nav maintains 40.2 and 38.9% SR on
+MP3D’s unseen and seen validation sets, outperforming the supervised
+method DAgRL in zero-shot settings. The results of instance-level
+navigation (TIN and IIN) further validate BSC-Nav’s robust multi-modal
+generalization. In TIN tasks, it nearly doubles the SR compared to
+UniGoal and VLFM. In IIN tasks, direct matching of target images with
+cognitive map features yields 71.4% SR, outperforming UniGoal
+by 11.4%.
+Notably, BSC-Nav achieves signiﬁcantly higher navigation efﬁ-
+ciency across all tasks compared to baseline methods, as measured by
+SPL scores. This improvement stems from our distance- and
+conﬁdence-based scoring strategy within the working memory mod-
+ule, which enables the agent to plan efﬁcient exploration sequences by
+examining only a small number of candidate locations (Supplementary
+Fig. 3). Interestingly, OGN and IIN generally reach higher SR and SPL
+with fewer explored candidates than OVON and TIN (Supplementary
+Fig. 3). We attribute this difference to target ambiguity: OGN and IIN
+typically provide stronger semantic or visual grounding, whereas
+OVON and especially TIN require broader open-vocabulary reasoning
+or ﬁner-grained instance disambiguation, making candidate veriﬁca-
+tion more challenging. Besides, performance differences across target
+categories likely reﬂect both visual saliency and contextual regularity.
+Large and visually distinctive objects such as beds are often easier to
+localize and verify because they occupy more stable and semantically
+predictable regions, whereas smaller or less distinctive targets can
+introduce greater ambiguity during retrieval and stopping decisions. A
+representative visualization example is presented in Fig. 3b, including
+top-down trajectories, ﬁrst-person observations, and MLLM-assisted
+target veriﬁcation. We provide additional examples across various
+navigation tasks in Supplementary Movie 1 and Supplementary Fig. 4.
+Furthermore, detailed numerical results for all four navigation tasks
+are provided in Supplementary Tables 1–3.
+Higher-level spatially-aware skills
+By integrating structured spatial memory with MLLMs’ robust visual
+grounding and high-level planning capabilities, BSC-Nav demonstrates
+strong performance on higher-order spatial tasks, such as long-
+horizon navigation and spatial reasoning based on complex linguistic
+instructions. Figure 4 summarizes the overall performance, including
+Fig. 2 | Precise localization via hierarchical retrieval in working memory. a For
+simple category-level goals, working memory prioritizes retrieval from the land-
+mark memory module for rapid matching and candidate coordinate generation.
+b For complex instance-level goals, working memory employs association-
+enhanced retrieval, converting text instructions into visual features to query the
+cognitive map module. For image goals, the cognitive map is queried directly using
+extracted visual features. A more detailed illustration of candidate generation,
+ranking, and veriﬁcation is provided in Supplementary Fig. 2.
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+4
+
+--- PDF PAGE 5 ---
+quantitative results in Fig. 4a, b and representative qualitative exam-
+ples in Fig. 4c, d.
+We evaluate BSC-Nav on a representative task termed Long-
+horizon Instruction-based Navigation (LIN)55,56, which requires agents
+to understand and execute complex instructions containing multiple
+intermediate goals and spatial constraints. For example, an instruction
+such as “Go through the glass door, pass between the sofa and the
+coffee table, walk to the refrigerator, then turn right and stop at the
+staircase entrance” demands nuanced vision-language reasoning and
+spatial understanding. To address this, we equip BSC-Nav with GPT-
+o357, a powerful MLLM with advanced reasoning capabilities. GPT-o3
+decomposes complex instructions into spatially grounded subgoals
+(termed waypoints, such as “glass door”, “refrigerator”, and “staircase
+entrance”) by language instruction and initial visual observation of the
+agent. This hierarchical planning strategy transforms instruction-
+following into sequential goal-directed navigation steps, enabling BSC-
+Nav to reliably reach each waypoint and ultimately the ﬁnal
+destination.
+We evaluate BSC-Nav on the VLN-CE R2R benchmark56, which
+includes 1,000 human-annotated long-horizon instructions from MP3D.
+As shown in Fig. 4a, BSC-Nav achieves 38.5% SR in zero-shot settings,
+only 8.5% below Uni-Navid12, the state-of-the-art vision-language-action
+model trained with extensive task-speciﬁc supervision. Notably, BSC-
+Nav attains 53.1% SPL, signiﬁcantly outperforming all baseline methods
+in navigation efﬁciency. We attribute this result to the complementary
+strengths of structured spatial memory and MLLM-based reasoning:
+GPT-o3 decomposes complex instructions into semantically grounded
+subgoals, while BSC-Nav reuses the landmark memory and cognitive
+Fig. 3 | Goal-orientedmulti-modal navigation. a Performance comparison against
+baseline methods across different navigation tasks. Evaluations encompass
+category-level tasks, including object goal navigation (OGN) and open-vocabulary
+object navigation (OVON), as well as instance-level tasks, including text instance
+navigation (TIN) and image instance navigation (IIN). Quantitative results are
+averaged across different trial numbers: 2195 and 2000 episodes for OGN on HM3D
+and MP3D, respectively; 1000 episodes each for OVON, TIN, and IIN. For each task,
+efﬁcacy and efﬁciency are quantiﬁed by Success Rate (SR, %) and Success weighted
+by Path Length (SPL, %), respectively, as indicated by the paired bar charts. Source
+data are provided as a Source Data ﬁle. b Visualization of navigation trajectories
+executed by BSC-Nav, illustrating the agent’s egocentric observations and the tar-
+get veriﬁcation process facilitated by MLLM interactions.
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+5
+
+--- PDF PAGE 6 ---
+map to localize and reach these waypoints efﬁciently across long tra-
+jectories. Compared with purely reactive or heavily supervised baselines,
+this memory-centric design allows the agent to better preserve spatial
+consistency and reduce unnecessary exploration, which is especially
+important in zero-shot long-horizon instruction following. Meanwhile,
+the remaining gap in SR relative to the best supervised method suggests
+that fully resolving complex linguistic ambiguity and multi-step spatial
+dependencies remains challenging without instruction-level task-spe-
+ciﬁc training. Representative navigation trajectories are visualized in
+Fig. 4c, including simpliﬁed waypoint descriptions and visual prototypes
+generated by working memory retrieval. Additional examples are pro-
+vided in Supplementary Movie 2. The full quantitative comparison is
+provided in Supplementary Table 4.
+The value of spatial cognition extends beyond navigation to
+spatial reasoning and scene understanding. Here we consider a
+representative task termed Active Embodied Question Answering (A-
+EQA)58–60, which requires agents to answer spatially grounded ques-
+tions through active exploration of the environment. Unlike static
+visual question answering, A-EQA demands spatial understanding,
+exploratory planning, and dynamic observation synthesis, all well
+aligned with BSC-Nav’s strengths. To address each question, BSC-Nav
+ﬁrst parses target waypoints (instances or regions relevant to the
+query) and then conducts goal-directed exploration. Upon reaching
+the appropriate locations, GPT-4o42 integrates local observations with
+the original question to generate spatially grounded answers. We
+evaluate BSC-Nav on the A-EQA subset of the OpenEQA benchmark60,
+Fig. 4 | Higher-level spatially-aware skills enabled by BSC-Nav. a Comparison of
+BSC-Nav against baseline methods on long-horizon instruction-following tasks
+using the VLN-CE R2R benchmark. Quantitative results are averaged over 1000
+episodes. Bar charts report Success Rate (SR, %) to quantify efﬁcacy and Success
+weighted by Path Length (SPL, %) to quantify efﬁciency. Source data are provided as
+a Source Data ﬁle. b Performance comparison on active embodied question
+answering tasks using the A-EQA benchmark, with results averaged over 184 test
+samples and evaluated by the LLM-match score. The right panel provides a ﬁne-
+grained performance breakdown of BSC-Nav, baselines, and human references
+across seven EQA question categories: object recognition (OR), object localization
+(OL), attribute recognition (AR), spatial understanding (SU), object state recogni-
+tion (OSR), functional reasoning (FR), and world knowledge (WK). Source data are
+provided as a Source Data ﬁle. c,d Representative visualizations of BSC-Nav’s
+navigation trajectories during human instruction navigation (c) and embodied
+question answering (d) tasks.
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+6
+
+--- PDF PAGE 7 ---
+which includes 184 questions that span seven categories. We compare
+BSC-Nav with three representative baselines: a blind LLM that answers
+without visual observations; a question-agnostic frontier exploration
+strategy60; and Explore-EQA61, an active exploration method without
+structured spatial memory. The overall performance is measured by
+LLM-Match60, which computes semantic similarity between the gen-
+erated and reference answers using LLMs (detailed in Methods).
+As shown in Fig. 4b, BSC-Nav achieves the highest LLM-Match
+score of 54.6, signiﬁcantly outperforming all baselines. We attribute
+this advantage to the fact that A-EQA requires not only local visual
+understanding but also active exploration guided by reusable spatial
+memory. In contrast to blind LLMs or question-agnostic exploration,
+BSC-Nav can parse target-relevant waypoints, conduct goal-directed
+exploration, and accumulate spatial evidence before answering. The
+category-wise breakdown in Fig. 4b further shows particularly strong
+improvements in tasks that require ﬁne-grained spatial localization
+and object-state awareness, where structured spatial memory is
+especially beneﬁcial for efﬁcient and accurate information gathering.
+The remaining gap to human performance underscores that embodied
+spatial reasoning still requires stronger integration of commonsense
+knowledge, causal inference, and abstraction from sparse observa-
+tions. A representative example in Fig. 4d exhibits how BSC-Nav
+combines goal-directed exploration with structured spatial memory to
+address diverse spatial reasoning problems. The detailed LLM-Match
+scores across all question categories are reported in Supplementary
+Table 5.
+Real-world navigation and mobile manipulation
+To demonstrate BSC-Nav’s generalization beyond simulation and its
+broad applicability in downstream tasks, we deploy it on a custom-
+built mobile robotic platform within physical indoor environments.
+This evaluation demonstrates how structured spatial memory enables
+reliable long-range navigation and integrated manipulation in the real
+physical world. The mobile platform (Fig. 5a) features a compact
+mechanical design equipped with high-precision motion control, as
+well as modular sensory and actuation capabilities. We conduct a total
+of 75 navigation episodes in a two-story indoor space (around 200 m2,
+Fig. 5b), covering three types of goal-directed tasks: Object-Goal
+Navigation (OGN), Text-Instance Navigation (TIN), and Image-Instance
+Navigation (IIN), with ﬁve distinct targets per task (Fig. 5c). Each target
+is tested over ﬁve trials from randomly sampled starting positions,
+with an average path length of 23.4 m.
+BSC-Nav demonstrates robust spatial generalization in all real-
+world tasks. As shown in Fig. 5d, it achieves at least 3 out of 5 successful
+trials per target (SR is deﬁned as reaching within 1.0 m), with IIN per-
+forming best, reaching 100% SR on 4 out of 5 targets. Both OGN and
+TIN reach 100% SR on two targets and exceed 66.7% SR across all cases.
+Even in failure cases, BSC-Nav reliably localizes to semantically plau-
+sible regions, demonstrating strong spatial awareness. The distance-
+to-goal distribution in Fig. 5e further conﬁrms the precise stop loca-
+tion, with the ﬁnal distance below 2.5 m in all cases and tight clustering
+between targets, particularly for IIN. Navigation efﬁciency is reﬂected
+in a mean velocity of 0.76 m/s with low variance (Fig. 5f), indicating
+stable and efﬁcient movement. Representative navigation trajectories
+are visualized in Fig. 5g, with complete demonstrations available in
+Supplementary Movies 3–7. The trial-level raw data for all 75 real-world
+navigation episodes are provided in Supplementary Tables 6–8.
+To further demonstrate the advantages of the BSC-Nav archi-
+tecture in real-world deployments, we conduct an ablation study on
+the Text Instance Navigation (TIN) task, comparing the full BSC-Nav
+against a landmark-memory-only variant (i.e., excluding the cognitive
+map). The conﬁguration of this variant serves a dual critical purpose:
+(i) it acts as a proxy baseline for existing modular methods that model
+solely landmark-level spatial knowledge without incorporating dense
+visual-spatial representations; and (ii) it provides a controlled setting
+to rigorously analyze the speciﬁc contributions of different memory
+modules in physical environments. As shown in Supplementary Fig. 5c,
+the landmark-only baseline achieved an overall navigation success rate
+of merely 52%, substantially lower than that of the full BSC-Nav (78%).
+This pronounced performance gap arises because the baseline, strip-
+ped of the dense visual-spatial features provided by the cognitive map,
+struggles immensely with text-instance targets that necessitate ﬁne-
+grained visual disambiguation. Constrained exclusively to category-
+level semantic matching, the baseline method is forced to resort to
+inefﬁcient sequential exploration across a series of candidate way-
+points. Supplementary Fig. 5d visualizes this candidate region
+exploration process for the landmark-only variant, and the detailed
+quantitative raw data are provided in Supplementary Table 9.
+Beyond navigation, BSC-Nav’s structured spatial memory sup-
+ports robust mobile manipulation guided by natural language.
+Although prior embodied manipulation systems62,63 have shown pro-
+mise in static, small-scale environments, they often lack the spatial
+generalization necessary for large-scale deployment. BSC-Nav over-
+comes this limitation by seamlessly integrating long-horizon naviga-
+tion with goal-conditioned manipulation. In our demonstrations,
+natural language instructions are interpreted by GPT-464 to generate
+waypoint-action sequences. Upon reaching each waypoint, the agent
+executes a predeﬁned manipulation primitive, such as grasp, place,
+and pour. Representative examples in Figure 6 show both single-step
+and multi-step tasks. Notably, the “make breakfast” task (Fig. 6c)
+involves identifying and interacting with three spatially distributed,
+open-vocabulary objects, emphasizing the critical role of structured
+spatial memory in long-horizon reasoning and reliable object
+grounding. Full demonstrations are provided in Supplementary
+Movies 8–10.
+Discussion
+This work demonstrates that organizing embodied navigation around
+high-level principles inspired by biological spatial cognition can be
+effective in practice. By constructing a structured spatial memory
+comprising computational counterparts of landmarks, route knowl-
+edge, and survey knowledge, BSC-Nav improves navigation perfor-
+mance and extends the spatial capabilities that complement the
+perceptual and reasoning strengths of modern MLLMs.
+Conventional embodied agents often rely on reinforcement
+learning or imitation learning, acquiring task-speciﬁc policies through
+extensive
+trial-and-error
+or
+teleoperated
+demonstrations.
+Here,
+“embodied” refers to agents that perceive and act in closed-loop
+interaction with physical or simulated environments, rather than
+explicitly modeling morphology-dependent cognition in the stronger
+sense emphasized in embodiment theory65. While effective in con-
+trolled settings, prior methods remain fundamentally reactive,
+responding to immediate stimuli without persistent or reusable spatial
+knowledge. BSC-Nav addresses this limitation by integrating struc-
+tured spatial memory with foundation models, enabling a transition
+from observation-driven pattern matching to multi-level spatial rea-
+soning. BSC-Nav exhibits strong performance across navigation tasks
+of varying modalities and granularities, especially in open-vocabulary
+and instance-level settings. These results demonstrate how memory-
+centric spatial representations enable such agents to decouple plan-
+ning from immediate perception, reuse prior experience across tasks,
+and translate high-level goals into concrete actions, which we view as
+important components of cognitive spatial intelligence. Importantly,
+BSC-Nav is not purely retrieval-based but also supports active
+exploration by ranking candidate targets, selectively visiting promis-
+ing locations, and verifying goals through ongoing interaction with the
+environment.
+BSC-Nav
+provides
+a
+computational
+framework
+that
+oper-
+ationalizes long-standing theories of spatial knowledge in biological
+systems16,17. While neuroscience has proposed that spatial cognition
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+7
+
+--- PDF PAGE 8 ---
+builds upon interconnected representations of landmarks, route
+knowledge, and survey knowledge, most experimental evidence has
+been behavioral or correlational. BSC-Nav demonstrates how these
+elements can be synergistically implemented to support long-horizon
+spatial understanding, planning, and reasoning. The cognitive map
+module further incorporates a surprise-driven update strategy
+inspired by the free-energy principle37,38 of representation updating,
+encouraging stronger incorporation of observations that are less
+consistent with existing memory. Furthermore, recent ﬁndings sug-
+gest that sequential route learning drives the formation of allocentric
+cognitive maps in the hippocampus-entorhinal circuits66, a process
+with similar ideas to BSC-Nav’s trajectory voxelization. These parallels
+reveal a convergent computational basis shared between cognitive
+science and AI.
+Fig. 5 | Universal navigation capabilities in real-world scenarios. a The custom-
+built robotic platform integrates perception, navigation, and manipulation cap-
+abilities. b The indoor experimental environment spans 200 m2 and includes
+diverse functional zones (e.g., ofﬁce, lounge, reception, and kitchen). c–g Real-
+world navigation performance across Object-Goal Navigation (OGN), Text-Instance
+Navigation (TIN), and Image-Instance Navigation (IIN) tasks with 15 distinct targets
+(c). For each target, we conducted n = 5 independent experimental trials with
+randomized starting positions. We report the success rate (SR) (d), ﬁnal distance to
+goal (e), and mean navigation velocity (f). In (e) and (f), data are presented as box
+plots with individual data points overlaid. For all box plots, the center line indicates
+the median, the lower and upper bounds of the box represent the 25th and 75th
+percentiles, respectively, and the whiskers extend to the minimum and maximum
+values. Source data are provided as a Source Data ﬁle. g Representative examples of
+real-world navigation. Each shows a top-down trajectory with timestamps (left) and
+corresponding egocentric-allocentric views (right).
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+8
+
+--- PDF PAGE 9 ---
+Fig. 6 | Real-world mobile manipulation. The coordination between spatial
+memory-driven navigation and manipulation primitives enables the execution of
+long-horizon tasks speciﬁed through human instructions. a Single-waypoint task,
+cleaning stains on a marble table next to a shredder. b Object transfer task, relo-
+cating a cookie box from table to the kitchen island, requiring navigation between
+manipulation actions. c Complex multi-step task, preparing breakfast by sequen-
+tially navigating to and manipulating three open-vocabulary targets (oatmeal jar,
+coco balls, and milk bottle) to assemble ingredients on a plate. Full demonstrations
+are provided in Supplementary Movies 8--10.
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+9
+
+--- PDF PAGE 10 ---
+BSC-Nav is particularly suited to goal-directed embodied opera-
+tion in partially observable environments, where agents must link
+semantic goals to persistent spatial structure, revisit previously seen
+regions, disambiguate candidate targets, and coordinate navigation
+with downstream interaction. This makes the framework directly
+relevant not only to service and assistive robotics, but also to embo-
+died question answering and other long-horizon tasks that require
+accumulated, queryable, and updateable spatial experience. Extending
+BSC-Nav across environmental scales, however, poses distinct chal-
+lenges rather than a single scaling problem. In compact environments,
+the key issue is representational economy, namely avoiding redundant
+memory growth while maintaining efﬁcient retrieval. In larger or more
+open-ended environments, the main bottlenecks shift to memory
+capacity, map consistency, and retrieval efﬁciency. These observations
+highlight scalability as an important next consideration for structured
+spatial memory beyond the benchmark settings studied here.
+As embodied AI systems advance in perceptual and motor cap-
+abilities, it becomes increasingly important to evaluate not only whe-
+ther agents can act successfully in physical environments but also how
+language and spatial cognition interact to support such behavior. In
+cognitive science, growing evidence suggests that language is not
+merely a detached symbolic interface but can itself serve as a source of
+grounding and a mode of action, while spatial knowledge and map-like
+representations
+are
+in
+turn
+deeply
+entangled
+with
+language
+experience67–69. Our results are broadly consistent with this perspec-
+tive. In BSC-Nav, linguistic goals become most effective when they can
+be anchored to structured spatial memory, whereas spatial memory
+becomes more ﬂexible when it can be queried, abstracted, and veriﬁed
+through language-guided reasoning. This interplay suggests that
+human-like spatial intelligence may depend not only on building
+internal models of space, but also on coupling them tightly with lin-
+guistic representations that support abstraction, disambiguation, and
+goal speciﬁcation. From this viewpoint, a future embodied Turing test
+for spatial cognition70 may need to assess not only navigation accu-
+racy, but also whether agents can construct reusable spatial repre-
+sentations, reason from sparse observations, and translate natural-
+language goals into grounded spatial plans in ways that remain robust
+across tasks and environments.
+Despite its effectiveness, the present work still has several limita-
+tions. First, although BSC-Nav is organized around high-level principles
+inspired by biological spatial cognition, it is not intended as a cognitively
+faithful model of human cognition. In particular, the language and visual
+reasoning components are implemented with modern MLLMs, which
+are used primarily as engineering modules for semantic grounding,
+visual interpretation, and high-level reasoning, rather than as biologi-
+cally or developmentally plausible models of human language proces-
+sing. Recent psycholinguistic work has likewise emphasized that strong
+linguistic generalizations learned by neural language models do not by
+themselves establish cognitively plausible mechanisms, especially for
+large-scale models trained far beyond human-like data conditions71.
+From this perspective, BSC-Nav shows that structured spatial memory
+can provide an effective computational interface between perception,
+language, and action, rather than offering a mechanistic account of how
+these functions are jointly realized in the brain. Second, while the fra-
+mework has clear conceptual implications for memory-centric embo-
+died agents, its theoretical contribution remains primarily architectural
+and computational. More formal analyses of when and why structured
+spatial memory improves generalization, efﬁciency, and language-
+guided behavior remain important directions for future work.
+Several future directions emerge from this work. Extending BSC-
+Nav to dynamic and unstructured environments will require spatial
+memory that can be continually revised as scenes evolve over time.
+Scaling to larger environments will in turn demand more efﬁcient
+memory organization, including hierarchical abstraction, compact
+storage, and retrieval with bounded latency. Richer embodied settings
+may further beneﬁt from integrating additional sensory streams, such
+as depth, audio, or tactile signals, together with uncertainty-aware
+updating. Beyond single-agent navigation, future systems should also
+support collaborative and multi-agent spatial reasoning, where mem-
+ory can be shared, communicated, or jointly reﬁned. More broadly, an
+important longer-term direction is to explore architectures in which
+memory, perception, and language are developed under stronger
+constraints of embodiment, experience, and computational efﬁciency.
+Progress along these directions may help narrow the gap between
+high-performing engineering systems and more cognitively grounded
+models of spatial intelligence.
+Methods
+The BSC-Nav framework
+This section describes the implementation details of BSC-Nav, including
+the three synergistic modules (Fig. 1b) and the pipeline of constructing
+and leveraging structured spatial memory (Supplementary Fig. 1).
+Observation space and pre-processing. The observation space of
+BSC-Nav is deﬁned as Ot = fIt, Dt, Ptg, comprising the RGB image
+It 2 RH × W × 3, the depth image Dt 2 Rw × h and the pose of the agent
+Pt = ðXt, Y t, ϕa
+t Þ 2 R3 at time t, where Xt and Yt denote the agent’s 2D
+position in the world coordinate system (defaulting to the Cartesian
+coordinate centered at the SLAM72 initialization point), ϕt is the angle
+of yaw, and H and W are image width and height, respectively. For
+simplicity, we omit the time subscript t in subsequent descriptions.
+RGB images serve as input for both salient object detection and visual
+feature extraction, while depth images and pose information enable
+projection from pixel coordinates to the world coordinate system.
+In a simulation environment, the agent receives RGB images at a
+resolution of 680 × 680 pixels with the depth image aligned to the
+same frame, and its pose is obtained directly from the simulator’s
+ground-truth odometry. In real-world deployment, BSC-Nav acquires
+848 × 480 RGB-D observations at 30 FPS from an Intel RealSense D435i
+depth camera mounted at 1.5 m above ground level. The agent’s pose is
+estimated in real time via 32-beam LiDAR-based SLAM. To mitigate
+sensing artifacts such as depth holes and edge discontinuities, the raw
+depth stream in the real-world is processed through a cascaded ﬁl-
+tering pipeline, comprising threshold ﬁltering (valid range [0.3, 8.0]
+m), spatio-temporal smoothing, and hole-ﬁlling ﬁlters.
+Landmark memory. During active exploration, an observation O is
+processed by two branches in parallel to construct structured spatial
+memory. For landmark memory, we instantiate it as a list of 4-tuples as
+follows:
+Mlandmark = Lk
+
+N
+k = 1,
+Lk = ck, θk, ρk, T k
+
+
+,
+ð1Þ
+where θk = ðXw
+k , Y w
+k , Zw
+k Þ 2 R3 represents the 3D coordinates of the
+center of the k-th instance in the world coordinate system, ck 2 C
+denotes the open-vocabulary category of the predeﬁned category set
+C, ρk ∈[0, 1] indicates detection conﬁdence, and T k is the description
+of the instance generated by GPT-4o42 based on observations, which
+encompasses texture, shape, and spatial contextual semantics.
+To obtain the world coordinates θk, we perform a series of coor-
+dinate transformations. Given a detected object with the bounding
+box center at pixel coordinates (uk, vk) and the corresponding depth
+value dk, we ﬁrst compute the 3D point in the camera coordinate sys-
+tem, which is deﬁned with its origin at the camera’s optical center, the
+xy-plane parallel to the image plane, and the z-axis aligned with the
+camera’s optical axis. The point in the camera coordinate system can
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+10
+
+--- PDF PAGE 11 ---
+be calculated through inverse perspective projection:
+pcam
+k
+= dk  K1
+uk
+vk
+1
+2
+64
+3
+75 = dk
+ðuk  cxÞ=f x
+ðvk  cyÞ=f y
+1
+2
+64
+3
+75,
+ð2Þ
+where K 2 R3 × 3 is the intrinsic matrix of the camera with focal lengths
+(fx, fy) and principal point (cx, cy). Subsequently, we transform this
+point into the world coordinate system. Given the robot pose
+Pt = (Xt, Yt, ϕt) from the observation space at time t, we construct the
+base-to-world transformation matrix:
+Tbase
+world =
+cos ϕt
+ sin ϕt
+0
+X t
+sin ϕt
+cos ϕt
+0
+Y t
+0
+0
+1
+Zbase
+0
+0
+0
+1
+2
+6664
+3
+7775 2 SEð3Þ,
+ð3Þ
+where Zbase represents the robot base height in the world frame. The
+point is then transformed through cascaded homogeneous transfor-
+mation:
+pworld
+k
+1
+"
+#
+= Tbase
+worldTcam
+base
+pcam
+k
+1
+
+
+,
+ð4Þ
+where Tcam
+base 2 SEð3Þ represents the ﬁxed rigid transformation from
+camera to robot base frame. The ﬁnal world coordinates are extracted
+as θk = pworld
+k
+= ðX w
+k , Y w
+k , Zw
+k Þ>. In practice, we employ the open-
+vocabulary object detector YOLO-World73 for the perception of salient
+instances. We predeﬁne several common object categories as the
+landmark category set C = f‘‘sofa”, ‘‘sink”, ‘‘bed”, . . .g, with a detection
+conﬁdence threshold to exclude semantically ambiguous and non-
+salient instances.
+To prevent duplicate memorization of the same instance, we
+perform overlap detection for each newly detected landmark LN+1.
+Deﬁne
+the
+spatial
+overlap
+set
+as:
+U = fLj 2 Mlandmark :k θN + 1  θjk2 < δoverlap ^ cN + 1 = cjg. If U≠;, we per-
+form the memory fusion of existing landmarks:
+Lfused =
+cfused = cN + 1
+θfused =
+ρN + 1θN + 1 +P
+j2Uρjθj
+ρN + 1 +P
+j2Uρj
+ρfused =
+ρN + 1 +P
+j2Uρj
+jUj + 1
+T fused = T k, k = arg maxj2fN + 1g ∪Uρj:
+8
+>
+>
+>
+>
+>
+>
+>
+<
+>
+>
+>
+>
+>
+>
+>
+:
+ð5Þ
+After memory fusion, all elements in U are removed from Mlandmark
+and Lfused is added. This update ensures that each landmark 4-tuple
+represents
+a
+unique
+spatial
+instance,
+avoiding
+information
+redundancy.
+Cognitive map. In parallel with the landmark memory module, the
+cognitive map module continuously projects RGB observations from
+egocentric movement sequences (corresponding to the route knowl-
+edge) into voxelized trajectories, which refer to the intermediate dis-
+cretized
+visual-spatial
+representations
+in
+a
+voxel
+grid,
+and
+progressively integrates and updates such voxelized trajectories into
+allocentric, map-like representations (corresponding to the survey
+knowledge). We deﬁne the cognitive map as a discrete voxelized
+representation:
+Mcog = fF vgv2V,
+where F v = ff bgB
+b = 1,
+f b 2 Rℏ,
+ð6Þ
+where V  Z3 denotes the discrete voxel index space, each voxel
+v = (vx, vy, vz) maintains a feature buffer F v containing up to B feature
+vectors and ℏis the dimension of the visual feature. To achieve ﬁne-
+grained visual-spatial encoding, we employ DINO-v234 (a powerful self-
+supervised visual encoder) to extract patch-level features from
+continuous 2D RGB observations. Given an RGB image I 2 RH × W × 3,
+DINO-v2
+produces
+patch
+tokens
+organized
+as
+a
+spatial
+grid
+Fpatch 2 RH0 × W 0 × D, where H0 = H=s and W 0 = W=s with patch stride s.
+These patch-level features are projected from 2D image coordinates to
+corresponding voxel coordinates through a multi-stage transforma-
+tion process. Let (i, j) denote the indices in the patch grid where i 2
+f0, 1, . . . , H0  1g and j 2 f0, 1, . . . , W 0  1g. For each patch (i, j), we ﬁrst
+determine its center pixel coordinates in the original image:
+ðuij, vijÞ =
+j  s + s=2, i  s + s=2
+
+
+,
+ð7Þ
+where s is the patch stride. Using the depth value dij sampled at this
+location, we compute the corresponding 3D point in the camera
+coordinate system:
+pcam
+ij
+= dij  K1
+uij
+vij
+1
+2
+64
+3
+75:
+ð8Þ
+This point is then transformed into world coordinates using the robot
+pose P = (X, Y, ϕ) from the observation space:
+pworld
+ij
+1
+"
+#
+= Tbase
+worldTcam
+base
+pcam
+ij
+1
+"
+#
+,
+ð9Þ
+where Tbase
+world is constructed from the robot pose as deﬁned in Eq. (7).
+With pworld
+ij
+= ðX w
+ij , Y w
+ij , Zw
+ij Þ>, we discretize the continuous world coor-
+dinates into voxel indices:
+vij =
+Xw
+ij
+Δ + G
+2
+$
+%
+,
+Y w
+ij
+Δ + G
+2
+$
+%
+,
+Zw
+ij
+Δ
+$
+%
+ 
+!
+,
+ð10Þ
+where Δ is the voxel size (spatial resolution) and G is the grid dimen-
+sion. The offset G/2 centers the voxel grid at the world origin. The
+visual feature Fpatch½i, j 2 RD from patch (i, j) is then associated with
+voxel vij.
+In our implementation, we set Δ = 0.1 m and G = 1000 for simu-
+lation environments, yielding an effective spatial coverage of 100 × 100
+m2 with a vertical range of [ −10, 10] m. For real-world deployment, we
+adopt a coarser resolution Δ = 0.2 m with G = 2000, providing a
+400 × 400 m2 coverage and a height range of [ −15, 15] m to accom-
+modate multi-ﬂoor structures and sensor calibration variance. To
+extract patch-level visual features for the cognitive map, we employ
+DINOv2 (ViT-L/14 with registers)34,35, which produces ℏ= 1024-dimen-
+sional feature vectors at a patch stride of s = 14. RGB observations are
+resized to 224 × 224 (simulation) or 252 × 448 (real-world, preserving
+the native camera aspect ratio), resulting in 256 or 576 patch tokens
+per frame, respectively. During depth-to-3D projection, we subsample
+depth maps at a rate of 1 per 1,000 points in simulation (1 per 200 in
+the real world) to balance computational cost with spatial coverage.
+Each
+projected
+point
+is
+assigned
+a
+radial
+Gaussian
+weight
+α = expðr2=ð2σ2ÞÞ, where r is the radial distance from the camera
+optical center and σ2 = 0.6, suppressing noisy features from peripheral
+and distant observations.
+In Mcog, we avoid redundantly storing all visual features from new
+observations, which would lead to information overload and inefﬁ-
+cient retrieval. We also forgo conventional fusion methods, such as
+grid averaging or distance-based weighting31,74, which often introduce
+bias in visual feature representation. Instead, inspired by biological
+learning and memory, we maintain dynamic buffers for each voxel and
+introduce a surprise-based update strategy. Free-energy37,38 and
+predictive-processing39,40 accounts suggest that biological systems
+update
+internal
+models
+in
+response
+to
+mismatches
+between
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+11
+
+--- PDF PAGE 12 ---
+observation and expectation. Motivated by this broad perspective,
+BSC-Nav updates its cognitive map according to the degree of devia-
+tion between new observations and existing memory representations
+within a given spatial region, quantiﬁed as a heuristic surprise score.
+This score is used as an engineering criterion for selective memory
+updating and is not intended as a formal variational free-energy
+objective41. For each new visual feature fnew projected to voxel v 2 Z3,
+we compute its surprise score as
+Sðf new, vÞ =
+1
+∣F N nðvÞ∣
+X
+f b2F N nðvÞ
+Dðf new, f bÞ,
+ð11Þ
+where N nðvÞ = fv0 2 Z3 :k v  v0k1 ≤ng denotes the n-hop Chebyshev
+neighborhood around voxel v, F N nðvÞ = S
+v02N nðvÞF v0 represents the
+union of all feature buffers in the neighborhood, and Dð, Þ is the dis-
+tance metric (e.g., cosine distance). We set n = 1 as each voxel’s surprise
+is computed against features stored in its 33 −1 = 26 adjacent voxels (1-
+hop Chebyshev neighborhood). When Sðf new, vÞ > τ (the surprise
+threshold), fnew is added to buffer F v. Since D is instantiated as the
+cosine distance between L2-normalized DINOv2 features, the com-
+puted surprise score S is strictly bounded within [0, 1]. We select τ = 0.5
+as the natural midpoint of this spectrum, which ensures that a new
+feature is incorporated only when its average divergence from existing
+neighborhood representations outweighs its similarity. Adopting a
+lower threshold would admit near-redundant features and needlessly
+inﬂate memory without enhancing representational diversity. Con-
+versely, a higher threshold risks discarding observations from
+moderately novel viewpoints, ultimately compromising the multi-
+perspective coverage of the cognitive map.
+If jF vj = B, the feature with the highest cosine similarity to fnew
+(i.e., the most redundant entry) within the buffer is replaced to main-
+tain memory efﬁciency. In addition, a periodic deduplication step is
+applied: features within each voxel whose pairwise cosine similarity
+exceeds 0.95 are grouped via union-ﬁnd clustering and merged by
+averaging, thereby compacting redundant encodings accumulated
+from overlapping viewpoints over time. This surprise-based update
+strategy achieves two key advantages: (i) it enhances the robustness of
+spatial knowledge by selectively caching diverse features across
+viewpoints and timepoints in adapting to dynamic environments; and
+(ii) it maintains memory storage and retrieval efﬁciency by avoiding
+redundant encoding of stable environmental elements.
+Working memory. The working memory module is responsible for the
+hierarchical retrieval and strategic reorganization of spatial knowledge
+from both the landmark memory Mlandmark and the cognitive map
+Mcog, enabling BSC-Nav to address navigation tasks of varying mod-
+alities and granularities (Fig. 2b). Unlike the parallel construction and
+passive updating of the two memory branches, the working memory is
+activated only upon receiving navigation instructions. It employs a
+hierarchical retrieval strategy guided by instruction complexity. For
+simple and concrete goals, it prioritizes the fast retrieval of landmark
+memory. For ﬁne-grained or image-based instructions, it further
+engages
+the
+cognitive
+map
+for
+precise
+visual-spatial
+localiza-
+tion (Fig. 2c).
+The structured knowledge base of landmark memory, including
+landmark categories, conﬁdence scores, and contextual descriptions,
+provides a strong foundation for MLLMs to reason about target loca-
+tions. Unlike direct rule matching, this approach enables context-
+aware reasoning and can infer the location of unrecorded targets
+based on spatial associations. For example, even if a “toaster” is not
+explicitly recorded, the system can infer its location by leveraging co-
+located landmarks such as “stove” and “kitchen island”. Speciﬁcally, we
+design retrieval prompts (see prompt templates in Supplementary
+Sec. A) that guide a text-only GPT-4 to integrate conﬁdence scores and
+descriptive semantics to generate a set of candidate coordinates
+fθi
+cand g
+K
+i = 1 from Mlandmark.
+To bridge the modality gap between textual instructions and
+visual representations, we perform association-enhanced retrieval
+over the cognitive map. It ﬁrst employs text-only GPT-4o to reﬁne goal
+descriptions, enriching them with detailed texture and spatial context
+information. Speciﬁcally, in LIN tasks, initial visual observations are
+additionally provided as environmental priors to enhance the accuracy
+and speciﬁcity of reﬁned descriptions. These enriched descriptions are
+then used to “imagine” potential visual appearances of targets through
+a text-to-image generation model, defaulting to Stable Diffusion 3.575.
+This “imagine-then-localize” process resembles human pre-navigation
+thinking. The generated imagined image is encoded by DINO-v2 to
+extract patch-level features ff igQ
+i = 1, followed by center-distance
+weighted pooling to obtain the instance visual representation:
+f target =
+PN
+i = 1wi  pi
+PN
+i = 1 wi
+,
+where wi = expðα  ðxi, yiÞ  ðxc, ycÞ2Þ,
+ð12Þ
+where (xi, yi) denotes the spatial coordinates of the i-th patch, (xc, yc) is
+the image center, and α is the temperature parameter. This weighting
+strategy suppresses background interference and enhances central
+features of the target instance. As an intermediate query, the pooled
+visual features are further matched against features stored in the
+cognitive map, returning the top-K voxel coordinate set with max-
+imum cosine similarity. We perform similarity-weighted DBSCAN
+clustering76 on the voxel coordinate set to obtain the grid coordinates
+of cluster centers as the ﬁnal spatial coordinate candidates. These grid
+coordinates need to be further back-projected to the world coordinate
+system, yielding fθi
+cand g
+Q
+i = 1 for subsequent low-level planning.
+We design a composite scoring function that integrates target
+existence probability and spatial distance to prioritize the set of can-
+didate spatial coordinates. Speciﬁcally, for candidates retrieved from
+the landmark memory, we use detection conﬁdence as the existence
+probability. For candidates retrieved from the cognitive map, we
+employ the cosine similarity of visual features. The priority scoring
+function is deﬁned as:
+Hi = λ  pi + ð1  λÞ  ð1  di
+dmax
+Þ,
+ð13Þ
+where pi represents the existence probability (conﬁdence or similarity)
+of the i-th candidate, di is the Euclidean distance between the candi-
+date and the starting point, dmax = maxj dj normalizes distance across
+candidates. The weighting hyperparameter λ balances existence
+probability and exploration efﬁciency, defaulting to λ = 0.5, assigning
+comparable weights to the target existence probability and spatial
+proximity. This conﬁguration aligns with our empirical ﬁnding that
+localization accuracy and spatial distance are equally pivotal to navi-
+gation efﬁcacy and efﬁciency. When multiple candidates exhibit simi-
+lar existence probabilities, spatial proximity serves as the tie-breaker
+to encourage prioritized exploration of the nearest points.
+Low-level navigation policy generation. Low-level navigation poli-
+cies are typically derived from deterministic path planning condi-
+tioned on environmental constraints and high-level spatial goals52.
+BSC-Nav employs a hierarchical navigation strategy: the exploration
+sequence of each candidate coordinate serves as a high-level policy,
+while heuristic algorithms are used to generate actionable low-level
+policies toward each candidate coordinate. In simulation environ-
+ments, we employ the greedy shortest path algorithm provided by
+the Habitat simulator46, which operates directly on 3D mesh repre-
+sentations of the scene to compute optimal action sequences within
+a discrete action space. For real-world deployment, we implement a
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+12
+
+--- PDF PAGE 13 ---
+two-tier planning architecture. Global planning is carried out using
+the A* algorithm77 on occupancy grid maps constructed via LiDAR-
+based SLAM, yielding globally optimal paths. Local planning levera-
+ges the Timed Elastic Band (TEB) algorithm78,79, which dynamically
+adjusts
+trajectories
+to
+avoid
+obstacles
+while
+maintaining
+efﬁciency. The TEB planner outputs continuous velocity commands
+to control the robot chassis, ensuring smooth and precise motion
+execution.
+Goal veriﬁcation and affordance. Upon arriving at a candidate
+coordinate, BSC-Nav veriﬁes whether the navigation target is present
+at the location. The robot ﬁrst performs a 360∘rotational scan to
+capture a sequence of RGB images. Cosine similarities are then com-
+puted between the CLIP visual embeddings of these images and the
+goal’s text or visual embeddings to identify the viewing angle with the
+highest semantic alignment. The selected image is subsequently fed
+into GPT-4o for precise target veriﬁcation. Beyond conﬁrming target
+presence, GPT-4o is also prompted to generate a sequence of
+affordance-based actions to guide the robot in ﬁne-tuning its pose,
+adjusting its relative position, and orientation for optimal proximity
+and visibility. This ensures favorable initial conditions for downstream
+manipulation tasks.
+Experimental details
+Simulator and datasets. The simulation experiments are conducted
+under the Habitat 3.0 platform80, a commonly used simulation fra-
+mework for embodied AI and human-robot interaction in domestic
+environments. We select this platform for its strong support for large-
+scale
+embodied
+navigation,
+including
+(i)
+habitat-sim,
+a
+high-
+performance
+simulator
+offering
+photorealistic
+rendering
+and
+physics-based interactions for mainstream indoor datasets, and (ii)
+habitat-lab, a modular benchmarking suite supporting a variety of
+navigation tasks with standardized pipelines and metrics. Here we
+evaluate BSC-Nav and baseline methods on four foundational naviga-
+tion tasks:
+1.
+Object-goal navigation (OGN). This task81 comprises two bench-
+marks, including (i) 2195 episodes across 34 HM3D scenes
+involving 6 object categories, and (ii) 2000 episodes across 10
+MP3D scenes with 20 object categories.
+2.
+Open-vocabularyobjectnavigation (OVON).This task49 extends to
+79 open-vocabulary categories across 10 MP3D scenes to address
+the limited object categories in object-goal navigation. We
+sampled 1000 episodes each from the validation-seen and
+validation-unseen splits. The seen split includes categories
+present in training (though not exact instances), while the unseen
+split
+comprises
+entirely
+novel
+and
+semantically
+dissimilar
+categories.
+3.
+Text-instance navigation (TIN). This task50 provides natural
+language descriptions for 795 instances across 36 HM3D scenes.
+Descriptions encompass both intrinsic attributes (inherent object
+properties including shape, color, and material) and extrinsic
+attributes (surrounding environmental contexts), annotated with
+a strong MLLM termed CogVLM82. We evaluate all 1000 test
+episodes.
+4.
+Image-instance navigation (IIN). This task51 employs single-view
+rendered images as navigation targets for instances across 34
+HM3D
+scenes.
+We
+sampled
+1000
+episodes
+from
+the
+validation split.
+Beyond these foundational navigation tasks, we further evaluate
+BSC-Nav and baseline methods on higher-level spatially-aware skills:
+1.
+Long-horizon instruction-based navigation (LIN). We employ the
+VLN-CE R2R benchmark56, which provides 1000 navigation
+episodes in Habitat-lab based on human-annotated long-horizon
+instructions across 11 MP3D scenes.
+2.
+Active embodied question answering (A-EQA). We develop a
+custom evaluation pipeline within Habitat-lab using OpenEQA60.
+Agents are initialized at the ﬁrst frame of each recorded
+exploration trajectory and are allowed to actively explore the
+environment to answer a given spatially grounded question. We
+evaluate the 184 test queries that span seven task categories.
+Evaluation metrics. We adopt two-dimensional metrics53 to quantify
+navigation performance. Success Rate (SR) measures the proportion of
+successful navigation episodes relative to the total test episodes,
+assessing the agent’s capability to accurately navigate target object
+instances. Notably, in OGN, any instance of the target category con-
+stitutes a valid goal regardless of distance from the starting position,
+whereas instance-level navigation requires reaching a unique speciﬁed
+instance in the environment. Speciﬁcally, an episode is deemed suc-
+cessful if the Euclidean distance between the agent and the target
+object is within 1.0 m upon executing the “stop” action. While Success
+weighted by Path Length (SPL) jointly considers navigation success
+and path efﬁciency:
+SPL = 1
+N
+X
+N
+i = 1
+Si 
+L*
+i
+maxðLi, L*
+iÞ
+,
+ð14Þ
+where N denotes the total number of episodes, Si is the binary success
+indicator for episode i (1 for success, 0 for failure), L*
+i represents the
+geodesic shortest path length, and Li is the actual trajectory length
+executed by the agent. SPL values range from 0 to 1, with higher values
+indicating more efﬁcient navigation. While SR quantiﬁes task com-
+pletion capability, SPL further evaluates the optimality of path plan-
+ning, collectively providing a comprehensive assessment of navigation
+performance.
+For A-EQA tasks, we adopt the LLM-Match scoring metric pro-
+posed in Open-EQA60 to assess the correctness of agent responses.
+This metric accounts for the open-vocabulary nature of the agent
+responses, serving as a substitute for manual evaluation. Speciﬁcally,
+given a question Qi, a human annotated response A*
+i, and an agent
+response Ai, the LLM is prompted to assign a score σi ∈{1, . . . , 5},
+where σi = 1 denotes an incorrect answer, σi = 5 denotes a correct
+answer, and intermediate values reﬂect varying degrees of partial
+correctness. The overall LLM-based correctness is then computed as
+follows:
+LLM-Match = 1
+NQ
+XNQ
+i
+σi  1
+4
+× 100%,
+ð15Þ
+where NQ denotes the total number of questions. Following the Open-
+EQA protocol, we employ text-only GPT-4 under ofﬁcial prompts to
+ensure evaluation fairness.
+Hardware stack. We implement BSC-Nav on a physical robotic plat-
+form for real-world deployment, comprising ﬁve core components:
+locomotion chassis, industrial computer, SLAM suite, robotic arm, and
+vision sensors.
+The locomotion system employs the Agilex Ranger-mini 3.0
+platform, chosen for its balance between cost and payload capacity. It
+features Ackermann steering with zero-radius turning capability,
+enabling agile maneuvering in complex environments. The SLAM suite
+integrates a 32-beam LiDAR, IMU sensor, and depth-compensation
+camera to support collision detection and real-world localization. For
+manipulation capabilities, we equipped the platform with a Franka
+Emika Research 3 robotic arm. Two Intel RealSense D435i cameras
+serve as primary vision sensors (one mounted at 1.5 m above ground
+level and another at the manipulator’s end effector), providing
+848 × 480 RGB-D imagery with an 87∘ﬁeld of view. To mitigate depth-
+sensing artifacts including holes and edge discontinuities, we apply
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+13
+
+--- PDF PAGE 14 ---
+spatio-temporal and hole-ﬁlling ﬁlters, constraining the effective sen-
+sing range to 0.3-8.0 m. An industrial-grade computer equipped with
+an NVIDIA RTX 4090 GPU handles all real-time processing, including
+BSC-Nav, SLAM computation, and manipulator control, ensuring end-
+to-end system responsiveness.
+Simulation environments. Before task execution, BSC-Nav requires
+environmental perception to construct preliminary landmark memory
+and cognitive map representations. For simulation environments, we
+implement a frontier-based52 autonomous exploration strategy for
+spatial memory construction: at each time step, the system generates a
+height map through depth projection to identify boundaries between
+explored and unexplored regions. On traversable boundaries, the
+system selects the nearest frontier point to the current position as the
+next exploration target, utilizing Habitat’s scene-mesh-based greedy
+navigator for low-level action planning. Upon reaching each frontier
+point, the agent performs a 360-degree rotation to comprehensively
+perceive the surrounding environment. This exploration process
+continues until a predetermined iteration limit is reached, which is
+dynamically adjusted based on scene scale. The iteration count is
+deﬁned as half of the traversable area.
+During task execution, both landmark memory and cognitive map
+maintain continuous updates. Parameter conﬁgurations are as follows:
+for landmark memory, the detector conﬁdence threshold is set to 0.55,
+a standard operating point for YOLO-World on indoor datasets that
+balances precision against recall for salient object retention, with a
+spatial overlap distance of 1.0 m, chosen to match the navigation
+success radius so that landmarks within one success zone are merged
+as a single instance.
+For the cognitive map, we set a voxel resolution of δ = 0.1 m3, a
+grid dimension of G = 1000, and a buffer capacity of B = 10 per voxel.
+The grid conﬁguration yields a 100 × 100 m2 spatial coverage that
+exceeds the largest indoor scenes in HM3D and MP3D (typically < 80
+m span), while Δ = 0.1 m affords object-scale spatial resolution. The
+per-voxel buffer capacity B = 10 empirically balances feature diversity
+against memory footprint: with 1024-dimensional features, the worst-
+case working set remains within the 24 GB VRAM budget of our
+deployment GPU.
+For each navigation episode, the system ﬁrst retrieves candidate
+target locations through the working memory module, with a max-
+imum of K = 3 candidates for landmark memory retrieval and Q = 3 for
+cognitive map retrieval. Our empirical analysis shows that the majority
+of successful episodes locate the target at the ﬁrst explored candidate,
+and beyond K, Q = 3 the cumulative success rate plateaus while path
+efﬁciency (SPL) steadily declines (Supplementary Fig. 3b,c), indicating
+diminishing returns in efﬁcacy at the cost of exploration efﬁciency. We
+employ Stable Diffusion 3.5-Medium for cognitive map retrieval, gen-
+erating three images per batch to mitigate stochasticity in visual ima-
+gination. The system subsequently navigates to each candidate
+location following the planned exploration sequence, performing
+target veriﬁcation upon arrival at each candidate. Task success is
+determined when at least one candidate passes veriﬁcation. If all
+candidates fail veriﬁcation, the task is deemed unsuccessful. In simu-
+lation environments, the agent operates in a discrete action space
+comprising forward motion of 0.25 m and left/right turns of 30∘, with a
+maximum of 5,000 steps per episode and a success distance threshold
+of 1.0 m. The effective depth sensing range is [0.1, 10.0] m. These
+parameter settings follow the choices made by prior works during
+benchmark evaluations.
+Real-world deployment. For real-world deployment, the initial phase
+of spatial memory construction relies on manual teleoperation, guided
+by two primary considerations. Firstly, strict safety constraints
+necessitate human oversight; unlike simulated environments, auton-
+omous exploration (e.g., frontier-based methods) often struggles to
+navigate complex physical hazards safely in unconstrained settings.
+Given our physical environment features stairs, numerous glass doors
+and walls, and frequent human activity, manual guidance mitigates
+signiﬁcant risks to both the robot and its payload. Secondly, employing
+manual exploration isolates our core contribution, i.e., the structured
+organization and retrieval of spatial memory, from the inherent failure
+rates of underlying exploration algorithms. During this pre-collection
+phase, an operator guides the robot through the environment at a
+walking pace, while the perception pipeline records RGB-D observa-
+tions and builds the cognitive map and landmark memory in real time.
+During the subsequent task execution phase, BSC-Nav operates
+autonomously. Since a simulator mesh does not bound the physical
+environment, several adaptations are required relative to the simula-
+tion conﬁguration as follows.
+The robot relies on LiDAR-based SLAM for real-time localization
+within a pre-built 2D occupancy grid map. At the start of each
+experiment, we must manually specify the robot’s initial pose by
+providing approximate pixel coordinates (x, y, θ) on the occupancy
+grid map. These pixel coordinates are converted to metric map coor-
+dinates via the map’s resolution and origin parameters and published
+to the SLAM system as the initial pose estimate.
+Several parameter adjustments are adopted to accommodate the
+physical sensing conditions. The detection conﬁdence threshold is
+lowered to 0.4 to compensate for increased visual noise, motion blur,
+and lighting variability in uncontrolled environments, and the pre-
+deﬁned landmark category set is reduced from 21 to 16. The voxel grid
+is conﬁgured with Δ = 0.2 m and G = 2000. The robot executes con-
+tinuous velocity commands at a nominal linear speed of 0.2 m/s and an
+angular speed of 0.3 rad/s. A goal is considered reached when the
+agent’s position remains within a 0.5 m threshold for a stability dura-
+tion of 5.0 s, with a per-goal navigation timeout of 300 s. The com-
+prehensive
+hyperparameter
+conﬁgurations
+are
+provided
+in
+Supplementary Tables 12 and 13.
+We identify several failure modes observed during physical
+deployment: (i) Impassable regions. The local planner inﬂates obsta-
+cles on the occupancy grid by a safety margin to prevent collisions. In
+narrow passages or cluttered areas, the inﬂated costmap from the
+SLAM system may mark the entire passageway as non-traversable,
+causing the robot to become stuck or to abort the navigation goal due
+to a timeout. In such cases, the system proceeds to the next candidate
+location. If no candidates remain reachable, the episode is recorded as
+a failure. (ii) Calibration drift. Inaccurate initial pose calibration or
+accumulated SLAM drift over long trajectories can cause a systematic
+offset between the robot’s estimated position and the true coordinates
+stored in spatial memory. This misalignment degrades both candidate
+retrieval accuracy and goal veriﬁcation, as the robot may arrive at a
+location displaced from the intended memory coordinate. (iii)
+Dynamic environmental disturbances. Large-scale environmental
+changes between memory construction and task execution, such as
+rearranged furniture, newly placed obstacles, or dense pedestrian
+trafﬁc, can invalidate stored spatial memory and obstruct planned
+paths. When a navigation goal is persistently unreachable due to
+dynamic obstacles (e.g., sustained pedestrian ﬂow blocking a corri-
+dor), the system times out, and the episode requires manual inter-
+vention to re-initialize the robot’s position and re-attempt the task.
+Computational footprint. We present the computational require-
+ments and real-time performance of BSC-Nav in both simulated and
+physical deployments. The minimum hardware requirement is a GPU
+with at least 24 GB of VRAM, primarily allocated for the real-time
+inference of DINOv2, YOLO-World, and Stable Diffusion 3.5 Medium,
+alongside 16 GB of system RAM dedicated to 3D coordinate projection
+and voxelized memory operations. Such resource conﬁgurations are
+readily
+satisﬁed
+by
+current-generation
+embodied
+computing
+platforms.
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+14
+
+--- PDF PAGE 15 ---
+In simulated environments (primarily Habitat-sim), the system
+executes approximately 10 spatial memory update cycles per second
+during exploration. Scene-scale exploration typically requires 5 to
+10 minutes, depending on the navigable area. BSC-Nav operates at
+approximately 10 Hz during task execution in the Habitat simulator.
+LLMs and MLLMs (GPT-4, GPT-4o, and o3-mini) are invoked exclusively
+for high-level planning tasks, such as candidate waypoint selection,
+target association augmentation, and instruction decomposition.
+These API-based calls are executed asynchronously at a low frequency,
+ensuring they neither exhaust local computational resources nor
+impede real-time low-level control due to network latency.
+In our physical deployment, BSC-Nav employs a decoupled high-
+and low-frequency system architecture to ensure real-time respon-
+siveness. High-frequency low-level control ( > 30 Hz), encompassing
+chassis motion control, obstacle avoidance, and real-time localization
+via LiDAR-based SLAM, operates directly on the robot’s edge com-
+puting unit. Low-to-medium-frequency perception and spatial mem-
+ory updates ( ~ 10 Hz), including visual feature extraction (DINOv2 and
+YOLO-World), coordinate projection, and cognitive map updates, are
+ofﬂoaded to an industrial host PC (Fig. 5a). During task execution, the
+robot navigates at an average speed of 0.76 m/s, governed by heuristic
+path planning and real-time motion control (Fig. 5f). Real-time
+(1 × speed) navigation demonstrations on the physical robot are pro-
+vided in Supplementary Movies 3–7.
+Foundation model speciﬁcations. BSC-Nav seamlessly integrates
+multiple foundation models across its perception, reasoning, and
+generation stages. For visual feature extraction within the cognitive
+map module, we employ DINOv2 with registers (ViT-L/14)34,35, a self-
+supervised vision transformer that yields 1,024-dimensional patch-
+level features. For open-vocabulary object detection in the landmark
+memory module, we utilize YOLO-World-X (YOLOv8 Extra-Large,
+WorldV2)73 with a conﬁdence threshold of 0.55 across 20 predeﬁned
+object categories. For text-image semantic matching during target
+veriﬁcation, we adopt CLIP (ViT-H/14, pre-trained with MetaCLIP
+FullCC)83. For visual imagination in association-augmented retrieval,
+we leverage Stable Diffusion 3.5 Medium43, generating images at a
+512 × 512 resolution using 28 inference steps, a guidance scale of 7.0,
+and a maximum sequence length of 512 tokens. To drastically reduce
+GPU memory consumption, the diffusion model is quantized to 4-bit
+NormalFloat (NF4) and evaluated with bﬂoat16 precision, with CPU
+ofﬂoading.
+For high-level semantic reasoning and planning, BSC-Nav employs
+three OpenAI models accessed via API, all utilizing default inference
+parameters (temperature = 1.0, top-p = 1.0): GPT-4 (gpt-4-0613) for
+landmark memory retrieval and spatial reasoning; GPT-4o (gpt-4o-
+2024-11-20)42
+for
+scene
+understanding,
+target
+veriﬁcation,
+and
+description augmentation; and o3-mini57 for complex instruction
+decomposition in long-horizon navigation tasks. As these are closed-
+source proprietary models, their precise architectural details, para-
+meter counts, and training data compositions remain undisclosed by
+OpenAI. To strictly facilitate reproducibility, we report the exactmodel
+version identiﬁers above, and all prompt templates are provided in
+Supplementary Sec. A and in our code repository.
+Baseline methods and comparison. End-to-end navigation methods
+leverage deep neural networks to directly map egocentric observa-
+tions to action sequences, implicitly encoding spatial-geometric priors
+and semantic knowledge within network parameters. While they
+streamline the decision-making process, they must simultaneously
+learn spatial memory tracking and action planning, necessitating
+extensive trajectory data or expert demonstrations for effective
+training. For instance, PixNav 11 performs greedy navigation by pre-
+dicting optimal actions toward salient pixels in the current view.
+DAgRL 49 and PSL 50 integrate pre-trained vision-language encoders
+with historical action embeddings or contrastive learning to align
+visual observations with textual goals. Despite their strong perfor-
+mance in simulated environments, these methods are highly suscep-
+tible to data distribution shifts between
+training
+and testing
+environments, severely impairing their generalization to real-world
+physical deployments. Recent vision-language-action models
+12,84,85
+attempt to address these limitations by scaling model capacity and
+diversifying training trajectories. Uni-NavId exempliﬁes this trend,
+achieving robust performance in parsing complex multi-modal
+instructions. However, these large-scale models incur signiﬁcant
+computational overhead, restrict action generation frequency, and
+fundamentally lack mechanisms for persistent, structured spatial
+memory integration. Unlike these frameworks, BSC-Nav leverages the
+explicit retrieval mechanism of its working memory to achieve a
+complete decoupling of high-level semantic goal planning from low-
+level physical motion control, thereby paving the way toward genuine
+zero-shot, general-purpose embodied navigation.
+Modular and map-based navigation methods represent a growing
+class of approaches that construct explicit spatial representations to
+support long-horizon planning and mitigate sim-to-real gaps. The
+necessity of internal spatial representation has been recognized since
+early computational models, such as the RNN-based dynamic forward
+models of Tani 86, which achieved sequential planning and symbol
+grounding without explicit global coordinates. However, limited by
+the perceptual technologies of their era, such models could not scale
+to semantically rich, large-scale scenarios. Driven by advances in
+foundation models, recent methods have increasingly adopted explicit
+memory structures. For example, GOAT36 and MOD-IIN54 project
+closed-set semantics or visual features onto top-down maps, while
+VLFM13 and UniGoal33 construct probabilistic frontier maps or abstract
+graph-based representations. More recently, GridMM30 builds a top-
+down dense grid memory map that aggregates ﬁne-grained visual
+features via cross-modal attention (essentially modeling localized
+route knowledge), whereas ETPNav32 dynamically evolves sparse
+topological nodes in continuous environments (leaning towards a
+reasoning-capable landmark representation).
+While these methods advance beyond purely reactive processing,
+they predominantly suffer from incomplete spatial memory by relying
+on a single-granularity representation, either purely dense grids or
+purely sparse topologies. Furthermore, they heavily depend on task-
+speciﬁcally trained cross-modal Transformers or policies for memory
+attention and planning, which inherently constrain their generalization
+to unseen environments. BSC-Nav fundamentally distinguishes itself in
+both representational granularity and retrieval paradigms. It oper-
+ationalizes a brain-inspired tripartite decomposition, preventing the
+semantic blurring typical of monolithic integration. Moreover, by
+introducing a transparent working memory interface equipped with
+visual imagination and MLLM-based logical reasoning, BSC-Nav replaces
+black-box policy attention with explicit, zero-shot inference. This allows
+the agent to ﬂexibly align complex semantic intents with accumulated
+spatial structures without relying on heavy instruction-level ﬁne-tuning,
+achieving robust spatial cognition across tasks and environments.
+Reporting summary
+Further information on research design is available in the Nature
+Portfolio Reporting Summary linked to this article.
+Data availability
+All simulation scene data and evaluation benchmarks used in this study
+are publicly available through open-source platforms or datasets. The
+MP3D and HM3D scene data can be accessed through the Habitat-sim
+repository
+(https://github.com/facebookresearch/habitat-sim/blob/
+main/DATASETS.md). Navigation benchmarks including object-goal
+navigation, image-instance navigation, and VLN-CE R2R datasets are
+available through Habitat-lab (https://github.com/facebookresearch/
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+15
+
+--- PDF PAGE 16 ---
+habitat-lab/blob/main/DATASETS.md). The open-vocabulary object
+navigation benchmark and conﬁguration ﬁles are from Yokoyama et
+al49. (https://github.com/naokiyokoyama/ovon). Text-instance naviga-
+tion data and conﬁgurations are from Sun et al50. (https://github.com/
+XinyuSun/PSL-InstanceNav). Active
+embodied
+question-answering
+data are from the OpenEQA dataset by Majumdar et al60. (https://
+github.com/facebookresearch/open-eqa). Source data are provided
+with this paper.
+Code availability
+The BSC-Nav implementation for both simulation and real-world
+experiments, along with data analysis and visualization scripts, is
+publicly available on GitHub (https://github.com/Heathcliff-saku/BSC-
+Nav) and on Zenodo87. The repository is organized into two branches:
+the sim-branch contains simulation implementations, benchmark
+conﬁgurations, and evaluation scripts; the phy-branch includes low-
+level control interfaces adapted for our robotic platform and BSC-Nav
+deployment scripts. Researchers can refer to these implementations to
+deploy BSC-Nav on custom-built embodied agents.
+References
+1.
+Gupta, A., Savarese, S., Ganguli, S. & Fei-Fei, L. Embodied intelli-
+gence via learning and evolution. Nat. Commun. 12, 5721 (2021).
+2.
+Malanchini, M. et al. Evidence for a unitary structure of spatial
+cognition beyond general intelligence. npj Sci. Learn. 5, 9 (2020).
+3.
+Bellmund, J. L., Gärdenfors, P., Moser, E. I. & Doeller, C. F. Navi-
+gating cognition: spatial codes for human thinking. Science 362,
+6766 (2018).
+4.
+Epstein, R. A., Patai, E. Z., Julian, J. B. & Spiers, H. J. The cognitive
+map in humans: spatial navigation and beyond. Nat. Neurosci. 20,
+1504 (2017).
+5.
+Denis, M. & Loomis, J. M. Perspectives on human spatial cognition:
+memory, navigation, and environmental learning. Psychol. Res. 71,
+235 (2007).
+6.
+Yang, J. et al. Thinking in space: How multimodal large language
+models see, remember, and recall spaces. In: Proceedings of the
+IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+pp.10632–10643 (IEEE, 2025).
+7.
+Tucker, S. A systematic review of geospatial location embedding
+approaches in large language models: a path to spatial AI systems.
+arXiv preprint arXiv:2401.10279 (2024).
+8.
+Papadimitriou, S., Virvou, M. Artiﬁcial Intelligence—Based Games as
+Novel Holistic Educational Environments to Teach 21st Century
+Skills. (Springer, 2025).
+9.
+Banino, A. et al. Vector-based navigation using grid-like repre-
+sentations in artiﬁcial agents. Nature 557, 429 (2018).
+10.
+Bermudez-Contreras, E., Clark, B. J. & Wilber, A. The neuroscience
+of spatial navigation and the relationship to artiﬁcial intelligence.
+Front. Comput. Neurosci. 14, 63 (2020).
+11.
+Cai, W. et al. Bridging zero-shot object navigation and foundation
+models through pixel-guided navigation skill. In: IEEE International
+Conference on Robotics and Automation, pp. 5228–5234
+(IEEE, 2024).
+12.
+Zhang, J. et al. Uni-NaVid: a video-based vision-language-action
+model for unifying embodied navigation tasks. In Proc. Robotics:
+Science and Systems (2025).
+13.
+Yokoyama, N., Ha, S., Batra, D., Wang, J., Bucher, B. VLFM: Vision-
+language frontier maps for zero-shot semantic navigation. In: IEEE
+International Conference on Robotics and Automation, pp. 42–48
+(IEEE, 2024).
+14.
+Ramakrishnan, S.K., Wijmans, E., Kraehenbuehl, P., Koltun, V. Does
+spatial cognition emerge in frontier models? In:International Con-
+ference on Learning Representations (ICLR, 2024).
+15.
+McNamara, T. P., Hardy, J. K. & Hirtle, S. C. Subjective hierarchies in
+spatial memory. J. Exp. Psychol. Learn. Mem. Cogn. 15, 211 (1989).
+16.
+Werner, S., Krieg-Brückner, B., Mallot, H. A., Schweizer, K., Freksa, C.
+Spatial cognition: the role of landmark, route, and survey knowledge
+in human and robot navigation. In:Informatik’97 Informatik Als Inno-
+vationsmotor: 27. Jahrestagung der Gesellschaft Für Informatik
+Aachen, 24–26. September 1997, pp.41–50 (Springer, 1997).
+17.
+Siegel, A. W. & White, S. H. The development of spatial repre-
+sentations of large-scale environments. Adv. Child Dev. Behav. 10,
+9 (1975).
+18.
+Chaplot, D. S., Gandhi, D. P., Gupta, A. & Salakhutdinov, R. R. Object
+goal navigation using goal-oriented semantic exploration. Adv.
+Neural Inf. Process. Syst. 33, 4247 (2020).
+19.
+Shah, D. et al. Ofﬂine reinforcement learning for visual navigation.
+In: Conference on Robot Learning, pp.44–54 (PMLR, 2023).
+20. Shah, D. et al. Vint: A foundation model for visual navigation. In:
+Conference on Robot Learning, pp. 711–733 (PMLR, 2023).
+21.
+OpenAI GPT-4V(ision) System Card https://cdn.openai.com/
+papers/GPTV_System_Card.pdf (2023).
+22. Yang, H. et al. Qwen-VL: a versatile vision-language model. arXiv
+preprint arXiv:2308.12966 (2023)
+23. Richter, K.-F. & Winter, S. Landmarks. Springer. Cham Heidelb. N. Y.
+Dordr. Lond. doi 10, 1 (2014).
+24. Jansen-Osmann, P. & Fuchs, P. Wayﬁnding behavior and spatial
+knowledge of adults and children in a virtual environment: the role
+of landmarks. Exp. Psychol. 53, 171 (2006).
+25. Wolbers, T., Weiller, C. & Büchel, C. Neural foundations of emerging
+route knowledge in complex spatial environments. Cogn. Brain Res.
+21, 401 (2004).
+26. Chrastil, E. R. & Warren, W. H. Active and passive spatial learning in
+human navigation: acquisition of survey knowledge. J. Exp. Psy-
+chol.: Learn., Mem., Cognition 39, 1520 (2013).
+27.
+Baddeley, A. Working memory: theories, models, and con-
+troversies. Annu. Rev. Psychol. 63, 1 (2012).
+28. Awh, E. & Jonides, J. Overlapping mechanisms of attention and
+spatial working memory. Trends Cogn. Sci. 5, 119 (2001).
+29. Logie, R.H. Visuo-spatial Working Memory. (Psychology
+Press, 2014).
+30. Wang, Z., Li, X., Yang, J., Liu, Y., Jiang, S. Gridmm: Grid memory map
+for vision-and-language navigation. In: Proceedings of the IEEE/CVF
+International Conference on Computer Vision, pp. 15625–15636
+(IEEE, 2023).
+31.
+Huang, C., Mees, O., Zeng, A., Burgard, W. Visual language maps for
+robot navigation. In: IEEE International Conference on Robotics and
+Automation, pp.10608–10615 (IEEEE, 2023).
+32. An, D., Wang, H., Wang, W., Wang, Z., Huang, Y., He, K. & Wang, L.
+ETpNav: evolving topological planning for vision-language navi-
+gation in continuous environments. IEEE Trans. Pattern Anal. Mach.
+Intell. 47, 5130 (2025).
+33. Yin, H., Xu, X., Zhao, L., Wang, Z., Zhou, J., Lu, J. Unigoal: Towards
+universal zero-shot goal-oriented navigation. In: Proceedings of the
+IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+pp. 19057–19066 (IEEE, 2025).
+34. Oquab, M. et al. DINOv2: learning robust visual features without
+supervision. Trans. Mach. Learn. Res. (2024).
+35. Darcet, T., Oquab, M., Mairal, J., Bojanowski, P. Vision Transformers
+Need Registers (2023)
+36. Chang, M. et al. GOAT: GO to Any Thing. In Proc. Robotics: Science
+and Systems (2024).
+37. Friston, K. The free-energy principle: a uniﬁed brain theory? Nat.
+Rev. Neurosci. 11, 127 (2010).
+38. Friston, K. The free-energy principle: a rough guide to the brain?
+Trends Cogn. Sci. 13, 293 (2009).
+39. Huang, Y. & Rao, R. P. Predictive coding. Wiley Interdiscip. Rev.
+Cogn. Sci. 2, 580 (2011).
+40. Kilner, J. M., Friston, K. J. & Frith, C. D. Predictive coding: an account
+of the mirror neuron system. Cogn. Process. 8, 159 (2007).
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+16
+
+--- PDF PAGE 17 ---
+41.
+Valsson, O. & Parrinello, M. Variational approach to enhanced
+sampling and free energy calculations. Phys. Rev. Lett. 113,
+090601 (2014).
+42. OpenAI Hello GPT-4o (2024). https://openai.com/index/hello-
+gpt-4o/
+43. Esser, P. et al. Scaling rectiﬁed ﬂow transformers for high-resolution
+image synthesis. In: International Conference on Machine Learning,
+pp. 12606–12633 (2024). PMLR
+44. Chang, A. X. et al. Matterport3D: learning from RGB-D data in indoor
+environments. In IEEE International Conference on 3D Vision
+667–676 (IEEE, 2017).
+45. Ramakrishnan, S. K. et al. Habitat-Matterport 3D dataset (HM3D):
+1000 large-scale 3D environments for embodied AI. In Proc. Neural
+Information Processing Systems Datasets and Benchmarks
+Track (2021).
+46. Savva, M. et al. Habitat: A platform for embodied AI research. In:
+Proceedings of the IEEE/CVF International Conference on Compu-
+ter Vision, pp. 9339–9347 (IEEE, 2019).
+47. Batra, D. et al. Objectnav revisited: On evaluation of embodied
+agents navigating to objects. arXiv preprint
+arXiv:2006.13171 (2020)
+48. Sun, J., Wu, J., Ji, Z. & Lai, Y.-K. A survey of object goal navigation.
+IEEE Trans. Autom. Sci. Eng. 22, 2292 (2024).
+49. Yokoyama, N., Ramrakhya, R., Das, A., Batra, D., Ha, S. Hm3d-ovon: a
+dataset and benchmark for open-vocabulary object goal naviga-
+tion. In: IEEE/RSJ International Conference on Intelligent Robots
+and Systems, pp. 5543–5550 (IEEE, 2024).
+50. Sun, X., Liu, L., Zhi, H., Qiu, R., Liang, J. Prioritized semantic learning
+for zero-shot instance navigation. In: Proceedings of the European
+Conference on Computer Vision, pp. 161–178 (Springer, 2024).
+51.
+Krantz, J., Lee, S., Malik, J., Batra, D., Chaplot, D.S. Instance-speciﬁc
+image goal navigation: Training embodied agents to ﬁnd object
+instances. arXiv preprint arXiv:2211.15876 (2022)
+52. Gervet, T., Chintala, S., Batra, D., Malik, J. & Chaplot, D. S. Navigating
+to objects in the real world. Sci. Robot. 8, 6991 (2023).
+53. Anderson, P. et al. On evaluation of embodied navigation agents.
+arXiv preprint arXiv:1807.06757 (2018)
+54. Krantz, J. et al. Navigating to objects speciﬁed by images. In: Pro-
+ceedings of the IEEE/CVF International Conference on Computer
+Vision, pp. 10916–10925 (IEEE, 2023).
+55. Anderson, P. et al. Vision-and-language navigation: Interpreting
+visually-grounded navigation instructions in real environments. In:
+Proceedings of the IEEE Conference on Computer Vision and Pat-
+tern Recognition, pp. 3674–3683 (IEEE, 2018).
+56. Krantz, J., Wijmans, E., Majumdar, A., Batra, D., Lee, S. Beyond the
+nav-graph: Vision-and-language navigation in continuous environ-
+ments. In: European Conference on Computer Vision, pp. 104–120
+(Springer, 2020).
+57. OpenAI Introducing OpenAI o3 and o4-mini https://openai.com/
+index/introducing-o3-and-o4-mini/ (2025).
+58. Das, A., Datta, S., Gkioxari, G., Lee, S., Parikh, D., Batra, D. Embodied
+question answering.In: Proceedingsof the IEEE/CVF Conference on
+Computer Vision and Pattern Recognition, pp. 1–10 (IEEE, 2018).
+59. Wijmans, E. et al. Embodied question answering in photorealistic
+environments with point cloud perception. In: Proceedings of the
+IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+pp. 6659–6668 (CVPR, 2019).
+60. Majumdar, A. et al. Openeqa: embodied question answering in the
+era of foundation models. In: Proceedings of the IEEE/CVF Con-
+ference on Computer Vision and Pattern Recognition, pp.
+16488–16498 (CVPR, 2024).
+61.
+Ren, A. Z. et al. Explore until conﬁdent: efﬁcient exploration for
+embodied question answering. In Proc. Robotics: Science and
+Systems (2024).
+62. Kim, M.J. et al. OpenVLA: an open-source vision-language-action
+model. In: Conference on Robot Learning, pp. 2679–2713
+(PMLR, 2025).
+63. Liu, S. et al. RDT-1B: a diffusion foundation model for bimanual
+manipulation. In Proc. International Conference on Learning Repre-
+sentations (2025).
+64. Wu, Z. et al. Embodied task planning with large language models.
+arXiv preprint arXiv:2307.01848 (2023).
+65. Pfeifer, R., Bongard, J. How the body shapes the way we think: a new
+view of intelligence. (MIT Press, 2006).
+66. Hilton, C. & Wiener, J. Route sequence knowledge supports the
+formation of cognitive maps. Hippocampus 33, 1161 (2023).
+67. Rinaldi, L. & Marelli, M. Maps and space are entangled with lan-
+guage experience. Trends Cogn. Sci. 24, 853 (2020).
+68. Dove, G. Language is a source of grounding and a mode of action.
+Top. Cogn. Sci. 15, 688 (2023).
+69. Louwerse, M. M. Symbol interdependency in symbolic and embo-
+died cognition. Top. Cogn. Sci. 3, 273 (2011).
+70. Zador, A. et al. Catalyzing next-generation artiﬁcial intelligence
+through neuroAI. Nat. Commun. 14, 1597 (2023).
+71.
+Wilcox, E. G. et al. Bigger is not always better: The importance of
+human-scale language modeling for psycholinguistics. J. Mem.
+Lang. 144, 104650 (2025).
+72.
+Zou, Q., Sun, Q., Chen, L., Nie, B. & Li, Q. A comparative analysis of
+lidar slam-based indoor navigation for autonomous vehicles. IEEE
+Trans. Intell. Transp. Syst. 23, 6907 (2021).
+73. Cheng, T. et al. Yolo-world: Real-time open-vocabulary object
+detection. In: Proceedings of the IEEE/CVF Conference on Com-
+puter Vision and Pattern Recognition, pp. 16901–16911 (IEEE, 2024).
+74. Jatavallabhula, K. M. et al. ConceptFusion: open-set multimodal 3D
+mapping. In Proc. Robotics: Science and Systems (2023).
+75. Rombach, R., Blattmann, A., Lorenz, D., Esser, P., Ommer, B. High-
+resolution image synthesis with latent diffusion models. In:Pro-
+ceedings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, pp. 10684–10695 (CVPR, 2022).
+76. Kriegel, H.-P., Kröger, P., Sander, J. & Zimek, A. Density-based
+clustering. Wiley Interdiscip. Rev. Data Min. Knowl. Discov. 1,
+231 (2011).
+77.
+Hart, P. E., Nilsson, N. J. & Raphael, B. A formal basis for the heuristic
+determination of minimum cost paths. IEEE Trans. Syst. Sci. Cybern.
+4, 100 (1968).
+78. Rösmann, C., Feiten, W., Wösch, T., Hoffmann, F., Bertram, T. Tra-
+jectory modiﬁcation considering dynamic constraints of autono-
+mous robots. In: German Conference on Robotics, pp. 1–6
+(GCR, 2012).
+79. Rösmann, C., Feiten, W., Wösch, T., Hoffmann, F., Bertram, T. Efﬁ-
+cient trajectory optimization using a sparse model. In: European
+Conference on Mobile Robots, pp. 138–143 (IEEE, 2013).
+80. Puig, X. et al. Habitat 3.0: a co-habitat for humans, avatars and
+robots. In Proc. International Conference on Learning Representa-
+tions (2024).
+81.
+Yadav, K. et al. Habitat Challenge 2023. https://aihabitat.org/
+challenge/2023/ (2023).
+82. Wang, W. et al. Cogvlm: Visual expert for pretrained language
+models. Adv. Neural Inf. Process. Syst. 37, 121475 (2024).
+83. Radford, A. et al. Learning transferable visual models from natural
+language supervision. In: Proceedings of the International Con-
+ference on Machine Learning, pp. 8748–8763 (PMLR, 2021).
+84. Zhang, J. et al. NaVid: video-based VLM plans the next step for
+vision-and-language navigation. In Proc. Robotics: Science and
+Systems (2024).
+85. Cheng, A.-C. et al. NaVILA: legged robot vision-language-action
+model for navigation. In Proc. Robotics: Science and Sys-
+tems (2025).
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+17
+
+--- PDF PAGE 18 ---
+86. Tani, J. Model-based learning for mobile robot navigation from the
+dynamical systems perspective. IEEE Trans. Syst., Man, Cybern.,
+Part B 26, 421 (1996).
+87. Shouwei, R. et al. BSC-Nav. https://doi.org/10.5281/zenodo.
+19979369.
+Author contributions
+S.R., L.W. and H.S. conceived the study. S.R., L.W. and S.L. designed the
+computational model. S.R. and C.K. performed the main experiments,
+assisted by Q.Z. S.R. and Q.Z. completed the design of the embodied
+robot and algorithm deployment. L.W. and S.R. drafted the paper. H.S.
+and X.W. supervised the project. H.S. offered funding and critically
+revised the paper. All authors read and approved the ﬁnal version.
+Funding
+This work was supported by the NSFC Projects (Nos. 92370124,
+U25B6003, 62350080, 62576020, 62406160), the Beijing Natural Sci-
+ence Foundation (No. L247011), the Shandong Provincial Natural Sci-
+ence Foundation (No. ZR2022ZD01), the Beijing Major Science and
+Technology Project (No. Z251100008425003), the High Performance
+Computing Center, Tsinghua University, and the Fundamental Research
+Funds for the Central Universities.
+Competing interests
+The authors declare no competing interests.
+Additional information
+Supplementary information The online version contains
+supplementary material available at
+https://doi.org/10.1038/s41467-026-74358-5.
+Correspondence and requests for materials should be addressed to
+Xingxing Wei or Hang Su.
+Peer review information Nature Communications thanks Giulia D’An-
+gelo, Daniele Gatti and Takashi Ikegami for their contribution to the peer
+review of this work. A peer review ﬁle is available.
+Reprints and permissions information is available at
+http://www.nature.com/reprints
+Publisher’s note Springer Nature remains neutral with regard to jur-
+isdictional claims in published maps and institutional afﬁliations.
+Open Access This article is licensed under a Creative Commons
+Attribution-NonCommercial-NoDerivatives 4.0 International License,
+which permits any non-commercial use, sharing, distribution and
+reproduction in any medium or format, as long as you give appropriate
+credit to the original author(s) and the source, provide a link to the
+Creative Commons licence, and indicate if you modiﬁed the licensed
+material. You do not have permission under this licence toshare adapted
+material derived from this article or parts of it. The images or other third
+party material in this article are included in the article’s Creative
+Commons licence, unless indicated otherwise in a credit line to the
+material. If material is not included in the article’s Creative Commons
+licence and your intended use is not permitted by statutory regulation or
+exceeds the permitted use, you will need to obtain permission directly
+from the copyright holder. To view a copy of this licence, visit http://
+creativecommons.org/licenses/by-nc-nd/4.0/.
+© The Author(s) 2026
+Article
+https://doi.org/10.1038/s41467-026-74358-5
+Nature Communications|
+(2026) 17:8061
+18

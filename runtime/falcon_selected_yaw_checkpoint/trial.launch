@@ -1,9 +1,0 @@
-<launch>
-<arg name="record_bag" default="false"/>
-<arg name="trial_dir" default="$(env EXPLORATION_TRIAL_DIR)"/>
-<include file="$(find pre_map_bridge)/launch/habitat_falcon.launch">
-<arg name="map_config" value="$(arg trial_dir)/config.yaml"/>
-<arg name="bridge_dir" value="$(arg trial_dir)/bridge"/>
-</include>
-<node if="$(arg record_bag)" pkg="rosbag" type="record" name="trial_recorder" args="--lz4 -O $(arg trial_dir)/trial.bag /habitat/rgb /uav_simulator/depth_image /uav_simulator/odometry /uav_simulator/sensor_pose /pre_map_vln/exploration_status /planning/replan /planning/bspline /voxel_mapping/map_coverage /planning_vis/frontier /preview/motion_blocked /planning/pos_cmd"/>
-</launch>

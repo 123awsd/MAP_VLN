@@ -1,0 +1,8 @@
+{
+  "number": 2,
+  "final": "figures/final/system_overview.png",
+  "source": "figures/source/fig02_system_overview",
+  "original_source": "PRE_MAP_VLN/paper/system_overview",
+  "final_sha256": "2a6ea6231372936dc2f5d057740e5a9ec16fc26eaeb6e53cae3d23f8dbad0e71",
+  "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+}

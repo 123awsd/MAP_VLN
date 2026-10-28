@@ -1,0 +1,62 @@
+[
+  {
+    "page": 2,
+    "bbox": [
+      39.685001373291016,
+      662.9756469726562,
+      294.8131103515625,
+      739.6998291015625
+    ],
+    "caption": "Fig. 1 | The BSC-Nav framework for cognitive spatial intelligence. a Structured spatial memory in biological brains, comprising landmarks, route knowledge, and survey knowledge. b The BSC-Nav framework instantiates structured spatial memory in embodied agents. Environment observations (RGB-D images and agent poses) are processed by (i) a landmark memory module encodes and retrieves durable associations of multi-modal environmental cues as the landmarks; and (ii) a cognitive map module accumulates and organizes movement trajectories as the route knowledge into allocentric, map-like representations as the survey"
+  },
+  {
+    "page": 4,
+    "bbox": [
+      39.685001373291016,
+      411.8827819824219,
+      294.79986572265625,
+      448.7502746582031
+    ],
+    "caption": "Fig. 2 | Precise localization via hierarchical retrieval in working memory. a For simple category-level goals, working memory prioritizes retrieval from the land- mark memory module for rapid matching and candidate coordinate generation. b For complex instance-level goals, working memory employs association-"
+  },
+  {
+    "page": 5,
+    "bbox": [
+      39.68499755859375,
+      513.873291015625,
+      294.8123779296875,
+      570.6398315429688
+    ],
+    "caption": "Fig. 3 | Goal-orientedmulti-modal navigation. a Performance comparison against baseline methods across different navigation tasks. Evaluations encompass category-level tasks, including object goal navigation (OGN) and open-vocabulary object navigation (OVON), as well as instance-level tasks, including text instance navigation (TIN) and image instance navigation (IIN). Quantitative results are averaged across different trial numbers: 2195 and 2000 episodes for OGN on HM3D"
+  },
+  {
+    "page": 6,
+    "bbox": [
+      39.68431854248047,
+      500.040283203125,
+      294.9031066894531,
+      576.7630615234375
+    ],
+    "caption": "Fig. 4 | Higher-level spatially-aware skills enabled by BSC-Nav. a Comparison of BSC-Nav against baseline methods on long-horizon instruction-following tasks using the VLN-CE R2R benchmark. Quantitative results are averaged over 1000 episodes. Bar charts report Success Rate (SR, %) to quantify efﬁcacy and Success weighted by Path Length (SPL, %) to quantify efﬁciency. Source data are provided as a Source Data ﬁle. b Performance comparison on active embodied question answering tasks using the A-EQA benchmark, with results averaged over 184 test samples and evaluated by the LLM-match score. The right panel provides a ﬁne-"
+  },
+  {
+    "page": 8,
+    "bbox": [
+      39.68499755859375,
+      568.2984619140625,
+      294.9193115234375,
+      645.0216064453125
+    ],
+    "caption": "Fig. 5 | Universal navigation capabilities in real-world scenarios. a The custom- built robotic platform integrates perception, navigation, and manipulation cap- abilities. b The indoor experimental environment spans 200 m2 and includes diverse functional zones (e.g., ofﬁce, lounge, reception, and kitchen). c–g Real- world navigation performance across Object-Goal Navigation (OGN), Text-Instance Navigation (TIN), and Image-Instance Navigation (IIN) tasks with 15 distinct targets (c). For each target, we conducted n = 5 independent experimental trials with randomized starting positions. We report the success rate (SR) (d), ﬁnal distance to"
+  },
+  {
+    "page": 9,
+    "bbox": [
+      39.68431091308594,
+      657.3629150390625,
+      294.8767395019531,
+      704.209228515625
+    ],
+    "caption": "Fig. 6 | Real-world mobile manipulation. The coordination between spatial memory-driven navigation and manipulation primitives enables the execution of long-horizon tasks speciﬁed through human instructions. a Single-waypoint task, cleaning stains on a marble table next to a shredder. b Object transfer task, relo- cating a cookie box from table to the kitchen island, requiring navigation between"
+  }
+]

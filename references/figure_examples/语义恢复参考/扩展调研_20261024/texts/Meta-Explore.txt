@@ -1,0 +1,2975 @@
+
+--- PDF PAGE 1 ---
+Meta-Explore: Exploratory Hierarchical Vision-and-Language Navigation
+Using Scene Object Spectrum Grounding
+Minyoung Hwang1, Jaeyeon Jeong1, Minsoo Kim3, Yoonseon Oh2, Songhwai Oh1
+1Electrical and Computer Engineering and ASRI, Seoul National University
+2Department of Electronic Engineering, Hanyang University
+3Interdisciplinary Major in Artiﬁcial Intelligence, Seoul National University
+{minyoung.hwang, jaeyeon.jeong}@rllab.snu.ac.kr, yoh21@hanyang.ac.kr, {goldbird5, songhwai}@snu.ac.kr
+Abstract
+The main challenge in vision-and-language navigation
+(VLN) is how to understand natural-language instructions
+in an unseen environment. The main limitation of conven-
+tional VLN algorithms is that if an action is mistaken, the
+agent fails to follow the instructions or explores unneces-
+sary regions, leading the agent to an irrecoverable path. To
+tackle this problem, we propose Meta-Explore, a hierarchi-
+cal navigation method deploying an exploitation policy to
+correct misled recent actions. We show that an exploitation
+policy, which moves the agent toward a well-chosen local
+goal among unvisited but observable states, outperforms a
+method which moves the agent to a previously visited state.
+We also highlight the demand for imagining regretful explo-
+rations with semantically meaningful clues. The key to our
+approach is understanding the object placements around the
+agent in spectral-domain. Speciﬁcally, we present a novel
+visual representation, called scene object spectrum (SOS),
+which performs category-wise 2D Fourier transform of de-
+tected objects. Combining exploitation policy and SOS fea-
+tures, the agent can correct its path by choosing a promis-
+ing local goal. We evaluate our method in three VLN bench-
+marks: R2R, SOON, and REVERIE. Meta-Explore outper-
+forms other baselines and shows signiﬁcant generalization
+performance. In addition, local goal search using the pro-
+posed spectral-domain SOS features signiﬁcantly improves
+thesuccessrateby17.1%andSPLby20.6%againstthestate-
+of-the-art method of the SOON benchmark. Project page:
+https://rllab-snu.github.io/projects/Meta-Explore/doc.html
+1. Introduction
+Visual navigation in indoor environments has been stud-
+ied widely and shown that an agent can navigate in unex-
+ThisworkwassupportedbyInstituteofInformation&CommunicationsTechnol-
+ogy Planning & Evaluation (IITP) grant funded by the Korea government (MSIT) (No.
+2019-0-01190,[SWStarLab]RobotLearning: Efﬁcient,Safe,andSocially-Acceptable
+MachineLearning). ThisworkwaspartlysupportedbyInstituteofInformation&com-
+munications Technology Planning & Evaluation (IITP) grant funded by the Korea gov-
+ernment(MSIT) (No.2022-0-00907, Development of AI Bots Collaboration Platform
+andSelf-organizingAI)(Corresponding authors: Yoonseon Oh and Songhwai Oh.)
+𝒐𝟓
+start
+local goal
+global goal
+t
+𝑡𝑡ℎvisited node
+unvisited, observable node
+Instruction: "Walk forward, keeping the long table to 
+the left. Exit the room via the white door to the left of 
+the stairs. Descend a narrow circular stairwell and 
+wait, facing two windows with circular stained glass 
+in their centers."
+Figure 1. Hierarchical Exploration. At each episode, a natural-
+language instruction is given to the agent to navigate to a goal lo-
+cation. The agent explores the environment and constructs a topo-
+logical map by recording visited nodes
+and next step reachable
+nodes . Each node consists of the position of the agent and visual
+features. ot denotes the observation at time t. The agent chooses
+an unvisited local goal to solve the regretful exploration problem.
+plored environments [1]. By recognizing the visual context
+and constructing a map, an agent can explore the environ-
+ment and solve tasks such as moving towards a goal or fol-
+lowing a desired trajectory. With the increasing development
+in human languageunderstanding, vision-and-language nav-
+igation (VLN) [2] has enabled robots to communicate with
+humans using natural languages. The high degree of free-
+dom in natural language instructions allows VLN to expand
+to various tasks, including (1) following ﬁne-grained step-
+by-step instructions [2–13] and (2) reaching a target location
+described by goal-oriented language instructions [14–20].
+A challenging issue in VLN is the case when an action
+is mistaken with respect to the given language instruction
+[21–26]. For instance, if the agent is asked to turn right at the
+end of the hallway but turns left, the agent may end up in ir-
+recoverable paths. Several existing studies solve this issue
+via hierarchical exploration, where the high-level planner
+decides when to explore and the low-level planner chooses
+what actions to take. If the high-level planner chooses to
+explore, the agent searches unexplored regions, and if it
+chooses to exploit, the agent executes the best action based
+on the previous exploration. Prior work [21–23] returns the
+agent to the last successful state and resumes exploration.
+arXiv:2303.04077v1  [cs.CV]  7 Mar 2023
+
+
+--- PDF PAGE 2 ---
+However, such methods take a heuristic approach because
+the agent only backtracks to a recently visited location. The
+agent does not take advantage of the constructed map and
+instead naively uses its recent trajectory for backtracking.
+Another recent work [26] suggests graph-based exploitation,
+which uses a topological map to expand the action space in
+global planning. Still, this method assumes that the agent can
+directly jump to a previously visited node. Since this method
+can perform a jump action at every timestep, there is no trig-
+ger that explicitly decides when to explore and when to ex-
+ploit. Therefore, we address the importance of time schedul-
+ing for exploration-exploitation and efﬁcient global planning
+using a topological map to avoid reexploring visited regions.
+We expand the notion of hierarchical exploration by
+proposing Meta-Explore, which not only allows the high-
+level planner to choose when to correct misled local move-
+ments but also ﬁnds an unvisited state inferred to be close
+to the global goal. We illustrate the overview of hierarchi-
+cal exploration in Figure 1. Instead of backtracking, we
+present an exploitation method called local goal search. We
+show that it is more efﬁcient to plan a path to a local goal,
+which is the most promising node from the unvisited but
+reachable nodes. We illustrate the difference between con-
+ventional backtracking and local goal search in Figure 2.
+Based on our method, we show that exploration and ex-
+ploitation are not independent and can complement each
+other: (1) to overtake regretful explorations, the agent can
+perform exploitation and (2) the agent can utilize the con-
+structed topological map for local goal search.
+We also
+highlight the demand for imagining regretful explorations
+with semantically meaningful clues. Most VLN tasks re-
+quire a level of understanding objects nearby the agent, but
+previous studies simply encode observed panoramic or ob-
+ject images [2, 3, 16–18, 21–35]. In this paper, we present
+a novel semantic representation of the scene called scene
+object spectrum (SOS), which is a matrix containing the ar-
+rangements and frequencies of objects from the visual ob-
+servation at each location. Using SOS features, we can suf-
+ﬁciently estimate the context of the environment. We show
+that the proposed spectral-domain SOS features manifest
+better linguistic interpretability than conventional spatial-
+domain visual features. Combining exploitation policy and
+SOS features, we design a navigation score that measures
+the alignment between a given language instruction and a
+corrected trajectory toward a local goal. The agent com-
+pares local goal candidates and selects a near-optimal can-
+didate with the highest navigation score from corrected tra-
+jectories. This involves high-level reasoning related to the
+landmarks (e.g., bedroom and kitchen) and objects (e.g., ta-
+ble and window) that appear in the instructions.
+The main contributions of this paper are as follows:
+• We propose a hierarchical navigation method called
+Meta-Explore, deploying an exploitation policy to cor-
+“Which visited node”
+“Which unvisited node”
+“is the most likely to be a local goal?”
+current position
+start
+local goal
+global goal
+visited node
+unvisited node
+searchable
+area
+<
+Figure 2. Local Goal Search for Exploitation. The local goal is
+likely to be chosen as the closest node to the global goal. Existing
+methods only backtrack to a visited node (left). We expand the
+searchable area by including unvisited but reachable nodes (right).
+rect misled recent actions. The agent searches for an
+appropriate local goal instead of reversing the recent
+action sequence.
+• In the exploitation mode, the agent uses a novel scene
+representation called scene object spectrum (SOS),
+which contains the spectral information of the object
+placements in the scene. SOS features provide seman-
+tically meaningful clues to choose a near-optimal local
+goal and help the agent to solve the regretful explo-
+ration problem.
+• We evaluate our method on three VLN benchmarks:
+R2R [2], SOON [16], and REVERIE [17]. The exper-
+imental results show that the proposed method, Meta-
+Explore, improves the success rate and SPL in test
+splits of R2R, SOON and val split of REVERIE. The
+proposed method shows better generalization results
+compared to all baselines.
+2. Related Work
+2.1. Vision-and-Language Navigation
+In VLN, an agent encodes the natural language instruc-
+tions and follows the instructions, which can be either (1)
+a ﬁne-grained step-by-step instruction the agent can fol-
+low [2–4], (2) a description of the target object and loca-
+tion [16, 17], or (3) additional guidance given to the agent
+[18,27]. These tasks require the agent to recognize its cur-
+rent location using some words in the natural-language in-
+structions. Prior work [2, 28–31] show that an agent can
+align visual features to language instructions via neural net-
+works and use the multimodal output embeddings to gen-
+erate a suitable action at each timestep. Most VLN meth-
+ods utilize cross-modal attention, either with recurrent neu-
+ral networks [2,28] or with transformer-based architectures
+[29–31]. For sequential action prediction, Hong et al. [32]
+further use recurrent units inside transformer architectures,
+while Pashevich et al. [33] and Chen et al. [34] use addi-
+tional transformers to embed past observations and actions.
+
+
+--- PDF PAGE 3 ---
+2.2. Exploration-Exploitation
+In an unseen environment, the agent must maximize the
+return without knowing the true value functions. One of
+the solutions to this problem is to switch back and forth be-
+tween exploration and exploitation [36]. In the exploration
+mode, the agent gathers more information about the environ-
+ment. On the other hand, the agent uses information col-
+lected during exploration and chooses the best action for ex-
+ploitation. Ecoffet et al. [37] reduced the exploration step
+by archiving the states and exploring again from the success-
+ful states. Pislar et al. [38] addressed the various scheduling
+policies and demonstrated their method on Atari games. Re-
+cent work [39, 40] successfully demonstrates the effective-
+ness of hierarchical exploration in image-goal navigation.
+Like commonly used greedy navigation policies, VLN
+tasks also deal with the problem of maximizing the chance
+to reach the goal without knowing the ground truth map.
+Several VLN methods employ the concept of exploitation
+to tackle this problem. Ke et al. [35] look forward to several
+possible future trajectories and decide whether to backtrack
+or not and where to backtrack. Others [21–23] estimate the
+progress to tell whether the agent becomes lost and make
+the agent backtrack to a previously visited location to restart
+exploration. However, previous studies do not take into ac-
+count what should be done in the exploitation mode. In order
+to handle this problem, we propose a hierarchical naviga-
+tion method which determines the scheduling between ex-
+ploration and exploitation.
+2.3. Visual Representations
+Popular visual encoding methods via ResNet [41] and
+ViT [42] can be trained to learn rotation-invariant visual fea-
+tures. Both methods learn to extract visual features with
+high information gain for global and local spatial informa-
+tion. The high complexity of the features leads to low in-
+terpretability of the scene and therefore requires the agent to
+use additional neural networks or complex processing to uti-
+lize them. On the other hand, traditional visual representa-
+tion methods such as Fourier transform use spectral analysis,
+which is highly interpretable and computationally efﬁcient.
+One drawback of the traditional methods is that they fail to
+maximize the information gain. Nonetheless, an appropri-
+ate use of essential information can be helpful for high-level
+decision making and enables more straightforward interpre-
+tation and prediction of the visual features. One traditional
+navigation method, Sturz et al. [43] used Fourier transform
+to generate rotation-invariant visual features. However, no
+research has transformed the spectral information of the de-
+tected objects to represent high-level semantics from visual
+observations. Focusing on the fact that 2D Fourier trans-
+form can extract morphological properties of images [44],
+we can ﬁnd out the shape or structure of detected objects
+through 2D Fourier transform. In this paper, we decompose
+the object mask into binary masks by object categories and
+perform a 2D Fourier transform on each binary mask.
+3. Method
+3.1. Problem Formulation
+We deal with VLN in discrete environments, where the
+environment is given as an undirected graph Ge = {V, E}.
+V denotes a set of N navigable nodes, {Vi}N
+i=1, and E is the
+adjacency matrix describing connectivity among the nodes
+in V . We denote the observation at node Vi as Oi. The
+agent uses a panoramic RGB image observation ot and cur-
+rent node vt, which are collected at time t. The agent either
+moves to a neighboring node or executes a stop action. at
+denotes the action at time t. The objectives of VLN are cat-
+egorized as follows: (1) to follow language instructions [2]
+and (2) to ﬁnd a target object described by language instruc-
+tions in a ﬁxed time T [16, 17]. We present a general hi-
+erarchical exploration method that can be applied to both
+tasks. We also enhance the navigation policy by extracting
+cross-domain visual representations from the environments,
+i.e., spatial-domain and spectral-domain representations. To
+balance the information loss and interpretability of the vi-
+sual feature, we adopt multi-channel fast Fourier transform
+(FFT) to encode semantic masks of the detected objects into
+category-wise spectral-domain features.
+3.2. Meta-Explore
+We design a learnable hierarchical exploration method for
+VLN called Meta-Explore, which decides (1) when to ex-
+plore or exploit and (2) a new imagined local goal to seek
+during exploitation. The overall network architecture of the
+proposed Meta-Explore is shown in Figure 3. Given a lan-
+guage instruction L, the agent navigates in the environment
+until it ﬁnds the target described in L. Meta-Explore con-
+sists of a mode selector and two navigation modules corre-
+sponding to two modes: exploration and exploitation. At
+each timestep, the mode selector chooses to explore or ex-
+ploit. At t = 0, the mode is initialized to exploration. In
+the exploration mode, the agent outputs an action toward a
+neighboring node to move the agent toward the goal. When
+the mode selector recognizes that the agent is not following
+theinstructionsuccessfully, themodeisswitchedtoexploita-
+tion. In the exploitation mode, the agent seeks a new local
+goal with the highest correspondence against the language
+instructions from the previously unvisited candidate nodes
+using spectral-domain visual features. The agent moves to-
+ward the local goal by planning a path. After the agent ar-
+rives at the local goal, the mode is reset to exploration. The
+explore-exploit switching decision occurs through the mode
+selector by estimating the probability to explore. The agent
+repeats this explore-exploit behavior until it determines that
+the target is found and decides to stop.
+3.2.1
+Mode Selector
+At time t, the agent observes visual features about the cur-
+rent node vt and several reachable nodes. We call the nodes
+reachable at the current timestep as candidate nodes. ncand
+
+
+--- PDF PAGE 4 ---
+𝑭𝒐𝒃𝒋
+“Lamp”
+“Table”
+“Curtain”
+“Chair”
+𝒐𝒕
+Mode Selector
+object 
+spectrum
+object image 
+feature
+or
+Cross-
+Attention
+Self-
+Attention
+𝒂𝒕
+action
+𝑭𝒍𝒂𝒏𝒈
+t
+current node
+next step
+reachable nodes
+Exploitation Module
+Exploration Module
+𝑭𝑹𝑮𝑩
+object detection
+candidate 1 candidate 2
+candidate 𝑛𝑐𝑎𝑛𝑑
+𝑯𝒕
+"Walk forward, keeping the long table to the left. Exit the room via the white door to the left of the stairs. 
+Descend a narrow circular stairwell and wait, facing two windows with circular stained glass in their centers."
+𝒔𝒑𝒂𝒕𝒊𝒂𝒍
+𝒍𝒂𝒏𝒈𝒖𝒂𝒈𝒆
+𝒔𝒑𝒆𝒄𝒕𝒓𝒂𝒍
+𝒄𝒂𝒏𝒅𝒊𝒅𝒂𝒕𝒆𝒐𝒃𝒔
+Figure 3. Network Architecture. Three types of visual features: panoramic (yellow), object image (aquamarine), and object spectrum (red)
+are encoded. The color in each parenthesis denotes the color describing the corresponding feature. The cross-modal transformer encodes
+language and spatial visual features as hidden state Ht. A mode selector gives explore or exploit command to the agent by predicting the
+explore probability Pexplore. The selected navigation module outputs an action at from the possible ncand candidate nodes.
+denotes the number of candidate nodes. We use a cross-
+modal transformer with nL layers to relate visual observa-
+tions to language instructions. The cross-modal transformer
+takes the visual features of nodes in the constructed topo-
+logical map at time t, Gt, and outputs cross-modal embed-
+ding Ht to encode visual observations with L. We concate-
+nate location encoding and history encoding [24] to the vi-
+sual features as node features to consider the relative pose
+from vt and the last visited timestep of each node, respec-
+tively. Each word is encoded via a pretrained language en-
+coder [45], which is used for general vision-language tasks.
+The cross-modal transformer consists of cross-attention
+layer L2V Attn( ˆW, ˆV ) = Softmax( ˆWΘ†
+q( ˆV Θ†
+k)T /
+√
+d) ˆV Θ†
+v and
+self-attention layer SelfAttn(X) = Softmax ((XΘq(XΘk)T +
+AΘe + be)/
+√
+d)XΘv, where ˆW, ˆV , X, and A denote word,
+visual, node representations and adjacency matrix of Gt,
+respectively.
+The (query, key, value) weight matrices
+of self-attention and cross-attention layers are denoted as
+(Θq, Θk, Θv) and (Θ†
+q, Θ†
+k, Θ†
+v), respectively. The ﬁnal cross-
+modal embedding at time t after passing through nL trans-
+former layers is denoted as Ht. To encourage the mono-
+tonic increasing relationship between language and vi-
+sual attentions at each timestep, we deﬁne a correlation
+loss Lcorr = PT
+t=1 ||L2V Attn −Inx||1 for training the cross-
+modal transformer, where nx denotes the dimension of the
+Ht and Inx denotes an identity matrix of size nx × nx.
+As illustrated in Figure 4, the mode selector estimates
+the probability to explore Pexplore given the cross-modal
+hidden state Ht. We denote the mode selector as Smode
+and use a two-layer feed-forward neural network. Given
+Ht, Smode outputs the exploration probability as Pexplore =
+1 −Smode(Ht). If Pexplore ≥0.5, the exploration policy
+outputs a probability distribution for reachable nodes at the
+next step. At time t+1, the agent moves to the node with the
+highest probability. If Pexplore < 0.5, the agent determines
+that the current trajectory is regretful, so the agent should
+traverse to ﬁnd a local goal, which is the most likely to be
+the closest node to the global goal. The exploitation policy
+mainly utilizes object-level features to search for the local
+goal with high-level reasoning. After the local goal is cho-
+sen, the path planning module outputs an action following
+the shortest path to the local goal.
+To train the mode selector, we require additional demon-
+stration data other than the ground truth trajectory, such that
+it switches between exploration and exploitation. We gener-
+ate the demonstration data from the ground truth trajectories,
+with additional detours. For the detours, we stochastically
+select candidate nodes other than the ground truth paths and
+add the trajectory that returns to the current viewpoint. The
+imitation learning loss for training the mode selector is de-
+ﬁned as Lmode = PT
+t=1 1(mt = gtt), where mt is the mode of
+the agent, 0 for exploitation and 1 for exploration. gtt is 1 if
+the current node is in the shortest ground truth trajectory and
+gtt = 0, otherwise.
+3.2.2
+Exploration Module
+In the exploration mode, the agent follows the following
+sequential operations: topological map construction, self-
+monitoring, and an exploration policy. To improve the ex-
+ploration, we adopt self-monitoring [21] to predict the cur-
+rent progress of exploration to enhance the exploration pol-
+icy itself. Prior work [21, 22] has shown that auxiliary loss
+using self-monitoring can regularize the exploration policy.
+Topological Map Construction.
+The agent constructs
+graph Gt by classifying nodes into two types: (1) visited
+nodes and (2) unvisited but observable nodes. At current
+
+
+--- PDF PAGE 5 ---
+Local Goal Search Module
+Path Planning Module
+𝐦𝐢𝐧(෡𝒅)
+𝒎𝒊𝒏(෍𝒘𝒊𝒋)
+Exploitation Module
+𝑯𝒕
+hidden state
+FFNN
+𝑮= (𝑽, 𝑬)
+lookahead 
+zone
+𝒈𝒍𝒐𝒄𝒂𝒍
+𝒈𝒈𝒍𝒐𝒃𝒂𝒍
+𝒗𝒕
+𝑽𝟏𝟑= 𝒗𝒕
+𝑽𝟔
+Mode Selector
+𝑷𝒆𝒙𝒑𝒍𝒐𝒓𝒆< 𝟎. 𝟓
+FFNN
+𝒔𝒐𝒇𝒕𝒎𝒂𝒙
+𝒂𝒕
+Exploration Module
+≥𝟎. 𝟓
+𝒗𝟎
+𝑽𝟏𝟐𝑽𝟏𝟏𝑽𝟗𝑽𝟕𝑽𝟔
+𝑽𝟏𝟑
+𝒂𝒕
+𝒑𝒐𝒑
+Figure 4. Navigation Modules. Mode selector estimates Pexplore,
+i.e., the probability to explore, and chooses between exploration
+and exploitation modules. The selected navigation module outputs
+the next action at.
+time t, the agent at node vt ∈{Vi}N
+i=1 observes N(vt)
+neighbor nodes as next step candidates at time t + 1. The
+visited nodes consist of visual features of their own and the
+neighboring nodes from panoramic RGB observations. The
+unvisited nodes can be observed only if they are connected
+to at least one visited node. The topological map records
+the positions and visual features of observed nodes at each
+timestep. By knowing the positions of nodes in Gt, the agent
+can plan the shortest path trajectory between two nodes.
+Self-Monitoring. We use a progress monitor to estimate the
+current navigation progress at each episode. Self-monitoring
+via estimating current progress helps the agent choose the
+next action that can increase the progress. The estimated
+progress ˆpt = Fprogress(Ht) is the output of a feed-forward
+neural network, given Ht as input. We measure the ground
+truth progress pt as the ratio between the current distance to
+the goal and the shortest path length of the episode subtracted
+from 1, described as 1 −dgeo(vt,vgoal)
+dgeo(v0,vgoal), where dgeo(a, b) is
+the geodesic distance between a and b. v0, vt, and vgoal de-
+note initial, current, and goal positions, respectively. We add
+progress loss Lprogress = PT
+t=1( ˆpt −pt)2 to train the progress
+monitor while training the exploration policy.
+Exploration Policy. The exploration policy Fexplore esti-
+mates the probability of moving to the candidate nodes at
+the next step. The agent chooses the action at at time t
+based on the estimated probability distribution among candi-
+date nodes, described as at = arg maxVi(Fexplore([Ht]i)).
+Fexplore is implemented via a two-layer feed-forward net-
+work with the cross-modal hidden state Ht given as input.
+The output of Fexplore becomes a probability distribution
+over possible actions. To only consider unvisited nodes, we
+mask out the output for visited nodes. For training, we sam-
+ple the next action from the probability distribution instead
+of choosing a node with the highest probability. We describe
+the training details in Section 3.3.
+𝟐𝑫𝑭𝑭𝑻
+object spectrum
+𝑲
+η
+𝑥
+𝑦
+object mask 𝒎𝒕
+𝒌
+separate
+categories
+𝟎°
+𝟗𝟎°
+𝟐𝟕𝟎°
+𝟏𝟖𝟎°
+object placement
+detection in panoramic image
+ζ
+𝑓𝑥
+𝑓𝑦
+𝜼
+𝑺𝒕
+Figure 5. Scene Object Spectrum (SOS). The agent calculates
+scene object spectrum (SOS) features for efﬁcient exploitation.
+SOS features incorporate semantic information observed in a single
+panoramic image by performing category-wise 2D FFT.
+3.2.3
+Exploitation Module
+In the exploitation mode, the agent requires high-level rea-
+soning with identiﬁable environmental clues to imagine re-
+gretful exploration cases. To ﬁnd clues in an object-level
+manner, we present a novel visual representation by captur-
+ing object information in the spectral-domain. The novel
+representation is more easily predictable than spatial fea-
+tures such as RGB image embeddings. The agent can take
+advantage of the predictability by expanding the searchable
+area to ﬁnd a local goal. We choose the local goal as the
+closest node to the global goal in the feature space.
+Spectral-Domain Visual Representations. Common nav-
+igation policies can lead the agent toward the node with the
+highest similarity to the target. However, even with a good
+learned policy, the agent can act in a novice manner in un-
+seen environments. In this paper, we seek extra information
+from the environment for generalizable high-level reason-
+ing to resolve the issue. As illustrated in Figure 5, scene
+object spectrum (SOS) incorporates semantic information
+observed in a single panoramic image by generating a se-
+mantic mask for each object category and applying Fourier
+transform to each semantic mask. The semantic mask for
+object class k at time t is calculated as a binary mask [mk
+t ]ij
+that detects the object at pixel (i, j). Suppose there are a
+total of K object categories. When multiple objects are de-
+tected for one object category, the binary mask appears as a
+union of the bounding boxes of the detected objects. We de-
+ﬁne FFT as a channel-wise 2D fast Fourier transform that
+receives K binary semantic masks and outputs K spectral-
+domain features, where K is the number of object classes.
+Then, SOS feature ⃗St = [s1
+t, ..., sK
+t ]T can be deﬁned as
+sk
+t = log |FFT(mk
+t )|. For simplicity, we perform mean
+pooling on the vertical spectral axis and normalize the out-
+put. The ﬁnal SOS feature has shape (K, η), where η is the
+maximum horizontal frequency.
+Local Goal Search Using Semantic Clues. We argue that
+returning to a previously visited node does not guarantee the
+agent escapes from the local optima. Instead of backtracking
+
+
+--- PDF PAGE 6 ---
+to a previously visited node, the agent searches for a local
+goal to move towards. If the agent plans a path and moves
+towards the local goal, the agent does not need to repeat
+unnecessary actions in visited regions after the exploitation
+ends. Additionally, searching for a local goal takes full ad-
+vantage of the topological map by utilizing the connections
+among the observed nodes. To expand the searchable area
+further, we let the agent choose the local goal from previ-
+ously unvisited and unchosen candidate nodes.
+To choose a local goal, we ﬁrst score the corrected trajec-
+tories to measure the alignment with the language instruc-
+tion L. We use SOS features as semantic environmental
+clues to estimate the navigation score Snav of the corrected
+trajectory, which is the shortest path trajectory from the ini-
+tial node to the local goal in the constructed topological
+map.To simplify, we convert the language instruction into a
+list of objects W o = [wo
+1, ..., wo
+B] consisting of B[≤K]
+object categories (e.g., desk, cabinet, and microwave). We
+approximate the corresponding reference SOS features as
+[ˆδ(wo
+1), ..., ˆδ(wo
+B)] where the ith row of ˆδ(wo
+k) is deﬁned as
+[ˆδ(wo
+k)]i = 1(k = i)λ(δ(wo
+k)) sinc( j
+2 −
+η
+4).
+λ(δ(wo
+k))
+denotes the average width of detected bounding boxes of
+object wo
+k in the environment. A detailed approximation
+process is explained in the supplementary material. To sim-
+ulate a corrected trajectory T ′ = (v′
+1, ..., v′
+t′), we calculate
+the SOS features [⃗S′
+1, ..., ⃗S′
+t′] corresponding to the nodes in
+T ′. We measure the similarity between two object spectrum
+features via the cosine similarity of the ﬂattened vectors. Fi-
+nally, the navigation score Snav of T ′ is computed as:
+Snav(T ′) =
+B
+P
+i=1
+t′
+P
+j=1
+(
+ˆδ(wo
+i )
+|ˆδ(wo
+i )| ·
+⃗S′
+j
+|⃗S′
+j|)((ˆδ(wo
+i ) −ˆδ(wo)) · (⃗S′
+j −⃗S′))
+s
+t′
+B ·
+B
+P
+i=1
+(ˆδ(wo
+i ) −ˆδ(wo))2
+t′
+P
+j=1
+(⃗S′
+j −⃗S′)2
+,
+(1)
+where ˆδ(wo) and ⃗S′ denote the average values of SOS fea-
+tures ˆδ(wo
+i ) and ⃗S′
+j, respectively. This equation can also be
+interpreted as a pseudo correlation-coefﬁcient function be-
+tween object list W o and trajectory T ′. The exploitation
+policy selects the node with the highest navigation score as
+the local goal from the previously unvisited candidates.
+Figure 6 illustrates a simple scenario of entering a room.
+Suppose W o = [sculpture, door, bed] and the agent has
+to compare two trajectories T1 = (v1, v2, A) and T1 =
+(v1, v2, B). Each similarity matrix in Figure 6 has the (t, j)
+element as the similarity between the SOS feature of Vt and
+ˆδ(wo
+j), which is calculated as ˆδ(wo
+j) · ⃗S′
+t. Notably, the simi-
+larity matrix shows monotonic alignment and the navigation
+score is higher when the next action is chosen correctly.
+3.3. Training Details
+We use [24] for pretraining the visual encoder with
+panoramic RGB observations. We use the DAgger algo-
+rithm [46] to pretrain the navigation policy and the mode
+selector.
+To prevent overﬁtting, we iteratively perform
+𝒘𝟏
+𝒐𝒘𝟐
+𝒐𝒘𝟑
+𝒐
+𝒗𝒕=𝟏
+𝒗𝒕=𝟐
+𝒗𝒕=𝟑
+𝒘𝟏
+𝒐𝒘𝟐
+𝒐𝒘𝟑
+𝒐
+𝒗𝒕=𝟏
+𝒗𝒕=𝟐
+𝒗𝒕=𝟑
+𝒗𝒕=𝟑= 𝑨, 𝑺𝒏𝒂𝒗= 𝟎. 𝟐𝟗𝟔
+similarity matrix
+observable
+objects
+𝒗𝒕=𝟏
+𝒗𝒕=𝟐
+𝑨
+𝑩
+bed
+door
+painting
+sculpture
+0.9 0.0 0.0
+0.3 1.0 0.0
+0.0 0.0 1.0
+0.9 0.0 0.0
+0.3 1.0 0.0
+0.5 0.4 0.0
+𝒗𝒕=𝟑= 𝑩, 𝑺𝒏𝒂𝒗= 𝟎. 𝟐𝟎𝟏
+Figure 6. Toy Example. Monotonic alignment between language
+instruction and visual observation is desirable. Yellow dots
+in the
+nodes describe the ground truth trajectory. Based on the node at
+t = 3, the similarity matrix can show either monotonic or non-
+monotonic alignment between object tokens and SOS features. The
+greencircles
+describethepossiblecandidatesA, B fornextaction.
+teacher forcing and student forcing to choose the action
+from the exploration policy. Imitation learning loss is cal-
+culated as LIL = PT
+t=1 −log p(a∗
+t |at) and object ground-
+ing loss is calculated as LOG = −log p(obj∗|objpred),
+where obj∗denotes the ground truth and objpred denotes
+the predicted object location. The total loss function is de-
+ﬁned as Ltotal = Lmode + Lprogress + Lcorr + LIL +
+LOG.
+We further ﬁnetune the agent via A2C [47].
+The exploration policy selects the action at with probabil-
+ity pa
+t . Reinforcement learning loss is deﬁned as LRL =
+−P
+t as
+t log(pa
+t )At −λ P
+t a∗
+t log(pa
+t ). To train the mode
+selector, progress monitor, and exploration policy in an end-
+to-end manner, we use the total loss function as Lfine =
+Lmode + Lprogress + LRL. The exploitation policy searches
+thepathtowardthelocalgoalfromtheconstructednavigation
+graph. Thus, the exploitation policy is not learned.
+4. Navigation Experiments
+4.1. Experiment Settings
+We evaluate our method on three VLN benchmarks,
+Room-to-Room(R2R) [2], SOON [16], and REVERIE [17].
+R2R evaluates the visually-grounded natural navigation
+performance of the agent. The agent must navigate to the
+predeﬁned goal point given image observations and lan-
+guage instructions in an unseen environment.
+SOON is also a goal-oriented VLN benchmark. Natural
+language instructions in SOON have an average length of
+47 words. The agent should locate the target location and
+detect the location of an object to ﬁnd the target object.
+REVERIE is a goal-oriented VLN benchmark that pro-
+vides natural language instruction about target locations and
+objects.
+In REVERIE, the agent is given an instruction
+referring to a remote object with an average length of 21
+words. With this instruction and a panoramic observation
+from the environment, the agent should navigate to the lo-
+cation the instruction describes and ﬁnd the correct object
+
+
+--- PDF PAGE 7 ---
+bounding box among the predeﬁned object bounding boxes.
+4.2. Evaluation Metrics
+4.2.1
+Navigation performance
+We evaluate algorithms using the trajectory length (TL),
+success rate (SR), and success weighted by inverse path
+length (SPL) [48], and oracle success rate (OSR) for
+the navigation performance comparison.
+An episode is
+recorded as a success if the agent takes a stop action
+within 3 m of the target location. TL is the average path
+length in meters. SR is denoted as the number of successes
+divided by the total number of episodes, M. SPL is calcu-
+lated as 1
+M
+PM
+i=1 Si
+li
+max(pi,li), where Si denotes the success
+as a binary value. pi and li denote the shortest path and ac-
+tual path lengths for the ith episode. OSR uses the oracle
+stop policy instead of the stop policy of the agent.
+4.2.2
+Object grounding performance
+We also evaluate the object grounding performance of
+the agent by the success rate of ﬁnding the target ob-
+ject (FSR) and the target ﬁnding success weighted by in-
+verse path length (FSPL) [16, 17]. FSPL is calculated as
+FSPL =
+1
+N
+PN
+i=1 Snav
+i
+Sloc
+i
+· lnav
+i
+/max(lnav
+i
+, lgt
+i ), where
+Snav
+i
+is whether the agent navigates to the target, Sloc
+i
+is
+whether the agent ﬁnds a target object bounding box, and
+lnav
+i
+and lgt
+i are the navigation trajectory length and ground
+truth trajectory length, respectively.
+4.3. Baselines and Implementation Details
+We compare our method with several other baselines as
+follows. For each task, we compare our method with a num-
+ber of baselines that use various types of memory (recur-
+rent, sequential, and topological map). For methods imple-
+mented with a hierarchical navigation framework, we com-
+pare the speciﬁc exploitation methods: homing, jump, and
+local goal search. Homing makes the agent backtrack, and
+jump makes the agent jump to a previously visited node.
+The hyperparameters and detailed model architecture of
+Meta-Explore are described in the supplementary material.
+4.4. Comparison with Navigation Baselines
+We compare our method with navigation baselines. We
+focus on the success rate and SPL. Rendered results and
+detailed analyses with other evaluation metrics are provided
+in the supplementary material.
+R2R. Table 1 compares the proposed Meta-Explore with
+baselines for the R2R navigation task. We categorize the
+baseline methods based on the type of constructed mem-
+ory and the type of exploitation. Our method outperforms
+other exploration-only baselines over all types of valida-
+tion and test splits in success rate and SPL. Compared with
+hierarchical baselines SMNA [21], Regretful-Agent [22],
+FAST [35], and SSM [26], Meta-Explore improves success
+Identical with its original term, Remote Grounding Success (RGS).
+† indicates reproduced results.
+rate and SPL by at least 16.4% and 8.9%, respectively. The
+main difference is that Meta-Explore constructs a topologi-
+cal map during exploration and uses the map for local goal
+search in exploitation. On the contrary, homing exploita-
+tion policies in SMNA, Regretful-Agent, and FAST only
+rely on the current trajectory, instead of taking advantage of
+the constructed memory. Jump exploitation in SSM uses a
+topological map to search a successful previous node, but it
+makes an unrealistic assumption that the agent can directly
+jump to a previously visited distant node and unfairly saves
+time. In our approach, we plan a path to the local goal based
+on the topological map. The experiment results reveal that
+even if we design a hierarchical navigation framework, ex-
+ploration and exploitation are not entirely separate but they
+can complement each other.
+SOON, REVERIE. Table 2 compares Meta-Explore with
+baselines in the SOON navigation task. While the proposed
+method does not improve performance in val seen split,
+Meta-Explore outperforms other baselines in the test unseen
+split of SOON for success rate by 17.1% and SPL by 20.6%.
+The result implies that for the goal-oriented VLN task, high
+performance in train or val seen splits can be the overﬁt-
+ted result. Because the agent can be easily overﬁtted to
+the training data, making a generalizable model or provid-
+ing a deterministic error-correction module for inference is
+essential. Meta-Explore chooses the latter approach by cor-
+recting the trajectory via exploitation in regretful cases. The
+evaluation results in the REVERIE navigation task are de-
+scribed in the supplementary material. Meta-Explore shows
+improvement in the val split of REVERIE for success rate
+and SPL, but the improvement in the test split is lower than
+the results in R2R and SOON. We found 252 meaningless
+object categories (e.g., verbs, adjectives, and prepositions)
+and 418 replaceable object categories (e.g., typographical
+errors and synonyms) in the REVERIE dataset. Because
+our exploitation method utilizes object-based parsing of the
+given instruction to match with the detected object cate-
+gories, the effectiveness of the proposed method is lessened
+due to inaccuracies and inconsistencies in the dataset. We
+expect to have higher performance if the mistakes in the
+dataset are ﬁxed.
+4.5. Local Goal Search using SOS Features
+To discuss the signiﬁcance of modeling exploitation pol-
+icy, we conduct speciﬁc experiments about choosing the lo-
+cal goal for R2R and SOON. We evaluate our method us-
+ing different types of local goal search, as shown in Ta-
+ble 3 and 4. Oracle denotes a method which selects a lo-
+cal goal using the ground truth trajectory. The performance
+of the oracle provides the achievable performance for each
+dataset. The results imply that local goal search using either
+10.7% and 41.2% of a total of 46,476 words in the bounding box
+dataset correspond to meaningless and replaceable object categories, re-
+spectively.
+
+
+--- PDF PAGE 8 ---
+Methods
+Memory
+Exploit
+Val Seen
+Val Unseen
+Test Unseen
+SR↑
+SPL↑
+TL↓
+NE↓
+SR↑
+SPL↑
+TL↓
+NE↓
+SR↑
+SPL↑
+TL↓
+NE↓
+Random
+-
+-
+16
+-
+9.58
+9.45
+16
+-
+9.77
+9.23
+13
+12
+9.89
+9.79
+Human
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+11.85
+1.61
+86
+76
+Seq2Seq [2]
+Rec
+
+6.0
+39
+11.33
+-
+22
+-
+8.39
+7.84
+20
+18
+8.13
+7.85
+VLN⟳BERT [32]
+Rec
+
+72
+68
+11.13
+2.90
+63
+57
+12.01
+3.93
+63
+57
+12.35
+4.09
+SMNA† [21]
+Rec
+homing
+69
+63
+11.69
+3.31
+47
+41
+12.61
+5.48
+61
+56
+-
+4.48
+Regretful-Agent [22]
+Rec
+homing
+69
+63
+-
+3.23
+50
+41
+-
+5.32
+48
+40
+-
+5.69
+FAST (short) [35]
+Rec
+homing
+-
+-
+-
+-
+56
+43
+21.17
+4.97
+54
+41
+22.08
+5.14
+FAST (long) [35]
+Rec
+homing
+70
+04
+188.06
+3.13
+63
+02
+224.42
+4.03
+61
+03
+196.53
+4.29
+HAMT-e2e [34]
+Seq
+
+76
+72
+11.15
+2.51
+66
+61
+11.46
+2.29
+65
+60
+12.27
+3.93
+DUET [24]
+Top. Map
+
+79
+73
+12.32
+2.28
+72
+60
+13.94
+3.31
+69
+59
+14.73
+3.65
+SSM [26]
+Top. Map
+jump
+71
+62
+14.7
+3.10
+62
+45
+20.7
+4.32
+61
+46
+20.4
+4.57
+Meta-Explore (Ours)
+Top. Map
+local goal
+81
+75
+11.95
+2.11
+72
+62
+13.09
+3.22
+71
+61
+14.25
+3.57
+Table 1. Comparison and evaluation results of the baselines and our model in the R2R Navigation Task.
+Gray shaded rows describe hierarchical navigation baselines. Three memory types: Rec(recurrent), Seq(sequential), and Top. Map(topological map)
+Methods
+Memory
+Exploit
+Val Seen Instruction
+Val Seen House
+Test Unseen House
+SR↑
+SPL↑
+OSR↑
+FSPL↑
+SR↑
+SPL↑
+OSR↑
+FSPL↑
+SR↑
+SPL↑
+OSR↑
+FSPL↑
+Human
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+90.4
+59.2
+91.4
+51.1
+Random
+Rec
+
+0.0
+1.5
+0.1
+1.4
+0.1
+0.0
+0.4
+0.9
+2.1
+0.4
+2.7
+0.0
+Speaker-Follower [28]
+Rec
+
+97.9
+97.7
+97.8
+24.5
+61.2
+60.4
+69.4
+9.1
+7.0
+6.1
+9.8
+0.6
+RCM [49]
+Rec
+
+84.0
+82.6
+89.1
+10.9
+62.4
+60.9
+72.7
+7.8
+7.4
+6.2
+12.4
+0.7
+AuxRN [23]
+Rec
+
+98.4
+97.4
+98.7
+13.7
+68.8
+67.3
+78.5
+8.3
+8.1
+6.7
+11.0
+0.5
+GBE w/o GE
+Top. Map
+
+89.5
+88.3
+91.8
+24.2
+62.5
+60.8
+73.0
+6.7
+11.4
+8.7
+18.8
+0.8
+GBE [16]
+Top. Map
+
+98.4
+97.9
+98.6
+44.2
+76.3
+62.5
+64.1
+7.3
+11.9
+10.2
+19.5
+1.4
+GBE†
+Top. Map
+
+-
+-
+-
+-
+19.5
+13.3
+28.5
+1.2
+12.9
+9.2
+21.5
+0.5
+DUET [24]
+Top. Map
+
+94.0
+91.6
+90.0
+31.1
+36.3
+22.6
+50.9
+3.8
+33.4
+21.4
+43.0
+4.2
+Meta-Explore (Ours)
+Top. Map
+local goal
+100.0
+99.1
+96.0
+33.9
+44.7
+34.8
+52.7
+8.9
+39.1
+25.8
+48.7
+4.0
+Table 2. Comparison and evaluation results of the baselines and our model in the SOON Navigation Task.
+spatial or spectral visual representations is more effective
+than random local goal search. The results show that local
+goal search using spectral visual representations, i.e., SOS
+features, lead the agent to desirable nodes the most. We also
+compare local goal search with homing and the difference
+between the performance of the two methods is most notice-
+able in the test split of the SOON navigation task. As shown
+in Table 4, choosing the local goal with only spatial-domain
+features, the navigation performance does not improve com-
+pared to homing. On the contrary, spectral-domain local
+goal search shows signiﬁcant improvement against homing
+by 10.4% in success rate, 34.5% on SPL, and 27.4% on
+FSPL. The results imply that using spectral-domain SOS
+features helps high-level decision making, thereby enhanc-
+ing the navigation performance. To further show the ef-
+fectiveness of SOS features, we provide sample local goal
+search scenarios in the supplementary material.
+Local
+Val Seen
+Val Unseen
+Goal
+SR↑
+SPL↑OSR↑
+TL↓
+NE↓
+SR↑
+SPL↑OSR↑
+TL↓
+NE↓
+Oracle
+81.88 74.12
+87.46
+13.06 1.93
+75.95 62.53
+84.16
+14.00 2.71
+Random 79.33 72.67
+85.31
+13.19 2.22
+70.97 59.45
+80.16
+14.92 3.34
+Homing
+80.22 73.63
+85.60
+12.51 2.14
+71.65 60.60
+80.33
+13.91 3.26
+Spatial
+79.63 73.14
+85.60
+12.99 2.22
+71.56 60.01
+80.33
+14.90 3.27
+Spectral
+80.61 75.15
+85.80
+11.95 2.11
+71.78 61.68
+80.76
+13.09 3.22
+Table 3. Comparison of Exploitation Policies. (R2R)
+Local
+Val Seen House
+Test Unseen House
+Goal
+SR↑
+SPL↑
+OSR↑
+FSPL↑
+SR↑
+SPL↑
+OSR↑
+FSPL↑
+Oracle
+54.42
+37.96
+63.72
+11.01
+48.38
+28.45
+62.98
+4.74
+Random
+24.78
+11.97
+34.96
+3.08
+24.19
+7.41
+35.84
+1.29
+Homing
+42.04
+27.72
+48.23
+10.18
+35.40
+19.18
+51.62
+3.14
+Spatial
+32.30
+11.60
+39.38
+1.90
+26.11
+10.58
+39.23
+1.43
+Spectral
+44.69
+34.84
+52.65
+8.89
+39.09
+25.80
+48.67
+4.01
+Table 4. Comparison of Exploitation Policies. (SOON)
+4.6. Ablation Study
+We conduct an ablation study to compare the proposed
+method against language-triggered hierarchical exploration.
+Results in the supplementary material show that among
+the three representation domains, spatial, spectral, and lan-
+guage, the spectral-domain features enhance navigation per-
+formance the most. Additionally, to implicate further ap-
+plications of Meta-Explore in continuous environments, we
+evaluate our method on the photo-realistic Habitat [50]
+simulator to solve image-goal navigation and vision-and-
+language navigation tasks. Implementation details and re-
+sults are included in the supplementary material. Results
+show that our method outperforms baselines in both tasks.
+5. Conclusion
+We have proposed Meta-Explore, a hierarchical naviga-
+tion method for VLN, by correcting mistaken short-term ac-
+tions via efﬁcient exploitation. In the exploitation mode, the
+agent is directed to a local goal which is inferred to be the
+closest to the target. A topological map constructed dur-
+ing exploration helps the agent to search and plan the short-
+est path toward the local goal. To further search beyond
+the frontier of the map, we present a novel visual repre-
+sentation called scene object spectrum (SOS), which com-
+pactly encodes the arrangements and frequencies of nearby
+objects. Meta-Explore achieves the highest generalization
+performance for test splits of R2R, SOON, and val split of
+REVERIE navigation tasks by showing less overﬁtting and
+high success rates. We plan to apply Meta-Explore for VLN
+tasks in continuous environments in our future work.
+
+
+--- PDF PAGE 9 ---
+References
+[1] Fengda Zhu, Yi Zhu, Vincent Lee, Xiaodan Liang, and Xiao-
+jun Chang. Deep learning for embodied vision navigation: A
+survey. arXiv preprint arXiv:2108.04097, 2021. 1
+[2] Peter Anderson, Qi Wu, Damien Teney, Jake Bruce, Mark
+Johnson, Niko S¨underhauf, Ian Reid, Stephen Gould, and An-
+ton Van Den Hengel. Vision-and-language navigation: In-
+terpreting visually-grounded navigation instructions in real
+environments. In Proceedings of the IEEE Conference on
+Computer Vision and Pattern Recognition,pages3674–3683,
+2018. 1, 2, 3, 6, 8, 14, 15
+[3] Howard Chen, Alane Suhr, Dipendra Misra, Noah Snavely,
+andYoavArtzi. Touchdown: Naturallanguagenavigationand
+spatial reasoning in visual street environments. In Proceed-
+ings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, pages 12538–12547, 2019. 1, 2
+[4] Alexander Ku, Peter Anderson, Roma Patel, Eugene Ie, and
+Jason Baldridge. Room-Across-Room: Multilingual vision-
+and-language navigation with dense spatiotemporal ground-
+ing. In Conference on Empirical Methods for Natural Lan-
+guage Processing, 2020. 1, 2
+[5] Vihan Jain, Gabriel Magalhaes, Alexander Ku, Ashish
+Vaswani,EugeneIe,andJasonBaldridge. Stayonthepath: In-
+structionﬁdelityinvision-and-languagenavigation. InTrans-
+actions of the Association for Computational Linguistics,
+pages 1862–1872, Florence, Italy, July 2019. Association for
+Computational Linguistics. 1
+[6] An Yan, Xin Eric Wang, Jiangtao Feng, Lei Li, and
+William Yang Wang. Cross-lingual vision-language naviga-
+tion. arXiv preprint arXiv:1910.11301, 2019. 1
+[7] Keji He, Yan Huang, Qi Wu, Jianhua Yang, Dong An, Shuan-
+glin Sima, and Liang Wang. Landmark-rxr: Solving vision-
+and-languagenavigationwithﬁne-grainedalignmentsupervi-
+sion. InProceedings of the International Conference on Neu-
+ral Information Processing Systems, volume 34, pages 652–
+663. Curran Associates, Inc., 2021. 1
+[8] Jacob Krantz, Erik Wijmans, Arjun Majundar, Dhruv Batra,
+and Stefan Lee. Beyond the nav-graph: Vision and language
+navigationincontinuousenvironments. InProceedings of the
+European Conference on Computer Vision, 2020. 1, 19
+[9] Piotr Mirowski, Andras Banki-Horvath, Keith Anderson,
+Denis Teplyashin, Karl Moritz Hermann, Mateusz Mali-
+nowski, Matthew Koichi Grimes, Karen Simonyan, Koray
+Kavukcuoglu, Andrew Zisserman, et al. The streetlearn envi-
+ronmentanddataset. arXiv preprint arXiv:1903.01292,2019.
+1
+[10] Karl Moritz Hermann, Mateusz Malinowski, Piotr Mirowski,
+Andras Banki-Horvath, Keith Anderson, and Raia Hadsell.
+Learning to follow directions in street view. In Proceedings
+of the AAAI Conference on Artiﬁcial Intelligence,volume34,
+pages 11773–11781, Apr. 2020. 1
+[11] Arun Balajee Vasudevan, Dengxin Dai, and Luc Van Gool.
+Talk2nav: Long-range vision-and-language navigation with
+dual attention and spatial memory.
+In Proceedings of the
+IEEE/CVF International Conference on Computer Vision,
+volume 129, pages 246–266. Springer, 2021. 1
+[12] Dipendra Misra, Andrew Bennett, Valts Blukis, Eyvind
+Niklasson, Max Shatkhin, and Yoav Artzi. Mapping instruc-
+tionstoactionsin3Denvironmentswithvisualgoalprediction.
+In Proceedings of the Conference on Empirical Methods for
+Natural Language Processing, pages 2667–2678, Brussels,
+Belgium, October-November 2018. Association for Compu-
+tational Linguistics. 1
+[13] Ta-Chung Chi, Minmin Shen, Mihail Eric, Seokhwan Kim,
+andDilekHakkani-tur.Justask: Aninteractivelearningframe-
+workforvisionandlanguagenavigation. InProceedings of the
+AAAI Conference on Artiﬁcial Intelligence,volume34,pages
+2459–2466, 2020. 1
+[14] Yi Wu, Yuxin Wu, Georgia Gkioxari, and Yuandong Tian.
+Buildinggeneralizableagentswitharealisticandrich3denvi-
+ronment. arXiv preprint arXiv:1801.02209, 2018. 1
+[15] Abhishek Das, Samyak Datta, Georgia Gkioxari, Stefan Lee,
+DeviParikh,andDhruvBatra. Embodiedquestionanswering.
+In Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition, pages 1–10, 2018. 1
+[16] Fengda Zhu, Xiwen Liang, Yi Zhu, Qizhi Yu, Xiaojun Chang,
+and Xiaodan Liang.
+Soon: Scenario oriented object nav-
+igation with graph-based exploration.
+In Proceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, pages 12689–12699, 2021. 1, 2, 3, 6, 7, 8, 14, 15
+[17] Yuankai Qi, Qi Wu, Peter Anderson, Xin Wang, William Yang
+Wang, Chunhua Shen, and Anton van den Hengel. Reverie:
+Remote embodied visual referring expression in real indoor
+environments. In Proceedings of the IEEE/CVF Conference
+on Computer Vision and Pattern Recognition, pages 9982–
+9991, 2020. 1, 2, 3, 6, 7, 14, 15
+[18] Khanh Nguyen and Hal Daum´e III. Help, anna! visual nav-
+igation with natural multimodal assistance via retrospective
+curiosity-encouraging imitation learning. In Proceedings of
+the Conference on Empirical Methods for Natural Language
+Processing, November 2019. 1, 2
+[19] Khanh Nguyen, Debadeepta Dey, Chris Brockett, and Bill
+Dolan. Vision-based navigation with language-based assis-
+tance via imitation learning with indirect intervention. In Pro-
+ceedings of the IEEE/CVF Conference on Computer Vision
+and Pattern Recognition, June 2019. 1
+[20] Alane Suhr, Claudia Yan, Jack Schluger, Stanley Yu, Hadi
+Khader, Marwa Mouallem, Iris Zhang, and Yoav Artzi. Ex-
+ecuting instructions in situated collaborative interactions. In
+Proceedings of the Conference on Empirical Methods for
+Natural Language Processing, pages 2119–2130, 2019. 1
+[21] Chih-YaoMa,JiasenLu,ZuxuanWu,GhassanAlRegib,Zsolt
+Kira, Richard Socher, and Caiming Xiong. Self-monitoring
+navigation agent via auxiliary progress estimation. In Pro-
+ceedings of the International Conference on Learning Rep-
+resentations, 2019. 1, 2, 3, 4, 7, 8, 14, 15
+[22] Chih-YaoMa,ZuxuanWu,GhassanAlRegib,CaimingXiong,
+andZsoltKira.Theregretfulagent: Heuristic-aidednavigation
+
+
+--- PDF PAGE 10 ---
+throughprogressestimation. InProceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition,
+pages 6732–6740, 2019. 1, 2, 3, 4, 7, 8, 14
+[23] Fengda Zhu, Yi Zhu, Xiaojun Chang, and Xiaodan Liang.
+Vision-language navigation with self-supervised auxiliary
+reasoningtasks. InProceedings of the IEEE/CVF Conference
+on Computer Vision and Pattern Recognition, pages 10012–
+10022, 2020. 1, 2, 3, 8, 14
+[24] Shizhe Chen,
+Pierre-Louis Guhur,
+Makarand Tapaswi,
+Cordelia Schmid, and Ivan Laptev. Think global, act local:
+Dual-scalegraphtransformerforvision-and-languagenaviga-
+tion. In Proceedings of the IEEE/CVF Conference on Com-
+puter Vision and Pattern Recognition, pages 16537–16547,
+2022. 1, 2, 4, 6, 8, 14, 15
+[25] Zhiwei Deng, Karthik Narasimhan, and Olga Russakovsky.
+Evolving graphical planner: Contextual global planning for
+vision-and-language navigation. In Proceedings of the Inter-
+national Conference on Neural Information Processing Sys-
+tems, volume 33, pages 20660–20672, 2020. 1, 2
+[26] Hanqing Wang, Wenguan Wang, Wei Liang, Caiming Xiong,
+and Jianbing Shen.
+Structured scene memory for vision-
+language navigation. In Proceedings of the IEEE/CVF Con-
+ference on Computer Vision and Pattern Recognition, pages
+8455–8464, June 2021. 1, 2, 7, 8, 14
+[27] Jesse Thomason, Michael Murray, Maya Cakmak, and Luke
+Zettlemoyer. Vision-and-dialog navigation. In Proceedings
+of the Conference on Robot Learning, pages 394–406, 2020.
+2
+[28] Daniel Fried, Ronghang Hu, Volkan Cirik, Anna Rohrbach,
+Jacob Andreas,
+Louis-Philippe Morency,
+Taylor Berg-
+Kirkpatrick, Kate Saenko, Dan Klein, and Trevor Darrell.
+Speaker-followermodelsforvision-and-languagenavigation.
+InProceedings of the International Conference on Neural In-
+formation Processing Systems, 2018. 2, 8, 14
+[29] Xiujun Li, Chunyuan Li, Qiaolin Xia, Yonatan Bisk, Asli Ce-
+likyilmaz, Jianfeng Gao, Noah A Smith, and Yejin Choi. Ro-
+bust navigation with language pretraining and stochastic sam-
+pling. In Proceedings of the Conference on Empirical Meth-
+ods for Natural Language Processing, pages 1494–1499,
+2019. 2
+[30] Jiasen Lu, Dhruv Batra, Devi Parikh, and Stefan Lee. Vil-
+bert: Pretraining task-agnostic visiolinguistic representations
+for vision-and-language tasks. In Proceedings of the Inter-
+national Conference on Neural Information Processing Sys-
+tems, 2019. 2, 14
+[31] Pierre-Louis Guhur, Makarand Tapaswi, Shizhe Chen, Ivan
+Laptev, and Cordelia Schmid. Airbert: In-domain pretrain-
+ingforvision-and-languagenavigation. InProceedings of the
+IEEE/CVF International Conference on Computer Vision,
+pages 1634–1643, 2021. 2, 14, 15
+[32] Yicong Hong, Qi Wu, Yuankai Qi, Cristian Rodriguez-Opazo,
+and Stephen Gould.
+Vln⟳bert: A recurrent vision-and-
+languagebertfornavigation. InProceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition,
+pages 1643–1653, 2021. 2, 8, 14, 15
+[33] Alexander Pashevich, Cordelia Schmid, and Chen Sun.
+Episodic transformer for vision-and-language navigation. In
+Proceedings of the IEEE/CVF International Conference on
+Computer Vision, pages 15942–15952, 2021. 2
+[34] Shizhe Chen, Pierre-Louis Guhur, Cordelia Schmid, and Ivan
+Laptev.
+History aware multimodal transformer for vision-
+and-language navigation.
+In Proceedings of the Interna-
+tional Conference on Neural Information Processing Sys-
+tems, pages 5834–5847, 2021. 2, 8, 14, 15
+[35] Liyiming Ke, Xiujun Li, Yonatan Bisk, Ari Holtzman, Zhe
+Gan, Jingjing Liu, Jianfeng Gao, Yejin Choi, and Siddhartha
+Srinivasa.
+Tactical rewind: Self-correction via backtrack-
+ing in vision-and-language navigation.
+In Proceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, pages 6741–6749, 2019. 2, 3, 7, 8, 14
+[36] James G March. Exploration and exploitation in organiza-
+tional learning. Organization science, 2(1):71–87, 1991. 3
+[37] Adrien Ecoffet, Joost Huizinga, Joel Lehman, Kenneth O
+Stanley, and Jeff Clune. First return, then explore. Nature,
+590(7847):580–586, 2021. 3
+[38] Miruna Pislar, David Szepesvari, Georg Ostrovski, Diana L
+Borsa, and Tom Schaul. When should agents explore? In Pro-
+ceedings of the International Conference on Learning Rep-
+resentations, 2022. 3
+[39] Devendra Singh Chaplot, Dhiraj Gandhi, Saurabh Gupta, Ab-
+hinav Gupta, and Ruslan Salakhutdinov. Learning to explore
+using active neural slam. In Proceedings of the International
+Conference on Learning Representations, 2020. 3, 17, 18
+[40] Meera Hahn, Devendra Singh Chaplot, Shubham Tulsiani,
+Mustafa Mukadam, James M Rehg, and Abhinav Gupta. No
+rl, no simulation: Learning to navigate without navigating.
+In Proceedings of the International Conference on Neural
+Information Processing Systems, volume 34, pages 26661–
+26673. Curran Associates, Inc., 2021. 3
+[41] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun.
+Deep residual learning for image recognition. In Proceedings
+of the IEEE/CVF Conference on Computer Vision and Pat-
+tern Recognition, pages 770–778, 2016. 3, 18
+[42] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov,
+Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner,
+Mostafa Dehghani, Matthias Minderer, Georg Heigold, Syl-
+vain Gelly, Jakob Uszkoreit, and Neil Houlsby. An image is
+worth 16x16 words: Transformers for image recognition at
+scale.
+In Proceedings of the International Conference on
+Learning Representations, 2021. 3, 13, 16
+[43] Wolfgang St¨urzl and Hanspeter A Mallot.
+Efﬁcient vi-
+sual homing based on fourier transformed panoramic images.
+Robotics and Autonomous Systems, 54(4):300–313, 2006. 3
+[44] Jean Serra. Mathematical Morphology, pages 1–16. Springer
+International Publishing, Cham, 2020. 3
+[45] Hao Tan and Mohit Bansal. Lxmert: Learning cross-modality
+encoder representationsfrom transformers. InProceedings of
+the Conference on Empirical Methods for Natural Language
+Processing, pages 5100–5111, 2019. 4, 13
+
+
+--- PDF PAGE 11 ---
+[46] St´ephaneRoss,GeoffreyJGordon,andJAndrewBagnell. No-
+regret reductions for imitation learning and structured predic-
+tion. arXiv preprint arXiv:1011.0686, 2010. 6
+[47] Volodymyr Mnih, Adria Puigdomenech Badia, Mehdi Mirza,
+AlexGraves,TimothyLillicrap,TimHarley,DavidSilver,and
+Koray Kavukcuoglu. Asynchronous methods for deep rein-
+forcementlearning. InProceedings of the International Con-
+ference on Machine Learning, pages 1928–1937, 2016. 6
+[48] Peter Anderson, Angel Chang, Devendra Singh Chaplot,
+Alexey Dosovitskiy, Saurabh Gupta, Vladlen Koltun, Jana
+Kosecka, Jitendra Malik, Roozbeh Mottaghi, Manolis Savva,
+et al. On evaluation of embodied navigation agents. arXiv
+preprint arXiv:1807.06757, 2018. 7, 18
+[49] Xin Wang, Qiuyuan Huang, Asli Celikyilmaz, Jianfeng Gao,
+DinghanShen,Yuan-FangWang,WilliamYangWang,andLei
+Zhang. Reinforcedcross-modalmatchingandself-supervised
+imitationlearningforvision-languagenavigation. InProceed-
+ings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, pages 6629–6638, 2019. 8, 14, 15
+[50] Andrew Szot, Alex Clegg, Eric Undersander, Erik Wijmans,
+Yili Zhao, John Turner, Noah Maestre, Mustafa Mukadam,
+Devendra Chaplot, Oleksandr Maksymets, Aaron Gokaslan,
+VladimirVondrus,SameerDharur,FranziskaMeier,Wojciech
+Galuba, Angel Chang, Zsolt Kira, Vladlen Koltun, Jitendra
+Malik, Manolis Savva, and Dhruv Batra. Habitat 2.0: Train-
+ing home assistants to rearrange their habitat. In Proceedings
+of the International Conference on Neural Information Pro-
+cessing Systems, 2021. 8, 17
+[51] Stanislaw Antol, Aishwarya Agrawal, Jiasen Lu, Margaret
+Mitchell, Dhruv Batra, C Lawrence Zitnick, and Devi Parikh.
+Vqa: Visual question answering. In Proceedings of the IEEE
+International Conference on Computer Vision, pages 2425–
+2433, 2015. 14
+[52] Xiangru Lin, Guanbin Li, and Yizhou Yu.
+Scene-intuitive
+agent for remote embodied visual grounding. In Proceedings
+of the IEEE/CVF Conference on Computer Vision and Pat-
+tern Recognition, pages 7036–7045, June 2021. 14, 15
+[53] Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario
+Amodei, Ilya Sutskever, et al. Language models are unsuper-
+vised multitask learners. OpenAI blog, 1(8):9, 2019. 16
+[54] Nils Reimers and Iryna Gurevych. Sentence-bert: Sentence
+embeddings using siamese bert-networks. In Proceedings of
+the 2019 Conference on Empirical Methods in Natural Lan-
+guage Processing. Association for Computational Linguis-
+tics, 11 2019. 16
+[55] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya
+Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry,
+Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learning
+transferable visual models from natural language supervision.
+In Proceedings of the International Conference on Machine
+Learning, pages 8748–8763, 2021. 16
+[56] S. Chen et al. Think global, act local: Dual-scale graph trans-
+formerforvision-and-languagenavigation. InProceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, 2022. 17
+[57] EdsgerWDijkstra. Anoteontwoproblemsinconnexionwith
+graphs. Numerische mathematik, 1(1):269–271, 1959. 17
+[58] Obin Kwon, Nuri Kim, Yunho Choi, Hwiyeon Yoo, Jeongho
+Park, and Songhwai Oh. Visual graph memory with unsu-
+pervised representation for visual navigation. In Proceedings
+of the IEEE/CVF International Conference on Computer Vi-
+sion, pages 15890–15899, 2021. 18
+[59] Edward Beeching, Jilles Dibangoye, Olivier Simonin, and
+Christian Wolf. Learning to plan with uncertain topological
+maps. In Proceedings of the European Conference on Com-
+puter Vision, pages 473–490. Springer, 2020. 18
+[60] Devendra Singh Chaplot, Ruslan Salakhutdinov, Abhinav
+Gupta, and Saurabh Gupta. Neural topological slam for vi-
+sualnavigation. InProceedings of the IEEE/CVF Conference
+on Computer Vision and Pattern Recognition, pages 12875–
+12884, 2020. 18
+[61] Fei Xia, Amir R Zamir, Zhiyang He, Alexander Sax, Jitendra
+Malik, and Silvio Savarese. Gibson env: Real-world percep-
+tion for embodied agents. In Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition,
+pages 9068–9079, 2018. 17
+[62] Bowen Cheng, Ishan Misra, Alexander G. Schwing, Alexan-
+der Kirillov, and Rohit Girdhar. Masked-attention mask trans-
+former for universal image segmentation. In Proceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, 2022. 17
+[63] Bolei Zhou, Hang Zhao, Xavier Puig, Sanja Fidler, Adela Bar-
+riuso, and Antonio Torralba. Scene parsing through ade20k
+dataset.
+In Proceedings of the IEEE/CVF Conference on
+Computer Vision and Pattern Recognition, pages 633–641,
+2017. 17
+[64] Junnan Li, Pan Zhou, Caiming Xiong, and Steven Hoi. Proto-
+typical contrastive learning of unsupervised representations.
+In Proceedings of the International Conference on Learning
+Representations, 2021. 18
+[65] YicongHong,ZunWang,QiWu,andStephenGould.Bridging
+the gap between learning in discrete and continuous environ-
+ments for vision-and-language navigation. In Proceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, 2022. 19
+[66] Muhammad Zubair Irshad, Chih-Yao Ma, and Zsolt Kira. Hi-
+erarchicalcross-modalagentforroboticsvision-and-language
+navigation.
+In 2021 IEEE International Conference on
+Robotics and Automation (ICRA),pages13238–13246.IEEE,
+2021. 19
+[67] Muhammad Zubair Irshad, Niluthpol Chowdhury Mithun,
+Zachary Seymour, Han-Pang Chiu, Supun Samarasekera, and
+Rakesh Kumar. Semantically-aware spatio-temporal reason-
+ingagentforvision-and-languagenavigationincontinuousen-
+vironments. Proceedings of the International Conference on
+Pattern Recognition (ICPR), 2021. 19
+
+
+--- PDF PAGE 12 ---
+Supplementary Material for “Meta-Explore: Exploratory Hierarchical
+Vision-and-Language Navigation Using Scene Object Spectrum Grounding”
+We provide additional details and analyses of the pro-
+posed method in this supplementary material. Section A
+provides model details. Section B provides detailed settings
+and data preprocessing for experiments. Section C provides
+evaluation results with detailed analyses. Section D pro-
+vides implementation details and detailed results for the ab-
+lation study.
+A. Model Details
+A.1. Algorithm Details
+Algorithm 1 summarizes the overall hierarchical explo-
+ration process. The mode selector supervises the process
+and chooses whether the agent should explore or exploit at
+each time step.
+A.2. Exploitation Module
+A.2.1
+Reference SOS Features.
+In the proposed method, we approximate the reference SOS
+feature of an object token by using prior information about
+objects in the training data. For instance, for the ‘chair’
+object, we collected the widths and heights of the detected
+bounding boxes as shown in Figure 7. Figure 8 shows two
+representative values: median and mean for each distribu-
+tion. We choose the median values, which minimizes the L1
+error, to represent the reference bounding box of each ob-
+ject. To generate rotation-invariant SOS features, we con-
+vert the four vertices of the bounding box detected from
+the front view image of size 640 × 480 to the vertices of
+a bounding box detected from the panoramic view image
+of size 2048 × 512 using coordinate transformations. To
+simplify the implementation, we assume that the converted
+bounding box has a rectangle shape with the vertices trans-
+formed into coordinates in a panoramic view. The refer-
+ence SOS feature is calculated as the logarithmic magni-
+tude of the Fourier transform of the panoramic mask with
+mean pooling on the vertical spectral axis. Considering that
+the shift in the spatial-domain only affects the phase of the
+Fourier transform, the location of a reference bounding box
+does not matter.
+A.2.2
+Navigation Score
+To compare local goal candidates, we design a navigation
+score of a corrected trajectory τ ′ as equation 2. This metric
+can also be interpreted as a weighted correlation coefﬁcient
+among SOS features and object tokens weighted by the sim-
+ilarities between them.
+Algorithm 1: Meta-Explore
+Pexplore ←1
+Success ←False
+Initialize Gt and node features
+while t < T do
+Update Gt
+Update node features
+Ht ←cross-modal embedding at time t
+if Pexplore ≥0.5 then
+at ←arg maxVi(Fexplore([Ht]i))
+ˆpt ←Fprogress(Ht)
+t ←t + 1
+else
+Vlocal ←unvisited but observed nodes in Gt
+vlocal ←arg maxv′∈Vlocal(Snav(τ ′(v0, v′)))
+τ ←PathPlanning(vt, vlocal)
+while not arrived at vlocal do
+at ←pop(τ)
+t ←t + 1
+end
+end
+Pexplore ←1 −Smode(Ht)
+if at is stop and d(vt, vgoal) < dsuccess then
+Success ←True
+end
+Viewindex 13
+Viewindex 15
+Viewindex 16
+Viewindex 14
+Front View Object Detection
+Panoramic View Object Detection
+Figure 7. Bounding box coordinate transformation. Front-view
+visual observations from different angles at the same location. Each
+bounding box shows the ‘chair’ detection. We use coordinate trans-
+formation to convert coordinates into panoramic view.
+Snav(T ′) =
+B
+P
+i=1
+t′
+P
+j=1
+(
+ˆδ(wo
+i )
+|ˆδ(wo
+i )| ·
+⃗S′
+j
+|⃗S′
+j|)((ˆδ(wo
+i ) −ˆδ(wo)) · (⃗S′
+j −⃗S′))
+s
+t′
+B ·
+B
+P
+i=1
+(ˆδ(wo
+i ) −ˆδ(wo))2
+t′
+P
+j=1
+(⃗S′
+j −⃗S′)2
+(2)
+
+
+--- PDF PAGE 13 ---
+Dataset
+Instruction
+Object Tokens
+Target Object
+R2R
+“Walkthroughthekitchen. Gopastthesinkandstovestandinfrontof
+[“kitchen”,“sink”,“stove”,“stand”,“dish”,“table”,“chair”]
+“chair”
+thediningtableonthebenchside.”
+SOON
+“Thisisabrandnewwhite,rectangularwoodentable,whichisabovea
+[“book”,“chair”,“pitcher”,“ﬂower”,“table”,“table”]
+“table”
+fewchairs,underapotofﬂowers. Itisinaveryneatstudywithmanybooks.”
+REVERIE
+“Gotothebedroomwiththeﬁreplaceandbringmethelowesthanging
+[“bedroom”,“ﬁreplace”,“bed”,“table”,“stand”,“art”]
+“art”
+smallpictureontherightwallacrossfromthebedsidetablewiththelamponit”
+Table 5. Object Parsing Examples. For each dataset, object tokens are extracted from the instructions. Target objects are inferred from the
+instructions using VQA. Words that have similar meanings are uniﬁed into a single object word for categorization.
+(a) width
+(b) height
+(c) size
+Figure 8. Bounding box statistics. We collect width, height, and
+size of detected bounding boxes. The histograms show statistics for
+‘chair’objects. Yellowlineandredlineshowthemedianandaverage
+values of each distribution, respectively.
+nDS
+𝑆𝑛𝑎𝑣
+𝑅
+𝑄
+Figure 9. Relationship between navigation score (Snav) and
+normalized distance sum (nDS) in R2R. We measure navigation
+scoresforaugmentedtrajectorieswhichincludebothsuccessfuland
+failed trajectories. R and Q illustrate an example case of a ground
+truth trajectory and a query trajectory. Maximum hop of a query
+trajectory is 15. Trajectories with high nDS scores also have high
+navigation scores.
+Figure 9 shows the relationship between the naviga-
+tion score and an evaluation metric in the R2R naviga-
+tion task.
+Both metrics measure how similar the cur-
+rent trajectory is to the ground truth trajectory.
+We
+generate 49,986 augmented trajectories with an average
+length of 8.23m based on 5596 ground truth trajecto-
+ries. To generate various samples, we separate each aug-
+mented trajectory (v1, v2, ..., vt) into t augmented trajecto-
+ries (v1), (v1, v2), ..., and (v1, v2, ..., vt). The ﬁnal 421,383
+augmented trajectories include trajectories with 1 to 15
+nodes and include both successful and unsuccessful trajec-
+tories. We classify the trajectories with the normalized dis-
+tance sum (nDS) between ground truth trajectory R and a
+query trajectory Q as follows:
+nDS(R, Q) = exp
+ 
+−
+X
+vi∈R
+min
+uj ∈Q d(vi, uj) +
+X
+uj ∈Q
+min
+vi∈R d(uj, vi)
+|R|+|Q|
+2
+dsuccess
+!
+,
+(3)
+which requires the ground truth information of R. d(u, v)
+denotes the geodesic distance between two nodes, u and v,
+and dsuccess denotes the success distance. The plot in Fig-
+ure 9 shows a linear relationship between the nDS and the
+navigation score. The results imply that the proposed nav-
+igation score effectively scores the augmented trajectories
+even though it only relies on the given target instruction and
+observation from the augmented paths, without any location
+information about the nodes on the ground truth trajectory.
+A.3. Implementation Details
+We use ViT-B/16 [42] pretrained on ImageNet to extract
+features from the viewpoint panoramic images. We use pre-
+trained LXMERT [45] for the language encoder and cross-
+modal transformer. We implement the mode selector as a
+two-layer feed-forward network.
+B. Experiment Setup
+B.1. Dataset Statistics
+R2R. The average length of instructions is 32 words. The
+average path length of the ground truth trajectory of each
+instruction is six steps. The number of train, val seen, val
+unseen, and test episodes are 14,025, 1020, 2349, and 4173.
+SOON. The average path length of the ground truth trajec-
+tory of each instruction is four to seven steps. The number of
+train, validation seen instruction, validation seen house, val-
+idation unseen house episodes are 3085, 245, 195, and 205.
+REVERIE. The average path length of the ground truth tra-
+jectory of each instruction is 9.5 steps. The number of train,
+val seen, val unseen, and test episodes are 10,466, 1423,
+3521, and 6292.
+B.2. Data Preprocessing
+To calculate reference SOS features, we preprocess ob-
+ject tokens from language instructions. Using a pretrained
+
+
+--- PDF PAGE 14 ---
+visual question answering (VQA) model [51] with the ques-
+tion ”What is the target object?
+Answer in one word.”,
+we extract target objects from the instructions in R2R and
+REVERIE datasets. For SOON dataset, the target object
+names are already given. After extracting target objects, we
+perform object parsing for the instructions as shown in Ta-
+ble 5. The ﬁnal object tokens are sorted by order of ap-
+pearance in the instructions for R2R and REVERIE. For
+SOON, considering that the full instruction is divided into
+5 parts: object name, object attribute, object relationship,
+target area, and neighbor areas, we sort the object tokens by
+reversed order of sentences.
+B.3. Baselines
+Seq2Seq [2] uses sequence-to-sequence action prediciton
+to generate actions from the agent trajectory.
+Speaker-
+Follower [28] uses the speaker model to augment natural
+language instructions and evaluate the candidate action
+sequence. FAST [35] uses both local and global signals to
+look forward the unobserved environment during explo-
+ration and backtrack to the originally visited nodes when
+needed.
+SMNA [21] uses visual-textual co-grounding
+module that encodes the past instructions and the instruc-
+tions and actions to be done. SMNA also uses a progress
+monitor to estimate the current progress of the agent
+relative to the total instructions.
+Regretful-Agent [22]
+improves SMNA via two modules.
+The regret module
+decides whether to continue to explore or rollback to
+previous state by a learned policy, and the progress marker
+decides the direction the agent should head to by selecting
+visited nodes with progress estimates. RCM [49] applies
+reinforcement learning to enforce the global matching
+between the agent trajectory and the given natural language
+instruction. Via cycle-reconstruction reward, RCM allows
+the agent to comprehend the natural language instruction
+and penalize paths that do not match with the given
+instructions. FAST-MATTN [17] introduces a Navigator-
+Pointer model to both navigate to the target point and to
+localize the object from the navigation point according
+to the language guidance.
+AuxRN [23] introduces four
+auxiliary tasks that help learning the navigation policy:
+a trajectory retelling task, a progress estimation task, an
+angle prediction task, and cross-modal matching task, and
+improves navigation success by aligning representations in
+these unseen domains with seen domain. HAMT [34] uses
+transformer instead of a recurrent unit to predict actions
+from a long-range trajectory of observations and actions.
+Airbert [31] uses ViLBert [30] to measure the correlation
+between the language instructions and the viewpoint
+trajectories.
+VLN⟳BERT [32] adds a recurrent unit in
+the transformer to predict the action from the trajectory.
+SIA [52] ﬁrst pretrains the agent to learn the cross-modality
+between object grounding task and scene grounding task,
+and then generates real action sequences with memory-
+based attention. SSM [26] integrates information during
+exploration and constructs a scene memory and chooses the
+most probable node among visited nodes during backtrack-
+ing. GBE [16] models the navigation state as a graph and
+explores the environment based on the navigation graph.
+DUET [24] uses two models, a local encoder and a global
+map planner, to fuse the local observations and coarse scale
+encoding for planning actions.
+C. Navigation Experiments
+In this section, we analyze the evaluation results of nav-
+igation experiments with different evaluation metrics. The
+results are provided in the paper.
+C.1. Detailed Analyses in R2R
+Navigation Error (NE). Navigation error (NE) is measured
+as the average distance between the ﬁnal location of the
+agent and the target location of episode in meters. Because
+each episode is recorded as success if NE is less than 3m,
+NE is strongly related with the success rate. Meta-Explore
+shows the lowest NE in the val seen and test unseen splits of
+the R2R navigation task. The results imply that hierarchical
+exploration with local goal search helps the agent arrive to
+the target location closer than other baselines.
+Trajectory Length (TL). Among all the R2R naviga-
+tion baselines, Seq2Seq shows the lowest TL. However,
+Seq2Seq shows low success rate and low SPL in all data
+splits. Compared to navigation baselines with SPL higher
+than 50% in the test split, VLN⟳BERT, SMNA, and
+HAMT-e2e show lower TL than Meta-Explore. However,
+all three of these methods show a lower success rate, SPL,
+and NE than Meta-Explore. According to R2R [2], train
+episodes show a wide range of average trajectory length
+from 5m to 25m, while the test episodes have an average
+trajectory length of 9.93m. This implies that the agent is
+trained with longer trajectories than the test split trajecto-
+ries, thereby the navigation policy might have learned to
+navigate longer paths better than shorter paths.
+C.2. Detailed Analyses in SOON
+Oracle Success Rate (OSR). In the SOON navigation task,
+Meta-Explore achieves the highest OSR in the test split
+while it does not improve the OSR in the val seen instruc-
+tion and val seen house splits. The proposed method shows
+a signiﬁcant generalization result compared to the baselines.
+AuxRN shows the highest OSR in both the val seen instruc-
+tion split and the val seen house split as 78.5% and 97.8%,
+respectively, but shows the OSR in the test unseen split
+as 11.0%. On the other hand, Meta-Explore shows OSR
+as 96.0%, 52.7%, and 48.7% in the val seen instruction,
+val seen house, and test unseen splits, respectively. Meta-
+Explore outperforms AuxRN on OSR by 442.7% in the test
+
+
+--- PDF PAGE 15 ---
+Methods
+Memory
+Exploit
+Val Seen
+Val Unseen
+Test Unseen
+SR↑
+SPL↑
+OSR↑
+TL↓
+SR↑
+SPL↑
+FSR↑
+FSPL↑
+OSR↑
+TL↓
+SR↑
+SPL↑
+OSR↑
+TL↓
+Human
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+81.51
+53.66
+86.83
+21.18
+Seq2Seq [2]
+Rec
+
+29.59
+24.01
+35.70
+12.88
+4.20
+2.84
+2.16
+1.63
+8.07
+11.07
+6.88
+3.99
+10.89
+3.09
+VLN⟳BERT [32]
+Rec
+
+51.79
+47.96
+53.90
+13.44
+30.67
+24.90
+18.77
+15.27
+35.02
+16.78
+29.61
+23.99
+32.91
+15.86
+RCM[49]
+Rec
+
+23.33
+21.82
+29.44
+10.70
+9.29
+6.97
+4.89
+3.89
+14.23
+11.98
+7.84
+6.67
+11.68
+10.60
+SMNA[21]
+Rec
+homing
+41.25
+39.61
+43.29
+7.54
+8.15
+6.44
+4.54
+3.61
+11.28
+9.07
+5.80
+4.53
+8.39
+9.23
+FAST-MATTN[17]
+Rec.
+
+50.53
+45.50
+55.17
+16.35
+14.40
+7.19
+7.84
+4.67
+28.20
+45.28
+19.88
+11.61
+30.63
+39.05
+HAMT[34]
+Seq
+
+43.29
+40.19
+47.65
+12.79
+32.95
+30.20
+18.92
+17.28
+36.84
+14.08
+30.40
+26.67
+33.41
+13.62
+SIA[52]
+Seq.
+
+61.91
+57.08
+65.85
+13.61
+31.53
+16.28
+22.41
+11.56
+44.67
+41.53
+30.80
+14.85
+44.56
+48.61
+Airbert[31]
+Seq.
+
+47.01
+42.34
+48.98
+15.16
+27.89
+21.88
+18.23
+14.18
+34.51
+18.71
+30.28
+23.61
+34.20
+17.91
+DUET[24]
+Top. Map
+
+71.75
+63.94
+73.86
+13.86
+46.98
+33.73
+32.15
+23.03
+51.07
+22.11
+52.51
+36.06
+56.91
+21.30
+Meta-Explore (Ours)
+Top. Map
+local goal
+71.68
+63.90
+73.79
+13.84
+47.49
+34.03
+32.32
+23.30
+51.21
+22.12
+-
+-
+-
+-
+Meta-Explore∗(Ours)
+Top. Map
+local goal
+71.89
+65.71
+73.44
+13.03
+47.66
+40.27
+32.15
+27.21
+50.55
+18.48
+51.18
+44.04
+53.8
+10.23
+Table 6. Comparison and evaluation results of the baselines and our model in REVERIE Navigation Task.
+Gray shaded rows describe hierarchical navigation baselines. Three memory types: Rec(recurrent), Seq(sequential), and Top. Map(topological map)
+split.
+Object Grounding Performance (FSPL). Following [16],
+we measure the object grounding performance with the tar-
+get ﬁnding success weighted by path length (FSPL). Al-
+though Meta-Explore show the highest success rate and
+SPL in the val seen instruction and test splits, it does not
+improve FSPL over baseline methods. We expect to achieve
+better performance on FSPL if the agent uses the SOS fea-
+tures as deterministic clues to ﬁnd the target object at the
+end of each episode.
+C.3. Evaluation Results in REVERIE benchmark
+Table 6 compares Meta-Explore with the baselines in
+the REVERIE navigation task. While the proposed method
+does not improve performance in the val seen split, Meta-
+Explore outperforms other baselines in the val unseen on
+success rate, SPL, FSR, FSPL, and OSR. However, the im-
+provement of performance is lower than the improvements
+shown in R2R and SOON benchmarks.
+We found 252
+meaningless object categories (e.g., verbs, adjectives, and
+prepositions) and 418 replaceable object categories (e.g., ty-
+pographical errors and synonyms) in the REVERIE dataset.
+10.7% and 41.2% of a total of 46,476 words in the bound-
+ing box dataset correspond to meaningless and replaceable
+object categories, respectively.
+Because our exploitation
+method utilizes object-based parsing of the given instruc-
+tion to match with the detected object categories, the effec-
+tiveness of the proposed method is lessened due to inaccu-
+racies and inconsistencies in the dataset. We expect to have
+higher performance if the mistakes in the dataset are fully
+ﬁxed. To provide evidence for this hypothesis, we evalu-
+ate Meta-Explore with a modiﬁed dataset, which is partially
+ﬁxed. Typographical errors are ﬁxed and words that have
+similar meanings are uniﬁed into a single object category.
+For instance, ‘blackboard’, ‘whiteboard’, and ‘bulletin’ are
+all uniﬁed into ‘board’. The results are shown as the per-
+formance of Meta-Explore∗in Table 6. The results imply
+that the proposed method can effectively enhance the SPL
+by classifying the detected objects correctly, using the mod-
+iﬁed dataset.
+Comparison
+between
+exploitation
+policies
+in
+the
+REVERIE navigation task is shown in Table 7. Among the
+four exploitation methods: random, spatial, spectral local
+goal search and homing, spectral-domain local goal search
+shows the highest performance. The results in Table 7 are
+consistent with the results in R2R and SOON.
+Local
+Val Seen
+Val Unseen
+Goal
+SR↑
+SPL↑FSR↑OSR↑
+TL↓
+SR↑
+SPL↑FSR↑OSR↑
+TL↓
+Oracle
+79.20 64.17 62.83
+84.05 18.53 59.07 38.23 40.36
+66.86 26.71
+Random
+0.21
+0.04
+0.00
+20.31 46.02
+1.11
+0.18
+0.34
+26.70
+0.05
+Homing 68.45 50.54 55.24
+73.23 17.95 43.60 28.25 29.59
+49.28 25.64
+Spatial
+67.53 40.21 54.25
+70.91 26.92 40.90 23.25 27.61
+45.84 26.92
+Spectral 71.68 63.90 57.34
+73.79 13.84 47.49 34.03 32.32
+51.21 22.12
+Table 7. Comparison of Exploitation Policies. (REVERIE)
+C.4. Local Goal Search
+In this section, we provide sample local goal search sce-
+narios. Figure 10 shows two scenarios of choosing the local
+goal when the agent moves to a wrong direction. The agent
+is given an instruction “Turn right and turn right again af-
+ter the desk on the right. Wait next to the cabinets and mi-
+crowave.”.
+In both scenarios, we assume that the agent
+chooses the local goal as the node with the highest nav-
+igation score among the possible candidates. If the local
+goal is chosen from the previously visited nodes, the agent
+has to move back toward the explored regions. In contrast,
+if the local goal is chosen from unvisited but observered
+nodes, the agent can choose a local goal which is close to
+the global goal. The two scenarios imply that the local goal
+search in Meta-Explore is more effective than exploitation
+methods that return the agent to a previously visited node.
+
+
+--- PDF PAGE 16 ---
+“is the most likely 
+to be a local goal?”
+0.22
+0.08
+0.18
+0.06
+0.05
+0.13
+0.05
+0.00
+0.100.11
+0.09
+0.06
+0.06
+Local Goal Search
+Local Goal Search
+Exploit Trajectory
+Exploit Trajectory
+Ground Truth Traj.
+Current Traj.
+Unvisited & 
+Observerd Nodes
+ground truth trajectory
+start
+local goal
+global goal
+visited node
+unvisited node
+agent
+navigation graph
+Ours
+Figure 10. Local goal search scenarios in R2R. Ground truth trajectory (orange) and current trajectory at time t = 6 (blue) are shown in the
+left. Traj. denotestrajectory. ThenumbernexttoeachnodedenotesthenavigationscoreSnav oftheshortestpathtrajectoryfromthestartnode
+to the corresponding node. If the local goal is chosen from the previously visited nodes, the local goal becomes the node with Snav = 0.11. If
+the local goal is chosen from the unvisited but observed nodes, the local goal becomes the node with Snav = 0.22.
+a bathroom with a toilet and 
+a mirror
+a room with a bed, a chair, 
+and a window
+a bathroom with a mirror, 
+a sink and a bathtub
+(a)
+(b)
+(d)
+(e)
+a kitchen with stainless steel 
+appliances and wood cabinets
+Figure 11. Sample image captions. (a), (b), (c), and (d) show cap-
+tions that successfully describe the scenes. (e) and (f) shows failure
+cases of caption generation. For successful language-triggered hi-
+erchical exploration, image captions should correctly describe the
+scenes. However, current image captioning methods often gener-
+ates misdescribed captions, thereby leading to a low navigation per-
+formance.
+D. Ablation Study
+D.1. Language-triggered Hierarchical Exploration
+In the proposed method, the target instruction and lo-
+cal goal candidates are compared in spectral-domain using
+SOS features. Since semantic information can also be ex-
+pressed in language-domain, we further experiment with
+the local goal search method using synthesized language
+captions from visual observations in the R2R navigation
+task. We compare three types of representation domains:
+spatial, spectral, and language, which are implemented as
+panoramic RGB image embeddings, SOS features, and sen-
+tence embeddings, respectively. To compare features in dif-
+ferent domains, we transfer the source domain to another
+using augmentation or cross-domain similarity.
+D.1.1
+Implementation Details
+We address that the agent can use image captioning to ex-
+tract contextual information from visual observations such
+as room type, color, and object placements. To compare
+local goal candidates and target instruction in language do-
+main, we use pretrained ViT [42] and GPT-2 [53] to gener-
+ate the caption for each viewpoint as Figure 11. The Fig-
+ure shows four successful cases and two failure cases of
+image captions. To ﬁnd a local goal using the generated
+captions, we calculated the similarities between the cap-
+tions corresponding to local goal candidates and the tar-
+get instruction using a ﬁne-tuned sentence transformer ‘all-
+MiniLM-L6-v2’ [54]. The local goal is chosen as the can-
+didate with the highest similarity. Additionally, we use pre-
+trained CLIP [55] to evaluate local goal search based on
+cross-modal similarities between the visual observations of
+local goal candidates and the target instruction.
+D.1.2
+Experiment Results
+Table 8 shows the evaluation results of the local goal search
+methods using different target and candidate domains in
+R2R navigation task.
+Nav. Target denotes the target of
+
+
+--- PDF PAGE 17 ---
+Domains
+Val Seen
+Val Unseen
+Nav. Target
+LocalGoal
+SR
+SPL
+SR
+SPL
+Lang.
+
+79.92
+72.79
+70.63
+59.81
+Lang.
+Spatial
+78.84
+71.96
+71.05
+58.86
+Lang.
+Lang. Aug.
+77.96
+70.77
+69.52
+57.26
+SpectralAug.
+Spectral
+80.61
+75.15
+71.78
+61.68
+Table 8. Comparison and evaluation results of the local goal search
+methods using different target and candidate domains. (R2R)
+1
+2
+4
+3
+5
+6
+7
+9
+10
+most similar
+start
+local goal
+global goal
+8
+Figure 12. Exploitation by searching a local goal. In the exploit
+mode, the agent aims to escape from the stranded local area. It ﬁrst
+searches for the most similar node to the goal. Then, it ﬁnds an opti-
+mallocalgoalwhichisunexploredandalsosimilartothegoalimage.
+We use SOS features to compare with the target image.
+VLN, initially given as language. Lang. Aug. denotes lan-
+guage captions generated from images. Spectral Aug. de-
+notes reference SOS features generated from language in-
+structions. Among the three representation domains, the
+spectral-domain features enhance navigation performance
+the most. This implies that hierarchical exploration is most
+effective when used with spectral visual features. Table 1
+and Table 2 in the paper also show the improvement of nav-
+igation performance by using both hierarchical exploration
+and spectral visual features over DUET [56], which uses
+the same ViT-B/16 to extract spatial visual features, result-
+ing in 17.1% increase in SR and 20.6% increase in SPL in
+the SOON test unseen split.
+D.2. Image-Goal Navigation in Continuous Domain
+To implicate further applications of Meta-Explore in
+a continuous domain, we evaluate our method on the
+photo-realistic Habitat [50] simulator with continuous ac-
+tion space with realistic noises to solve an image-goal nav-
+igation task.
+The objective is to arrive at the target lo-
+cation of the given goal image in an unseen environment.
+We mainly focus on the effectiveness of hierarchical explo-
+ration using local goal search in this experiment. The results
+are shown in Table 9.
+D.2.1
+Exploration-Exploitation Selection
+We extend Meta-Explore to continuous environments to ad-
+dress the impact of hierarchical exploration in realistic envi-
+ronments. The mode selector decides when to explore and
+exploit. In the exploration mode, the agent explores around
+a local area until the meta-controller decides to stop the ex-
+ploration. The exploration module consists of graph con-
+struction module and navigation module. We use recurrent
+action policy that takes the current and target image features
+and outputs low-level actions for exploration. We illustrate
+that the explore-exploit switching decision occurs in stuck
+scenarios, such as entering a small place or getting stranded
+in a corner. Figure 12 shows the overview of exploitation in
+image-goal navigation by searching a local goal. When the
+control mode is changed to exploitation mode, the agent re-
+turns to the closest previously visited node. Then, the agent
+ﬁnds a local goal among the nodes in the constructed topo-
+logical map and moves toward the local goal using dijkstra’s
+algorithm [57]. The local goal is chosen as the node which
+has the most similar SOS feature with the SOS feature of the
+target image based on cosine similarity. The agent repeats
+this explore-exploit behavior until it ﬁnds the goal. This
+explore-exploit switching decision increases the navigation
+success rate.
+D.2.2
+Experiment Details
+We evaluate Meta-Explore in the Gibson dataset [61] with
+Habitat [50] simulator to solve an image-goal navigation
+task.
+Habitat simulator allows the agent to navigate in
+photo-realistic indoor environments. The exploration policy
+of the agent is trained using 72 scenes. We evaluate Meta-
+Explore using 14 unseen scenes. We use panoramic RGBD
+observations and construct image-based graph memory. To
+construct a context frequency vector, we detect objects via
+Mask2Former [62] pretrained in ADE-20K dataset [63],
+to effectively detect the objects that are generally lo-
+cated in indoor scenes.
+We use a discrete action space,
+{stop, move forward, turn left, turn right}
+for
+navigation. With move forward action, an agent moves
+forward by 0.25 m, while turn left and turn right
+denotes a 10◦rotation, counter-clockwise and clockwise,
+respectively. The difﬁculty of each episode is determined
+by the geodesic distance between the initial and the goal
+location; easy: 1.5 m∼3 m, medium: 3 m∼5 m, and hard:
+5 m∼10 m. The actuation noise model [39] is also applied
+to the agent in order to evaluate in realistic situations.
+We also demonstrated navigation experiments in the real
+world using a Jackal robot. The episodes are sampled from
+simulation point goal episodes with all difﬁculties; easy,
+medium and hard. We demonstrate both straight and curved
+trajectories to evaluate that our model is not task-speciﬁc.
+We used the model only trained in Habitat simulator with
+Gibson dataset. To collect panoramic RGBD observations,
+we use one panoramic RGB camera and four front-view
+RGBD cameras. In order to implement collision avoidance
+similar to the construction of navigable mesh in Habitat
+simulator, we implemented a collision avoidance module
+by clipping the action value based on the depth image
+observation.
+
+
+--- PDF PAGE 18 ---
+Methods
+Exploit
+Need
+Domain
+Easy
+Medium
+Hard
+Overall
+Pose Info.
+spatial
+frequency
+SR
+SPL
+SR
+SPL
+SR
+SPL
+SR
+SPL
+VGM [58]
+
+no
+RGBD
+
+0.86
+0.80
+0.81
+0.68
+0.61
+0.46
+0.76
+0.64
+Neural Planner [59]
+
+global
+RGBD
+
+0.72
+0.41
+0.65
+0.39
+0.42
+0.27
+0.60
+0.36
+NTS [60]
+
+global
+RGBD
+
+0.87
+0.65
+0.58
+0.38
+0.43
+0.26
+0.63
+0.43
+ANS [39]
+
+global
+RGBD
+
+0.74
+0.21
+0.68
+0.23
+0.30
+0.11
+0.58
+0.18
+Meta-Explore (homing)
+
+local
+RGBD
+SOS
+0.82
+0.61
+0.83
+0.61
+0.70
+0.48
+0.78
+0.57
+Meta-Explore (localgoal)
+
+no
+RGBD
+SOS
+0.94
+0.84
+0.88
+0.63
+0.71
+0.18
+0.84
+0.55
+Table 9. Evaluation results for Image-goal Navigation Task.
+(SR: success rate, SPL: success weighted by path length)
+D.2.3
+Baselines
+We compare our image-goal navigation policy with vari-
+ous baselines. Active Neural SLAM (ANS) constructs a
+top-down metric map and uses a hierarchical structure con-
+sisting of global and local policies. The global policy out-
+puts long-term goals, which are used to generate short-term
+goals. The local policy uses a geometric path planner to
+navigate to a short-term goal. NTS [60] constructs a topo-
+logical graph during exploration and plans subgoals with
+graph localization and planning, while navigating to the
+node with local point goal navigation policy. Neural Plan-
+ner [59] constructs a graph using an estimated connectivity
+probability calculated from the neural network. VGM [58]
+uses unsupervised image-based graph memory representa-
+tion to compare the similarity between goal image and the
+current observation image. We adapt VGM for graph con-
+struction and local navigation policy.
+PCL [64] encoder
+with ResNet18 [41] backbone network is used as the visual
+encoder for VGM [58].
+D.2.4
+Evaluation Metrics
+We evaluate both success rate (SR) and success weighted by
+inverse path length (SPL) [48]. An episode is recorded as
+success if the agent takes a stop action within 1 m of the
+target location. SR is denoted as the number of successes
+divided by the total number of episodes, E. SPL is calcu-
+lated as 1
+E
+PE
+i=1 Si
+li
+max(pi,li). Si denotes the success as a
+binary value. pi and li denote the shortest path and actual
+path length for the ith episode. For each task difﬁculty, SR
+and SPL are measured separately.
+D.2.5
+Experiment Results
+Detailed comparisons with the baseline methods are shown
+in Table 9. The results show that the continuous version
+Meta-Explore and SOS features help navigation and the ex-
+ploitation mode provides corrections for misled exploration
+or undesirable actions. Compared with the exploration pol-
+icy baseline VGM [58], Meta-Explore shows an enhance-
+ment in the overall success rate by 10.5%. The results im-
+ply that local goal search helps the agent escape from the
+current location when the agent recurrently explores a local
+area but cannot ﬁnd the target location. Exploitation can
+reduce unnecessary exploration and help the agent reach
+the target goal before the maximum time horizon. Among
+two methods of exploitation, local goal search outperforms
+homing, presumably because of the noisy actuation model
+used in the simulator. Due to the noisy actions, the agent
+can hardly return to a previously visited location by directly
+reversing the action sequence.
+Comparing our method with other graph-based hier-
+archical navigation methods, Meta-Explore outperforms
+ANS, Neural Planner, and NTS in the success rate. Our
+model shows lower performance in SPL for hard episodes
+while the success rate is higher than the baselines. This
+implies that the exploitation mode of the proposed method
+allows the agent to explore more uncovered areas. Mean-
+while, the proposed method appears to yield a positive im-
+pact for easy episodes, with the increase on both success
+rate by 9.3% and SPL by 5.0%. Speciﬁcally, our method
+outperforms ANS in terms of both success rate and SPL
+across all episodes. When compared to Neural Planner and
+NTS, our approach shows better performance in both suc-
+cess rate and SPL for easy and medium episodes, while out-
+performing Neural Planner and NTS in success rate for hard
+episodes. On the other hand, the proposed method shows
+lower SPL for hard episodes than NTS and Neural Planner.
+This implies that Meta-Explore tends to explore uncovered
+areas in both successful and unsuccessful episodes, which
+could be the result of using the SOS features to understand
+scenes. Comparing the proposed method using different ex-
+ploitation methods (homing and local goal search) shows
+that searching for a local goal leads the agent to better es-
+cape from a local area. Figure 13 shows a simple scenario
+of image-goal navigation using Meta-Explore. The mode
+selector detects a regretful situation when the agent is recur-
+rently exploring a local area but cannot ﬁnd the target loca-
+tion. Hierarchical exploration via local goal search helps the
+agent overcome the situation and move toward the global
+goal in ﬁxed time.
+D.3. VLN in Continuous Domain
+Image-goal navigation results in complex settings (con-
+tinuous environments with noisy actions, max∼300 steps)
+imply that our model can be transferred to long-horizon
+
+
+--- PDF PAGE 19 ---
+t=23
+t=76
+t=90
+t=120
+t=230
+𝒐𝒈
+𝒐𝒕
+explore
+exploit
+explore
+stuck
+global goal
+local goal
+agent
+visual node
+localized node
+Figure 13. Experiment visualization for image-goal navigation task in continuous environment. The mode selector detects stuck event
+at t = 76 and switches the explore mode to exploit mode. Then, the agent returns toward the local goal, which is chosen as a position nearby one
+of the nodes in the previously constructed graph.
+Methods
+Memory
+Exploit
+SR↑
+SPL↑
+OSR↑
+TL↓
+NE↓
+VLN-CE [8]
+Rec
+
+32
+30
+40
+8.64
+7.37
+HCM† [66]
+Rec
+
+-
+-
+43
+15.61
+8.93
+SASRA [67]
+Semantic Map
+
+24
+22
+-
+7.89
+8.32
+Conti-CMA† [65]
+Top. Map
+
+41
+35
+51
+10.90
+6.20
+Meta-Explore (Ours)
+Top. Map
+local goal
+49
+38
+54
+14.88
+4.25
+Table 10. Evaluation results in the VLN-CE val unseen split.
+VLN with noisy actions. We further extend the proposed
+method in continuous environments to solve the VLN-CE
+[8] task. In the VLN-CE [8] task, our agent constructs a
+topological map by using Conti-CMA [65] as a baseline to
+ﬁnd reachable nodes (i.e., waypoints) and reuses the map in
+the exploitation mode. We compare our continuous version
+Meta-Explore with various navigation baselines: VLN-CE
+[8], HCM [66], SASRA [67], and Conti-CMA† [65]. We
+evaluate algorithms using the success rate (SR), success
+weighted by inverse path length (SPL), oracle success rate
+(OSR), trajectory length (TL), and navigation error (NE),
+following the deﬁnitions of the evaluation metrics in the pa-
+per.
+D.3.1
+Experiment Results
+Results in Table 10 show that our method outperforms other
+baselines by at least 19.5% in the success rate, 8.6% in
+SPL, and 5.9% in OSR. We excluded the results of HCM
+for SR and SPL because HCM measures SR, SPL using or-
+acle stop in the ofﬁcial code, which is not allowed in other
+baselines. We address that our model can be transferred to
+long-horizon (max. step 300) VLN with noisy actions in
+complex settings, as demonstrated by image-goal naviga-
+tion results in Sec. D.2.
+† indicates reproduced results.

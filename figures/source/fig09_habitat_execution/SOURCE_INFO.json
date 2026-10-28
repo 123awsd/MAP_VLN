@@ -1,0 +1,8 @@
+{
+  "number": 9,
+  "final": "figures/final/habitat_long_instruction_en.png",
+  "source": "figures/source/fig09_habitat_execution",
+  "original_source": "画图/Habitat长指令执行",
+  "final_sha256": "a5f7d728f67538dc64b96f4b839ad6188cff3b124a59e351784f5a39612125af",
+  "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+}

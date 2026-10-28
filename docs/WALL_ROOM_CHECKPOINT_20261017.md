@@ -1,7 +1,0 @@
-# 墙提取与房间分割检查点
-
-保留新墙提取＋独立观测支持分割的可运行试验版本。三层7/13/10个几何分区；并非语义准确率验收。3-05凸出、部分墙间细条仍存在。未将未通过的墙结构替代算法晋升。
-
-流程：analyze_wall_side_evidence.py → segment_rooms_wall_band_support.py（实测射线缓存）→ segment_rooms_independent_support.py；run_wall_structural_trial.py产生新墙，run_wall_structural_rooms.py接入相同分割流程，render_wall_structural_rooms_final.py展示最终图。使用既有700秒运行和原墙提取产物，依赖具体实测数据缓存，不是脱离数据的独立发布包。输出数据未加入git。
-
-此次提交仅保留上述代码及其可视化和说明，原在线探索与无关工作区改动不纳入。新墙不是已证实的全面改进；详见WALL_STRUCTURAL_EVIDENCE_TRIAL_20261017.md。输出outputs/coverage700_wall_room_preview/wall_structural_rooms/final_three_floors.png。

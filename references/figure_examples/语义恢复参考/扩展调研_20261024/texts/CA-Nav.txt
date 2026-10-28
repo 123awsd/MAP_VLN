@@ -1,0 +1,2394 @@
+
+--- PDF PAGE 1 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+1
+Constraint-Aware Zero-Shot Vision-Language
+Navigation in Continuous Environments
+Kehan Chen∗, Dong An∗, Yan Huang, Rongtao Xu, Yifei Su, Yonggen Ling, Ian Reid, Liang Wang†
+Abstract—We address the task of Vision-Language Navigation
+in Continuous Environments (VLN-CE) under the zero-shot
+setting. Zero-shot VLN-CE is particularly challenging due to the
+absence of expert demonstrations for training and minimal envi-
+ronment structural prior to guide navigation. To confront these
+challenges, we propose a Constraint-Aware Navigator (CA-Nav),
+which reframes zero-shot VLN-CE as a sequential, constraint-
+aware sub-instruction completion process. CA-Nav continuously
+translates sub-instructions into navigation plans using two core
+modules: the Constraint-Aware Sub-instruction Manager (CSM)
+and the Constraint-Aware Value Mapper (CVM). CSM de-
+fines the completion criteria for decomposed sub-instructions as
+constraints and tracks navigation progress by switching sub-
+instructions in a constraint-aware manner. CVM, guided by
+CSM’s constraints, generates a value map on the fly and refines
+it using superpixel clustering to improve navigation stability. CA-
+Nav achieves the state-of-the-art performance on two VLN-CE
+benchmarks, surpassing the previous best method by 12% and
+13% in Success Rate on the validation unseen splits of R2R-
+CE and RxR-CE, respectively. Moreover, CA-Nav demonstrates
+its effectiveness in real-world robot deployments across various
+indoor scenes and instructions1.
+Index Terms—Vision-Language Navigation, Constraint-Aware,
+Value Map, Zero-Shot
+I. INTRODUCTION
+V
+ISION-Language Navigation (VLN) is a fundamental
+task in Embodied AI. It requires the agent to navi-
+gate in novel environments according to natural language
+instructions [1]. Early efforts primarily focused on discrete
+environments, leveraging structural priors such as connectivity
+graphs to guide navigation [2], [3]. However, this setting
+diverges from real-world scenarios, where structural prior
+like connectivity graph is typically unavailable, and collecting
+expert demonstrations for training is costly. The lack of
+structural prior and expert prior thus poses critical challenges
+for advancing practical VLN applications. Recent studies have
+addressed these limitations along two orthogonal dimensions,
+as illustrated in Figure 1. First, Vision-Language Navigation in
+Continuous Environments (VLN-CE) [4] has gained traction
+by allowing agents to navigate freely within 3D environments
+∗These two authors contributed equally to this work.
+† Liang Wang is the corresponding author.
+Kehan Chen, Yan Huang, Yifei Su, and Liang Wang are with New
+Laboratory of Pattern Recognition (NLPR), Institute of Automation, Chinese
+Academy of Sciences and School of Artificial Intelligence, University of
+Chinese Academy of Sciences, China. Email: kehan.chen@cripac.ia.ac.cn,
+yhuang@nlpr.ia.ac.cn, yifei.su@cripac.ia.ac.cn, wangliang@nlpr.ia.ac.cn.
+Dong An, Rongtao Xu, and Ian Reid are with Mohamed bin Zayed
+University of Artificial Intelligence (MBZUAI), Abu Dhabi, UAE. Email:
+dong.an@mbzuai.ac.ae, rongtao.xu@mbzuai.ac.ae, ian.reid@mbzuai.ac.ae.
+Yonggen Ling is with Robotics X, Tencent. Email: rolandling@tencent.com.
+1Project page: https://chenkehan21.github.io/CA-Nav-project/
+train 
+execute 
+VLN
+execute 
+Zero-Shot VLN
+train 
+execute 
+VLN-CE
+execute 
+Zero-Shot VLN-CE (Ours)
+Expert   Prior
+Structural  Prior
+No Training
+Full Training
+Connectivity Graph
+Navigation Mesh
+Fig. 1: The zero-shot VLN-CE task (bottom right) addresses
+the dual challenge of prior scarcity along two orthogonal
+dimensions: the absence of expert demonstrations for training
+and limited structural prior to guide navigation.
+via navigation meshes, which alleviates the reliance on struc-
+tural prior like connectivity graphs. Second, the emergence
+of Vision-Language Models (VLMs) [5] and Large Language
+Models (LLMs) [6] has enabled zero-shot VLN, which aims
+to perform navigation tasks using foundation models without
+relying on expert-annotated training data.
+Despite promising progress in addressing the scarcity of ex-
+pert prior and structural prior individually, the combination of
+these two research lines - zero-shot VLN-CE - remains largely
+unexplored. A potential approach is to adapt existing zero-shot
+VLN methods to continuous environments. Existing zero-shot
+VLN methods [7]–[9] follow a text-based prompt paradigm,
+converting visual observations and navigation history into text,
+which is then combined with the full instruction and input into
+an LLM to infer the next action. However, such an adaptation
+faces two major challenges and shows substantial performance
+degradation. First, continuous environments expand the state
+space, making it difficult for the agent to accurately track nav-
+igation progress and determine which part of the instruction is
+being executed. Existing methods that input the full instruction
+into the LLM might overlook the importance of monitoring
+the completion status of sub-instructions. Second, converting
+visual observations into text often leads to losing visual details
+and environmental structures [10], impairing the agent’s spatial
+understanding and path planning.
+In light of the above, we propose Constraint-aware Naviga-
+tor (CA-Nav), a new approach to tackle the challenges of zero-
+shot VLN-CE. CA-Nav reframes VLN-CE as a sequential,
+constraint-aware sub-instruction completion process. Within
+each episode, the Constraint-Aware Sub-instruction Manager
+arXiv:2412.10137v4  [cs.RO]  15 Apr 2025
+
+
+--- PDF PAGE 2 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+2
+LLM
+Instruction: Turn around and go to your 
+right. Turn right and go past the painting. 
+Then go left to go into the bar area. Pass the 
+bar and go towards the dining table. Stop in 
+the dining room near the table.
+Sub-instruction4: Pass the bar and go 
+towards the dining table.
+sub1
+sub2
+sub3
+sub4
+sub5
+(a) Constraint-aware 
+Sub-instruction Manager (CSM)
+Object constraint: Dining table
+Location constraint: bar
+Direction constraint: forward
+(b) Constraint-aware Value Mapper (CVM) 
+State Constraint Queue
+Agent
+Destination
+Value
+Waypoint
+I have completed the constraints of the first 
+three sub-instructions, now I can switch to 
+the next one to pass the bar and find the 
+dining table. Now I will build a value map 
+focus on dining table. I think exploring the 
+higher-value area ahead is a good choice.
+Fig. 2: Illustration of the proposed CA-Nav. (a) The Constraint-aware Sub-instruction Manager decomposes the instruction
+into a sequence of sub-instructions and identifies object constraints, location constraints and direction constraints for each of
+them. (b) During navigation, a Constraint-aware Value Mapper builds a value map based on the landmark prompt provided by
+CSM and uses the superpixel clustering method to segment it into regions. It switches sub-instructions in a constraint-aware
+manner and chooses the most promising region’s geometric center as waypoints.
+(CSM) decomposes the given instruction into sub-instructions
+and dynamically switches between them by assessing whether
+the relevant constraints are met. Meanwhile, the Constraint-
+aware Value Mapper (CVM) constructs and continuously
+updates a value map based on current constraints and ob-
+servations, capturing both visual details and spatial layouts.
+Using the value map generated by CVM, CA-Nav formulates
+navigation plans, which are executed by classical control
+algorithms. This iterative process guides the agent to complete
+each sub-instruction until the episode terminates.
+As shown in Figure 2 (a), at the start of an episode, CSM
+prompts the LLM to decompose the instruction into sub-
+instructions and generate constraints for completing each one.
+During navigation, CSM actively monitors the fulfillment of
+these constraints and switches to the next sub-instruction once
+the current constraints are met. To support this process, we
+leverage VLMs [5], [11] to detect various constraints, includ-
+ing landmark detection, location recognition, and direction
+estimation. These constraints are composed to cover diverse
+sub-instruction expressions, ensuring flexibility and robustness
+in handling different instructions.
+Building on the sub-instructions identified by CSM, the
+next challenge is grounding them in the map alongside visual
+details for improved spatial understanding and navigation plan-
+ning. We address this with CVM, which evaluates the potential
+of each step’s observations in satisfying the current constraint.
+As depicted in Figure 2 (b), CVM builds a map to capture both
+the semantics and spatial layout of the environment. Using a
+VLM, it calculates the similarity between current observations
+and landmarks associated with task constraints, generating a
+constraint-aware value map projected onto the ground plane.
+To enhance the accuracy and stability of navigation, superpixel
+clustering [12] is applied to refine the map, reducing noise and
+maintaining coherence within regions. This enables the agent
+to select waypoints from high-value regions, ensuring that
+navigation aligns with both task constraints and environmental
+understanding. Finally, classical control algorithms [13] are
+employed for waypoint-reaching navigation.
+Experiments in both simulation and real-world demonstrate
+the effectiveness of CA-Nav. On two VLN-CE benchmarks
+under the zero-shot setting, CA-Nav achieves state-of-the-
+art performance, surpassing the previous best methods by
+12% on R2R-CE and 13% on RxR-CE in terms of success
+rate on the validation unseen split. Notably, CA-Nav delivers
+approximately 3 times faster response times and a 95% cost
+reduction compared to counterparts. Furthermore, real-world
+robot deployments validate CA-Nav’s potential for practi-
+cal applications, showcasing its effectiveness across open-
+vocabulary instructions and various indoor environments.
+The rest of the paper is organized as follows: In § II, we
+provide a brief review of the related work. § III outlines
+the task setup for zero-shot Vision-Language Navigation in
+Continuous Environments and details the proposed method.
+Experimental results and ablation studies are presented in § IV.
+Finally, we conclude this work in § V.
+II. RELATED WORK
+A. Vision-Language Navigation.
+Vision-Language Navigation (VLN) has garnered significant
+attention in recent years. Early VLN approaches leveraged
+LSTM models [14] for cross-modal alignment and navigation
+policy learning [1]. Building upon these methods, various
+techniques have been proposed, including progress monitor-
+ing [15], [16], backtracking mechanisms [17], and reinforce-
+ment learning [18], [19]. Some approaches focus on extracting
+specific information from both instructions and observations,
+
+
+--- PDF PAGE 3 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+3
+such as rooms [20], [21], objects [21]–[23], scenes [23],
+[24], and actions [22]. In addition, supplementary information,
+such as navigation history [25], neighboring views [26], and
+topological graphs [2], [3], has also been explored to improve
+navigation performance.
+More recently, transformer-based methods have become the
+predominant approach in VLN due to their superior capability
+in cross-modal alignment [21], [23], [27], [28]. This shift has
+also led to the adoption of pre-training strategies [29], [30],
+which incorporate auxiliary tasks [31]–[33] to learn general
+representations that can be applied to the VLN task. Further-
+more, a significant body of research has focused on augment-
+ing VLN datasets to enhance the agent’s generalization ability
+in novel environments. Some studies have leveraged internet
+data such as YouTube videos [34], [35], while others have
+synthesized new scenes [36]–[40] and instructions [41], [42]
+to diversify training data and improve model robustness.
+Although significant progress has been made, these methods
+overlook low-level control in continuous environments, par-
+ticularly in scenarios where predefined navigation graphs are
+unavailable. As a result, their performance drops significantly
+when VLN methods are applied to real-world settings [43].
+B. VLN in Continuous Environments.
+Since the assumption of a predefined navigation graph does
+not accurately reflect the challenges in the real-world, Krantzet
+al. [4] introduce Vision-Language Navigation in Continu-
+ous Environments (VLN-CE). Early VLN-CE approaches use
+GRU networks [44] to align observations and instructions,
+and then directly learn low-level actions in an end-to-end
+manner [4], [45]. In order to improve the agent’s instruction
+following capability, Raychaudhuriet al. [46] uses the action of
+moving towards the ground-truth waypoint as supervision to
+improve language-aligned waypoint prediction. Additionally,
+several studies incorporate semantic map for spatial reasoning,
+as these maps capture the layout of the environment and
+enhance waypoint prediction [47]–[49].
+Honget al. [50] introduces a waypoint predictor trained on
+the navigation graphs from Matterport 3D dataset [51]. When
+inputting current panoramic observation, the waypoint predic-
+tor outputs candidate waypoints. After generating candidate
+waypoints by leveraging the waypoint predictor, the VLN-CE
+task is then simplified as a cross-modal waypoint selection
+problem which is similar to the VLN task. It bridges the gap
+between discrete environments and continuous environments
+to some extent and brings an emerging trend of panoramic
+waypoint-based approaches [3], [52]–[54].
+However, these methods rely heavily on annotated tra-
+jectories, which demand substantial human effort to create.
+Therefore, we aim to develop a zero-shot approach for the
+VLN-CE task relying on foundation models.
+C. Foundation Models for Robotic Navigation.
+Foundation models are those trained on broad data that can
+be adapted to a wide range of downstream tasks including
+LLMs [6], [55], [56] and VLMs [5], [11], [57]. Their strengths
+in reasoning, task planning, and multi-modal understanding
+make them promising for robotic navigation [58]–[62].
+Recently, zero-shot VLN methods [7], [63], [64] have
+emerged, they use VLMs to describe observations and LLMs
+to make step-by-step decisions in discrete environments.
+Specifically, DiscussNav [63] employs multiple GPT-4 experts
+to discuss the current observations, status, and instructions
+before moving; NavGPT [7] utilizes GPT-4 to process de-
+scriptions of visual observations and navigation history before
+navigating; MapGPT [8] converts a topological map into
+prompts and then uses GPT-4 for navigation; MC-GPT [64]
+also introduces a topological map to store history and leverages
+chain-of-thought (CoT) [65] for navigation reasoning.
+However, few studies focus on zero-shot VLN-CE [9],
+[66], [67]. A2Nav [66] attempts to decompose instructions
+into action-specific object navigation sub-tasks. However, it’s
+not truly training-free as it relies on room region bounding
+box annotations from HM3D [68] to collect data for training
+five action-specific navigators. OpenNav [9] aims to develop
+a navigation system that leverages open-source LLMs and
+VLMs. Although it focuses on continuous environments, it
+relies on the pre-trained waypoint predictor [50] to provide
+candidate waypoints. The navigation decisions are based on
+CoT reasoning, which also analyzes the descriptions of visual
+observations, similar to approaches for discrete environments
+like NavGPT and MC-GPT. InstructNav [67] utilizes GPT-
+4V [69] and panoramic observations to build an intuition value
+map for heading evaluation and constructs additional value
+maps based on hand-designed rules. At each decision step, it
+calls GPT-4 [6] to plan the next navigation sub-task and then
+uses the multi-sourced value maps to select the waypoint.
+In contrast, we introduce a novel training-free method, CA-
+Nav, which enables sub-instruction switching in a constraint-
+aware manner based on egocentric views. In contrast to
+InstructNav, our approach focuses on a setting where the agent
+relies solely on egocentric observations. Additionally, CA-Nav
+does not require calling LLMs at every decision step, making
+it faster and more cost-efficient than InstructNav.
+III. METHOD
+Problem Definition. We address the zero-shot VLN-CE
+task [4], where the agent navigates to a destination fol-
+lowing natural language instructions. Unlike methods like
+A2Nav [66], which are trained on datasets for specific nav-
+igation skills, our approach only utilizes foundation models
+for decision-making. To better align with real-world scenarios,
+we adopt an egocentric setup, which differs from works like
+InstructNav [67]. Concretely, the agent is equipped with odom-
+etry and an egocentric RGB-D camera with a 79◦Horizontal
+Field of View (HFOV). It can perform low-level actions such
+as MOVE FORWARD (0.25m), TURN LEFT/RIGHT (30◦),
+and STOP. An episode is considered successful if the agent
+stops within a certain distance from the target.
+A. Method Overview
+As illustrated in Figure 3, for each episode, CSM and CVM
+work coherently to execute instruction-following navigation.
+The CSM identifies key constraints that define the completion
+criteria for each sub-instruction, ensuring constraint-aware
+sub-instruction switching and navigation progress tracking.
+
+
+--- PDF PAGE 4 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+4
+BLIP-2
+ITM
+Agent Pose
+Action
+Semantic 
+Mapping
+Super-Pixel 
+Clustering
+Instruction
+LLM
+Navigation State
+Constraint-aware
+Sub-instruction Manager
+Update Constraint
+Constraint 
+Prompt
+Constraints Detection
+FMM
++
+Constraint-aware Value Map Module
+CVM-
+Generation
+Update State
+RGB-D
+Object Constraint
+Location Constraint
+Direction Constraint
+Current Constraints
+BLIP-2
+VQA
+Grounding 
+DINO
+Odometry
+FMM
+…
+Sub-instruction 1
+Sub-instruction 2
+Sub-instruction N
+State Constraint Queue
+…
+Super-Pixel Value Map
+Semantic Map
+Value Map
+Fig. 3: An overall pipeline of CA-Nav. The details of the Constraint-aware Value Map Generation are shown in Figure 4.
+Upon completing a sub-instruction, CSM uses these con-
+straints to automatically transit to the next one (§ III-B). Then
+the CVM uses the identified constraints to build a constraint-
+aware value map, which guides navigation for the current sub-
+instruction (§ III-C).
+B. Constraint-aware Sub-instruction Manager
+The Constraint-aware Sub-instruction Manager (CSM) aims
+to decompose instructions and track the navigation progress
+through explicit sub-instruction switching. We achieve this by
+appropriately prompting an LLM and designing a constraint-
+aware switching mechanism.
+Instruction Decomposition. As shown in Figure 2, at the
+beginning of an episode, CSM decomposes the instruction
+into a sequence of sub-instructions. Each of them outlines
+the goal for the current sub-instruction and specifies the
+constraints for switching to the next one. We categorize these
+constraints as object constraints (e.g., “chair”), location con-
+straints (e.g., “bedroom”), and direction constraints (e.g., “turn
+left”). Particularly, object and location constraints describe the
+landmarks that can be observed along the desired navigation
+path. Thus, they will prompt subsequent building of the value
+map (§ III-C). In practice, we implement the above decom-
+position and constraints extraction process through an LLM.
+The prompt consists of four parts, namely task description,
+output definition, few-shot prompt, and key content reminder
+(in Appendix Figure 5). We find that it’s helpful to give large
+language models an example to follow. Because the few-shot
+prompt can set a clear expectation of the desired output.
+Sub-instruction Switching. In the zero-shot VLN-CE set-
+ting, the agent should be aware of its navigation progress and
+automatically switch sub-instructions. We achieve this through
+a constraint-aware sub-instruction switching mechanism. As
+shown in Figure 3, CSM maintains a queue in the order of
+decomposed sub-instructions, with each element containing a
+set of constraints. These constraints can be a combination of
+object, location, and direction constraints, depending on the
+current sub-instruction. CSM always selects the first unsatis-
+fied constraint set as the current and only switches to the next
+set once all constraints in the current set are satisfied. The
+agent sequentially checks each constraint within the current
+set at each step. We leverage VLM and odometry information
+to design satisfaction checks for the constraints:
+• Object Constraints: Since the navigation instructions include
+open vocabulary, we use Grounding DINO [11] to detect
+objects. A constraint is considered satisfied if the agent
+detects the object within a certain range r which could
+empirically be set as 5 meters.
+• Location Constraints: Indoor location detection can be ap-
+proached as scene recognition, using a Visual Question
+Answering (VQA) model such as BLIP2 [5] with the
+template: “Can you see the < location >?”. If the answer
+is yes, the constraint is considered satisfied.
+• Direction Constraints: The change in direction should be
+assessed based on the agent’s trajectory rather than just its
+orientation. To do this, we query the odometry for the poses
+within a certain time window τ, which could be empirically
+selected as 5. The poses are denoted as pt and pt−τ. The
+change of direction and angle is then calculated using their
+cross-product and dot product.
+Sometimes, the agent may get stuck on a single constraint
+or switch between constraints too frequently. To address this,
+we empirically establish a maximum step threshold of 25 to
+prompt the agent to switch constraints when progress stalls,
+along with a minimum step threshold of 10 to ensure adequate
+focus on each constraint before switching.
+C. Constraint-aware Value Mapper
+After CSM provides the current sub-instruction along with
+its associated constraints, these constraints serve as guiding
+factors for the value map construction. Specifically, we pro-
+pose a Constraint-aware Value Mapper (CVM) to ground the
+
+
+--- PDF PAGE 5 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+5
+BLIP-2
+ITM
+Constraint Prompt:
+Dining Table
+…
+Value Map Update
+Semantic map
+Navigable area
+Trajectory 
+Mask
+HFOV
+Update
+( ,
+)
+tp
+t
+O
+tv
+global
+1
+t−
+V
+global
+t
+V
+visible
+t
+V
+visible
+1
+t−
+C
+visible
+1
+t−
+V
+visible
+t
+C
+M
+Fig. 4: Details of the Constraint-aware Value Map Generation.
+constraints within the visual environment, ensuring that the
+value map reflects the potential of each observation to satisfy
+the current constraints. The CVM is then refined using a
+superpixel clustering method for waypoint selection.
+Constraint-aware Value Map Generation. As navigation
+progresses, we maintain and continuously update a value map
+that encodes both the environment layout and instruction-
+relevant values. Specifically, the environment layout is cap-
+tured by maintaining a semantic map, from which we derive
+navigable areas following SemExp [70]. Below, we describe
+how the instruction-relevant values are projected onto these
+navigable areas. An overview of this process is illustrated in
+Figure 4. Recall that in our setting the agent uses egocentric
+observation space so the visible region is limited by its HFOV.
+Therefore, the value map Vglobal
+t
+can be divided into two parts,
+namely the invisible part Vinvisible
+t
+and the visible part Vvisible
+t
+where the value update takes place. Formally:
+Vglobal
+t
+=
+ Vvisible
+t
++ Vinvisible
+t
+
+· γB
+⊙M
+(1)
+where a decay factor γ and a trajectory map M are include in
+the global value map update function which will be interpreted
+in the following parts.
+At each time step, given the current RGB observation Ot
+and the constraint prompt provided by the Constraint Semantic
+Module (CSM) (§ III-B), we first compute the cosine similarity
+between them. This similarity score vt = BLIP2(Ot, promptt)
+reflects how relevant the current observation is to the given
+instruction constraint. The similarity score vt is applied to the
+corresponding frustum region and forms the Vvisible
+t
+. When
+updating the value map we follow VLFM [71] that utilizes a
+confidence mask to apply a cosine-weighted average:
+Ct =
+ cos2(θi,j/(θhfov/2) · π/2),
+if (i, j) is visible
+0,
+if (i, j) is invisible
+(2)
+where θi,j denotes the angle between pixel (i, j) and the
+camera’s optical axis, and θhfov is the angle of HFOV. The
+confidence mask C assigns higher weights to regions near the
+optical axis, prioritizing areas with more reliable observations,
+while assigning zero weight to regions outside the frustum.
+We then update the value map following Equation 3, the
+function T extracts the frustum region from the previous step
+of global value map according to current agent pose pt and
+forms Vvisible
+t−1 , then the confidence mask in visible regions are
+used to do the cosine-weighted average update.
+Vvisible
+t
+←Cvisible
+t
+Vvisible
+t
++ Cvisible
+t−1 Vvisible
+t−1
+Cvisible
+t
++ Cvisible
+t−1
+Vvisible
+t−1
+←T
+
+Vglobal
+t−1 , pt
+
+Vinvisible
+t
+←Vinvisible
+t−1
+; Vinvisible
+t
+is initialized as 0
+(3)
+After updating the value map we update the confidence
+mask following Equation 4 which is similar to the process
+of updating value map.
+Cvisible
+t
+←
+ Cvisible
+t
+2 +
+ Cvisible
+t−1
+2
+Cvisible
+t
++ Cvisible
+t−1
+Cvisible
+t−1
+←T
+
+Cglobal
+t−1 , pt
+
+Cinvisible
+t
+←Cinvisible
+t−1
+; Cinvisible
+t
+is initialized as 0
+(4)
+It’s worth noting that when CSM switches constraints, the
+constraint prompt changes. If the previous value map is cleared
+entirely, the agent loses navigational cues and must rebuild
+from scratch, often causing it to linger and collide. To address
+this, we introduce a historical decay factor γ that retains past
+value map with a reduced weight, helping the agent focus on
+new constraints while still leveraging past exploration. The
+historical decay factor is controlled by a binary indicator B
+that reflects whether a constraint switch occurs. The decay of
+the value map happens only when constraint switches. The
+default γ is set to 0.5.
+γ ∈(0, 1]; B =
+
+1, switch constraint
+0, not switch constraint
+(5)
+Finally, to encourage exploration, we introduce a trajectory
+mask M representing the agent’s willingness to explore, as
+shown in Equation 6. This mask starts as a matrix of ones,
+but its values decay exponentially by a factor of λ in regions
+the agent has already traversed, k(i, j) represents the total
+number of visits to position (i, j). The value map will adjusted
+
+
+--- PDF PAGE 6 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+6
+by element-wise multiplication with this trajectory mas. By
+default, the λ is set to 0.95.
+Mi,j = λk(i,j), λ ∈(0, 1], M is initialized as 1
+(6)
+Superpixel-based Waypoint Selection. Next, we need to
+choose a waypoint according to the value map. A common
+approach is using frontier-based exploration (FBE) [72] which
+has been widely used in object navigation task [71], [73], [74].
+Among them, VLFM [71] is the most comparable to ours, as
+it also constructs a value map and selects the frontier with
+the highest value as the navigation target. However, it only
+focuses on the boundaries of the explored area, restricting
+the full utilization of the value map. We propose that using
+the full value map can benefit navigation, however, our CSM
+introduces sub-instruction switching, which may lead to abrupt
+value changes at the frontiers. To that end, we propose a
+superpixel-based waypoint selection approach that considers
+the global value map.
+Specifically, we employ SLIC [12] to refine the constraint-
+aware value map. Given current value map V, SLIC produces
+a set of superpixels {S1, S2, · · · , Sn}, where each superpixel
+Si represents a visually consistent region. Let v(p) denote the
+value at pixel p in V, then compute the average value of each
+superpixel Si. The optimal region S∗is then selected based
+on the highest average value, guiding the agent towards areas
+of greater semantic relevance:
+V(Si) =
+1
+|Si|
+X
+p∈Si
+v(p),
+S∗= arg max
+Si
+V(Si)
+(7)
+Finally, the waypoint is the geometric center of the optimal
+region S∗. Note that when the agent reaches the final sub-
+instruction, it extracts the target’s segmentation mask using
+RepViT-SAM [75], [76], which achieves real-time segmenta-
+tion of anything. The mask is then projected onto the semantic
+map and its geometric center will be the destination waypoint.
+After determining the waypoint, the Fast Marching Method
+(FMM) [13] is used to plan low-level actions to the waypoint.
+IV. EXPERIMENTS AND RESULTS
+A. Experiment Setup
+Dataset and Evaluation. We primarily conduct experiments
+on the val-unseen split of R2R-CE [4] and RxR-CE [77]
+using Habitat simulator [78], which are the only two VLN-
+CE datasets. R2R-CE and RxR-CE datasets provide 1839
+and 3669 step-by-step trajectory-instruction pairs across 11
+unseen environments, respectively, with RxR-CE containing
+more detailed instructions and longer trajectories.
+We use standard metrics following [1], [4]: Navigation Error
+(NE) measures the mean distance from the final location to the
+destination; Success Rate (SR) represents the proportion of
+episodes with NE under 3 meters; Oracle Success Rate (OSR)
+calculates SR with an oracle stop policy; Success weighted by
+Trajectory Length (SPL) normalizes SR by trajectory length;
+Normalized Dynamic Time Warping (NDTW) evaluates the
+fidelity between the agent’s and the annotated trajectories; and
+Success-weighted Dynamic Time Warping (SDTW) weights
+NDTW by SR. For R2R-CE dataset, SR and SPL are the
+primary metrics to evaluate navigation performance. RxR-CE
+additionally emphasizes NDTW and SDTW metrics to assess
+path fidelity.
+B. Main Results
+Methods for Comparison. We compare CA-Nav with
+VLN-CE methods that also use low-level actions. These
+methods can be categorized into two types: the first type
+is training-based methods, including Sara [79], Seq2Seq [4],
+VLN
+⟳
+BERT [50], AG-CMTP [80], WS-MGMap [47] and
+LAW [46]. The second type is zero-shot methods, including
+CoW [81], NavGPT-CE [7], OpenNav [6], InstructNav [67],
+A2Nav [66] and our CA-Nav. CoW was originally designed
+for zero-shot object navigation [73], [74], [82]. We adapt
+it to the VLN-CE task by extracting object and location
+constraints from the instructions and have CoW navigate to
+them sequentially. We evaluate two representative variants:
+CoW-OWL and CoW-CLIP-Grad, which use object detectors
+and gradient-based saliency maps to localize target locations,
+respectively.
+NavGPT was originally for zero-shot VLN, we transfer
+it to zero-shot VLN-CE by using a waypoint predictor [50]
+to predict navigable nodes in panoramas, discretizing the
+continuous environment for high-level navigation planning.
+We also list other methods that rely on high-level actions,
+including Sim2Sim [52], GridMM [48], ETPNav [3], and
+BEVBert [53].
+R2R-CE Dataset. As shown in Table I, our method sur-
+passes various models trained with panorama in NE, SR,
+and OSR. This indicates that building an egocentric zero-
+shot VLN-CE system with LLMs and VLMs is feasible and
+potential. Our method’s success with egocentric observations
+lies in the value map’s dual role: storing environmental layout
+memory and leveraging VLM’s prior knowledge.
+Both the detector-based and gradient-based variants of CoW
+perform poorly, which is unsurprising. The main reason is
+that CoW’s single-object searching capability is inherently
+limited2. The performance further degrades in VLN-CE, where
+the task involves multi-object search and is subject to accu-
+mulating navigation errors. Moreover, CoW is designed for
+label-level object navigation (i.e., finding any instance of a
+given object category), while VLN-CE requires instance-level
+understanding - the agent needs to locate specific objects or
+locations that match detailed language descriptions, rather than
+just finding any object of a certain category.
+To study the performance of zero-shot methods in contin-
+uous environments, we transfer NavGPT3 to continuous envi-
+ronments (i.e., NavGPT-CE), with results showing a success
+rate drop of over 50%. One potential issue is that the caption
+model sometimes misses crucial details like landmarks and
+spatial layout. Additionally, the LLM may generate hallucina-
+tions when summarizing navigation history or reasoning about
+the agent’s status, resulting in incorrect navigation planning.
+(visualization analysis in § IV-D).
+2CoW-CLIP-Grad achieved 9.2 SR and CoW-OWL achieved 4.7 SR in
+Habitat MP3D.
+3NavGPT achieved 34.0 SR and 29.0 SPL on the R2R dataset.
+
+
+--- PDF PAGE 7 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+7
+TABLE I: Comparison with SOTA methods on R2R-CE validation-unseen split. In the Efficient LLM Usage column: - means
+the LLM is not used, ✓means the LLM is only used before navigation starts, and ✗means the LLM is accessed for each
+navigation decision. †: Our reproduced NavGPT-CE for VLN-CE. ∗: Methods use the same waypoint predictor proposed in [50].
+✓∖: A2Nav pretrained the navigator on an action-specific dataset built from HM3D [68]
+.
+Method
+Zero-shot
+Efficient LLM Usage
+Egocentric Obs
+NE↓
+OSR↑
+SR↑
+SPL↑
+Sasra [79]
+✗
+-
+✗
+8.32
+-
+24.0
+22.0
+Seq2Seq [4]
+✗
+-
+✗
+7.77
+37.0
+25.0
+22.0
+AG-CMTP [80]
+✗
+-
+✗
+7.90
+39.2
+23.1
+19.1
+VLN
+⟳
+BERT [50]
+✗
+-
+✗
+7.66
+-
+23.2
+21.7
+VLN
+⟳
+BERT∗[50]
+✗
+-
+✗
+5.74
+53.0
+44.0
+39.0
+Sim2Sim∗[52]
+✗
+-
+✗
+6.07
+52.0
+43.0
+36.0
+GridMM∗[48]
+✗
+-
+✗
+5.11
+61.0
+49.0
+41.0
+ETPNav∗[3]
+✗
+-
+✗
+4.71
+65.0
+57.0
+49.0
+BEVBert∗[53]
+✗
+-
+✗
+4.57
+67.0
+59.0
+50.0
+WS-MGMap [47]
+✗
+-
+✓
+6.28
+47.6
+38.9
+34.3
+CoW-OWL [81]
+✓
+-
+✓
+8.72
+5.9
+3.4
+1.6
+CoW-CLIP-Grad [81]
+✓
+-
+✓
+8.68
+3.4
+1.8
+1.3
+NavGPT-CE∗† [7]
+✓
+✗
+✗
+8.37
+26.9
+16.3
+10.2
+OpenNav∗(LLama3.1) [9]
+✓
+✗
+✗
+7.25
+23.0
+16.0
+12.9
+InstructNav (ego) [67]
+✓
+✗
+✓
+9.20
+47.0
+17.0
+11.0
+A2Nav [66]
+✓∖
+✓
+✓
+-
+-
+22.6
+11.1
+CA-Nav
+✓
+✓
+✓
+7.58
+48.0
+25.3
+10.8
+CA-Nav (test-unseen)
+✓
+✓
+✓
+8.32
+39.4
+23.0
+11.0
+Similar to NavGPT-CE, OpenNav also utilizes panoramic
+observations and a waypoint predictor [50] to generate candi-
+date waypoints in continuous environments. It then leverages
+open-source VLMs to describe the observations and uses
+CoT reasoning to make navigation decisions based on open-
+source LLMs. The primary reasons for this are similar to
+the drawbacks of NavGPT-CE, namely, that the descriptions
+often overlook significant visual details, despite OpenNav’s
+consideration of spatial information.
+Similar to our approach, InstructNav also explores the
+potential of value maps. At each decision step, it invokes GPT-
+4 to plan the next navigation sub-task, then prompts GPT-4V
+with the current panoramic observations to estimate the most
+appropriate heading. Additionally, it constructs other multi-
+sourced value maps using hand-crafted rules to guide waypoint
+selection. The use of panoramic observations, along with the
+powerful GPT-4 and GPT-4V, contributes to InstructNav’s
+high performance which achieves 31.0 SR. However, this
+distinguishes it from our task setting, where CA-Nav utilizes
+egocentric views and calls LLMs more efficiently. When
+InstructNav also use egocentric observations the performance
+drops significantly (from 31.0 SR to 17.0 SR).
+The method closest to our task setting is A2Nav, which also
+uses LLM efficiently and utilizes egocentric observation. Our
+method surpasses it on SR and OSR because A2Nav focuses
+more on actions. Descriptions of actions in instructions are
+more prone to ambiguity. For example, a path to the living
+room might be described as either “Turn left to the living
+room.” or “Turn slightly right, then turn left immediately and
+go to the living room.”. We conclude that rigid execution
+of actions such as turning tends to cause serious cumulative
+errors, and the agent should focus on more clearly described
+instructions such as landmarks.
+However, CA-Nav exhibits a slightly lower SPL compared
+to some other methods. This is primarily because, in the ego-
+centric setting, the agent receives more limited observations
+compared to panoramic views. As a result, the agent spends
+more steps exploring the environment, which slightly reduces
+path efficiency. In contrast, OpenNav utilizes panoramic obser-
+vations along with a waypoint predictor, providing additional
+information and thereby achieving a higher SPL. Similarly,
+InstructNav achieves an SPL of 24 with panoramic views, but
+it drops to 11 when using egocentric observations. Therefore,
+under the egocentric observation setting, CA-Nav achieves a
+comparable SPL to other methods. We also report CA-Nav’s
+performance on the test-unseen split4, which demonstrates
+a comparable SR and a slightly higher SPL compared to
+its performance on the val-unseen split. This indicates that
+CA-Nav maintains its navigation effectiveness in previously
+unseen environments. Moreover, the improvement in SPL also
+highlights its ability to generalize to new instructions and adapt
+to unfamiliar spatial layouts.
+Overall, CA-Nav achieves state-of-the-art performance in
+SR, NE, and OSR under the setting of using egocentric
+observations and performs comparably on SPL.
+RxR-CE Dataset. Table II reports the results on the RxR-
+CE val-unseen split5, which contains longer and more detailed
+instructions with fine-grained descriptions of landmarks and
+actions. These characteristics of the dataset make it more
+challenging, as they lead to more frequent instruction switches
+and more complex constraint identification. Despite these
+challenges, CA-Nav demonstrates competitive performance,
+surpassing several models trained with panoramic observa-
+tions such as LAW or egocentric observations such as WS-
+4To our knowledge, no other zero-shot VLN-CE methods have reported
+results on the test unseen split.
+5The RxR-CE test-unseen leaderboard has been closed, and the correspond-
+ing results are currently unavailable.
+
+
+--- PDF PAGE 8 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+8
+TABLE II: Comparison with SOTA methods on RxR-Habitat val-unseen split (only English).
+Method
+Zero-shot
+Efficient LLM Usage
+Egocentric Obs
+NE↓
+SR↑
+SPL↑
+NDTW↑SDTW↑
+LAW [46]
+✗
+-
+✗
+11.04
+10.0
+9.0
+37.0
+8.0
+VLN
+⟳
+BERT∗[50]
+✗
+-
+✗
+8.98
+27.1
+23.7
+46.7
+-
+GridMM∗[48]
+✗
+-
+✗
+8.42
+36.3
+30.1
+48.2
+33.7
+ETPNav∗[3]
+✗
+-
+✗
+5.64
+54.8
+44.9
+61.9
+45.3
+WS-MGMap [47]
+✗
+-
+✓
+9.83
+15.0
+12.1
+-
+-
+A2Nav [66]
+✓∖
+✓
+✓
+-
+16.8
+6.3
+-
+-
+CA-Nav
+✓
+✓
+✓
+10.37
+19.0
+6.0
+13.5
+5.0
+MGMap. Notably, CA-Nav outperforms A2Nav in both SR
+and NE, while remaining competitive in SPL. Although A2Nav
+pretrained five action-aware navigators it shows lower perfor-
+mance in SR and NE, indicating that CA-Nav’s CSM and CSV
+are effective even when facing complex instructions.
+C. Ablation Study
+We conduct ablation experiments on the R2R-CE dataset to
+evaluate each component of CA-Nav, focusing on six aspects:
+(1) the impact of constraints, (2) value map update methods,
+(3) the effectiveness of superpixel-based waypoint selection,
+(4) the impact of different superpixel size, (5) robustness to
+different constraint switching step thresholds, (6) analysis of
+different history decay factors, (7) influence of trajectory decay
+factors and (8) generalization to different LLMs.
+The effect of different constraints. We begin our in-
+vestigation by examining how the performance of CA-Nav
+is influenced by different types of constraints. As shown
+in Table III-1, we first remove all constraints except those
+related to the final sub-instruction, making the task more
+akin to object navigation. The success rate drops by about
+21% compared to our best performance. Next, we evalu-
+ate the performance of using each constraint independently.
+The results show notable improvements, particularly when
+employing object constraints. We then explore the effect of
+combining two types of constraints. However, performance
+declines when direction constraints are included (Row 5 and
+Row 6), especially in terms of SPL. The reason is that relying
+solely on direction constraints while lacking object or location
+constraints leads to excessive exploration, resulting in lower
+SPL. Notably, combining object and location constraints leads
+to significant improvements (Row 7), indicating that these
+two factors contribute the most to effective navigation. Only
+when both object and location constraints are incorporated
+does the direction constraint become beneficial, helping the
+agent better follow sub-instructions and ultimately achieve the
+best performance.
+This further supports our analysis in § IV-B that the agent
+relies more on landmarks than directions during navigation,
+which also explains why CA-Nav outperforms A2Nav. Fi-
+nally, when both object. By designing appropriate constraints
+and using a Constraint-aware Sub-instruction Manager, our
+method can autonomously switch between sub-instructions in
+long-horizon navigation tasks. This not only compensates for
+VLFM’s [71] inability to handle sequential tasks but also
+avoids frequent calls to LLMs.
+How can the value map be better updated? Recall that
+in the value map generation section § III-C, we designed a
+historical decay mechanism to leverage past explorations and a
+trajectory mask to encourage exploration. We investigate their
+influence in Table III-3. In Row1, we ablate both historical
+decay and trajectory mask which means the value map will be
+completely reset upon constraint switching. It’s not unexpected
+that this brings a severe performance drop. In Row 2, we ablate
+the trajectory mask, the performance drops and we observe that
+the agent tends to get stuck in narrow spaces such as corridors.
+This suggests that the trajectory mask contributes positively to
+the agent’s exploration. In Row 3, where the historical decay
+is ablated and shows a worse performance. This highlights
+the inefficiency of discarding all previous knowledge after
+each constraint switches, as it forces the agent to rediscover
+previously explored areas. However, Row 4, which incorpo-
+rates both a trajectory mask and long-term value maintenance
+using historical decay, effectively balances exploration with
+exploitation and achieves the best performance.
+Comparison of different waypoint selection methods.
+To verify the effectiveness of the superpixel-based waypoint
+selection method, we compare it with the FBE-based method
+mentioned in § III-C. Additionally, we also compare it to the
+Pixel-based and ORP-based methods. The Pixel-based method
+directly selects the pixel with the highest value from the global
+value map as the navigation target. While the ORP-based
+method chooses the Optimal Region first and then selects the
+Pixel with the highest value as the waypoint.
+Results in Table III-4 show that the superpixel-based method
+outperforms the FBE-based and Pixel-based methods in terms
+of SR, and also takes the lead in NE and SPL. This is because
+value map updates tend to be uneven, making the FBE-based
+method, which focuses on local frontiers more susceptible
+to disruptions from sudden value changes (§ IV-D). While
+a confidence mask is applied to perform cosine-weighted
+averaging during value map generation (§ III-C), the trajectory
+mask affects the map’s smoothness, and the historical de-
+cay further disrupts consistency when sub-instructions switch.
+This indicates the importance of incorporating a more global
+perspective into the value map utilizing. The ORP-based
+method performs closely with the superpixel-based method
+and is superior to FBE-based and Pixel-based methods. This
+indicates that clustering similar regions would improve the
+understanding of the explored area, resulting in more stable
+navigation planning.
+Robustness analysis of superpixel size. The superpixel
+size determines the granularity of the waypoints used for
+
+
+--- PDF PAGE 9 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+9
+TABLE III: Ablation results for constraints, switching step thresholds, value map update methods, waypoint selection methods,
+history decay factors, trajectory decay factors, superpixel sizes and LLMs.
+1. The effect of different constraints
+2. Different constraint switching step thresholds
+Direction
+Object
+Location
+NE↓
+OSR↑
+SR↑
+SPL↑
+Min/Max
+NE↓
+OSR↑
+SR↑
+SPL↑
+-
+-
+-
+7.95
+36.4
+20.0
+9.8
+-
+-
+-
+-
+-
+✓
+-
+-
+7.79
+40.4
+22.8
+10.1
+0/0
+7.81
+40.2
+22.3
+10.9
+-
+✓
+-
+7.71
+44.0
+23.8
+10.7
+5/25
+7.73
+45.1
+24.1
+10.9
+-
+-
+✓
+7.85
+43.6
+23.5
+10.4
+10/25
+7.58
+48.0
+25.3
+10.8
+✓
+-
+✓
+8.10
+45.4
+20.9
+7.2
+15/25
+7.65
+47.6
+24.8
+9.9
+✓
+✓
+-
+7.93
+46.6
+23.1
+8.6
+10/15
+7.54
+48.1
+25.0
+11.7
+-
+✓
+✓
+7.74
+46.9
+24.0
+10.9
+10/25
+7.58
+48.0
+25.3
+10.8
+✓
+✓
+✓
+7.58
+48.0
+25.3
+10.8
+10/35
+7.56
+48.5
+24.4
+10.2
+3. Influence of value map update methods
+4. Different waypoint selection methods
+Method
+NE↓
+OSR↑
+SR↑
+SPL↑
+Method
+NE↓
+OSR↑
+SR↑
+SPL↑
+None
+7.68
+38.9
+22.3
+10.3
+FBE-based
+8.08
+50.2
+21.9
+10.4
+trajectory mask
+7.65
+41.3
+24.6
+10.9
+Pixel-based
+7.87
+42.9
+22.9
+10.4
+historical decay
+7.57
+45.6
+24.6
+10.8
+ORP-based
+7.54
+45.7
+25.0
+10.6
+trajectory mask + historical decay
+7.58
+48.0
+25.3
+10.8
+Superpixel-based
+7.58
+48.0
+25.3
+10.8
+5. Analysis of different history decay factors
+6. Influence of trajectory decay factors
+History factor γ
+NE↓
+OSR↑
+SR↑
+SPL↑
+Trajectory factor λ
+NE↓
+OSR↑
+SR↑
+SPL↑
+0.0
+7.57
+45.5
+24.4
+10.7
+0.95
+7.58
+48.0
+25.3
+10.8
+0.25
+7.93
+47.2
+24.8
+10.7
+0.90
+7.52
+47.9
+24.5
+10.8
+0.50
+7.58
+48.0
+25.3
+10.8
+0.85
+7.57
+48.8
+24.7
+10.8
+0.75
+7.77
+46.0
+24.0
+10.5
+0.80
+7.82
+46.8
+24.8
+10.2
+7. Different superpixel sizes
+8. Generalization to different LLMs
+Supepixe Size
+NE↓
+OSR↑
+SR↑
+SPL↑
+Method
+NE↓
+OSR↑
+SR↑
+SPL↑
+25 × 25 (pixel)
+7.54
+47.5
+23.7
+10.3
+GPT-3.5
+7.66
+45.0
+21.1
+9.4
+50 × 50 (pixel)
+7.57
+46.5
+24.9
+10.5
+Claude-3.5 Sonnet
+7.41
+47.1
+25.2
+11.8
+75 × 75 (pixel)
+7.75
+46.0
+24.1
+10.1
+GPT-4
+7.58
+48.0
+25.3
+10.8
+100 × 100 (pixel)
+7.89
+42.7
+21.4
+8.7
+-
+-
+-
+-
+-
+navigation. Smaller superpixels result in more precise way-
+points, while larger superpixels result in coarser regions, which
+may affect the agent’s ability to make accurate navigation
+decisions. Therefore, it’s necessary to analyze the impact of
+different superpixel sizes on CA-Nav’s performance. We test
+four different superpixel sizes and the resolution ratio was
+set to 5, which means each pixel corresponds to a 5 cm
+× 5 cm area in the real world. The results in Table III-
+7 show that a smaller superpixel size (25 × 25) leads to
+lower navigation error (NE) and higher object success rate
+(OSR). This is likely due to the finer granularity of waypoints,
+which help the agent get closer to the destination. However,
+the success rate (SR) decreases because smaller superpixels
+are more sensitive to noise in the value map. On the other
+hand, when the superpixel size is too large (e.g., 100 × 100),
+the regions become overly coarse, making it difficult for CA-
+Nav to select precise waypoints, resulting in a significant
+drop in performance. In such cases, the robot may end up
+in imprecise areas or fail to navigate effectively, particularly
+when encountering smaller obstacles or narrow paths. Our
+results suggest that superpixel sizes around 50 × 50 achieve
+an optimal balance between precision and robustness to value
+map noise. We finally set the default superpixel size as 48 ×
+48 which achieves the best result.
+Influence of constraint switching step threshold. Recall
+that in the sub-instruction switching section§ III-B we in-
+troduced minimum and maximum constraint switching step
+thresholds respectively. This mechanism is designed to en-
+sure that transitions between constraints occur neither too
+early nor too late, which could negatively affect navigation
+performance. By setting appropriate thresholds for the min-
+imum and maximum steps, we can improve the stability of
+navigation. To figure out its impact on navigation we test
+various combinations of minimum and maximum thresholds
+as shown in table III-2. As shown in Line 1, When both the
+minimum and maximum thresholds are set to 0, representing
+the vanilla constraints transition mechanism, the SR, OSR,
+and NE all get worse. This demonstrates the importance of
+the threshold in improving performance. However, CA-Nav
+shows robustness against minor variations in other thresholds.
+Whether the minimum is set to 10 or 15, and the maximum to
+25 or 35, the performance remains within a narrow range. This
+suggests that CA-Nav is not overly sensitive to small changes
+in the constraint switching steps, making it more flexible and
+adaptable in real-world scenarios.
+Analysis of different history decay factor. We investigate
+the impact of the historical decay factor γ on final performance
+in Table III-5. The default setting of γ = 0.5 means that when
+switching constraints, the historical value map is decayed by
+half. Both decreasing and increasing γ lead to a drop in SR,
+though the changes are moderate, and the SPL remains stable.
+Overall, a medium decay factor (e.g., 0.5) proves to be optimal,
+
+
+--- PDF PAGE 10 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+10
+striking a balance between preserving historical information
+and adapting to new constraints.
+Influence of trajectory decay factor. The influence of
+trajectory decay factor is also examined, as shown in Table III-
+6. Specifically, the decay factor λ is applied to the trajectory
+mask to encourage exploration, and it is set to 0.95 by default.
+We evaluate the performance of CA-Nav under different λ
+values. As λ decreases, both SR and OSR exhibit a moderate
+decline, indicating that CA-Nav remains robust to minor
+variations in λ.
+Generalization to other LLMs. We further replace GPT-4
+in our method with GPT-3.5 and Claude 3.5 Sonnet to explore
+the robustness and generalizability across different LLMs.
+From Table III-8, we observe that Claude-3.5 Sonnet achieves
+a comparable SR to GPT-4 and even surpasses it in NE and
+SPL. This demonstrates that our method can adapt effectively
+to other LLMs. However, the performance of GPT-3.5 is not
+satisfactory. The reason could be that GPT-3.5 extracts less
+precise constraints than GPT-4 and Claude-3.5.
+D. Quantitative and Qualitative Analysis
+Economic and Low-latency. We compared the response
+speed and cost efficiency of CA-Nav and NavGPT-CE. In
+terms of response speed, we measured the time required for
+each step to be executed by both methods. For CA-Nav, this
+includes the execution time of Grounding-DINO, BLIP2, map
+building, SLIC, and FMM. For NavGPT-CE, this includes the
+time spent on calling the caption model and the LLM. By
+using CSM for minimizing GPT-4 calls, CA-Nav outperforms
+NavGPT-CE significantly. As shown in Figure 5, NavGPT-CE
+takes about 1.29 seconds per action and costs about $0.85 per
+episode, while CA-Nav responds in 0.45 seconds and costs
+only $0.04 per episode, making it roughly 3 times faster and
+5% of the cost.
+Fig. 5: Comparison between CA-Nav and NavGPT-CE.
+Impact of Instruction Complexity. To analyze the impact
+of instruction complexity on navigation performance we divide
+the instructions of R2R-CE val-unseen split into categories
+based on the number of sub-instructions, ranging from 1 to
+7. For each category, we record the number of success and
+failure trajectories and calculated the corresponding success
+rate (SR). The results in Figure 6 reveal a trend that as
+the number of sub-instructions increases, the success rate
+(SR) generally decreases. As the number of sub-instructions
+increases, the system is required to perform more actions
+and make more decisions, which increases the chance for
+errors in task execution. This becomes particularly apparent
+in trajectories with 5 or more sub-instructions, where the SR
+Fig. 6: Impact of instruction complexity on success rate.
+starts to decrease significantly. This indicates that instruction
+switching may not always be accurate as the perception model
+is imperfect. When the number of sub-instructions increases
+errors tend to accumulate. Enhancing the CSM further could
+be a promising direction for improvement.
+Constraint Fulfillment Evaluation. To demonstrate the
+effectiveness of the CSM module, we evaluate the fulfillment
+of the current constraints through human evaluation. We select
+the top 25 trajectories from the successful set based on SPL
+in descending order to assess whether the episodes that best
+follow the instructions also achieve the highest constraint
+fulfillment. Additionally, we randomly sample 25 trajectories
+from the oracle successful set to examine whether constraint
+fulfillment declines in episodes that reach the ground truth
+destination but fail to stop correctly. For failure trajectories,
+to ensure a diverse coverage of different trajectory lengths,
+we randomly select 25 samples each for short, medium, and
+long trajectories. Then we calculate the Constraint Fulfillment
+Score (i.e., CFS) of episodes and CFS for the three type of
+constraints (D: Direction, O: Object, L: Location) following
+equation 8. Specifically, M represents the number of the
+evaluation set which is 25, Nj is the number of constraints
+in the jth episode and Cj represents the number of specific
+constraints of type direction, object or location in the jth
+episode. We manually inspected each step of these trajectories
+and their constraint fulfillment status. A step was considered
+fulfilled if and only if the CSM determined the constraint
+was met and manual verification confirmed its correctness;
+otherwise, it was labeled as a violation.
+CFSepisode = 1
+M
+M
+X
+j=1
+1
+Nj
+Nj
+X
+i=1
+I(constrainti)
+CFSD/O/L = 1
+M
+M
+X
+j=1
+1
+Cj
+Cj
+X
+i=1
+I(constrainti)
+(8)
+The results are shown in Table IV. Successful trajectories
+achieve the highest episode-level CFS (0.69) and lead in CFS
+across all constraint types, demonstrating the effectiveness of
+CSM in adhering to constraints. In contrast, Oracle Success
+trajectories exhibit a lower CFSepisode (0.50) and reduced
+CFS for individual constraint types, suggesting that while the
+agent reaches the correct location, it follows constraints less
+rigorously. As failure severity increases, both CFSepisode and
+CFSD/O/L drop below 0.5, indicating that CSM fails most
+of the time. Overall, these results highlight the relationship
+
+
+--- PDF PAGE 11 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+11
+t=12
+t=32
+t=56
+t=94
+t=156
+Time
+Frontiers
+Candidate waypoints
+Target waypoints
+Observation
+Superpixel
+CVM
+Object constraint: stairs
+Direction constraint: right
+Location constraint: room
+Object constraint: couches
+Object constraint: glass table
+Object constraint: white chairs
+Instruction: Go straight. Pass the stairs on the right and continue straight. When you get to the stairs going up pass those as 
+well. Go into the room with the couches and then turn right. wait near the glass table with white chairs.
+Destination: glass table with 
+white chairs in the room
+Start: look around
+t=12
+t=32
+t=63
+t=92
+t=107
+Observation
+Frontier 
+CVM
+Fig. 7: Navigation visualization based on superpixel value map and frontier value map waypoint selection methods.
+between CSM’s effectiveness and navigation performance.
+Episodes with higher navigation success rates tend to exhibit
+greater constraint fulfillment, and this positive correlation to
+some extent indicates the effectiveness of CSM.
+TABLE IV: Constraint Fulfillment Evaluation.
+Type
+CFSepisode ↑
+CFSD ↑
+CFSO ↑
+CFSL ↑
+Success
+0.69
+1.00
+0.77
+0.52
+Oracle Success
+0.50
+0.43
+0.50
+0.55
+Fail(short)
+0.42
+0.61
+0.42
+0.23
+Fail(medium)
+0.38
+0.40
+0.42
+0.36
+Fail(long)
+0.34
+0.31
+0.39
+0.31
+Navigation Visualization. As shown in Figure 7, and Figure
+1 in Appendix, we visualize the navigation process of CA-
+Nav, FBE-Nav and NavGPT-CE on the same episode. Note
+that the FBE-Nav uses frontier-based exploration for waypoint
+selection, while the rest of the process is the same as the CA-
+Nav. Among these three methods, CA-Nav shows the most
+stable and coherent navigation, thanks to CSM’s effective
+instruction decomposition and constraint identification, along
+with CVM’s comprehensive use of the value map.
+In contrast, FBE-Nav fails at step 56 due to abrupt value
+changes at the frontier. As shown in Figure 7, the agent
+navigates correctly during the first sub-instruction. However,
+upon reaching the second sub-instruction, the landmark prompt
+changes to “room,” causing the value map, initially based
+on the previous landmark prompt “stairs”, to decay as new
+values are updated. The FBE-based waypoint selection method
+then chooses a left frontier, which has the highest value
+among the available options, but the correct path is to walk
+straight toward the open area with the stairs. Compared to the
+Superpixel Value Map based waypoint selection method shown
+in Figure 7, CA-Nav avoids focusing solely on local high
+values. Instead, it considers the global value map, allowing
+it to navigate correctly during the second sub-instruction.
+Failure Analysis. To gain deeper insights into the limita-
+tions of our approach, we conduct a detailed failure analysis
+and categorize the four primary failure modes, as illustrated in
+Figure 8. First, visual reconstruction errors in the simulation
+environment often lead to failures in object detection. Inac-
+curacies in scene rendering may distort object appearances,
+causing the detection model to miss or misinterpret key
+objects. Second, object detection model errors can arise due to
+semantic ambiguities. Models such as GroundingDINO may
+misclassify objects with similar visual and contextual features,
+leading to incorrect navigation decisions. For example, the bar
+is mistaken for the message table. Third, location recognition
+
+
+--- PDF PAGE 12 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+12
+Instruction: Walk straight and stop in the doorway to the left of the white 
+statue of two people.
+Current constraint: object constraint, white statue of two people
+Failure reason: Visual Reconstruction Errors
+Instruction: Walk up the stairs ahead. Enter the massage room and wait next to 
+the massage table.
+Current constraint: object constraint, massage table
+Failure reason: Object Detection Errors
+Mesh Reconstruction 
+Raw Picture
+Observation
+GT Destination
+Instruction: Turn around and leave the bathroom. Go into the bedroom. Turn left 
+and go down the hallway to the left. You'll stop by the big cabinet on the left.
+Current constraint: location constraint, bathroom
+Failure reason: Location Identification Errors
+Observation
+Value Map
+Instruction: Walk past hall table. Walk into bedroom. Make left at table clock. 
+Wait at bathroom door threshold.
+Current constraint: object constraint, table clock (direction constraint, left)
+Failure reason: LLM Constraint Extraction Errors
+Observation
+Value Map
+: Agent
+: GT
+: Missing Direction 
+Constraint,  Left
+Object detection results:
+Table (False negative)
+Object detection results:
+message table (False positive)
+Location detection results:
+Q: Can you see the bathroom? A: No.
+Fig. 8: Failure cases visualization. The red font indicates the sub-instruction currently being executed.
+failures occur when vision-language models such as BLIP2-
+VQA provide incorrect scene interpretations. Despite the pres-
+ence of clear visual cues, the model may fail to recognize
+specific locations. For instance, BLIP2 might not correctly
+identify a bathroom even when a toilet is visible, resulting in
+incorrect localization. Lastly, constraint decomposition errors
+occasionally arise from the large language model (LLM). In
+some cases, the LLM fails to accurately parse and decompose
+instructions, leading to omissions of constraints. For example,
+the instruction includes a step of “turn left at table clock”,
+however, the LLM overlooked this sub-instruction and failed
+to extract the direction constraint. Such errors can disrupt
+navigation planning and lead to deviations from the intended
+path. These failure cases highlight the challenges of inte-
+grating multiple vision and language models for embodied
+navigation and suggest directions for future improvement,
+such as enhancing simulator’s visual fidelity, refining spatial
+reasoning capabilities, and improving LLM’s understanding of
+instructions.
+E. Real Robot Experiments
+We conduct real robot experiments based on the QiZhi
+mobile robot, as shown in Figure 9 (e). We equip the robot
+with a laptop (including an Intel i9-14900HX CPU and a
+GeForce RTX 4090 GPU) and a Kinect V2.0 RGB-D camera
+whose HFoV is 84◦and VFoV is 42◦. However, due to the
+camera’s limited depth sensing range and the inaccuracies or
+depth loss at the edges, we utilize Depth Anything V2 [83]
+to generate depth images. An RPLIDAR-A2M8 LiDAR is
+also used to obtain a relatively accurate pose through Hector
+(a) Entrance Hall
+(b) Office
+(c) Meeting Room
+(d) Reception Room
+(d) Lounge
+(e) QiZhi Robot
+Fig. 9: Real-world scenes and real robot.
+SLAM. It is important to note that Hector SLAM is employed
+solely for estimating the camera’s pose, not for constructing a
+pre-built map. The robot has a radius of 22.5cm and a height
+of 137cm.
+Corresponding to the experiments in simulation (§ III), we
+still set the low-level action as MOVE FORWARD (0.25m),
+TURN LEFT/RIGHT (30◦), and STOP. The only modification
+is that successful navigation is defined as the robot stopping
+within 1 meter of the destination. For waypoint navigation,
+we continue to rely on the FMM approach, rather than
+adopting ROS navigation packages or other trained PointNav
+policies [84]. The linear and angular velocities are set to
+0.1m/s and 0.1rad/s respectively.
+To evaluate the effectiveness of CA-Nav we conduct ex-
+periments in diverse indoor scenes including lounge, meeting
+room, reception room, entrance hall, and office, as shown in
+Figure 9. These diverse environments test the adaptability of
+our method to different spatial layouts and semantic contexts.
+
+
+--- PDF PAGE 13 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+13
+TABLE V: Information about real robot experiments. The robot’s initial pose will be different in each episode. d represents
+the distance between the initial position and the destination. SR is the success rate. CoW represents the detector based version
+(i.e., CoW-OWL), Ours represents CA-Nav using Depth Anything V2, ZoeDepth represents CA-Nav using ZoeDepth.
+Instruction
+Go to the door.
+Turn left then walk towards
+the signboard and wait by
+the elevator.
+Walk out of the door then
+stop in front of the plant.
+Walk out to the corridor,
+and stop in front of the
+poster.
+Example Pose
+Distance (d)
+5.4m
+5.5m
+6.6m
+4.3m
+SR: CoW, Ours, ZoeD
+4/10, 8/10, 8/10
+0/10, 4/10, 3/10
+1/10, 5/10, 2/10
+2/10, 6/10, 4/10
+Instruction
+Walk towards the robot.
+Walk towards the living
+room then stop beside the
+couch.
+Turn slightly right and
+walk into the meeting
+room, step forward then
+stop in front of the table.
+Go towards the plant, turn
+right, walk along the wall
+then stop near the World
+Cup Trophy.
+Example Pose
+Distance (d)
+3.6m
+6.0m
+3.8m
+10.4m
+SR: CoW, Ours, ZoeD
+6/10, 7/10, 6/10
+1/10, 4/10, 3/10
+0/10, 4/10, 4/10
+0/10, 2/10, 1/10
+For instructions, we design 8 instructions with different com-
+plexity. Easy instructions contain only one sub-instruction and
+the destination is obvious, such as, “Go to the door.”. Complex
+instructions are longer and with more than three constraints
+and the agent can not directly see the destination from its initial
+position, thus requiring exploration following the instruction.
+To check our method’s ability to novel landmarks we design
+open vocabulary destinations such as “robot” and “world cup
+trophy” (details in Table V).
+For each instruction, we run 10 episodes, with the robot’s
+initial pose different each time (details in Table V). We
+deploy CoW-OWL as the baseline. For CA-Nav, we use Depth
+Anything V2 as the default setting and also compare it with
+ZoeDepth [85]. The results indicate that CoW can handle
+simple cases where the target object is directly visible from
+the initial pose and the instruction consists of only a single
+sub-step. However, when the instruction requires sequential
+exploration of multiple objects, CoW fails in most cases. In
+contrast, CA-Nav effectively handles long-horizon navigation
+tasks even without a pre-built map, demonstrating the effec-
+tiveness of our real-time constructed constraint-aware value
+map. Furthermore, Depth Anything V2 and ZoeDepth exhibit
+comparable performance. However, Depth Anything V2 holds
+a slight advantage, likely due to its superior depth estimation
+capability. In Appendix, we provide visualizations of CoW and
+ZoeDepth along with corresponding discussions. Furthermore,
+thanks to the VLM, CA-Nav demonstrates a certain level of
+generalization to open vocabularies. As shown in Figure 2 in
+Appendix, the agent follows a complex instruction consisting
+of four sub-instructions and ultimately stops successfully near
+a World Cup Trophy. This indicates that CA-Nav can general-
+ize to new instructions and adapt to novel environments while
+effectively tracking the navigation process.
+V. CONCLUSION
+In this work, we focus on developing a novel Constraint-
+Aware
+Navigator
+for
+the
+challenging
+zero-shot
+Vision-
+Language Navigation in Continuous Environments. To reach
+this goal, we propose a Constraint-aware Sub-instruction Man-
+ager and a Constraint-aware Value Mapper. The two modules
+work coherently to navigate novel environments by identifying
+and adapting to the constraints of each sub-instruction. Exten-
+sive experiments are conducted in both simulated and real-
+world environments, demonstrating the robustness and adapt-
+ability of our approach. These results highlight the potential
+of CA-Nav to bridge the gap between simulated benchmarks
+and real-world applications, providing an effective framework
+for future advancements in zero-shot navigation tasks.
+Limitations and Future work. Under the egocentric set-
+ting, the agent tends to spend more steps exploring the
+environment, resulting in slightly lower SPL. Developing a
+navigation world model to predict environments outside the
+current field of view is a potential direction to alleviate this
+issue. Moreover, CA-Nav is bottlenecked by the imperfections
+in perception models, which results in less accurate instruction
+decomposition and constraint detection, particularly for longer
+instructions. Leveraging more robust foundation models and
+fine-tuning specific modules are promising future directions.
+REFERENCES
+[1] P. Anderson, Q. Wu, D. Teney, J. Bruce, M. Johnson, N. S¨underhauf,
+I. Reid, S. Gould, and A. Van Den Hengel, “Vision-and-language
+navigation: Interpreting visually-grounded navigation instructions in
+real environments,” in Proceedings of the IEEE/CVF Conference on
+Computer Vision and Pattern Recognition, 2018, pp. 3674–3683.
+[2] S. Chen, P.-L. Guhur, M. Tapaswi, C. Schmid, and I. Laptev, “Think
+global, act local: Dual-scale graph transformer for vision-and-language
+navigation,” in Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition, 2022, pp. 16 516–16 526.
+
+
+--- PDF PAGE 14 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+14
+[3] D. An, H. Wang, W. Wang, Z. Wang, Y. Huang, K. He, and L. Wang,
+“Etpnav: Evolving topological planning for vision-language navigation
+in continuous environments,” IEEE Transactions on Pattern Analysis
+and Machine Intelligence, pp. 1–16, 2024.
+[4] J. Krantz, E. Wijmans, A. Majundar, D. Batra, and S. Lee, “Beyond the
+nav-graph: Vision and language navigation in continuous environments,”
+in Proceedings of the European Conference on Computer Vision, 2020,
+pp. 104–120.
+[5] J. Li, D. Li, S. Savarese, and S. Hoi, “BLIP-2: bootstrapping language-
+image pre-training with frozen image encoders and large language
+models,” in International conference on machine learning, 2023, pp.
+19 730–19 742.
+[6] OpenAI, “Gpt-4 technical report,” arXiv preprint arXiv:2303.08774,
+2024.
+[7] G. Zhou, Y. Hong, and Q. Wu, “Navgpt: Explicit reasoning in vision-
+and-language navigation with large language models,” in Proceedings
+of the AAAI Conference on Artificial Intelligence, 2024, pp. 7641–7649.
+[8] J. Chen, B. Lin, R. Xu, Z. Chai, X. Liang, and K.-Y. K. Wong, “Mapgpt:
+Map-guided prompting for unified vision-and-language navigation,” in
+Proceedings of the Conference of the North American Chapter of the
+Association for Computational Linguistics, 2024, pp. 9796–9810.
+[9] Y. Qiao, W. Lyu, H. Wang, Z. Wang, Z. Li, Y. Zhang, M. Tan, and
+Q. Wu, “Open-nav: Exploring zero-shot vision-and-language naviga-
+tion in continuous environment with open-source llms,” arXiv preprint
+arXiv:2409.18794, 2024.
+[10] A. Wunderlich and K. Gramann, “Landmark-based navigation instruc-
+tions improve incidental spatial knowledge acquisition in real-world en-
+vironments,” Journal of Environmental Psychology, vol. 77, pp. 101 645–
+101 677, 2021.
+[11] S. Liu, Z. Zeng, T. Ren, F. Li, H. Zhang, J. Yang, Q. Jiang, C. Li, J. Yang,
+H. Su et al., “Grounding dino: Marrying dino with grounded pre-
+training for open-set object detection,” in Proceedings of the European
+Conference on Computer Vision, 2024, pp. 38–55.
+[12] R. Achanta, A. Shaji, K. Smith, A. Lucchi, P. Fua, and S. S¨usstrunk,
+“Slic superpixels compared to state-of-the-art superpixel methods,” IEEE
+transactions on pattern analysis and machine intelligence, vol. 34,
+no. 11, pp. 2274–2282, 2012.
+[13] J. A. Sethian, “Fast marching methods,” SIAM review, vol. 41, no. 2,
+pp. 199–235, 1999.
+[14] S. Hochreiter and J. Schmidhuber, “Long short-term memory,” Neural
+computation, vol. 9, no. 8, pp. 1735–1780, 1997.
+[15] C.-Y. Ma, J. Lu, Z. Wu, G. AlRegib, Z. Kira, R. Socher, and C. Xiong,
+“Self-monitoring navigation agent via auxiliary progress estimation,” in
+International Conference on Learning Representations, 2019, pp. 5613–
+5630.
+[16] C.-Y. Ma, Z. Wu, G. AlRegib, C. Xiong, and Z. Kira, “The regretful
+agent: Heuristic-aided navigation through progress estimation,” in Pro-
+ceedings of the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, 2019, pp. 6732–6740.
+[17] L. Ke, X. Li, Y. Bisk, A. Holtzman, Z. Gan, J. Liu, J. Gao, Y. Choi, and
+S. Srinivasa, “Tactical rewind: Self-correction via backtracking in vision-
+and-language navigation,” in Proceedings of the IEEE/CVF Conference
+on Computer Vision and Pattern Recognition, 2019, pp. 6741–6749.
+[18] X. Wang, Q. Huang, A. Celikyilmaz, J. Gao, D. Shen, Y.-F. Wang,
+W. Y. Wang, and L. Zhang, “Reinforced cross-modal matching and
+self-supervised imitation learning for vision-language navigation,” in
+Proceedings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, 2019, pp. 6629–6638.
+[19] X. Wang, W. Xiong, H. Wang, and W. Y. Wang, “Look before you
+leap: Bridging model-free and model-based reinforcement learning for
+planned-ahead vision-and-language navigation,” in Proceedings of the
+European Conference on Computer Vision, 2018, pp. 4392–4412.
+[20] C. Gao, J. Chen, S. Liu, L. Wang, Q. Zhang, and Q. Wu, “Room-
+and-object aware knowledge reasoning for remote embodied referring
+expression,” in Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition, 2021, pp. 3064–3073.
+[21] Y. Qi, Z. Pan, Y. Hong, M.-H. Yang, A. van den Hengel, and Q. Wu,
+“The road to know-where: An object-and-room informed sequential bert
+for indoor vision-language navigation,” in Proceedings of the IEEE/CVF
+International Conference on Computer Vision, 2021, pp. 1635–1644.
+[22] Y. Qi, Z. Pan, S. Zhang, A. v. d. Hengel, and Q. Wu, “Object-and-
+action aware model for visual language navigation,” in Proceedings of
+the European Conference on Computer Vision, 2020, pp. 303–317.
+[23] A. Moudgil, A. Majumdar, H. Agrawal, S. Lee, and D. Batra, “Soat: A
+scene-and object-aware transformer for vision-and-language navigation,”
+in Advances in Neural Information Processing Systems, 2021, pp. 7357–
+7367.
+[24] X. Lin, G. Li, and Y. Yu, “Scene-intuitive agent for remote embodied
+visual grounding,” in Proceedings of the IEEE/CVF Conference on
+Computer Vision and Pattern Recognition, 2021, pp. 7036–7045.
+[25] S. Chen, P.-L. Guhur, C. Schmid, and I. Laptev, “History aware multi-
+modal transformer for vision-and-language navigation,” in Advances in
+Neural Information Processing Systems, 2021, pp. 5834–5847.
+[26] D. An, Y. Qi, Y. Huang, Q. Wu, L. Wang, and T. Tan, “Neighbor-view
+enhanced model for vision and language navigation,” in Proceedings of
+the ACM International Conference on Multimedia, 2021, pp. 5101–5109.
+[27] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez,
+Ł. Kaiser, and I. Polosukhin, “Attention is all you need,” in Advances
+in neural information processing systems, 2017, pp. 5998–6008.
+[28] Y. Hong, Q. Wu, Y. Qi, C. Rodriguez-Opazo, and S. Gould, “Vln bert:
+A recurrent vision-and-language bert for navigation,” in Proceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+2021, pp. 1643–1653.
+[29] W. Hao, C. Li, X. Li, L. Carin, and J. Gao, “Towards learning a
+generic agent for vision-and-language navigation via pre-training,” in
+Proceedings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, 2020, pp. 13 134–13 143.
+[30] A. Majumdar, A. Shrivastava, S. Lee, P. Anderson, D. Parikh, and
+D. Batra, “Improving vision-and-language navigation with image-text
+pairs from the web,” in Proceedings of the European Conference on
+Computer Vision, 2020, pp. 259–274.
+[31] Y. Qiao, Y. Qi, Y. Hong, Z. Yu, P. Wang, and Q. Wu, “Hop: History-
+and-order aware pre-training for vision-and-language navigation,” in
+Proceedings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, 2022, pp. 15 418–15 427.
+[32] Y. Qiao, Y. Qi, Y. Hong, Z. Yu, and Q. Wu, “Hop+: History-enhanced
+and order-aware pre-training for vision-and-language navigation,” IEEE
+Transactions on Pattern Analysis and Machine Intelligence, vol. 45,
+no. 7, pp. 8524–8537, 2023.
+[33] H. Hong, S. Wang, Z. Huang, Q. Wu, and J. Liu, “Why only text: Em-
+powering vision-and-language navigation with multi-modal prompts,”
+2024, pp. 839–847.
+[34] P.-L. Guhur, M. Tapaswi, S. Chen, I. Laptev, and C. Schmid, “Airbert: In-
+domain pretraining for vision-and-language navigation,” in Proceedings
+of the IEEE/CVF International Conference on Computer Vision, 2021,
+pp. 1614–1623.
+[35] K. Lin, P. Chen, D. Huang, T. H. Li, M. Tan, and C. Gan, “Learning
+vision-and-language navigation from youtube videos,” in Proceedings of
+the IEEE/CVF International Conference on Computer Vision, 2023, pp.
+8283–8292.
+[36] J. Li, H. Tan, and M. Bansal, “Envedit: Environment editing for vision-
+and-language navigation,” in Proceedings of the IEEE/CVF Conference
+on Computer Vision and Pattern Recognition, 2022, pp. 15 386–15 396.
+[37] S. Chen, P.-L. Guhur, M. Tapaswi, C. Schmid, and I. Laptev, “Learning
+from unlabeled 3d environments for vision-and-language navigation,” in
+Proceedings of the European Conference on Computer Vision, 2022, pp.
+638–655.
+[38] Z. Wang, J. Li, Y. Hong, Y. Wang, Q. Wu, M. Bansal, S. Gould,
+H. Tan, and Y. Qiao, “Scaling data generation in vision-and-language
+navigation,” in Proceedings of the IEEE/CVF International Conference
+on Computer Vision, 2023, pp. 11 975–11 986.
+[39] K. He, C. Si, Z. Lu, Y. Huang, L. Wang, and X. Wang, “Frequency-
+enhanced data augmentation for vision-and-language navigation,” in
+Advances in Neural Information Processing Systems, 2024, pp. 1–14.
+[40] J. Li and M. Bansal, “Panogen: Text-conditioned panoramic environment
+generation for vision-and-language navigation,” in Advances in Neural
+Information Processing Systems, 2024, pp. 21 878–21 894.
+[41] D. Fried, R. Hu, V. Cirik, A. Rohrbach, J. Andreas, L.-P. Morency,
+T. Berg-Kirkpatrick, K. Saenko, D. Klein, and T. Darrell, “Speaker-
+follower models for vision-and-language navigation,” in Advances in
+Neural Information Processing Systems, 2018, pp. 3318–3329.
+[42] K. He, Y. Huang, Q. Wu, J. Yang, D. An, S. Sima, and L. Wang,
+“Landmark-rxr: Solving vision-and-language navigation with fine-
+grained alignment supervision,” in Advances in Neural Information
+Processing Systems, 2021, pp. 652–663.
+[43] P. Anderson, A. Shrivastava, J. Truong, A. Majumdar, D. Parikh,
+D. Batra, and S. Lee, “Sim-to-real transfer for vision-and-language
+navigation,” in Conference on Robot Learning, 2021, pp. 671–681.
+[44] J. Chung, C. Gulcehre, K. H. Cho, and Y. Bengio, “Empirical evalua-
+tion of gated recurrent neural networks on sequence modeling,” arXiv
+preprint arXiv:1412.3555, 2014.
+[45] J. Krantz, A. Gokaslan, D. Batra, S. Lee, and O. Maksymets, “Waypoint
+models for instruction-guided navigation in continuous environments,”
+
+
+--- PDF PAGE 15 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+15
+in Proceedings of the IEEE/CVF International Conference on Computer
+Vision, 2021, pp. 15 142–15 151.
+[46] S. Raychaudhuri, S. Wani, S. Patel, U. Jain, and A. X. Chang,
+“Language-aligned waypoint (law) supervision for vision-and-language
+navigation in continuous environments,” in Proceedings of the Confer-
+ence on Empirical Methods in Natural Language Processing, 2021, pp.
+4018–4028.
+[47] P. Chen, D. Ji, K. Lin, R. Zeng, T. Li, M. Tan, and C. Gan, “Weakly-
+supervised multi-granularity map learning for vision-and-language nav-
+igation,” in Advances in Neural Information Processing Systems, 2022,
+pp. 38 149–38 161.
+[48] Z. Wang, X. Li, J. Yang, Y. Liu, and S. Jiang, “Gridmm: Grid
+memory map for vision-and-language navigation,” in Proceedings of
+the IEEE/CVF International Conference on Computer Vision, 2023, pp.
+15 625–15 636.
+[49] Z. He, L. Wang, S. Li, Q. Yan, C. Liu, and Q. Chen, “Mlanet: Multi-
+level attention network with sub-instruction for continuous vision-and-
+language navigation,” arXiv preprint arXiv:2303.01396, 2023.
+[50] Y. Hong, Z. Wang, Q. Wu, and S. Gould, “Bridging the gap be-
+tween learning in discrete and continuous environments for vision-and-
+language navigation,” in Proceedings of the IEEE/CVF Conference on
+Computer Vision and Pattern Recognition, 2022, pp. 15 418–15 428.
+[51] A. Chang, A. Dai, T. Funkhouser, M. Halber, M. Niessner, M. Savva,
+S. Song, A. Zeng, and Y. Zhang, “Matterport3d: Learning from rgb-d
+data in indoor environments,” in International Conference on 3D Vision,
+2017, pp. 667–676.
+[52] J. Krantz and S. Lee, “Sim-2-sim transfer for vision-and-language
+navigation in continuous environments,” in Proceedings of the European
+Conference on Computer Vision, 2022, pp. 588–603.
+[53] D. An, Y. Qi, Y. Li, Y. Huang, L. Wang, T. Tan, and J. Shao,
+“Bevbert: Multimodal map pre-training for language-guided navigation,”
+in Proceedings of the IEEE/CVF International Conference on Computer
+Vision, 2023, pp. 2737–2748.
+[54] Z. Wang, X. Li, J. Yang, S. Jiang et al., “Sim-to-real transfer via 3d
+feature fields for vision-and-language navigation,” in Conference on
+Robot Learning, 2024, pp. 1–14.
+[55] T. B. Brown, B. Mann, N. Ryder, M. Subbiah, J. Kaplan, P. Dhariwal,
+A. Neelakantan, P. Shyam, G. Sastry, A. Askell et al., “Language models
+are few-shot learners,” in Advances in neural information processing
+systems, 2020, pp. 1877–1901.
+[56] H. Touvron, T. Lavril, G. Izacard, X. Martinet, M.-A. Lachaux,
+T. Lacroix, B. Rozi`ere, N. Goyal, E. Hambro, F. Azhar et al.,
+“Llama: Open and efficient foundation language models,” arXiv preprint
+arXiv:2302.13971, 2023.
+[57] A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agarwal,
+G. Sastry, A. Askell, P. Mishkin, J. Clark et al., “Learning transferable
+visual models from natural language supervision,” in International
+conference on machine learning, 2021, pp. 8748–8763.
+[58] J. Zhang, K. Wang, R. Xu, G. Zhou, Y. Hong, X. Fang, Q. Wu, Z. Zhang,
+and W. He, “Navid: Video-based vlm plans the next step for vision-and-
+language navigation,” Robotics: Science and Systems, pp. 1–17, 2024.
+[59] D. Zheng, S. Huang, L. Zhao, Y. Zhong, and L. Wang, “Towards learning
+a generalist model for embodied navigation,” in Proceedings of the
+IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+2024, pp. 13 624–13 634.
+[60] G. Zhou, Y. Hong, Z. Wang, X. E. Wang, and Q. Wu, “Navgpt-2:
+Unleashing navigational reasoning capability for large vision-language
+models,” in Proceedings of the European Conference on Computer
+Vision, 2024, pp. 260–278.
+[61] B. Lin, Y. Nie, Z. Wei, J. Chen, S. Ma, J. Han, H. Xu, X. Chang, and
+X. Liang, “Navcot: Boosting llm-based vision-and-language navigation
+via learning disentangled reasoning,” arXiv preprint arXiv:2403.07376,
+2024.
+[62] J. Chen, B. Lin, X. Liu, X. Liang, and K.-Y. K. Wong, “Affordances-
+oriented planning using foundation models for continuous vision-
+language navigation,” in Proceedings of the AAAI Conference on Ar-
+tificial Intelligence, 2025, pp. 1–9.
+[63] Y. Long, X. Li, W. Cai, and H. Dong, “Discuss before moving: Visual
+language navigation via multi-expert discussions,” in Proceedings of the
+IEEE International Conference on Robotics and Automation, 2024, pp.
+17 380–17 387.
+[64] Z. Zhan, L. Yu, S. Yu, and G. Tan, “Mc-gpt: Empowering vision-and-
+language navigation with memory map and reasoning chains,” arXiv
+preprint arXiv:2405.10620, 2024.
+[65] J. Wei, X. Wang, D. Schuurmans, M. Bosma, F. Xia, E. Chi, Q. V.
+Le, D. Zhou et al., “Chain-of-thought prompting elicits reasoning in
+large language models,” in Advances in neural information processing
+systems, 2022, pp. 24 824–24 837.
+[66] P. Chen, X. Sun, H. Zhi, R. Zeng, T. H. Li, G. Liu, M. Tan, and
+C. Gan, “A2nav: Action-aware zero-shot robot navigation by exploit-
+ing vision-and-language ability of foundation models,” arXiv preprint
+arXiv:2308.07997, 2023.
+[67] Y. Long, W. Cai, H. Wang, G. Zhan, and H. Dong, “Instructnav: Zero-
+shot system for generic instruction navigation in unexplored environ-
+ment,” in Conference on Robot Learning, 2024, pp. 1–12.
+[68] S. K. Ramakrishnan, A. Gokaslan, E. Wijmans, O. Maksymets,
+A. Clegg, J. Turner, E. Undersander, W. Galuba, A. Westbury, A. X.
+Chang et al., “Habitat-matterport 3d dataset (hm3d): 1000 large-scale
+3d environments for embodied ai,” arXiv preprint arXiv:2109.08238,
+2021.
+[69] Z. Yang, L. Li, K. Lin, J. Wang, C.-C. Lin, Z. Liu, and L. Wang,
+“The dawn of lmms: Preliminary explorations with gpt-4v(ision),” arXiv
+preprint arXiv:2309.17421, 2023.
+[70] D. S. Chaplot, D. Gandhi, A. Gupta, and R. Salakhutdinov, “Object
+goal navigation using goal-oriented semantic exploration,” in Advances
+in Neural Information Processing Systems, 2020, pp. 4247–4258.
+[71] N. Yokoyama, S. Ha, D. Batra, J. Wang, and B. Bucher, “Vlfm:
+Vision-language frontier maps for zero-shot semantic navigation,” in
+Proceedings of the IEEE International Conference on Robotics and
+Automation, 2024, pp. 42–48.
+[72] B. Yamauchi, “A frontier-based approach for autonomous exploration,”
+in Proceedings IEEE International Symposium on Computational Intel-
+ligence in Robotics and Automation, 1997, pp. 146–151.
+[73] K. Zhou, K. Zheng, C. Pryor, Y. Shen, H. Jin, L. Getoor, and X. E. Wang,
+“Esc: Exploration with soft commonsense constraints for zero-shot
+object navigation,” in International Conference on Machine Learning,
+2023, pp. 42 829–42 842.
+[74] D. Shah, M. R. Equi, B. Osi´nski, F. Xia, B. Ichter, and S. Levine,
+“Navigation with large language models: Semantic guesswork as a
+heuristic for planning,” in Conference on Robot Learning, 2023, pp.
+2683–2699.
+[75] A. Wang, H. Chen, Z. Lin, and J. Han, “Repvit-sam: Towards real-time
+segmenting anything,” arXiv preprint arXiv:2312.05760, 2023.
+[76] A. Wang, H. Chen, Z. Lin, J. Han, and G. Ding, “Repvit: Revisiting
+mobile cnn from vit perspective,” in Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition, 2024, pp.
+15 909–15 920.
+[77] A. Ku, P. Anderson, R. Patel, E. Ie, and J. Baldridge, “Room-across-
+room: Multilingual vision-and-language navigation with dense spa-
+tiotemporal grounding,” in Proceedings of the Conference on Empirical
+Methods in Natural Language Processing, 2020, pp. 4392–4412.
+[78] M. Savva, A. Kadian, O. Maksymets, Y. Zhao, E. Wijmans, B. Jain,
+J. Straub, J. Liu, V. Koltun, J. Malik et al., “Habitat: A platform for
+embodied ai research,” in Proceedings of the IEEE/CVF International
+Conference on Computer Vision, 2019, pp. 9338–9346.
+[79] M. Z. Irshad, N. C. Mithun, Z. Seymour, H.-P. Chiu, S. Samarasekera,
+and R. Kumar, “Semantically-aware spatio-temporal reasoning agent
+for vision-and-language navigation in continuous environments,” in
+International Conference on Pattern Recognition, 2022, pp. 4065–4071.
+[80] K. Chen, J. K. Chen, J. Chuang, M. V´azquez, and S. Savarese, “Topo-
+logical planning with transformers for vision-and-language navigation,”
+in Proceedings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, 2021, pp. 11 276–11 286.
+[81] S. Y. Gadre, M. Wortsman, G. Ilharco, L. Schmidt, and S. Song, “Cows
+on pasture: Baselines and benchmarks for language-driven zero-shot
+object navigation,” in Proceedings of the IEEE/CVF Conference on
+Computer Vision and Pattern Recognition, 2023, pp. 23 171–23 181.
+[82] A. Majumdar, G. Aggarwal, B. Devnani, J. Hoffman, and D. Batra,
+“Zson: Zero-shot object-goal navigation using multimodal goal embed-
+dings,” in Advances in Neural Information Processing Systems, 2022,
+pp. 32 340–32 352.
+[83] L. Yang, B. Kang, Z. Huang, Z. Zhao, X. Xu, J. Feng, and H. Zhao,
+“Depth anything v2,” in Advances in Neural Information Processing
+Systems, 2024, pp. 21 875–21 911.
+[84] P. Anderson, A. Chang, D. S. Chaplot, A. Dosovitskiy, S. Gupta,
+V. Koltun, J. Kosecka, J. Malik, R. Mottaghi, M. Savva et al., “On evalu-
+ation of embodied navigation agents,” arXiv preprint arXiv:1807.06757,
+2018.
+[85] S. F. Bhat, R. Birkl, D. Wofk, P. Wonka, and M. M¨uller, “Zoedepth:
+Zero-shot transfer by combining relative and metric depth,” arXiv
+preprint arXiv:2302.12288, 2023.
+
+
+--- PDF PAGE 16 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+16
+Fig. 10: Navigation visualization of NavGPT-CE for the same episode as shown in Figure 8.
+Observation
+Superpixel
+CVM
+Instruction: Go towards the plant then turn right, walk along the wall and stop near the world cup trophy.
+Object constraint: plant
+Direction constraint: right
+Location constraint: wall
+Destination: world cup trophy
+Start: look around
+Third-Person
+ View
+t=12
+t=32
+t=67
+t=91
+t=103
+Time
+Fig. 11: Visualization of the real-world navigation. The agent follows a complex instruction consisting
+of four sub-instructions and ultimately stops successfully near a World Cup Trophy.
+APPENDIX
+VISUALIZATION AND ANALYSIS OF NAVGPT-CE
+We analyze NavGPT-CE in detail and identify three main
+types of errors that contribute to its failures: waypoint predictor
+failure, LLM hallucination, and caption model inaccuracy. As
+shown in Figure 10, the agent initially follows the instructions
+correctly, but errors start to appear from step 30. At step
+30, the ground truth action was to move forward, and the
+LLM correctly identified this. However, the waypoint predictor
+failed to identify the navigable viewpoint, causing the agent to
+move to the right instead. At step 41, the LLM exhibits context
+inconsistency hallucination in summarizing observation de-
+scriptions. Specifically, the dining room is to the left, which is
+the correct direction, but the LLM incorrectly summarized it as
+being in front of the robot. Moreover, since the dining room to
+the left is too far away, the waypoint predictor failed to identify
+valid waypoints, leading the LLM to choose to go to the right
+instead. At step 55, the caption model describes the current
+panoramic observation as “a bathroom with a toilet and a sink.”
+However, the primary objects in the scene are stairs, and this
+incorrect caption ultimately misleads the agent. Our analysis
+reveals that NavGPT-CE relies solely on converting visual
+observations into text-based scene descriptions and historical
+summaries for navigation decisions, making it prone to errors
+when these descriptions are inaccurate.
+
+
+--- PDF PAGE 17 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+17
+Instruction: Walk out to the corridor, and stop in front of the poster.
+Depth 
+Anything V2
+ZoeDepth
+RGB
+RGB
+Depth
+Depth
+Value Map
+Value Map
+Narrow 
+pathway
+Fig. 12: Depth Anything V2 compares with ZoeDepth. As shown in the figure, Depth Anything V2 provides more accurate
+depth estimation, leading to a more precise value map, particularly in narrow spaces such as pathways. Consequently, Depth
+Anything V2 achieves a higher success rate than ZoeDepth in real-world experiments.
+Step 1
+Step 3
+Step 5
+Step 7
+Step 9
+Step 11
+Step 2
+Step 5
+Step 8
+Step 11
+Step 14
+Step 14
+CoW-OWL (Detector-based)
+CoW-CLIP-Grad (Gradient-based)
+Fig. 13: Visualization of the episode with the instruction “Go to the door.” Both CoW-OWL and CoW-CLIP-Grad navigate
+well initially. However, they become confused when approaching the door due to the presence of a refrigerator door nearby.
+
+
+--- PDF PAGE 18 ---
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021
+18
+[TASK DESCRIPTION]
+Parse a navigation instruction delimited by triple quotes and your task is to perform the following actions:
+1. Extract Destination: Understand the entire instruction and summarize a description of the destination. The description should be a 
+sentence containing landmark and room type. The description of the destination should not accurately describe the orientation and order. 
+Here are examples about destination: "second room on the left" -> "room"(neglect order and direction); "between the bottom of the first 
+stair and the console table in the entry way" -> "console table near entry way"(simplify description); "in front of the railing about halfway 
+between the two upstairs rooms" -> "railing near two upstair rooms"
+2. Split instructions: Split the instruction into a series of sub-instructions according to the execution steps. Each sub-instruction contain 
+one landmark.
+3. Infer agent's state constraints: Infer the state constraints that the agent should satisfy for each sub-instruction. There're thee constraint 
+types: location constraints, direction constraints and object constraints. You need to select an appropriate constraint type and give the 
+corresponding constraint object. Direction constraint object has two types: left, right. Constraints can format as a tuple: (constraint type, 
+constraint object)
+4. Make a decision: Analyze the landmarks, actions, and directions in each sub-instruction to determine how the agent should act. For a 
+landmark, the agent has three options: approach, move away, or approach and then move away. For direction, the agent has three options: 
+turn left, turn right, or go forward
+[OUTPUT DEFINITION]
+Provide your answer in JSON format with the following details:
+1. use the following keys: destination, sub-instructions, state-constraints, decisions
+2. the value of destination is a string
+3. the value of sub-instructions is a list of all sub-instructions
+4. the value of state-constraints is a JSON. The key is index start from zero and the value is a list of all constraints, each constraint is a 
+tuple
+5. the value of decisions is a nested JSON. The first level JSON's key is index start from zero and it’s value is second level JONS with 
+keys: landmarks, directions. The value of landmarks is a list of tuples, each tuple contains (landmark, action). The value of directions is a 
+list of direction choice for each sub-instruction.
+[FEW-SHOT PROMPT]
+An Example:
+User: "Walk into the living room and keep walking straight past the living room. Then walk into the entrance under the balcony. Wait in 
+the entrance to the other room."
+You: {{"destination": "entrance to the other room under the balcony", "sub-instructions": ["Walk into the living room", "keep walking 
+straight past the living room", "walk into the entrance under the balcony", "wait in the entrance to the other room"], "state-constraints": 
+{{"0": [["location constraint", "living room"]], "1": [["location constraint", "living room"]], "2": [["location constraint", "balcony"], 
+["object constraint", "entrance"]], "3": [["location constraint", "other room"], ["object constraint", "entrance"]]}}, "decisions": {{"0": 
+{{"landmarks": [["living room", "approach"]], "directions": ["forward"]}}, "1": {{"landmarks": [["living room", "move away"]], 
+"directions": ["forward"]}}, "2": {{"landmarks": [["balcony", "approach"], ["entrance", "approach"]], "directions": ["forward"]}}, "3": 
+{{"landmarks": [["other room", "approach"], ["entrance", "approach"]], "directions": ["forward"]}}}}}}
+[KEY CONTENT REMINDER]
+ATTENTION:
+1. constraint type: location constraint is for room type, object constraint is for object type, directions constraint. Don't confuse object 
+constraint with location constraint!
+2. landmark choice: approach, move away, approach then move away
+3. direction choice: left, right, forward
+4. The landmark and constraint object should not accurately describe the orientation and order. Here are examples about landmark: 
+"second step from the top" -> "step"(neglect order and position relation); "room directly ahead" -> "room"; "right bedroom door" -> 
+"bedroom door"
+Fig. 14: CA-Nav LLM prompts. The prompt consists of four parts, namely task description, output definition, few-shot prompt,
+and key content reminder.

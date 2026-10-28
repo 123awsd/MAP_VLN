@@ -1,0 +1,8 @@
+{
+  "number": 6,
+  "final": "figures/final/viewpoint_generation_en.pdf",
+  "source": "figures/source/fig06_viewpoint_generation",
+  "original_source": "画图/候选视角生成_新版",
+  "final_sha256": "af462721c2e1076d6b0cc89af27a5377b89468784eebe7bdb0c5ff237957d299",
+  "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+}

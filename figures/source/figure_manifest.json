@@ -1,0 +1,74 @@
+[
+  {
+    "number": 1,
+    "final": "figures/final/real_world_execution.png",
+    "source": "figures/source/fig01_real_world",
+    "original_source": "画图/主图/local_vggt/logicfly_no_fpv_tilted_figure",
+    "final_sha256": "48d388856858bcb95baebc434125985e37c99d4354d69bf6e21ce82f923c29a9",
+    "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+  },
+  {
+    "number": 2,
+    "final": "figures/final/system_overview.png",
+    "source": "figures/source/fig02_system_overview",
+    "original_source": "PRE_MAP_VLN/paper/system_overview",
+    "final_sha256": "2a6ea6231372936dc2f5d057740e5a9ec16fc26eaeb6e53cae3d23f8dbad0e71",
+    "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+  },
+  {
+    "number": 3,
+    "final": "figures/final/stage1_mapping_pipeline.jpg",
+    "source": "figures/source/fig03_mapping_pipeline",
+    "original_source": "素材处理后/第一阶段/阶段对照",
+    "final_sha256": "a2fbcfcf326b4c64b5de3315acea979d968062f83affc07911e1d72e15fc4f63",
+    "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+  },
+  {
+    "number": 4,
+    "final": "figures/final/room_segmentation_en.pdf",
+    "source": "figures/source/fig04_room_partitioning",
+    "original_source": "画图/房间分割",
+    "final_sha256": "230c426ba56cfeb0bf846fa83c7fce95095858d0632789ddd02be4e4084f71ee",
+    "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+  },
+  {
+    "number": 5,
+    "final": "figures/final/conditional_task_graph.pdf",
+    "source": "figures/source/fig05_task_graph",
+    "original_source": "画图/任务图/CPTG_TaskGraph_Full_Reproducible",
+    "final_sha256": "d2cc71438a2707d4d3395c301ee1e50f03037f517be3d736e90eaa3cbbe6e2f2",
+    "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+  },
+  {
+    "number": 6,
+    "final": "figures/final/viewpoint_generation_en.pdf",
+    "source": "figures/source/fig06_viewpoint_generation",
+    "original_source": "画图/候选视角生成_新版",
+    "final_sha256": "af462721c2e1076d6b0cc89af27a5377b89468784eebe7bdb0c5ff237957d299",
+    "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+  },
+  {
+    "number": 7,
+    "final": "figures/final/joint_task_viewpoint_planning_en.pdf",
+    "source": "figures/source/fig07_joint_planning",
+    "original_source": "画图/联合任务视角规划",
+    "final_sha256": "d596f54547e3281e215106ec9165de7e8affb61194c9ae437b3f24dd899efd7d",
+    "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+  },
+  {
+    "number": 8,
+    "final": "figures/final/semantic_recovery_en.pdf",
+    "source": "figures/source/fig08_semantic_recovery",
+    "original_source": "画图/语义恢复与地图更新/habitat_reference_draft/clear_rooms",
+    "final_sha256": "d1d14a9b3800a522acc7e8002378a9a9e972da3f2b0ebff9f00141eb9c6946a2",
+    "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+  },
+  {
+    "number": 9,
+    "final": "figures/final/habitat_long_instruction_en.png",
+    "source": "figures/source/fig09_habitat_execution",
+    "original_source": "画图/Habitat长指令执行",
+    "final_sha256": "a5f7d728f67538dc64b96f4b839ad6188cff3b124a59e351784f5a39612125af",
+    "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+  }
+]

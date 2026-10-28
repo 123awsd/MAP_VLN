@@ -1,0 +1,18 @@
+{
+  "official_scene_page": "https://aihabitat.org/datasets/hm3d/00337-CFVBbU9Rsyb/index.html",
+  "official_dollhouse": "https://habitatwebsite.s3.amazonaws.com/website-visualization/00337-CFVBbU9Rsyb/dollhouse_highres.png",
+  "source_run": "outputs/stage2_3d/tasks/00337_all_found_showcase_v1_20260830",
+  "registration_note": "The official dollhouse and FALCON map are linked representations of the same scene; no pixel-level registration is claimed.",
+  "paper_size_inches": [
+    7.16,
+    3.78
+  ],
+  "scene_scope": "Official dollhouse shows full-scene context; recorded map and execution show L1-L3.",
+  "facts": {
+    "tasks": 4,
+    "feasible_views": 16,
+    "path_m": 48.1060055564,
+    "found": 4,
+    "active_recovery_executed": false
+  }
+}

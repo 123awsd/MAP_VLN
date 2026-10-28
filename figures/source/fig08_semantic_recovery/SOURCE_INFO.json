@@ -1,0 +1,8 @@
+{
+  "number": 8,
+  "final": "figures/final/semantic_recovery_en.pdf",
+  "source": "figures/source/fig08_semantic_recovery",
+  "original_source": "画图/语义恢复与地图更新/habitat_reference_draft/clear_rooms",
+  "final_sha256": "d1d14a9b3800a522acc7e8002378a9a9e972da3f2b0ebff9f00141eb9c6946a2",
+  "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+}

@@ -1,0 +1,63 @@
+{
+  "source_run": "outputs/stage2_3d/tasks/00337_all_found_showcase_v1_20260830",
+  "instruction": "朋友快到了，帮我看看二楼厨房台面附近的微波炉、二楼客厅沙发旁的茶几和三楼客厅的电视是不是都还在原位，再顺路确认一下二楼卫生间马桶旁还有没有厕纸，先后顺序你自己安排。",
+  "qwen_task_count": 4,
+  "qwen_precedence_constraint_count": 0,
+  "conditional_rule_count": 0,
+  "feasible_viewpoint_count": 16,
+  "executed_order": [
+    "check_microwave_kitchen_l2",
+    "check_toilet_paper_bath_l2",
+    "check_coffee_table_living_l2",
+    "check_tv_living_l3"
+  ],
+  "path_length_m": 48.106005556437374,
+  "elapsed_wall_s": 13.032660698983818,
+  "status": "complete",
+  "detections": {
+    "check_microwave_kitchen_l2": {
+      "label": "microwave",
+      "score": 0.798187,
+      "bbox_xyxy": [
+        387.66,
+        136.52,
+        447.34,
+        178.48
+      ],
+      "rgb": "frames/terminal_00_check_microwave_kitchen_l2.jpg"
+    },
+    "check_toilet_paper_bath_l2": {
+      "label": "toilet paper",
+      "score": 0.42919,
+      "bbox_xyxy": [
+        433.44,
+        236.48,
+        476.56,
+        296.02
+      ],
+      "rgb": "frames/terminal_01_check_toilet_paper_bath_l2.jpg"
+    },
+    "check_coffee_table_living_l2": {
+      "label": "coffee table",
+      "score": 0.253861,
+      "bbox_xyxy": [
+        130.0,
+        285.47,
+        565.0,
+        479.53
+      ],
+      "rgb": "frames/terminal_02_check_coffee_table_living_l2.jpg"
+    },
+    "check_tv_living_l3": {
+      "label": "television",
+      "score": 0.817574,
+      "bbox_xyxy": [
+        207.5,
+        179.53,
+        437.5,
+        319.22
+      ],
+      "rgb": "frames/terminal_03_check_tv_living_l3.jpg"
+    }
+  }
+}

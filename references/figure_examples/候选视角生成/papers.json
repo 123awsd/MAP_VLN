@@ -1,0 +1,54 @@
+[
+  {
+    "id": "REVERIE",
+    "url": "https://openaccess.thecvf.com/content_CVPR_2020/papers/Qi_REVERIE_Remote_Embodied_Visual_Referring_Expression_in_Real_Indoor_Environments_CVPR_2020_paper.pdf"
+  },
+  {
+    "id": "SOON",
+    "url": "https://openaccess.thecvf.com/content/CVPR2021/papers/Zhu_SOON_Scenario_Oriented_Object_Navigation_With_Graph-Based_Exploration_CVPR_2021_paper.pdf"
+  },
+  {
+    "id": "ConceptGraphs",
+    "url": "https://arxiv.org/pdf/2309.16650"
+  },
+  {
+    "id": "VLMaps",
+    "url": "https://arxiv.org/pdf/2210.05714"
+  },
+  {
+    "id": "VoxPoser",
+    "url": "https://proceedings.mlr.press/v229/huang23b/huang23b.pdf"
+  },
+  {
+    "id": "FUEL",
+    "url": "https://arxiv.org/pdf/2010.11561"
+  },
+  {
+    "id": "SEE-2018",
+    "url": "https://arxiv.org/pdf/1802.08617"
+  },
+  {
+    "id": "SEE-Journal",
+    "url": "https://arxiv.org/pdf/2207.13684"
+  },
+  {
+    "id": "BubbleExplorer",
+    "url": "https://arxiv.org/pdf/2304.00852"
+  },
+  {
+    "id": "MA-SCVP",
+    "url": "https://arxiv.org/pdf/2304.00910"
+  },
+  {
+    "id": "ConstrainedSpaces",
+    "url": "https://arxiv.org/pdf/2306.06969"
+  },
+  {
+    "id": "FALCON",
+    "url": "https://arxiv.org/pdf/2407.00577"
+  },
+  {
+    "id": "SCONE",
+    "url": "https://arxiv.org/pdf/2208.10449"
+  }
+]

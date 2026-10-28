@@ -1,0 +1,1156 @@
+
+--- PDF PAGE 1 ---
+IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. FEBRUARY, 2025
+1
+Dynamic Open-Vocabulary 3D Scene Graphs for
+Long-term Language-Guided Mobile Manipulation
+Zhijie Yan1, Shufei Li2, Zuoxu Wang1, Lixiu Wu3, Han Wang4, Jun Zhu4, Lijiang Chen4, Jihong Liu1
+Unlimited Start Point
+A* for path planning
+start point
+target point
+Task 1-1: Go To Pen
+Please move the pen on the cabinet into the 
+green container and then give me the keys.
+Task Planning
+Large Language Model
+Task 1-1
+Go To
+Object1: pen, object2: cabinet
+Task 1-2
+Pick Up
+Object1: pen
+Task 1-3
+Go To
+Object1: green container, object2: None
+Task 1-4
+Place
+Object1: pen, object2: green container
+Task 2-1
+Go To
+Object1: keys, object2: None
+Task 2-2
+Pick Up
+Object1: keys
+Task 2-3
+Go To
+Object1: back, object2: None
+Recognize-Anything + 
+Grounding-DINO + 
+Segment Anything-2 +  CLIP 
+Perception
+Initial State
+After modified
+pen
+keys
+The environment has been manually modified.
+Navigation / Manipulation
+High-level  Scene Graph
+Floor
+cabinet
+keys
+Green 
+container
+table
+pen
+handle
+Low-level Semantic memory
+Memory
+Update in 
+each subtask
+Task 1-2: Pick up the pen on the cabinet
+Grounding DINO +
+SAM-2+
+AnyGrasp
+Place point
+Grounding DINO +
+SAM-2
+Task 1-4: Place the pen in the green container
+Task 2-2: Pick up the keys
+on
+on
+on
+on
+belong
+on
+Fig. 1. Overview of Our DovSG System. DovSG is a mobile robotic system designed to perform long-term tasks in real-world environments. It can detect
+changes in the scene during task execution, ensuring that subsequent subtasks are completed correctly. The system consists of five main components: perception,
+memory, task planning, navigation, and manipulation. The memory module includes a lower-level semantic memory and a higher-level scene graph, both of
+which are continuously updated as the robot explores the environment. This enables the robot to promptly detect manual changes (e.g., keys being moved from
+cabinet to table) and make the necessary adjustments for subsequent tasks (such as correctly executing Task 2-2).
+Abstract—Enabling mobile robots to perform long-term tasks
+in dynamic real-world environments is a formidable challenge,
+especially when the environment changes frequently due to human-
+robot interactions or the robot’s own actions. Traditional methods
+typically assume static scenes, which limits their applicability
+in the continuously changing real world. To overcome these
+limitations, we present DovSG, a novel mobile manipulation
+framework that leverages dynamic open-vocabulary 3D scene
+graphs and a language-guided task planning module for long-
+term task execution. DovSG takes RGB-D sequences as input and
+utilizes vision-language models (VLMs) for object detection to
+obtain high-level object semantic features. Based on the segmented
+Manuscript received: October 16, 2024; Revised January 2, 2025; Accepted
+February 4, 2025.
+This paper was recommended for publication by Editor Gentiane Venture
+upon evaluation of the Associate Editor and Reviewers’ comments.
+This work was supported by the National Natural Science Foundation of
+China (NSFC, Grant No. 52205244), the Ministry of Industry and Information
+Technology (MIIT) Key Laboratory of Intelligent Manufacturing for High-end
+Aerospace Products, and the Beijing Key Laboratory of Digital Design and
+Manufacturing.
+Corresponding author: Zuoxu Wang, e-mail: zuoxu_wang@buaa.edu.cn.
+1Zhijie Yan, Zuoxu Wang and Jihong Liu are with School of Mechanical
+Engineering and Automation, Beihang University, Beijing 100191, China.
+2Shufei Li is with Department of Systems Engineering, City University of
+Hong Kong, Hong Kong SAR 518057, China.
+3Lixiu Wu is with School of Information Engineering, Minzu University of
+China, Beijing 100081, China.
+4Han Wang, Jun Zhu and Lijiang Chen are with Afanti Tech LLC, Beijing
+100192, China.
+Digital Object Identifier (DOI): see top of this page.
+objects, a structured 3D scene graph is generated for low-level
+spatial relationships. Furthermore, an efficient mechanism for
+locally updating the scene graph, allows the robot to adjust parts
+of the graph dynamically during interactions without the need for
+full scene reconstruction. This mechanism is particularly valuable
+in dynamic environments, enabling the robot to continually adapt
+to scene changes and effectively support the execution of long-
+term tasks. We validated our system in real-world environments
+with varying degrees of manual modifications, demonstrating its
+effectiveness and superior performance in long-term tasks. Our
+project page is available at: https://bjhyzj.github.io/dovsg-web.
+Index Terms—3D scene graph, Long-term Tasks, Mobile
+Manipulation, Open vocabulary
+I. INTRODUCTION
+M
+OBILE manipulation in real-world environments is
+increasingly expected to perform complex, long-term
+tasks that require adaptability and resilience to changes. These
+dynamic environments are characterized by frequent alterations
+caused by human activities, robot interactions, or the inherent
+variability of the surroundings. Traditional robotic systems
+often fall short in such settings because they typically rely on
+the assumption of a static or minimally changing environment
+[1], [2], [3], [4], [5]. This limitation restricts their applicability
+in real-world scenarios where adaptability is crucial.
+In this work, we enhance robotic capabilities by introducing a
+novel and practical robotic framework, the DovSG system. This
+arXiv:2410.11989v6  [cs.RO]  19 Mar 2025
+
+
+--- PDF PAGE 2 ---
+2
+IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. FEBRUARY, 2025
+framework comprises five key modules: perception, memory,
+task planning, navigation, and manipulation, as illustrated in
+Fig. 1. To address the challenge of scene perception, our per-
+ception module integrates advanced tools such as Recognize-
+Anything [6], Grounding DINO [7], Segment Anything-2 [8],
+and CLIP [9] to detect objects or components and extract their
+semantic features. In the memory module, each object within
+the scene is represented as a node characterized by geometric
+and semantic features, with the relationships between objects
+encoded in the graph’s edges. The module continuously updates
+object features and scene graphs by locally refining the areas
+where the robot interacts, preserving knowledge to support
+ongoing exploration and exploitation, while avoiding the need
+to reconstruct the entire scene and enabling more efficient
+adaptation to dynamic environments. Our task planning
+module uses the advanced large language models to decompose
+tasks into manageable subtasks. Then, the navigation and
+manipulation module are activated to execute the planned
+actions. In experiments, we deployed a mobile robot platform
+in multiple real-world indoor environments, conducting long-
+term task trials under varying degrees of manual environmental
+modifications. We demonstrated that DovSG can accurately
+update the 3D scene graph and perform excellently in long-
+term tasks and subtasks such as pick-up, place, and navigation.
+Our contributions are as follows:
+• We propose a novel robotic framework that integrates
+dynamic open-vocabulary 3D scene graphs with language-
+guided task planning, enabling accurate long-term task
+execution in dynamic and interactive environments.
+• We construct dynamic 3D scene graphs that capture rich
+object semantics and spatial relations, performing localized
+updates as the robot interacts with its environment, allow-
+ing it to adapt efficiently to incremental modifications.
+• We develop a task planning method that decomposes
+complex tasks into manageable subtasks, including pick-
+up, place, and navigation, enhancing the robot’s flexibility
+and scalability in long-term missions.
+• We implement DovSG on real-world mobile robots and
+demonstrate its capabilities across dynamic environments,
+showing excellent performance in both long-term tasks
+and subtasks like navigation and manipulation.
+II. RELATED WORKS
+1) 3D Scene Representations for Perception: 3D scene
+representation in robotics often follows two main approaches:
+using foundation models to create 3D structures [10], [11],
+[12], or combining 2D image and vision-language models
+[7], [9], [8], [6], [13] to connect with the 3D world, showing
+impressive results in open-vocabulary tasks [14], [15], enabling
+language-guided object grounding [12], [3], [16], [14] and 3D
+reasoning [17], [18], [19]. However, dense semantic features
+for each point are redundant, memory-intensive, and not
+easily decomposable, limiting their use in dynamic robotics
+applications.
+2) 3D scene graphs for memory: 3D scene graphs use
+a hierarchical graph structure to represent objects as nodes
+and their relationships as edges within a scene [20]. This
+approach efficiently stores semantic information in robot
+memory, even in large and dynamic environments. Recent
+methods like ConceptGraphs [14] and HOV-SG [21] create
+more compact and efficient scene graphs by merging features
+of the same object across multiple views, thereby reducing
+memory redundancy. However, these methods often assume
+static environments and overlook scene updates during inter-
+active robot manipulations. RoboEXP [15] addresses this by
+encoding both spatial relationships and logical associations
+that reflect the effects of robot actions, enabling the discovery
+of objects through interaction and supporting dynamic scene
+updates. Building on this, we have applied these concepts
+to mobile robots, allowing them to rapidly update memory
+and adjust the 3D scene graph in real-time during dynamic
+interactions with environments.
+3) Large Language Models for Planning: Large language
+models (LLMs) [22], [23] and VLMs demonstrate significant
+potential for zero-shot planning in robotics [24], [25]. These
+models have been used to generate trajectories and plan
+manipulations, improving robot adaptability. Integrating LLMs
+with 3D scene graphs offers further opportunities for task
+planning. In DovSG, we leverage GPT-4 to decompose tasks
+into subtasks that can be executed through graph memory,
+enabling robots to handle complex tasks flexibly and adaptively.
+4) Indoor Visual Localization for Interaction: Robot in-
+teraction relies on accurate tracking of 6-DoF poses using
+maps constructed from image sequences. Visual relocalization
+techniques can be categorized into structure-based and learning-
+based methods. Structure-based approaches employ local
+descriptors to match 2D pixels to 3D scene coordinates and
+use PnP algorithms for pose recovery, supported by image
+retrieval and advanced matching techniques like LightGlue
+[26] or MatchFormer [27]. While effective for large-scale
+environments, they struggle in small, static indoor settings
+due to expanding image and feature databases. Learning-based
+methods, such as ACE [28] and DSAC* [29], predict poses
+via direct regression, enabling rapid end-to-end optimization
+but with limited precision due to reliance on approximate
+pose estimates. These methods also require scene-specific
+training, which limits scalability. To achieve fast and accurate
+relocalization in indoor environments, we combine the strengths
+of both approaches. We use ACE to estimate an initial pose
+from 2D images, employ LightGlue to match the most similar
+historical 2D images and their poses, and then further refine
+the pose by iterative closest point (ICP [30]).
+III. METHOD
+DovSG enables mobile robots to perform long-term tasks
+in indoor environments by constructing dynamic 3D scene
+graphs and using large language models for task planning. The
+process starts with scanning the environment using an RGB-
+D camera to capture images, followed by open-vocabulary
+3D object mapping that detects, associates, and fuses objects
+into a 3D representation. From these, a 3D scene graph is
+generated, capturing object relationships and continuously
+updated when the environment changes. Task planning is
+performed through language-guided decomposition of long-
+
+
+--- PDF PAGE 3 ---
+YAN et al.: DYNAMIC OPEN-VOCABULARY 3D SCENE GRAPHS FOR LONG-TERM LANGUAGE-GUIDED MOBILE MANIPULATION
+3
+term tasks into subtasks, which are executed via navigation
+and manipulation modules.
+A. Home Scanning and Coordinate Transformation
+1) Home Scanning: Following [4], we captured a video
+of the room using an Intel Realsense D455 camera, resulting
+in a sequence of RGB-D images, It = I1, I2, . . . , It, It =
+⟨Irgb
+t , Idepth
+t
+⟩(color and depth), with t as the sequence length.
+The capture focused on both objects of interest and navigable
+surfaces, especially around objects and containers.
+2) Coordinate Transformation: After data collection, we
+used DROID-SLAM to estimate the camera poses throughout
+the sequence, as shown in Fig. 2 (top left). To achieve accurate
+pose estimation at true scale, we replaced DROID-SLAM’s
+depth prediction with actual depth data from the camera sensor,
+resulting in camera poses, Pdroid. In many SLAM algorithms
+[31], [32], [33], the first frame’s pose is used as the origin,
+making subsequent poses relative to it, which is often unsuitable
+for spatial relationships. To normalize the scene, we used the
+‘floor’ as a reference and processed each RGB frame with
+Grounding DINO and Segment Anything-2 to obtain a floor
+mask. Since the query only focused on the floor, this process
+was computationally efficient. Once we obtained the mask, we
+projected 2D pixels to a 3D point cloud. To align the scene
+relative to the detected floor, we applied RANSAC to fit a plane
+to the 3D floor points and computed a transformation matrix
+T floor, aligning the floor with the global z = 0 plane. Each pose
+in Pdroid was then transformed as: P = RxT floorPdroid, where
+Rx aligns the coordinate system to the x-axis. This yielded the
+final set of poses, P = {Ipose
+1
+, Ipose
+2
+, . . . , Ipose
+t
+}, with the floor
+properly aligned. By integrating P with the image sequence
+It, we obtained It = ⟨Irgb
+t , Idepth
+t
+, Ipose
+t
+⟩.
+B. Open-vocabulary 3D Object Mapping
+With the RGB-D sequences and camera poses, we proceed
+to construct an object-centric 3D representation from RGB-D
+observations It = {I1, I2, . . . , It} to objects Ot = {oj}, j ∈
+{1, ..., J} is all object length, each object oj is characterized by
+a 3D point cloud pcdoj, visual feature f rgb
+oj and text feature f text
+oj .
+This map is built incrementally, incorporating each incoming
+frame It into the existing object set Ot−1, by either adding to
+existing objects or instantiating new ones.
+1) Open-vocabuary 2D Segmentation: To maximize object
+recognition in the scene, we first apply the image tagging
+model Recognize-Anything [6] to each frame It, generating
+a set of object classes {ct,i}, i ∈{1, ..., M} detected in the
+image. We then use {ct,i}, i ∈{1, ..., M} as input to the 2D
+detector Grounding DINO to obtain object bounding boxes
+{bt,i}, i ∈{1, ..., M} . Finally, we refine these bounding boxes
+into object masks {mt,i}, i ∈{1, ..., M} using the advanced
+segmentation model Segment Anything-2. For each obtained 2D
+mask mt,i, we extract a cropped image based on its bounding
+box, as well as an isolated mask image without background,
+as illustrated in Fig. 2 (bottom-left). We then extract the visual
+features of each object using two mask-based images with CLIP,
+and fuse them using a weighted sum method, as described in
+HOV-SG [21]. This combines the CLIP features from both the
+cropped target image and the isolated mask image to generate
+a visual feature descriptor:
+f rgb
+t,i = Embed(Irgb
+t , bt,i, mt,i),
+(1)
+while the text descriptor is obtained by:
+f text
+t,i = Embed(ci,t),
+(2)
+each masked region is then projected into 3D, denoised using
+DBSCAN clustering with an adaptively computed ε parameter
+based on the sorted distances to the k-nearest neighbors, and
+transformed to the map frame, resulting in a point cloud pcdt,i,
+along with unit-normalized semantic feature f rgb
+t,i and f text
+t,i .
+2) Object Association: For every newly detected object
+⟨pcdt,i, f rgb
+t,i , f text
+t,i ⟩, we compute geometric and semantic sim-
+ilarity with respect to all objects ot-1,j = ⟨pcdoj, f rgb
+oj , f text
+oj , ⟩
+in the map that shares any partial geometric overlap. The
+geometric similarity:
+sgeo(i, j) = Nnrate(pcdt,i, pcdoj)
+(3)
+is defined as the ratio of the number of points in point cloud
+pcdt,i that have nearest neighbors in point cloud pcdoj, within
+a distance threshold of δnn, to the total number of points in
+pcdt,i. The visual and text similarity:
+svis(i, j) = (f rgb
+t,i )⊤f rgb
+oj /2 + 1/2
+(4)
+stext(i, j) = (f text
+t,i )⊤f text
+oj /2 + 1/2
+(5)
+is the normalized cosine distance between the corresponding
+visual descriptors. The overall similarity measure s(i, j) is a
+weighted sum of the individual similarity measures:
+s(i, j) = svis(i, j) · ωv + sgeo(i, j) · ωg + stext(i, j) · ωt,
+(6)
+where ωv + ωg + ωt = 1. We perform object association by
+a greedy assignment strategy where each new detection is
+matched with an existing object with the highest similarity
+score. If no match is found with a similarity higher than δsim,
+we initialize a new object.
+3) Object Fusion: If a detection ot-1,j is associated with a
+mapped object oj, we fuse the detection with the map. This is
+achieved by updating the object’s features as
+f rgb
+oj = (nojf rgb
+oj + f rgb
+t,i )/(noj + 1),
+(7)
+where noj is the number of detections that have been associated
+to oj so far; and updating the pointcloud as pcdt,i ∪pcdoj,
+followed by down-sampling to remove redundant points.
+C. 3D Scene Graph Generation
+DovSG constructs a 3D scene graph Gt = ⟨Ot, Et⟩, where
+and Et = {ek}, k ∈{1, ..., K} represent the sets of objects and
+edges, respectively. Given the set of 3D objects OT obtained
+from the previous step, we estimate their spatial relationships,
+i.e., the edges ET , to complete the 3D scene graph, as shown in
+Fig. 2 (column 3). Leveraging the transformation of the scene’s
+coordinate system from the previous steps—where the ground
+plane serves as the origin and the z-axis points upwards—we
+can efficiently extract the fundamental spatial relationships
+among the objects. While focusing on these relationships, we
+
+
+--- PDF PAGE 4 ---
+4
+IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. FEBRUARY, 2025
+3D objects
+3D Scene Graphs
+Color Mapping Based on CLIP Similarity
+Query: tangerine
+transform pose
+Pre-Frame detected object features and point clouds
+New object Association 
+Object Merging  
+/ Initialization
+Input RGB-D sequence
+DROID-SLAM
+Pose estimation
+trajectories
+Open-vocab
+Det/Seg
+open-vocab masks
+Data Preprocess
+on
+Alpha shape at XY-axis
+Intersection
+belong
+RANSAC-based plane fitting
+Delaunay Triangles 
+Inclusion
+2D Mask
+CLIP
++
+weighted Sum
+CLIP
+2D Segment
+Feature Fusion
+Filter outliers
+DBSCAN/KNN
+floor
+Nodes
+Part-level: handle
+Object-level: doll,  fork, 
+spoon,  pepper, potato, 
+carrot, cabinet, plate
+handle
+fork
+carrot
+potato
+pepper
+plate
+doll
+cabinet
+floor
+spoon
+inside
+Fig. 2. Initialization and Construction of 3D Scene Graphs. We first use the RGB-D-based DROID-SLAM [31] model to predict the pose of each frame in
+the scene. Then, we apply an advanced Open-Vocal segmentation model to segment regions in the RGB images, extract semantic feature vectors for each
+region, and project them onto a 3D point cloud. Based on semantic, geometric, and CLIP feature similarities, the same object captured from multiple views is
+gradually associated and fused, resulting in a series of 3D objects. Next, we infer the relationships between objects based on their spatial positions and generate
+edges connecting these objects, forming a scene graph. This scene graph provides a structured and comprehensive understanding of the scene, allowing efficient
+localization of target objects and enabling easy reconstruction and updating in dynamic environments, and supports task planning for large language models.
+first voxelize the point cloud pcdoj of each object oj in the
+scene. This reduces computation and storage by converting
+dense point clouds into sparse voxel grids, ensuring efficient
+scene updates in future tasks. We focus on three relationships:
+“on”, “belong”, and “inside”, as mentioned in RoboEXP [15], as
+these relationships are sufficient for downstream tasks. The “on”
+relationship denotes a stacking or positional hierarchy between
+objects, such as an apple being placed on a table. The “belong”
+relationship captures ownership or attachment between objects,
+like a refrigerator handle belonging to the refrigerator. Lastly,
+the “inside” relationship is particularly relevant during the
+robot’s exploration when it opens containers such as drawers
+or cabinets, revealing that certain objects are contained within
+others. It is important to note that for “inside” relationship,
+we limit our focus to small-scale containment between objects,
+as technically, every object in the scene could be considered
+“inside” the overall home environment.
+D. Dynamic Scene Adaptation
+In dynamic indoor interaction scenarios, the layout of the
+environment changes due to human activities or the robot’s
+task execution. These changes are often invisible to previous
+approaches [3], [21], [14], and in such environments, if the
+robot cannot dynamically update its memory, it will soon
+face failure. To address this issue, we have designed a simple
+memory update module that can quickly perform local updates
+to the memory based on new RGB-D observations captured
+by the robot, as shown in Fig. 3.
+1) Relocalization and refinement: Accurate re-localization is
+crucial for a mobile robot performing manipulations in dynamic
+environments to maintain an up-to-date scene graph. To ensure
+precise local updates to the voxelized map, we employ a
+multi-stage relocalization process that efficiently integrates
+new observations into the existing scene representation. We
+begin by training an ACE scene-specific regression MLP using
+memory ⟨Irgb
+i , Ipose
+i
+⟩, i ∈{1, ..., t} (see the top left corner
+in Fig.3). After the robot collects new RGB-D observations
+Ik for k
+∈{t + 1, ..., t + n}, where each observation
+Ik = ⟨Irgb
+k , Idepth
+k
+, Ic2b
+k ⟩includes the RGB image, depth image,
+and the camera-to-arm-base transformation, we proceed to
+estimate the robot’s pose within the existing map. Then,
+leveraging the trained ACE model, we predict a rough global
+pose Ipose
+k
+for each new RGB image Irgb
+k
+by utilizing the prior
+mapping data ⟨Irgb
+i , Ipose
+i
+⟩, where i ∈{1, ..., t}. While ACE
+provides a coarse alignment, its precision may not suffice
+for detailed scene updates. To refine these pose estimates,
+we perform local feature matching using LightGlue [26],
+identifying the historical image Irgb
+ˆk , ˆk ∈{1, ..., t} with the
+most feature correspondences to each new observation Irgb
+k .
+This step enhances the robustness of the pose estimation by
+anchoring it to the most similar view in the prior map. With the
+matched image pairs, we extract the corresponding point clouds
+from the RGB-D data and perform multi-scale colored iterative
+closest point (ICP) alignment. This refinement step minimizes
+both geometric and photometric discrepancies between the
+new observations and the existing map, yielding a precise
+transformation T icp
+k
+that aligns the new observations within
+the global coordinate frame. The refined poses Ipose
+k
+are then
+updated using the transformation Ipose
+k
+←T icpIpose
+k
+.
+2) Remove obsolete indices: This step is to identify and
+remove obsolete voxels from the memory map. We propose
+an efficient method that leverages new RGB-D observations
+to update the volumetric representation accordingly. Given the
+set of stored voxel indices, each associated with 3D positions
+
+
+--- PDF PAGE 5 ---
+YAN et al.: DYNAMIC OPEN-VOCABULARY 3D SCENE GRAPHS FOR LONG-TERM LANGUAGE-GUIDED MOBILE MANIPULATION
+5
+and color information, we process each new observation Ik as
+follows: (1) We transform the all voxel point cloud (points)
+{pcdoj}, j ∈{1, ..., J} into the current camera coordinate by:
+pcdcam
+oj = (Ipose
+k
+)−1pcdoj
+(8)
+(2) The transformed points are then projected onto the image
+plane using the camera’s intrinsic parameters to obtain pixel
+coordinates:
+uj, vj
+
+= Π(pcdcam
+oj ),
+(9)
+where Π denotes the projection function. We consider only
+points that project within the image boundaries and are in front
+of the camera, that is, zj > 0, zj is the z-axis coordinates of
+the pcdcam
+oj . (3) For each valid projected point i, we compute
+the depth and color difference:
+∆zi =
+Idepth
+k
+ui
+j, vi
+j
+
+−zi
+j
+ ,
+(10)
+∆ci =
+Irgb
+k
+ui
+j, vi
+j
+
+−ci
+j
+ ,
+(11)
+where cj is the stored color of pcdoj. (4) We define thresholds
+δz, δ′
+z, and δc for depth and color differences. A point i is
+marked for deletion if:
+point i is deleted if
+(
+∆zi > δz,
+∆zi > δ′
+z and ∆ci > δc.
+(12)
+3) Update low-level memory: After the above step, the
+local scene in the historical low-level memory will be updated
+to the latest state based on the visual information provided
+by the new RGB-D observations Ik, k ∈t + 1, . . . , t + n.
+We process Ik sequentially in the same way as described in
+Sec. III-B, and fuse it with the historical Ot to Ot+1. The set
+⟨Irgb
+k , Idepth
+k
+, Ipose
+k
+⟩, k ∈t + 1, . . . , t + n will also be updated
+into It+1, providing new reference viewpoints for the next
+re-localization to ensure long-term localization accuracy.
+4) Update high-Level memory: For updating the scene graph,
+we adopt a simple local sub-graph-based update strategy to
+avoid redundant global updates. Specifically, (1) We compare
+the historical object set Ot with the updated object set Ot+1
+to identify the objects that have been deleted or whose points
+have been changed, forming the set Oaffected. (2) Next, we
+examine the edges in Et to find the parent objects of all
+objects in Oaffected and the child objects of those parent objects.
+These related objects are also added to Oaffected, and all
+edges associated with Oaffected are removed from Et. (3) We
+then identify the objects in Oaffected that still exist in Ot+1
+and locate any newly added objects in Ot+1. Both these
+types of objects are added to the set Oneed_process for further
+processing. (4) For each object in Oneed_process, we recompute
+the spatial relationships as described in Sec. III-C. This involves
+determining the relevant edges e for each object, updating Et+1
+with the new connections and builds Gt+n.
+E. Language-guided Task planning
+Benefiting from the system’s long-term workability in indoor
+environments, we integrated the advanced large language model
+GPT-4o. Based on class-agnostic and highly extensible prompt
+text descriptions, we decompose long-term tasks described
+new observations overlap with 
+down sampled memory
+multi-view observations
+Scene-specific 
+Regression MLP
+Scene-agnostic 
+Regression MLP
+Training ACE
+Initial Scene
+poses
+After Manually Modified
+Local 
+Updates
+Pose Estimator
+LightGlue +ICP
+Fig. 3. Adaptation in interactions with manually modified scenes. (1) We
+train the scene-specific regression MLP of the ACE model using RGB images
+and their poses, making the process highly efficient. (2) After manual scene
+modification, multi-view observations allow rough global pose estimation via
+ACE, refined further using LightGlue and ICP. The new viewpoint’s point
+cloud closely aligns with the stored pose. (3) The bottom image shows accurate
+local updates to the scene based on observations from the new viewpoint.
+in natural language into multiple subtasks that the robot can
+easily adapt to. Each subtask output by GPT consists of an
+“action_name” and multiple “object_name”, which are directly
+extracted from the description and maintain the same level of
+abstraction as the described objects, ensuring that the original
+meaning is not distorted during task decomposition.
+F. Navigation
+1) Localization: Before initiating each navigation task,
+we first determine the robot’s precise pose as described in
+Sec. III-D1, establishing its position in the world coordinate
+system (start point). To locate the target object(s), we utilize
+CLIP to obtain embeddings of the specified object names. If
+only object A is specified, we compute its CLIP embedding
+and compare it with the embeddings of all objects in the scene
+using cosine similarity. The object with the highest similarity
+score is identified as the target location of A (as illustrated
+in the upper section of Fig. 2). For tasks involving a spatial
+relationship between two objects (e.g., “object A is on object
+B”), we compute CLIP embeddings for both A and B. We then
+compare these embeddings with those of the scene objects to
+obtain similarity scores. For each object, we select the top-k
+most similar scene objects (top-k A and top-k B, respectively).
+Next, we calculate the Euclidean distances between each pair
+of candidate locations from top-k A and top-k B. The pair with
+the shortest distance is deemed the most probable configuration,
+and the location of the corresponding A candidate is selected
+as the target point.
+2) Mobile control: Once the target location is determined,
+we use the A* [34] algorithm to generate a collision-free
+navigation path from the start point to the target point. The
+robot then follows this path using a PID controller to ensure
+accurate and smooth navigation.
+G. Manipulation
+Once the robot reaches the target location, we employ a
+pick-and-place strategy similar to Ok-Robot [3]. First, the robot
+
+
+--- PDF PAGE 6 ---
+6
+IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. FEBRUARY, 2025
+AnyGrasp
+2D Segmentation Filter
+crop
+Grasp proposals
+Heuristics grasp
+𝑤𝑤
+ℎ
+𝑙𝑙
+𝑤𝑤> 𝑙𝑙
+top down grasp
+𝑤𝑤
+ℎ
+𝑙𝑙
+𝑤𝑤< 𝑙𝑙
+top down grasp
+𝑤𝑤
+ℎ
+𝑙𝑙
+ℎ> 2 ∗max 𝑤𝑤, 𝑙𝑙
+horizontal grasp
+Fig. 4.
+Two proposed grasp strategies in DovSG. In the first row, we
+cropped the point cloud input into anyGrasp within a certain range around the
+target object, allowing anyGrasp to focus more on the target object without
+compromising the generation of collision-free grasps. Furthermore, we filtered
+the grasps based on translational and rotational costs, with the red grasps
+indicating the highest confidence. In the second row, we show our heuristic
+grasp strategy, which leverages the object’s bounding box information to rotate
+and select the most appropriate grasp orientation.
+retrieves the object’s 3D coordinates from semantic memory
+and points its camera at the target to capture RGBD images.
+Then, the robot performs either a “Pick up” or “Place”.
+1) Pick up: To focus the AnyGrasp model on the target
+object, we first preprocess the point cloud by cropping it
+to a region around the target object, based on its detected
+bounding box. This step refines the input for AnyGrasp,
+leading to more accurate and efficient grasp predictions. After
+generating candidate grasps, we apply cost-based filtering to
+select the best option. The robot executes the grasp with the
+highest confidence, leveraging additional segmentation from
+Grounding DINO and Segment Anything-2 for precise targeting.
+Furthermore, we introduce a heuristic grasp strategy that uses
+the object’s bounding box information to rotate and align the
+gripper for the most suitable grasp orientation, as shown in
+Fig. 4. This heuristic strategy is only activated when AnyGrasp
+can’t provide a suitable grasp, ensuring optimal interaction
+with the object’s geometry
+2) Place: We first obtain the point cloud pcda of the
+target object using Grounding DINO and Segment Anything-2
+(SAM2), as described in Sec. III-B1. This point cloud is then
+transformed into the robot’s base coordinate frame. Next, we
+compute the median coordinates xm and ym, and determine
+the drop height as follows:
+zmax = 0.1 + max (z | 0 ≤x ≤xm, |y −ym| < 0.1) ,
+(13)
+where (x, y, z) ∈pcda. A buffer of 0.1 is added to account
+for potential collisions. The robot executes the placement
+manipulation at the computed coordinates (xm, ym, zmax).
+IV. EXPERIMENTS
+In this section, We evaluate DovSG’s performance in
+dynamic, real-world environments to answer two key questions:
+(1) How well does our system adapt to changes by updating the
+dynamic scene graph? (2) How effectively does this facilitate
+the completion of consecutive tasks without manual resets?
+Initial State
+Minor Adjustment
+Positional Shift
+Appearance
+Manual Modifications to the Environment
+Fig. 5. Degrees of environmental modifications. The left column shows the
+initial state of the scene, while the two columns on the right represent the
+state of the scene after manual modifications.
+1) Robot Setups: We used a real-world setup with a
+UFACTORY xARM6 robotic arm on an Agilex Ranger Mini
+3 mobile base, equipped with a RealSense D455 camera for
+perception and a basket for item transport.
+2) Environment and Task Setups: To verify our method’s
+ability to enable robots to perform long-term tasks in dynamic
+environments, we designed an experiment in 4 real-world rooms.
+The experiment simulated dynamic environments through
+human interactions, which modified object positions, added
+new objects, or revealed hidden ones. Each experiment began
+with a 3D scene graph and involved two consecutive tasks.
+Before the first task, we manually adjusted objects related to
+the second task by changing their positions, adding new objects,
+or revealing hidden ones. These modifications were designed
+to be detectable during the execution of the first task. After
+completing the first task, instead of being repositioned to an
+initial start point, the robot continued to the next task from
+its current state. This setup simulated real-world scenarios
+with continuous environmental changes caused by human
+interference.
+To evaluate the robot’s ability to detect and adapt to
+environmental changes, we categorized the modifications to
+the objects in the second task into three levels (see Fig. 5):
+(1) Minor Adjustment: Slight position changes that remain
+detectable from the original location. For instance, a slightly
+moved object may still be visible within the robot’s field of view.
+(2) Appearance: Previously hidden objects become visible,
+such as items revealed by opening a drawer or placing a key
+on the table. These changes introduce new nodes into the scene
+graph. (3) Positional Shift: Significant relocations of objects
+render them undetectable from their original positions, altering
+their spatial relationships with other objects in the scene graph.
+Overall, for each method, each level of modification was
+tested through 20 long-term tasks per room across 4 rooms,
+resulting in a total of 80 trials per modification type. With
+three modification levels, each method was subjected to 240
+long-term task experiments, in which objects or their positions
+were randomized in every trial.
+3) Baselines: To demonstrate our approach’s adaptability
+to changing environments and the effectiveness of scene
+graph prediction, we evaluated scene changes and scene graph
+predictions. Using GPT-4o as the base model, enhanced with
+
+
+--- PDF PAGE 7 ---
+YAN et al.: DYNAMIC OPEN-VOCABULARY 3D SCENE GRAPHS FOR LONG-TERM LANGUAGE-GUIDED MOBILE MANIPULATION
+7
+TABLE I
+QUANTITATIVE RESULTS ON DYNAMIC SCENE ADAPTATION AND SCENE
+GRAPH GENERATION.
+Task
+Minor Adjustment
+Appearance
+Positional Shift
+Metrics
+GPT-4o
+Ours
+GPT-4o
+Ours
+GPT-4o
+Ours
+SCDA
+41.44%
+95.37%
+64.25%
+93.22%
+66.35%
+94.23%
+SGA
+54.60%
+88.75%
+52.25%
+84.86%
+46.18%
+83.72%
+chain-of-thought (CoT) reasoning [35], similar to the method
+proposed by Jiang et al. [15], the model takes RGB observations
+from the robot, matches them to the most similar image in
+memory, detects differences, and predicts the scene graph based
+on the new RGB observation. For long-term task execution, we
+implemented Ok-Robot [3] on our mobile robot as a comparison
+method. Additionally, we compared our approach with Ok-
+Robot and ConceptGraphs [14] in terms of memory usage and
+scene update time.
+TABLE II
+SUCCESS RATE OF LONG-TERM TASKS AND SUBTASKS
+Task
+Method
+Minor Adjustment
+Appearance
+Positional Shift
+Total(%)
+Pick up
+Ok-Robot
+84 / 110
+61 / 92
+59 / 87
+70.58%
+Ours
+111 / 137
+111 / 136
+108 / 133
+81.28%
+Place
+Ok-Robot
+53 / 64
+40 / 51
+42 / 51
+81.32%
+Ours
+80 / 93
+83 / 95
+74 / 85
+86.81%
+Navigation
+Ok-Robot
+179 / 210
+146 / 184
+137 / 180
+80.48%
+Ours
+228 / 236
+239 / 254
+224 / 245
+94.01%
+Long-term
+Ok-Robot
+12 / 80
+0 / 80
+0 / 80
+5.00%
+Ours
+33 / 80
+28 / 80
+23 / 80
+35.00%
+4) Evaluation: To thoroughly evaluate DovSG’s adaptability
+to dynamic environments and its effectiveness in long-term
+tasks, we involved human evaluators in modifying the envi-
+ronment, constructing ground truth (GT) scene graphs, and
+determining task execution success. Our evaluation focuses
+on three key aspects: Dynamic Scene Adaptation and Scene
+Graph Generation: We recorded RGB observations during
+the robot’s task execution and compared DovSG’s perfor-
+mance with baseline methods in detecting scene changes and
+generating scene graphs. Long-Term Tasks Evaluation: In
+addition to assessing the overall success rate of long-term
+tasks, we evaluated the success rates of individual subtasks such
+as picking, placing, and navigation. This detailed evaluation
+provides a comprehensive analysis of the effectiveness of our
+method across different components of task execution. The
+three main metrics used for evaluation are as follows: (1)
+Scene Change Detection Accuracy (SCDA): This metric
+measures the accuracy of detecting changes in the observed
+scene and matching them to the corresponding memory-stored
+RGB information. (2) Scene Graph Accuracy (SGA): This
+metric evaluates whether the generated scene graph matches the
+GT scene graph and only recognizes three types of relations:
+“on”, “belong”, and “inside”. If the final scene graph perfectly
+matches the GT version, the experiment is considered successful
+and assigned a score of 1, otherwise 0. (3) Task Success Rate:
+This metric represents the overall task completion success rate.
+For long-term tasks, success is only counted if all subtasks are
+completed successfully.
+5) Results: As shown in Tab. I, in the SCDA evaluation,
+GPT-4o often struggles with inconsistencies between the
+scope of historical observations and new observations, which
+introduces a significant amount of noise in the responses,
+leading to poor performance. This inconsistency also makes
+accurate detection under “Minor Adjustment” scenarios very
+challenging. In contrast, DovSG, supported by precise re-
+localization, can accurately identify the voxel index where
+changes have occurred in the scene, significantly outperforming
+the baseline. Specifically, in “Minor Adjustment” scenarios,
+DovSG exceeds the baseline by nearly 54%, primarily because
+GPT-4o struggles to recognize smaller positional changes.
+Additionally, in “Appearance” and “Positional Shift” scenarios,
+DovSG achieves a scene change recognition success rate
+approximately 28% higher than the GPT-4o. In the SGA
+evaluation, both approaches generate scene graphs based on
+new observations, with SGA accuracy in “Minor Adjustment”
+scenarios being higher than in “Appearance” and “Position
+Shift” scenarios. The main issue with our method arises when
+the same object is decomposed into multiple nodes, affecting
+the scene graph’s accuracy. On the other hand, GPT-4o struggles
+to accurately recognize relationships or redundantly defines
+objects, leading to erroneous results.
+In Tab. II, we have the fellow observations: (1) In the
+“Minor Adjustment” environment, although the object is slightly
+moved, it remains within the robot’s field of view. This makes
+it highly likely for the robot to navigate near the target,
+resulting in a significantly higher success rate compared to
+“Appearance” and “Positional Shift” (in 80 trials, it achieved 5
+and 10 more successes, respectively). In the “Positional Shift”
+scenario, the residual effect of CLIP features can occasionally
+mislead the robot into navigating toward the object’s historical
+location, ultimately causing navigation failure. In contrast, for
+“Appearance”, where a new object emerges, the robot does not
+face the challenge of misjudging the original object’s position,
+generally leading to a higher success rate than “Positional
+Shift” (with 5 more successes out of 80 trials). (2) DovSG
+demonstrates significantly enhanced manipulation capabilities
+over Ok-Robot. For the "Pick up" task, compared to Ok-Robot,
+DovSG employs two proposed grasp strategies that focus
+specifically on the target object. By optimizing the selection of
+grasp candidates and integrating a heuristic grasping method,
+DovSG reduces environmental interference and ensures the
+robot selects the optimal grasp. This results in a 10.7% higher
+pick-up success rate than Ok-Robot, which relies solely on
+AnyGrasp. Regarding “Place” task, DovSG utilizes a lower
+placement position and an inclined placement method (see our
+project page for details), achieving an overall success rate that
+is 5.49% higher than Ok-Robot. (3) In dynamic environments,
+DovSG significantly outperforms Ok-Robot (which assumes
+a static scene) in long-term tasks, thanks to its ability to
+adapt to scene changes. Although Ok-Robot can occasionally
+succeed in locating the correct object under minor changes (e.g.,
+“Minor Adjustment”), it struggles with larger modifications
+such as “Appearance” or “Positional Shift” because it cannot
+partially update its scene representation—making success in
+these scenarios nearly impossible. As a result, Ok-Robot’s
+success rate for long-term tasks in dynamic environments is
+approximately 30% lower than DovSG.
+Tab. III further demonstrates the memory consumption
+required to store memory at a 1 cm resolution and the
+update times for DovSG, Ok-Robot, and ConceptGraphs after
+
+
+--- PDF PAGE 8 ---
+8
+IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. FEBRUARY, 2025
+TABLE III
+EFFIECIENCY COMPARISON.
+Method (m2)
+Memory (GB)↓
+Time (min)↓
+Ok-Robot
+2
+20
+ConceptGraphs
+0.15
+27
+Ours
+0.15
+1
+processing 1200 frames of RGBD data within a 40 m2 scene.
+It is important to note that since Ok-Robot and ConceptGraphs
+cannot perform partial updates, the table only presents the time
+required for a complete scene update. The results show that
+Ok-Robot consumes approximately 13 times more memory
+than DovSG and has update times 20 times longer. While
+ConceptGraphs and DovSG have similar memory usage due
+to both using 3D scene graphs, DovSG’s ability to perform
+local updates allows it to achieve update times 27 times faster
+than ConceptGraphs.
+V. LIMITATION AND FUTURE WORK
+Limitation: The performance of DovSG’s visual relocal-
+ization depends on the presence of distinctive visual cues
+(e.g., textures, edges, objects) for key point matching. In
+environments with sparse, minimal, or repetitive features,
+the system may struggle to extract enough distinctive points,
+impacting localization accuracy.
+Future work: Exploring real-time precise localization through
+multi-sensor fusion, efficient memory update mechanisms, and
+developing lightweight methods for scene representation is
+crucial. Additionally, enabling efficient collaboration between
+mobile robots and manipulators will be key to making mobile
+manipulation more practical in real-world scenarios.
+VI. CONCLUSION
+In this paper, we introduce DovSG, an innovative framework
+designed to enable mobile robots to perform long-term tasks
+in dynamic environments by continuously local updates of 3D
+scene graphs. DovSG enables the robot to adapt to changes
+caused by human interaction or by the robot’s own task
+execution. These capabilities ensure the precise execution of
+long-term tasks without being affected by cumulative temporal
+errors. By evaluating long-term tasks and subtasks such as
+pickup, place, and navigation, our results highlight the robust-
+ness and effectiveness of DovSG in handling the complexity
+of dynamic real-world scenes. Compared to methods that
+assume static environments and cannot adjust to scene changes,
+DovSG achieves a 30% higher success rate in long-term tasks,
+accelerates updates by up to 27 times in typical room scenarios,
+and reduces memory consumption by a factor of 13.
+REFERENCES
+[1] A. Brohan, N. Brown, J. Carbajal, and et al., “Rt-2: Vision-language-
+action models transfer web knowledge to robotic control,” 2023.
+[2] D. Driess, F. Xia, M. S. M. Sajjadi, and et al., “Palm-e: An embodied
+multimodal language model,” in arXiv preprint arXiv:2303.03378, 2023.
+[3] P. Liu, Y. Orru, C. Paxton, N. M. M. Shafiullah, and L. Pinto, “Ok-robot:
+What really matters in integrating open-knowledge models for robotics,”
+arXiv preprint arXiv:2401.12202, 2024.
+[4] T. Gilles, S. Sabatini, and et al., “Gohome: Graph-oriented heatmap
+output for future motion estimation,” in 2022 International Conference
+on Robotics and Automation (ICRA).
+IEEE, 2022, pp. 9107–9114.
+[5] Z. Wang, X. Liang, M. Li, and et al., “Towards cognitive intelligence-
+enabled product design: The evolution, state-of-the-art, and future of
+ai-enabled product design,” Journal of Industrial Information Integration,
+vol. 43, p. 100759, 2025.
+[6] Y. Zhang, X. Huang, J. Ma, and et al., “Recognize anything: A strong
+image tagging model,” arXiv preprint arXiv:2306.03514, 2023.
+[7] S. Liu, Z. Zeng, T. Ren, and et al., “Grounding dino: Marrying dino
+with grounded pre-training for open-set object detection,” 2024.
+[8] N. Ravi, V. Gabeur, Y.-T. Hu, and et al., “Sam 2: Segment anything in
+images and videos,” 2024.
+[9] A. Radford, J. W. Kim, C. Hallacy, and et al., “Learning transferable
+visual models from natural language supervision,” 2021.
+[10] W. Shen, G. Yang, A. Yu, J. Wong, L. P. Kaelbling, and P. Isola, “Distilled
+feature fields enable few-shot language-guided manipulation,” 2023.
+[11] J. Kerr, C. M. Kim, K. Goldberg, A. Kanazawa, and M. Tancik, “Lerf:
+Language embedded radiance fields,” 2023.
+[12] Y. Zheng, X. Chen, Y. Zheng, and et al., “Gaussiangrasper: 3d language
+gaussian splatting for open-vocabulary robotic grasping,” 2024.
+[13] Z. Yan, Z. Wang, S. Li, and et al., “Manufvissgg: A vision-language-
+model approach for cognitive scene graph generation in manufacturing
+systems,” in 2024 IEEE 20th International Conference on Automation
+Science and Engineering (CASE).
+IEEE, 2024, pp. 1632–1637.
+[14] Q. Gu, A. Kuwajerwala, S. Morin, and et al., “Conceptgraphs: Open-
+vocabulary 3d scene graphs for perception and planning,” 2023.
+[15] H. Jiang, B. Huang, and et al., “Roboexp: Action-conditioned scene
+graph via interactive exploration for robotic manipulation,” 2024.
+[16] P. Liu, Z. Guo, M. Warke, and et al., “Dynamem: Online dynamic
+spatio-semantic memory for open world mobile manipulation,” 2024.
+[17] S. Peng, K. Genova, C. M. Jiang, A. Tagliasacchi, M. Pollefeys,
+and T. Funkhouser, “Openscene: 3d scene understanding with open
+vocabularies,” 2023.
+[18] S. Li, P. Zheng, J. Fan, and L. Wang, “Toward proactive human–
+robot collaborative assembly: A multimodal transfer-learning-enabled
+action prediction approach,” IEEE Transactions on Industrial Electronics,
+vol. 69, no. 8, pp. 8579–8588, 2021.
+[19] S. Li, P. Zheng, S. Liu, and et al., “Proactive human–robot collaboration:
+Mutual-cognitive, predictable, and self-organising perspectives,” Robotics
+and Computer-Integrated Manufacturing, vol. 81, p. 102510, 2023.
+[20] R. Wu, K. Xu, C. Liu, N. Zhuang, and Y. Mu, “Localize, assemble,
+and predicate: Contextual object proposal embedding for visual relation
+detection,” in AAAI, vol. 34, no. 07, 2020, pp. 12 297–12 304.
+[21] A. Werby, C. Huang, and et al., “Hierarchical Open-Vocabulary 3D Scene
+Graphs for Language-Grounded Robot Navigation,” in Proceedings of
+Robotics: Science and Systems, Delft, Netherlands, July 2024.
+[22] OpenAI and et al., “Gpt-4 technical report,” 2024. [Online]. Available:
+https://arxiv.org/abs/2303.08774
+[23] G. T. et al., “Gemini: A family of highly capable multimodal models,”
+2024. [Online]. Available: https://arxiv.org/abs/2312.11805
+[24] Z. Yan, P. Li, Z. Fu, and et al., “Int2: Interactive trajectory prediction at
+intersections,” in ICCV, October 2023, pp. 8536–8547.
+[25] X. Zheng, L. Wu, Z. Yan, Y. Tang, H. Zhao, C. Zhong, B. Chen,
+and J. Gong, “Large language models powered context-aware motion
+prediction in autonomous driving,” 2024.
+[26] P. Lindenberger, P.-E. Sarlin, and M. Pollefeys, “LightGlue: Local Feature
+Matching at Light Speed,” in ICCV, 2023.
+[27] Q. Wang, J. Zhang, K. Yang, and et al., “Matchformer: Interleaving
+attention in transformers for feature matching,” 2022.
+[28] E. Brachmann, T. Cavallari, and V. A. Prisacariu, “Accelerated coordinate
+encoding: Learning to relocalize in minutes using rgb and poses,” 2023.
+[29] E. Brachmann and C. Rother, “Visual camera re-localization from rgb
+and rgb-d images using dsac,” IEEE Transactions on Pattern Analysis
+and Machine Intelligence, vol. 44, no. 9, pp. 5847–5865, 2022.
+[30] P. Besl and N. D. McKay, “A method for registration of 3-d shapes,”
+IEEE Transactions on Pattern Analysis and Machine Intelligence, vol. 14,
+no. 2, pp. 239–256, 1992.
+[31] Z. Teed and J. Deng, “DROID-SLAM: Deep Visual SLAM for Monocular,
+Stereo, and RGB-D Cameras,” NeurIPS, pp. 16 558–16 569, 2021.
+[32] R. Mur-Artal and J. D. Tardós, “ORB-SLAM2: an open-source SLAM
+system for monocular, stereo and RGB-D cameras,” IEEE Transactions
+on Robotics, vol. 33, no. 5, pp. 1255–1262, 2017.
+[33] Z. Zhu, S. Peng, V. Larsson, and et al., “Nice-slam: Neural implicit
+scalable encoding for slam,” in CVPR, 2022.
+[34] P. E. Hart, N. J. Nilsson, and B. Raphael, “A formal basis for the heuristic
+determination of minimum cost paths,” IEEE transactions on Systems
+Science and Cybernetics, vol. 4, no. 2, pp. 100–107, 1968.
+[35] J. Wei, X. Wang, D. Schuurmans, and et al., “Chain-of-thought prompting
+elicits reasoning in large language models,” 2023.

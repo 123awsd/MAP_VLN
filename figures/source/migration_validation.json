@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-28",
+  "project": "/home/uav/map_VLN/LogicFly-paper",
+  "original_manuscript": "/home/uav/map_VLN/PRE_MAP_VLN/论文/TASE_英文初稿",
+  "final_figure_count": 9,
+  "final_figures_byte_identical": true,
+  "manuscript_changes": "Relative graphicspath only",
+  "manuscript_page_text_unchanged": true,
+  "pdf_pages": 11,
+  "project_build_passed": true,
+  "extracted_submission_build_passed": true,
+  "extracted_project": "/tmp/logicfly-paper-standalone-l2q8q9e2",
+  "original_directories_retained": true,
+  "code_branches_not_modified": true
+}

@@ -1,2 +1,0 @@
-FROM pre-map-vln/real-fly-noetic-offline:local
-RUN apt-get update && apt-get install -y --no-install-recommends ros-noetic-mavros-msgs && rm -rf /var/lib/apt/lists/*

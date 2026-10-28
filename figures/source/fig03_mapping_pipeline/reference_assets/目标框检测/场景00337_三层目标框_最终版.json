@@ -1,0 +1,117 @@
+{
+  "format": "pre_map_vln.multifloor_box_stack.v2",
+  "box_dir": "/home/uav/map_VLN/PRE_MAP_VLN/outputs/room_pipeline/00337_dormant_recovery_20260829_boxfloorfix",
+  "grid_dir": "/home/uav/map_VLN/PRE_MAP_VLN/outputs/wall_extraction/00337_dormant_recovery_ceiling_clearance_L1-L3",
+  "floors": [
+    1,
+    2,
+    3
+  ],
+  "stack_gap": 4.2,
+  "azimuth": -58.0,
+  "elevation": 26.0,
+  "z_aspect": 1.5,
+  "min_prob": 0.0,
+  "render_mode": "cuboid",
+  "height_scale": 0.62,
+  "wall_thin_px": 0,
+  "outline_mode": "outer-dashed",
+  "dash_cells": [
+    7,
+    5
+  ],
+  "outline_color": "#657f99",
+  "scene_dir": null,
+  "category_palette": {
+    "sleep": "#9BBCE0",
+    "opening": "#F2AAA5",
+    "storage": "#C8B5E6",
+    "seating": "#A9D8B8",
+    "surface": "#F5C78E",
+    "fixture": "#9ED9D5",
+    "appliance": "#F1DB91",
+    "decor": "#DAB5CC",
+    "other": "#B9CBD5"
+  },
+  "reports": {
+    "1": {
+      "source_boxes": 29,
+      "rendered_boxes": 29,
+      "categories": {
+        "bathtub": 2,
+        "bed": 4,
+        "cabinet": 3,
+        "crib": 1,
+        "curtain": 1,
+        "dishwasher": 1,
+        "door": 4,
+        "dresser": 1,
+        "lamp": 1,
+        "mattress": 1,
+        "microwave": 1,
+        "mirror": 1,
+        "picture": 2,
+        "pillow": 1,
+        "railing": 1,
+        "rug": 1,
+        "sink": 1,
+        "vanity": 1,
+        "window": 1
+      }
+    },
+    "2": {
+      "source_boxes": 66,
+      "rendered_boxes": 66,
+      "categories": {
+        "armchair": 1,
+        "bed": 5,
+        "bench": 1,
+        "cabinet": 4,
+        "coffee table": 1,
+        "countertop": 1,
+        "curtain": 9,
+        "door": 9,
+        "dresser": 1,
+        "fireplace": 1,
+        "heater": 1,
+        "kitchen island": 1,
+        "microwave": 1,
+        "mirror": 2,
+        "picture": 5,
+        "pillow": 4,
+        "railing": 1,
+        "rug": 3,
+        "sofa": 2,
+        "table": 2,
+        "television": 3,
+        "toilet": 1,
+        "toilet paper": 1,
+        "window": 6
+      }
+    },
+    "3": {
+      "source_boxes": 30,
+      "rendered_boxes": 30,
+      "categories": {
+        "bed": 2,
+        "countertop": 1,
+        "crib": 1,
+        "curtain": 1,
+        "door": 6,
+        "dresser": 3,
+        "fireplace": 1,
+        "lamp": 2,
+        "mattress": 2,
+        "mirror": 1,
+        "picture": 3,
+        "pillow": 1,
+        "rug": 2,
+        "table": 1,
+        "television": 1,
+        "vanity": 1,
+        "window": 1
+      }
+    }
+  },
+  "png": "/home/uav/map_VLN/\u7d20\u6750\u5904\u7406\u540e/\u7b2c\u4e00\u9636\u6bb5/\u76ee\u6807\u6846\u68c0\u6d4b/\u573a\u666f00337_\u4e09\u5c42\u76ee\u6807\u6846_\u6700\u7ec8\u7248.png"
+}

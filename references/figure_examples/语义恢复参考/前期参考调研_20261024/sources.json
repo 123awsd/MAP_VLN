@@ -1,0 +1,134 @@
+[
+  {
+    "id": "01",
+    "paper": "VLFM",
+    "title": "真实场景 + 半透明信息层",
+    "source": "VLFM.pdf",
+    "page": 1,
+    "figure": "Fig. 1",
+    "clip": [
+      54,
+      155,
+      558,
+      336
+    ],
+    "url": "https://arxiv.org/pdf/2312.03275v1#page=1",
+    "borrow": "空间位置、搜索路径和数值层共用一张底图，读者无需另猜抽象符号。",
+    "fit": "适合 Fig. 8 的主场景，以及“去哪里继续找”的空间关系。",
+    "limit": "原图表达目标搜索的语义价值与路径比较，不直接表示覆盖驱动的负证据更新。",
+    "short": "看空间构图与透明叠层；配色可以另定。",
+    "preview": "figures/01_VLFM.png",
+    "crop_pdf": "figures/01_VLFM.pdf",
+    "source_sha256": "07f1f60fae11be46c488c1fbf5581c8f6d44904ac39ebb6071050d44d731efce"
+  },
+  {
+    "id": "02",
+    "paper": "BeliefMapNav",
+    "title": "一张主地图串起多个观测时刻",
+    "source": "BeliefMapNav.pdf",
+    "page": 2,
+    "figure": "Fig. 1",
+    "clip": [
+      107,
+      58,
+      506,
+      259
+    ],
+    "url": "https://arxiv.org/pdf/2506.06487v1#page=2",
+    "borrow": "中间地图承担空间主线，上下观测对应地图上的时间节点，有明确主次。",
+    "fit": "适合把局部重试、切换搜索区域和最终验证放在同一段执行过程里。",
+    "limit": "原图的六个时间点、彩色体素和路径细节较多；小尺寸 Fig. 8 应只保留关键转折。",
+    "short": "看主次布局；不必把所有子图等宽并排。",
+    "preview": "figures/02_BeliefMapNav.png",
+    "crop_pdf": "figures/02_BeliefMapNav.pdf",
+    "source_sha256": "88a9c2ce82325ebacd33c2546cf7a168a95270afbdaad71061025c3f0581cc05"
+  },
+  {
+    "id": "03",
+    "paper": "SG-Nav",
+    "title": "误检 → 再观察 → 确认目标",
+    "source": "SG-Nav.pdf",
+    "page": 9,
+    "figure": "Fig. 6, lower example",
+    "clip": [
+      108,
+      248,
+      504,
+      412
+    ],
+    "url": "https://arxiv.org/pdf/2410.08189v1#page=9",
+    "borrow": "连续相机观测和固定的局部地图，直接解释为何重新判断目标。",
+    "fit": "适合解决“失败以后具体看到了什么、为什么继续找”的直观表达。",
+    "limit": "这是原图下半部的单个例子。它纠正目标误检，与本论文的未检出恢复并非同一机制；借鉴因果呈现。",
+    "short": "看失败与恢复的因果关系；此处截取下半部。",
+    "preview": "figures/03_SG-Nav.png",
+    "crop_pdf": "figures/03_SG-Nav.pdf",
+    "source_sha256": "c79eb95338ef42030d6b64423f2cd908406695ce195bc81dd87e3fe1077c005c"
+  },
+  {
+    "id": "04",
+    "paper": "DovSG",
+    "title": "新观测对应地图的局部更新",
+    "source": "DovSG_v6.pdf",
+    "page": 5,
+    "figure": "Fig. 3",
+    "clip": [
+      311,
+      57,
+      564,
+      217
+    ],
+    "url": "https://arxiv.org/pdf/2410.11989v6#page=5",
+    "borrow": "用真实局部观测与更新前后地图的对应区域，交代“哪里发生了变化”。",
+    "fit": "适合 Fig. 8 的地图更新部分；可把观测、确认实例及对应图节点建立明确关联。",
+    "limit": "原图含重定位和配准流程，不能照搬为本论文的融合模块；本论文还需保留执行后插入实例的时间关系。",
+    "short": "看局部变化如何落回地图；左侧算法细节无需照搬。",
+    "preview": "figures/04_DovSG.png",
+    "crop_pdf": "figures/04_DovSG.pdf",
+    "source_sha256": "b1a04ccc43de4ded903a30ab1ac734ee30e0f57f521e619603e3ea10ff758ee0"
+  },
+  {
+    "id": "05",
+    "paper": "BeliefMapNav",
+    "title": "同一视角下比较三层空间证据",
+    "source": "BeliefMapNav.pdf",
+    "page": 20,
+    "figure": "Fig. 12",
+    "clip": [
+      116,
+      323,
+      496,
+      684
+    ],
+    "url": "https://arxiv.org/pdf/2506.06487v1#page=20",
+    "borrow": "三个视角完全一致的场景上下排列，便于对照先验、可见性与后验。",
+    "fit": "适合参考“置信度变化仍然附着在具体空间上”的表达，避免孤立的小网格。",
+    "limit": "原文是体素信念与可见性，本论文是区域信念与新增覆盖；不把三张全图直接塞入小尺寸 Fig. 8。",
+    "short": "看固定视角的上下对照；与本论文更新公式不同。",
+    "preview": "figures/05_BeliefMapNav.png",
+    "crop_pdf": "figures/05_BeliefMapNav.pdf",
+    "source_sha256": "88a9c2ce82325ebacd33c2546cf7a168a95270afbdaad71061025c3f0581cc05"
+  },
+  {
+    "id": "06",
+    "paper": "Inner Monologue",
+    "title": "动作与反馈一一对应",
+    "source": "InnerMonologue.pdf",
+    "page": 2,
+    "figure": "Fig. 1",
+    "clip": [
+      107,
+      70,
+      505,
+      247
+    ],
+    "url": "https://proceedings.mlr.press/v205/huang23c/huang23c.pdf#page=2",
+    "borrow": "动作旁边就是成功或失败反馈，重试发生的原因沿阅读顺序展开。",
+    "fit": "适合借鉴少量反馈文字的摆放与连接方式，是主场景以外的补充参考。",
+    "limit": "空间信息较弱，若以对话气泡为主体仍会偏文字化；仅取反馈对应关系。",
+    "short": "看反馈信息的摆放；作为局部表达参考。",
+    "preview": "figures/06_Inner_Monologue.png",
+    "crop_pdf": "figures/06_Inner_Monologue.pdf",
+    "source_sha256": "a8edfa05bef6ea6ad5021bf2bd63283c1eeb865452c81aa9f00566761c5f3f1e"
+  }
+]

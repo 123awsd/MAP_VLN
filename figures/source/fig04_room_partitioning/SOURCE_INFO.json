@@ -1,0 +1,8 @@
+{
+  "number": 4,
+  "final": "figures/final/room_segmentation_en.pdf",
+  "source": "figures/source/fig04_room_partitioning",
+  "original_source": "画图/房间分割",
+  "final_sha256": "230c426ba56cfeb0bf846fa83c7fce95095858d0632789ddd02be4e4084f71ee",
+  "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+}

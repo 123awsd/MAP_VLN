@@ -1,0 +1,8 @@
+{
+  "number": 1,
+  "final": "figures/final/real_world_execution.png",
+  "source": "figures/source/fig01_real_world",
+  "original_source": "画图/主图/local_vggt/logicfly_no_fpv_tilted_figure",
+  "final_sha256": "48d388856858bcb95baebc434125985e37c99d4354d69bf6e21ce82f923c29a9",
+  "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+}
