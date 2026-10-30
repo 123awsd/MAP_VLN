@@ -1,6 +1,6 @@
 # Room segmentation figure
 
-当前正文采用 `single_row/room_segmentation_en.pdf` 的单行四幅版本（184 × 60 mm），跨双栏显示；绘图脚本、图注和机制证据均保存在 `single_row/` 中。下文保留原两行五幅版本的制作说明。
+当前正文采用 `single_column/room_segmentation_en.pdf` 的单栏单行四幅版本（88 × 23.91 mm），已去掉底部图例。该版本从 `single_row/` 的现有矢量图导出，保留全部地图和四幅标题；导出脚本及版面记录保存在 `single_column/` 中，原绘图脚本和机制证据仍在 `single_row/`。下文保留原两行五幅版本的制作说明。
 
 论文配图，**88 × 76 mm，单栏宽；两行布局，上排 a–c、下排 d–e**。英文标注全部加粗，原始实测点云与四幅连续完整楼层地图，明亮区域色。PDF/SVG 中地图和文字为矢量，点云以 600 dpi 栅格化以控制文件大小；PNG 为 600 dpi，预览为 400 dpi。2026-10-24 按用户要求改为两行单栏，并更新 TASE 工作稿中的 Fig.4 和编译 PDF。所有子图保持相同完整楼层范围、比例与方向。
 

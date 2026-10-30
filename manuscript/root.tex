@@ -131,12 +131,12 @@ Components with area below $A_{\min}$ are discarded; each remaining component re
 
 \emph{Constrained region propagation:} Marker-controlled watershed propagation operates on the negative distance field $-d$ within $\Omega$. Interior cores form the initial basins, and a multi-source priority-queue flood assigns the remaining reachable cells through four-connected neighbors. Propagation minimizes the maximum negative-distance value encountered along a path, so low-clearance connections act as bottlenecks between competing regions. The mask prevents propagation through wall barriers or outside the supported domain. A geometric post-check merges an enclosed region into its sole labeled neighbor when wall support along its boundary is weak and the region does not border unsupported open space. Supported components without a marker remain unassigned. The resulting regions support object association and room naming; the independent 3D occupancy map determines flight feasibility, including obstacles within each region.
 
-\begin{figure*}[t]
+\begin{figure}[t]
 \centering
-\includegraphics[width=\textwidth]{room_segmentation_en.pdf}
+\includegraphics[width=\columnwidth]{room_segmentation_en.pdf}
 \caption{Wall-guided room partitioning from a recorded floor point cloud. (a) Input measurements. (b) Extracted walls define structural barriers for partitioning. (c) Observation evidence determines the supported domain; connected high-clearance interiors form the cores used to initialize partitioning. Light blue shows supported space outside the cores, orange shows excluded candidates, and dark teal shows interior cores. (d) Marker-controlled watershed propagation within the supported domain, followed by geometric merge checks, produces room regions. Region colors identify partitions; gray denotes supported space without an assigned region. All panels share the same complete floor extent, scale, and orientation.}
 \label{fig:room-segmentation}
-\end{figure*}
+\end{figure}
 
 \subsection{Conditional Partial-Order Task Graph}
 \label{sec:cptg}

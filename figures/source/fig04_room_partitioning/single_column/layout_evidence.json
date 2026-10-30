@@ -1,0 +1,24 @@
+{
+  "base_variant": "single_row",
+  "base_pdf_sha256": "8e7b898d012c96318180024dbdbab90ef3efaa141d648f1aff4d757de5d5d569",
+  "base_svg_sha256": "cdb878b318351c614d6aaa8d3415dee898b99748612c0865c089845c2bcc0341",
+  "size_mm": [
+    88,
+    23.913042288421515
+  ],
+  "source_clip_pt": [
+    0.0,
+    0.0,
+    521.5748291015625,
+    141.73228346456693
+  ],
+  "removed_footer_legend": [
+    "Excluded",
+    "Interior cores",
+    "Supported space",
+    "Unassigned"
+  ],
+  "layout": "single row, four panels; single-column width",
+  "measured_geometry_regenerated": false,
+  "map_content_cropped": false
+}
