@@ -1,4 +1,4 @@
-"""Client and geometry helpers for the persistent local OWLv2 detector."""
+"""Client and geometry helpers for the persistent local open-vocabulary detector."""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ import numpy as np
 
 
 ROOT = Path(__file__).resolve().parents[1]
-READY_PREFIX = "PRE_MAP_VLN_OWLV2_READY "
-RESULT_PREFIX = "PRE_MAP_VLN_OWLV2_RESULT "
+READY_PREFIX = "PRE_MAP_VLN_DETECTOR_READY "
+RESULT_PREFIX = "PRE_MAP_VLN_DETECTOR_RESULT "
 PILOT_CLASS_THRESHOLDS = {
     "bed": 0.325,
     "lamp": 0.25,
@@ -29,25 +29,41 @@ PILOT_CLASS_THRESHOLDS = {
 }
 
 
+def detector_defaults(backend: str) -> dict[str, Any]:
+    """Do not carry OWLv2 calibration over to SAM 3.1."""
+    if backend == "sam31":
+        return {"python": ".envs/sam31/bin/python", "threshold": 0.5, "class_thresholds": {}}
+    if backend == "owlv2":
+        return {"python": ".envs/boxer/bin/python", "threshold": 0.2,
+                "class_thresholds": dict(PILOT_CLASS_THRESHOLDS)}
+    raise ValueError(f"unsupported detector backend: {backend}")
+
+
 class LocalOpenVocabularyDetector:
-    """Keep OWLv2 resident in its isolated Boxer environment."""
+    """Keep the selected detector resident in its isolated environment."""
 
     def __init__(
         self,
         prompts: list[str],
-        threshold: float = 0.08,
+        threshold: float | None = None,
         timeout_s: float = 180.0,
         python_path: Path | None = None,
         cuda_visible_devices: str | None = None,
+        backend: str = "sam31",
     ):
         if not prompts:
             raise ValueError("at least one prompt is required")
         self.prompts = list(dict.fromkeys(item.strip().lower() for item in prompts if item.strip()))
+        if not self.prompts:
+            raise ValueError("at least one nonempty prompt is required")
+        self.backend = backend
+        defaults = detector_defaults(backend)
+        threshold = defaults["threshold"] if threshold is None else threshold
         self.timeout_s = timeout_s
-        executable = python_path or ROOT / ".envs/boxer/bin/python"
+        executable = python_path or ROOT / defaults["python"]
         command = [
             str(executable), "-u", str(ROOT / "boxer_ext/open_vocab_worker.py"),
-            "--threshold", str(threshold), "--prompts", *self.prompts,
+            "--backend", backend, "--threshold", str(threshold), "--prompts", *self.prompts,
         ]
         worker_environment = None
         if cuda_visible_devices is not None:
@@ -64,11 +80,15 @@ class LocalOpenVocabularyDetector:
             env=worker_environment,
         )
         self._request_lock = threading.Lock()
-        self.ready = self._read_prefixed(READY_PREFIX, timeout_s)
+        try:
+            self.ready = self._read_prefixed(READY_PREFIX, timeout_s)
+        except Exception:
+            self.close()
+            raise
 
     def _read_prefixed(self, prefix: str, timeout_s: float) -> dict[str, Any]:
         if self.process.stdout is None:
-            raise RuntimeError("OWLv2 worker stdout is unavailable")
+            raise RuntimeError("Detector worker stdout is unavailable")
         selector = selectors.DefaultSelector()
         selector.register(self.process.stdout, selectors.EVENT_READ)
         deadline = time.monotonic() + timeout_s
@@ -77,7 +97,7 @@ class LocalOpenVocabularyDetector:
             while time.monotonic() < deadline:
                 if self.process.poll() is not None:
                     remainder = self.process.stdout.read()
-                    raise RuntimeError("OWLv2 worker exited: " + " | ".join((diagnostics + [remainder])[-8:]))
+                    raise RuntimeError("Detector worker exited: " + " | ".join((diagnostics + [remainder])[-8:]))
                 events = selector.select(timeout=min(1.0, max(0.0, deadline - time.monotonic())))
                 if not events:
                     continue
@@ -89,12 +109,12 @@ class LocalOpenVocabularyDetector:
                     diagnostics = diagnostics[-8:]
         finally:
             selector.close()
-        raise TimeoutError(f"OWLv2 worker timed out; recent output: {' | '.join(diagnostics)}")
+        raise TimeoutError(f"Detector worker timed out; recent output: {' | '.join(diagnostics)}")
 
     def detect(self, image_path: Path, prompts: list[str] | None = None) -> dict[str, Any]:
         with self._request_lock:
             if self.process.stdin is None:
-                raise RuntimeError("OWLv2 worker stdin is unavailable")
+                raise RuntimeError("Detector worker stdin is unavailable")
             request_id = uuid.uuid4().hex
             request: dict[str, Any] = {"id": request_id, "image_path": str(Path(image_path).resolve())}
             if prompts is not None:
@@ -103,7 +123,7 @@ class LocalOpenVocabularyDetector:
             self.process.stdin.flush()
             result = self._read_prefixed(RESULT_PREFIX, self.timeout_s)
             if result.get("id") != request_id:
-                raise RuntimeError("OWLv2 worker returned a mismatched request id")
+                raise RuntimeError("Detector worker returned a mismatched request id")
             if result.get("error"):
                 raise RuntimeError(result["error"])
             return result
@@ -135,7 +155,7 @@ class AsyncOpenVocabularyDetector:
 
     def __init__(self, backend: LocalOpenVocabularyDetector):
         self.backend = backend
-        self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="owlv2")
+        self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="open_vocab")
         self.pending: Future | None = None
         self.submitted = 0
         self.dropped_busy = 0

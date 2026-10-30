@@ -12,13 +12,13 @@ fi
 prepared_name="$1"
 run_name="$2"
 task_source="$3"
-verification_mode="${4:-owlv2}"
+verification_mode="${4:-sam31}"
 prepared_dir="$root_dir/outputs/stage2_3d/prepared/$prepared_name"
 manifest="$prepared_dir/manifest.json"
 run_dir="$root_dir/outputs/stage2_3d/tasks/$run_name"
 
 [[ "$run_name" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "invalid run name: $run_name" >&2; exit 2; }
-case "$verification_mode" in semantic|owlv2|qwen_vl|hybrid|owlv2_qwen_fallback|controlled) ;; *)
+case "$verification_mode" in sam31|sam31_qwen_fallback|semantic|owlv2|qwen_vl|hybrid|owlv2_qwen_fallback|controlled) ;; *)
   echo "unsupported verification mode: $verification_mode" >&2; exit 2;;
 esac
 for path in "$manifest" "$prepared_dir/scene_graph.json" \
@@ -78,7 +78,7 @@ fi
   --output-dir "$run_dir/execution" \
   --verification-mode "$verification_mode" \
   --max-candidates 3 --planning-horizon-tasks 2 \
-  --owlv2-every 10 --save-every 5
+  --detector-every 10 --save-every 5
 
 .envs/habitat/bin/python - "$run_dir/run_manifest.json" \
   "$prepared_name" "$scene_id" "$verification_mode" <<'PY'

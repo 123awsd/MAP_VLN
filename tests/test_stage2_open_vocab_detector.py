@@ -4,10 +4,44 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from stage2.open_vocab_detector import AsyncOpenVocabularyDetector, LocalOpenVocabularyDetector, PILOT_CLASS_THRESHOLDS, apply_class_thresholds, associate_projection, project_detection_to_world, target_found
+from stage2.open_vocab_detector import AsyncOpenVocabularyDetector, LocalOpenVocabularyDetector, PILOT_CLASS_THRESHOLDS, apply_class_thresholds, associate_projection, detector_defaults, project_detection_to_world, target_found
 
 
 class OpenVocabularyDetectorTest(unittest.TestCase):
+    @patch.object(LocalOpenVocabularyDetector, "_read_prefixed", return_value={"backend": "sam31"})
+    @patch("stage2.open_vocab_detector.subprocess.Popen")
+    def test_default_worker_uses_sam_environment_and_uncalibrated_class_thresholds(self, popen, _ready):
+        LocalOpenVocabularyDetector(["chair"])
+        command = popen.call_args.args[0]
+        self.assertTrue(command[0].endswith(".envs/sam31/bin/python"))
+        self.assertEqual(command[command.index("--backend") + 1], "sam31")
+        self.assertEqual(command[command.index("--threshold") + 1], "0.5")
+        self.assertEqual(detector_defaults("sam31")["class_thresholds"], {})
+
+    @patch.object(LocalOpenVocabularyDetector, "_read_prefixed", return_value={"backend": "owlv2"})
+    @patch("stage2.open_vocab_detector.subprocess.Popen")
+    def test_explicit_legacy_worker_preserves_owl_calibration(self, popen, _ready):
+        LocalOpenVocabularyDetector(["chair"], backend="owlv2")
+        command = popen.call_args.args[0]
+        self.assertTrue(command[0].endswith(".envs/boxer/bin/python"))
+        self.assertEqual(command[command.index("--backend") + 1], "owlv2")
+        self.assertEqual(detector_defaults("owlv2")["class_thresholds"], PILOT_CLASS_THRESHOLDS)
+
+    @patch("stage2.open_vocab_detector.subprocess.Popen")
+    def test_invalid_inputs_do_not_start_worker(self, popen):
+        for kwargs in ({"prompts": [" "]}, {"prompts": ["chair"], "backend": "invalid"}):
+            with self.assertRaises(ValueError):
+                LocalOpenVocabularyDetector(**kwargs)
+        popen.assert_not_called()
+
+    @patch.object(LocalOpenVocabularyDetector, "close")
+    @patch.object(LocalOpenVocabularyDetector, "_read_prefixed", side_effect=TimeoutError)
+    @patch("stage2.open_vocab_detector.subprocess.Popen")
+    def test_startup_failure_closes_worker(self, _popen, _ready, close):
+        with self.assertRaises(TimeoutError):
+            LocalOpenVocabularyDetector(["chair"])
+        close.assert_called_once()
+
     @patch.object(LocalOpenVocabularyDetector, "_read_prefixed", return_value={"backend": "fake"})
     @patch("stage2.open_vocab_detector.subprocess.Popen")
     def test_worker_can_override_cuda_visibility(self, popen, _ready):

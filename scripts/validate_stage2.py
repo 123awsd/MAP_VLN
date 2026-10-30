@@ -85,10 +85,11 @@ def main() -> None:
     require(execution["frame_count"] >= 50, "online RGB trajectory is unexpectedly short")
     frame_files = list((args.execution_dir / "frames").glob("frame_*.jpg"))
     require(len(frame_files) == execution["frame_count"], "full per-frame RGB was not saved")
-    if execution.get("verification_mode") in {"owlv2", "owlv2_qwen_fallback"}:
-        require(execution.get("open_vocab_detector", {}).get("backend") == "local_owlv2", "local OWLv2 backend was not recorded")
-        require(bool(execution.get("open_vocab_observations")), "online OWLv2 keyframe detections are missing")
-        require(all(item["verification"].get("owlv2") is not None for item in execution["observations"]), "terminal OWLv2 evidence is incomplete")
+    if execution.get("verification_mode") in {"sam31", "sam31_qwen_fallback", "owlv2", "owlv2_qwen_fallback"}:
+        backend = "sam31" if execution["verification_mode"].startswith("sam31") else "owlv2"
+        require(execution.get("open_vocab_detector", {}).get("backend") == "local_" + backend, "local detector backend was not recorded")
+        require(bool(execution.get("open_vocab_observations")), "online detector keyframe detections are missing")
+        require(all((item["verification"].get("open_vocab") or item["verification"].get("owlv2")) is not None for item in execution["observations"]), "terminal detector evidence is incomplete")
 
     required_topics = {
         "/stage2/rgb", "/stage2/executed_path", "/stage2/global_tour",
@@ -98,8 +99,8 @@ def main() -> None:
         "/voxel_mapping/occupancy_grid_occupied",
     }
     require(required_topics <= set(bag["topic_counts"]), "stage2 bag is missing visualization topics")
-    if execution.get("verification_mode") in {"owlv2", "owlv2_qwen_fallback"}:
-        require(bag["topic_counts"].get("/stage2/open_vocab_boxes") == len(execution["open_vocab_observations"]), "bag OWLv2 box events are incomplete")
+    if execution.get("verification_mode") in {"sam31", "sam31_qwen_fallback", "owlv2", "owlv2_qwen_fallback"}:
+        require(bag["topic_counts"].get("/stage2/open_vocab_boxes") == len(execution["open_vocab_observations"]), "bag detector box events are incomplete")
     require(bag["topic_counts"]["/stage2/rgb"] == len(execution["trajectory_xyz_yaw"]), "bag RGB is not frame-complete")
     require(bag["topic_counts"]["/stage2/reached_goals"] == 1 + len(execution["observations"]), "reached-goal stars do not cover every terminal observation")
     require(bag["size_bytes"] > 350_000 * execution["frame_count"], "stage2 bag is unexpectedly small")

@@ -1,4 +1,7 @@
-# 主机生成，NX 原样执行
+# 静态 MINCO 轨迹回放入口
+
+完整系统已在线下完成跨房间飞行、在线目标识别、条件分支、局部视点重试和跨房间恢复搜索的真机验证。
+本文仅说明静态 MINCO 轨迹的保存和回放，不限定系统的闭环执行能力。
 
 主机 `run_real_stage2_task.sh` 在静态任务通过后自动调用
 `generate_final_minco.sh RUN_ID TASK_ID`。已有 mission_plan 可单独运行后者。

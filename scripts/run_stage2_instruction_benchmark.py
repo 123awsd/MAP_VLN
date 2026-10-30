@@ -321,7 +321,7 @@ def main() -> int:
         print(f"[{index}/{len(cases)}] {case_id}: {case['instruction']}", flush=True)
         command = [
             str(ROOT / "scripts/run_prepared_stage2.sh"), str(prepared_name),
-            temporary_name, case["instruction"], suite.get("verification_mode", "owlv2"),
+            temporary_name, case["instruction"], suite.get("verification_mode", "sam31"),
         ]
         log_path = session_dir / f"{case_id}.log"
         with log_path.open("w", encoding="utf-8") as log:

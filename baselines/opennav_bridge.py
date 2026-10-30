@@ -40,6 +40,7 @@ class OpenNavObservationBridge:
         self.runtime_dir.mkdir(parents=True, exist_ok=True)
         self.detector = detector or LocalOpenVocabularyDetector(
             self.prompts,
+            backend="owlv2",
             threshold=0.20,
             cuda_visible_devices=os.getenv("PRE_MAP_VLN_OWLV2_CUDA_VISIBLE_DEVICES", "0"),
         )

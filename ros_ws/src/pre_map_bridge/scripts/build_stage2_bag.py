@@ -581,7 +581,8 @@ def annotated_evidence(path, observation):
     if bgr is None:
         raise FileNotFoundError(path)
     verification = observation.get("verification", {})
-    detections = verification.get("owlv2", {}).get("detections", [])
+    detected = verification.get("open_vocab") or verification.get("owlv2") or {}
+    detections = detected.get("detections", [])
     for detection in detections:
         x1, y1, x2, y2 = [int(round(value)) for value in detection["bbox_xyxy"]]
         cv2.rectangle(bgr, (x1, y1), (x2, y2), (0, 255, 40), 5)

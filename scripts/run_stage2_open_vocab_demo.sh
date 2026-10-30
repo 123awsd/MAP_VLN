@@ -14,9 +14,8 @@ cd "$root_dir"
   --grid-prefix runtime/occusg/hm3d_stage1_complete_v3_grid \
   --output-dir "$run_dir/habitat_demo" \
   --save-every 1 \
-  --verification-mode owlv2 \
-  --owlv2-every 5 \
-  --owlv2-threshold 0.20 \
+  --verification-mode sam31 \
+  --detector-every 5 \
   --max-viewpoint-attempts 3 \
   --novel-object-min-support 2
 docker compose run --rm falcon \

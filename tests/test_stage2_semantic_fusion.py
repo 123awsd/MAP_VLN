@@ -40,7 +40,7 @@ class SemanticFusionTest(unittest.TestCase):
         graph = {"rooms": [{"id": "room_0", "centroid_xy_m": [1.0, 2.0], "objects": []}]}
         updated, added = fusion.materialize_scene_graph(graph)
         self.assertEqual(len(added), 1)
-        self.assertEqual(updated["rooms"][0]["objects"][0]["source"], "online_owlv2_rgbd_fusion")
+        self.assertEqual(updated["rooms"][0]["objects"][0]["source"], "online_rgbd_fusion")
 
     def test_configurable_support_threshold_is_respected(self):
         fusion = OnlineSemanticFusion(minimum_novel_support=3)

@@ -23,9 +23,7 @@ class Sam31Wrapper:
         from sam3.model.vl_combiner import SAM3VLBackboneTri
         from sam3.model.sam3_image_processor import Sam3Processor
         self.device = str(device)
-        self.prompts = [str(v).strip().lower() for v in (text_prompts or [])]
-        if not self.prompts or len(set(self.prompts)) != len(self.prompts):
-            raise ValueError('SAM3.1 requires nonempty, unique text prompts')
+        self.set_text_prompts(text_prompts or [])
         self.checkpoint_path = Path(checkpoint_path or ROOT/'models/sam31/sam3.1_multiplex.safetensors').resolve()
         if not self.checkpoint_path.is_file():
             raise FileNotFoundError(self.checkpoint_path)
@@ -49,6 +47,12 @@ class Sam31Wrapper:
         self.processor = Sam3Processor(self.model, device=self.device, confidence_threshold=float(min_confidence))
         self.last_detections = []
         self.last_unmapped_detections = []
+
+    def set_text_prompts(self, text_prompts):
+        prompts = [str(v).strip().lower() for v in text_prompts]
+        if not prompts or any(not v for v in prompts) or len(set(prompts)) != len(prompts):
+            raise ValueError('SAM3.1 requires nonempty, unique text prompts')
+        self.prompts = prompts
 
     @torch.inference_mode()
     def forward(self, image_torch, resize_to_HW=None):

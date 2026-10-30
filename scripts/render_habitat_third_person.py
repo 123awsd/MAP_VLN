@@ -278,7 +278,8 @@ def found_boxes(execution, generated, scene_graph=None, runtime_box_overrides=No
         if observation.get("outcome") != "found":
             continue
         verification = observation.get("verification", {})
-        projected = verification.get("owlv2", {}).get("projected_3d", [])
+        detected = verification.get("open_vocab") or verification.get("owlv2") or {}
+        projected = detected.get("projected_3d", [])
         confirmed = [item for item in projected if item.get("confirmed", False)] or projected[:1]
 
         # A single observation may contain duplicate detections of the same

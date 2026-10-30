@@ -119,7 +119,7 @@ class OnlineSemanticFusion:
                 "center_xyz_m": track["center"], "size_xyz_m": track["size"],
                 "orientation_wxyz": [1.0, 0.0, 0.0, 0.0],
                 "probability": track["score"], "support_count": track["support_count"],
-                "source": "online_owlv2_rgbd_fusion", "room_assignment": "nearest_centroid",
+                "source": "online_rgbd_fusion", "room_assignment": "nearest_centroid",
             })
             added.append(track["id"])
         return result, added

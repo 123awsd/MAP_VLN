@@ -1,8 +1,10 @@
 # Stage 2 real-machine runtime
 
-`stage2_runtime` contains the lightweight online localization entry point for
-real flight. It is separate from Stage 1 mapping and from the GPU-heavy Stage
-2 offline Boxer pipeline.
+`stage2_runtime` contains real-flight localization and execution utilities.
+Physical UAV validation has been completed for cross-room flight, online target
+recognition, conditional task execution, local viewpoint retries, and cross-room
+recovery search. The diagnostic and static-playback entry points described below
+are individual tools, not a complete statement of the system's experimental scope.
 
 ## Localization-only mode
 

@@ -40,7 +40,7 @@ def main() -> None:
         raise FileNotFoundError(f"no terminal frames under {args.frames_dir}")
     prompts = sorted(set(TARGETS.values()))
     records = []
-    with LocalOpenVocabularyDetector(prompts, threshold=args.threshold, timeout_s=300.0) as detector:
+    with LocalOpenVocabularyDetector(prompts, threshold=args.threshold, timeout_s=300.0, backend="owlv2") as detector:
         startup = detector.ready
         for path in images:
             target = next(value for key, value in TARGETS.items() if key in path.stem)

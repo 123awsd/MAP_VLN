@@ -41,7 +41,7 @@ from stage2.voxel_map_3d import VoxelMap3D  # noqa: E402
 from stage2.open_vocab_detector import (  # noqa: E402
     AsyncOpenVocabularyDetector,
     LocalOpenVocabularyDetector,
-    PILOT_CLASS_THRESHOLDS,
+    detector_defaults,
     apply_class_thresholds,
     associate_projection,
     project_detection_to_world,
@@ -183,18 +183,18 @@ def main() -> None:
     parser.add_argument("--save-every", type=int, default=3)
     parser.add_argument(
         "--verification-mode",
-        choices=("semantic", "owlv2", "qwen_vl", "hybrid", "owlv2_qwen_fallback", "controlled"),
-        default="owlv2",
-        help="Decision source; owlv2 is the fast local-GPU default and Qwen is optional fallback",
+        choices=("sam31", "sam31_qwen_fallback", "semantic", "owlv2", "qwen_vl", "hybrid", "owlv2_qwen_fallback", "controlled"),
+        default="sam31",
+        help="Decision source; SAM 3.1 is the local-GPU default and Qwen is optional fallback",
     )
-    parser.add_argument("--owlv2-threshold", type=float, default=0.20)
+    parser.add_argument("--detector-threshold", "--owlv2-threshold", type=float, default=None)
     parser.add_argument(
-        "--owlv2-class-thresholds",
-        default=json.dumps(PILOT_CLASS_THRESHOLDS),
-        help="JSON per-class thresholds calibrated by the local Semantic-GT pilot",
+        "--detector-class-thresholds", "--owlv2-class-thresholds",
+        default=None,
+        help="Optional JSON per-class thresholds for the selected detector",
     )
     parser.add_argument(
-        "--owlv2-every", type=int, default=10,
+        "--detector-every", "--owlv2-every", type=int, default=10,
         help="Run local open-vocabulary mapping every N flight frames; 0 disables keyframes",
     )
     parser.add_argument("--vlm-confidence-threshold", type=float, default=0.65)
@@ -249,9 +249,15 @@ def main() -> None:
     minimum_pixels_by_task = {
         str(key): int(value) for key, value in json.loads(args.minimum_pixels_by_task).items()
     }
+    detector_backend = "owlv2" if args.verification_mode.startswith("owlv2") else "sam31"
+    defaults = detector_defaults(detector_backend)
+    if args.detector_threshold is None:
+        args.detector_threshold = defaults["threshold"]
+    if args.detector_class_thresholds is None:
+        args.detector_class_thresholds = json.dumps(defaults["class_thresholds"])
     class_thresholds = {
         str(key).strip().lower(): float(value)
-        for key, value in json.loads(args.owlv2_class_thresholds).items()
+        for key, value in json.loads(args.detector_class_thresholds).items()
     }
     controlled_stale_object_ids = {str(value) for value in json.loads(args.controlled_stale_object_ids)}
     controlled_found_object_ids = {str(value) for value in json.loads(args.controlled_found_object_ids)}
@@ -296,8 +302,8 @@ def main() -> None:
         if args.planning_strategy == "lazy_representative" else None
     )
     state = MissionState(task_graph)
-    vlm_verifier = QwenImageVerifier() if args.verification_mode in {"qwen_vl", "hybrid", "owlv2_qwen_fallback"} else None
-    open_vocab_modes = {"owlv2", "owlv2_qwen_fallback"}
+    vlm_verifier = QwenImageVerifier() if args.verification_mode in {"qwen_vl", "hybrid", "owlv2_qwen_fallback", "sam31_qwen_fallback"} else None
+    open_vocab_modes = {"sam31", "sam31_qwen_fallback", "owlv2", "owlv2_qwen_fallback"}
     detector_prompts = sorted({
         label
         for task in tasks.values()
@@ -312,7 +318,8 @@ def main() -> None:
     if args.verification_mode in open_vocab_modes:
         open_vocab_detector = LocalOpenVocabularyDetector(
             detector_prompts,
-            threshold=args.owlv2_threshold,
+            backend=detector_backend,
+            threshold=args.detector_threshold,
             timeout_s=300.0,
         )
         async_detector = AsyncOpenVocabularyDetector(open_vocab_detector)
@@ -386,7 +393,7 @@ def main() -> None:
         if packet is None:
             return
         metadata = packet["metadata"]
-        detected = apply_class_thresholds(packet["result"], args.owlv2_threshold, class_thresholds)
+        detected = apply_class_thresholds(packet["result"], args.detector_threshold, class_thresholds)
         lifted = [
             associate_projection(projected, mapped_objects, ALIASES)
             for item in detected["detections"]
@@ -424,8 +431,8 @@ def main() -> None:
             save_frame = frame_index % max(1, args.save_every) == 0
             detect_frame = bool(
                 open_vocab_detector is not None
-                and args.owlv2_every > 0
-                and frame_index % args.owlv2_every == 0
+                and args.detector_every > 0
+                and frame_index % args.detector_every == 0
             )
             frame_path = frames_dir / f"frame_{frame_index:06d}.jpg"
             if save_frame or detect_frame:
@@ -710,7 +717,7 @@ def main() -> None:
             if open_vocab_detector is not None:
                 consume_async(async_detector.flush() if async_detector is not None else None)
                 local_result = apply_class_thresholds(
-                    open_vocab_detector.detect(terminal_rgb), args.owlv2_threshold, class_thresholds
+                    open_vocab_detector.detect(terminal_rgb), args.detector_threshold, class_thresholds
                 )
                 local_found = target_found(local_result, tasks[visit["task_id"]]["verification_label"], ALIASES)
                 accepted = ALIASES.get(
@@ -759,7 +766,7 @@ def main() -> None:
             should_call_vlm = bool(
                 vlm_verifier is not None
                 and (
-                    args.verification_mode != "owlv2_qwen_fallback"
+                    args.verification_mode not in {"owlv2_qwen_fallback", "sam31_qwen_fallback"}
                     or not open_vocab_verification
                     or not open_vocab_verification["found"]
                 )
@@ -777,7 +784,7 @@ def main() -> None:
                 selected_found = False
             elif args.verification_mode == "semantic":
                 selected_found = bool(semantic_verification["found"])
-            elif args.verification_mode == "owlv2":
+            elif args.verification_mode in {"sam31", "owlv2"}:
                 selected_found = bool(open_vocab_verification and open_vocab_verification["found"])
             elif args.verification_mode == "qwen_vl":
                 selected_found = vlm_found
@@ -822,8 +829,9 @@ def main() -> None:
                 "mode": args.verification_mode,
                 "found": selected_found,
                 "semantic_found": bool(semantic_verification["found"]),
-                "owlv2_found": None if open_vocab_verification is None else open_vocab_verification["found"],
-                "owlv2": open_vocab_verification,
+                "open_vocab_found": None if open_vocab_verification is None else open_vocab_verification["found"],
+                "open_vocab": open_vocab_verification,
+                "detector_backend": detector_backend if open_vocab_verification is not None else None,
                 "vlm_found_at_threshold": vlm_found if vlm_verification is not None else None,
                 "vlm_confidence_threshold": args.vlm_confidence_threshold,
                 "vlm": vlm_verification,
@@ -831,6 +839,9 @@ def main() -> None:
                 "controlled_found": controlled_found,
                 "target_reference_relation": relation_verification,
             })
+            if detector_backend == "owlv2" and open_vocab_verification is not None:
+                verification["owlv2"] = open_vocab_verification
+                verification["owlv2_found"] = open_vocab_verification["found"]
             action = tasks[visit["task_id"]]["action"]
             if action in {"inspect", "find", "observe"}:
                 outcome = "found" if selected_found else "not_found"
@@ -962,7 +973,7 @@ def main() -> None:
                     "matching_pixels": verification["matching_pixels"],
                     "mode": args.verification_mode,
                     "vlm_confidence": None if vlm_verification is None else vlm_verification["confidence"],
-                    "owlv2_score": None if not open_vocab_verification or not open_vocab_verification["detections"] else open_vocab_verification["detections"][0]["score"],
+                    "detector_score": None if not open_vocab_verification or not open_vocab_verification["detections"] else open_vocab_verification["detections"][0]["score"],
                     "projected_3d": None if not open_vocab_verification else open_vocab_verification["projected_3d"],
                     "sequence": len(observations_log) - 1,
                 }
@@ -1047,11 +1058,11 @@ def main() -> None:
             "added_novel_object_ids": added_novel_objects,
         },
         "open_vocab_detector": None if open_vocab_detector is None else {
-            "backend": "local_owlv2",
+            "backend": "local_" + detector_backend,
             "prompts": detector_prompts,
-            "threshold": args.owlv2_threshold,
+            "threshold": args.detector_threshold,
             "class_thresholds": class_thresholds,
-            "keyframe_interval": args.owlv2_every,
+            "keyframe_interval": args.detector_every,
             "startup": open_vocab_detector.ready,
             "async": None if async_detector is None else async_detector.stats,
         },

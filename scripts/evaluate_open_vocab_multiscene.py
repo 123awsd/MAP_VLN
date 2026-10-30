@@ -140,7 +140,7 @@ def classification_counts(records: list[dict], prompt: str | None, threshold: fl
 
 def evaluate(records: list[dict], output_dir: Path, threshold: float) -> dict:
     started = time.monotonic()
-    with LocalOpenVocabularyDetector(PROMPTS, threshold=threshold, timeout_s=300.0) as detector:
+    with LocalOpenVocabularyDetector(PROMPTS, threshold=threshold, timeout_s=300.0, backend="owlv2") as detector:
         startup = detector.ready
         for index, record in enumerate(records):
             image_path = output_dir / record["image"]

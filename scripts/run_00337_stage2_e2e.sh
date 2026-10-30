@@ -6,7 +6,7 @@ cd "$root_dir"
 
 instruction="${1:-先去一楼浴室看一下洗手池，再去二楼厨房确认微波炉。顺便看看二楼客厅沙发旁的茶几，还有三楼卧室床边的灯。最后确认三楼客厅壁炉旁的电视；如果没看到电视，就去二楼客厅找找。}"
 run_name="${2:-qwen_e2e_$(date +%Y%m%d_%H%M%S)}"
-verification_mode="${3:-owlv2}"
+verification_mode="${3:-sam31}"
 run_dir="outputs/stage2_3d/tasks/00337_${run_name}"
 
 if [[ -e "$run_dir" ]]; then
@@ -30,5 +30,5 @@ exec .envs/habitat/bin/python -u scripts/run_stage2_habitat.py \
   --verification-mode "$verification_mode" \
   --max-candidates 8 \
   --planning-horizon-tasks 2 \
-  --owlv2-every 10 \
+  --detector-every 10 \
   --save-every 1

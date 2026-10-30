@@ -14,6 +14,11 @@ real_fly/
     └── data/                 # inputs, execution logs, reports; not in Git
 ```
 
+## 真机验证状态
+
+已在线下完成真机验证：跨房间飞行、在线目标识别、条件分支执行、局部视点重试和跨房间恢复搜索。
+离线地图处理、静态轨迹回放和定位诊断各有独立入口；其局部功能范围不代表完整系统的实验范围。
+
 ## Data policy
 
 Keep large or generated files under the corresponding `data/` directory, for

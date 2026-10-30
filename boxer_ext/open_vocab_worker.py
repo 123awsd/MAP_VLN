@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Persistent local OWLv2 worker using a JSON-lines protocol on stdio."""
+"""Persistent local open-vocabulary worker using a JSON-lines protocol on stdio."""
 
 from __future__ import annotations
 
@@ -15,19 +15,18 @@ from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "third_party/boxer"))
-
-from owl.owl_wrapper import OwlWrapper  # noqa: E402
+sys.path.insert(0, str(ROOT))
 
 
-READY_PREFIX = "PRE_MAP_VLN_OWLV2_READY "
-RESULT_PREFIX = "PRE_MAP_VLN_OWLV2_RESULT "
+READY_PREFIX = "PRE_MAP_VLN_DETECTOR_READY "
+RESULT_PREFIX = "PRE_MAP_VLN_DETECTOR_RESULT "
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--prompts", nargs="+", required=True)
-    parser.add_argument("--threshold", type=float, default=0.08)
+    parser.add_argument("--backend", choices=("sam31", "owlv2"), default="sam31")
+    parser.add_argument("--threshold", type=float, default=None)
     parser.add_argument("--precision", choices=("float32", "bfloat16"), default="bfloat16")
     parser.add_argument("--device", default="cuda")
     return parser.parse_args()
@@ -40,15 +39,21 @@ def emit(prefix: str, payload: dict) -> None:
 def main() -> int:
     args = parse_args()
     started = time.perf_counter()
-    detector = OwlWrapper(
-        device=args.device,
-        text_prompts=args.prompts,
-        min_confidence=args.threshold,
-        precision=args.precision,
-        warmup=True,
-    )
-    prompts = list(args.prompts)
+    from stage2.open_vocab_detector import detector_defaults
+    if args.threshold is None:
+        args.threshold = detector_defaults(args.backend)["threshold"]
+    if args.backend == "sam31":
+        from boxer_ext.sam31_wrapper import Sam31Wrapper
+        detector = Sam31Wrapper(device=args.device, text_prompts=args.prompts,
+                                min_confidence=args.threshold, precision=args.precision)
+    else:
+        sys.path.insert(0, str(ROOT / "third_party/boxer"))
+        from owl.owl_wrapper import OwlWrapper
+        detector = OwlWrapper(device=args.device, text_prompts=args.prompts,
+                              min_confidence=args.threshold, precision=args.precision, warmup=True)
+    prompts = [str(p).strip().lower() for p in args.prompts]
     emit(READY_PREFIX, {
+        "backend": args.backend,
         "device": args.device,
         "prompts": prompts,
         "threshold": args.threshold,
@@ -63,7 +68,7 @@ def main() -> int:
             request_prompts = request.get("prompts") or prompts
             if request_prompts != prompts:
                 detector.set_text_prompts(request_prompts)
-                prompts = list(request_prompts)
+                prompts = [str(p).strip().lower() for p in request_prompts]
             image_path = Path(request["image_path"])
             image = np.asarray(Image.open(image_path).convert("RGB"))
             image_tensor = torch.from_numpy(image.copy()).permute(2, 0, 1).float()[None]
@@ -85,6 +90,7 @@ def main() -> int:
             detections.sort(key=lambda item: item["score"], reverse=True)
             emit(RESULT_PREFIX, {
                 "id": request.get("id"),
+                "backend": args.backend,
                 "image_path": str(image_path),
                 "image_size": [int(image.shape[1]), int(image.shape[0])],
                 "latency_ms": round(latency_ms, 3),

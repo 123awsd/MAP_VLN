@@ -6,7 +6,7 @@ cd "$root_dir"
 
 task_name="${1:-main}"
 run_name="${2:-${task_name}_$(date +%Y%m%d_%H%M%S)}"
-verification_mode="${3:-owlv2}"
+verification_mode="${3:-sam31}"
 recovery_mode="${4:-qwen}"
 branch_mode="${5:-normal}"
 
@@ -63,7 +63,7 @@ exec .envs/habitat/bin/python -u scripts/run_stage2_habitat.py \
   --verification-mode "$verification_mode" \
   --max-candidates 3 \
   --planning-horizon-tasks 2 \
-  --owlv2-every 10 \
+  --detector-every 10 \
   --save-every 5 \
   "${extra_args[@]}" \
   "${controlled_args[@]}"
