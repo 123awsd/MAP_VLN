@@ -28,7 +28,7 @@
     "final": "figures/final/room_segmentation_en.pdf",
     "source": "figures/source/fig04_room_partitioning",
     "original_source": "画图/房间分割",
-    "final_sha256": "98e6a69b62e7924e54c1bf26a72a36ef6517c943cb51806f558da89940345f27",
+    "final_sha256": "a6dcab59a4e7083e458f1ef4a8e97891c7a3ac2a20cfb7edc5b81707ea50c660",
     "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN.",
     "installed_variant": "single_column/room_segmentation_en.pdf"
   },

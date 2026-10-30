@@ -47,7 +47,7 @@ make bundle    # 生成可独立编译的投稿源码包
 | 9 | Habitat 执行示例 | `habitat_long_instruction_en.png` | `fig09_habitat_execution/` |
 
 `final/` 是正文引用图件的唯一入口。源目录里的草稿、预览和新变体不会自动替换定稿。
-Fig. 4 正文采用 `fig04_room_partitioning/single_column/` 中的单行四幅、无底部图例版本，以单栏宽显示；第二层倾斜分区及 SAM 3.1 目标框叠加工作稿位于 `fig04_room_partitioning/oblique_l2/`。
+Fig. 4 正文采用 `fig04_room_partitioning/single_column/` 中的单栏两行两列、无底部图例版本，从左上 (a) 依次经过右上 (b)、右下 (c)，到左下 (d)；三个箭头完整连接流程，图内标题为 8.5 pt，正文图注为 9 pt。第二层倾斜分区及 SAM 3.1 目标框叠加工作稿位于 `fig04_room_partitioning/oblique_l2/`。
 
 每幅图的 `SOURCE_INFO.json` 记录原始来源；[figure_manifest.json](figures/source/figure_manifest.json) 记录定稿文件、图号和当前定稿的校验值。
 

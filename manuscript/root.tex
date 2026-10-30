@@ -134,8 +134,11 @@ Components with area below $A_{\min}$ are discarded; each remaining component re
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{room_segmentation_en.pdf}
+\begingroup
+\renewcommand{\footnotesize}{\fontsize{9}{11}\selectfont}
 \caption{Wall-guided room partitioning from a recorded floor point cloud. (a) Input measurements. (b) Extracted walls define structural barriers for partitioning. (c) Observation evidence determines the supported domain; connected high-clearance interiors form the cores used to initialize partitioning. Light blue shows supported space outside the cores, orange shows excluded candidates, and dark teal shows interior cores. (d) Marker-controlled watershed propagation within the supported domain, followed by geometric merge checks, produces room regions. Region colors identify partitions; gray denotes supported space without an assigned region. All panels share the same complete floor extent, scale, and orientation.}
 \label{fig:room-segmentation}
+\endgroup
 \end{figure}
 
 \subsection{Conditional Partial-Order Task Graph}

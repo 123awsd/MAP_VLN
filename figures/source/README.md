@@ -14,7 +14,7 @@
 
 ## 当前工作稿
 
-- `fig04_room_partitioning/single_column/`：正文当前采用的单栏单行四幅版本，去掉底部图例。
+- `fig04_room_partitioning/single_column/`：正文当前采用的单栏两行两列版本，蛇形流程顺序，去掉底部图例，图内标题为 8.5 pt。
 - `fig04_room_partitioning/single_row/`：保留底部图例的原单行四幅版本，合并支持域和内部核心。
 - `fig04_room_partitioning/oblique_l2/`：第二层倾斜分区、SAM 3.1 融合 3D 框及各配色版本。
 - `fig06_viewpoint_generation/`：候选视角生成的 Blender 场景、三维模型与版面脚本。
