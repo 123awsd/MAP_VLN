@@ -14,7 +14,7 @@
 
 ## 当前工作稿
 
-- `fig04_room_partitioning/single_row/`：单行四幅版本，合并支持域和内部核心。
+- `fig04_room_partitioning/single_row/`：正文当前采用的单行四幅版本，合并支持域和内部核心。
 - `fig04_room_partitioning/oblique_l2/`：第二层倾斜分区、SAM 3.1 融合 3D 框及各配色版本。
 - `fig06_viewpoint_generation/`：候选视角生成的 Blender 场景、三维模型与版面脚本。
 - `fig08_semantic_recovery/clear_rooms/`：当前物品核验与语义恢复图稿。
