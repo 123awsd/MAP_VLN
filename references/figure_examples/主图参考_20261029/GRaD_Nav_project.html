@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="description"
+        content="GRaD-Nav++: Vision-Language Model Enabled Visual Drone Navigation with Gaussian Radiance Fields and Differentiable Dynamics">
+  <meta name="keywords" content="VLA model, Reinforcement Learning, Differentiable Simulation">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Vision-Language Model Enabled Visual Drone Navigation with Gaussian Radiance Fields and Differentiable Dynamics">
+  <meta name="author" content="Qianzhong Chen">
+  <meta property="og:title" content="GRaD-Nav++: Vision-Language Model Enabled Visual Drone Navigation with Gaussian Radiance Fields and Differentiable Dynamics">
+  <meta property="og:description" content="GRaD-Nav++: Vision-Language Model Enabled Visual Drone Navigation with Gaussian Radiance Fields and Differentiable Dynamics">
+  <meta property="og:url" content="https://qianzhong-chen.github.io/gradnav.github.io/">
+
+  <title>GRaD-Nav++: Vision-Language Model Enabled Visual Drone Navigation with Gaussian Radiance Fields and Differentiable Dynamics</title>
+
+    <!-- Thumbnail for social media sharing -->
+    <!-- <meta property="og:image" content="media/thumbnail.jpg"> -->
+
+    <!-- Favicon -->
+    <!-- <link rel="icon" href="media/thumbnail.jpg" type="image/jpeg"> -->
+
+    <script>
+        window.dataLayer = window.dataLayer || [];
+    </script>
+
+    <script>
+        function updateInTheWild() {
+            var task = document.getElementById("inthewild-video-menu").value;
+
+            console.log("updateInTheWild", task)
+
+            var video = document.getElementById("inthewild-video");
+            video.src = "media/videos/" +
+                task +
+                ".m4v"
+            video.play();
+        }
+
+        function updateBimanual() {
+            var task = document.getElementById("bimanual-video-menu").value;
+
+            console.log("updateBimanual", task)
+
+            var video = document.getElementById("bimanual-video");
+            video.src = "media/videos/1_" +
+                task +
+                ".mp4"
+            video.play();
+        }
+
+        function updateClothes() {
+            var task = document.getElementById("clothes-video-menu").value;
+
+            console.log("updateclothes", task)
+
+            var img = document.getElementById("clothes-img");
+            img.src = "media/fold-strategies/" +
+                task +
+                ".jpeg"
+
+            var video = document.getElementById("clothes-video");
+            video.src = "media/videos/fold-" +
+                task +
+                ".mp4"
+            video.play();
+        }
+    </script>
+
+
+    <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
+
+    <link rel="stylesheet" href="./static/css/bulma.min.css">
+    <link rel="stylesheet" href="./static/css/bulma-carousel.min.css">
+    <link rel="stylesheet" href="./static/css/bulma-slider.min.css">
+    <link rel="stylesheet" href="./static/css/fontawesome.all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+    <link rel="stylesheet" href="./static/css/index.css">
+
+    <link rel="stylesheet" href="./static/source_serif_4.css">
+    <link rel="stylesheet" href="./static/source_sans_3.css">
+    <link rel="stylesheet" href="./static/academicons.min.css">
+    <link rel="stylesheet" href="./static/fontawesome/css/fontawesome.css">
+    <link rel="stylesheet" href="./static/fontawesome/css/brands.css">
+    <link rel="stylesheet" href="./static/fontawesome/css/light.css">
+
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script defer src="./static/js/fontawesome.all.min.js"></script>
+    <script src="./static/js/bulma-carousel.min.js"></script>
+    <script src="./static/js/bulma-slider.min.js"></script>
+    <script src="./static/js/index.js"></script>
+</head>
+
+<body onload="updateInTheWild();updateBimanual();">
+
+
+<section class="hero">
+    <div class="hero-body">
+        <div class="container is-fullhd">
+        <div class="columns is-centered">
+            <div class="column has-text-centered">
+            <h1 class="title is-1 publication-title">GRaD-Nav++: Vision-Language Model Enabled Visual Drone Navigation with Gaussian Radiance Fields and Differentiable Dynamics</h1>
+            <div class="is-size-5 publication-authors">
+                <span class="author-block">
+                <a target="_blank" href="https://qianzhong-chen.github.io/">Qianzhong Chen</a><sup>1</sup>,
+                <a target="_blank" href="https://www.linkedin.com/in/naixiang-gao-543348272/">Naixiang Gao</a><sup>1</sup>,
+                <a target="_blank" href="https://suninghuang19.github.io/">Suning Huang</a><sup>1</sup>,
+                <a target="_blank" href="https://msl.stanford.edu/people/junenlow">JunEn Low</a><sup>1</sup>,
+                <a target="_blank" href="https://msl.stanford.edu/people/timchen">Timothy Chen</a><sup>1</sup>,
+                <a target="_blank" href="https://web.stanford.edu/~jksun/">Jiankai Sun</a><sup>1</sup>,
+                <a target="_blank" href="https://msl.stanford.edu/people/timchen">Timothy Chen</a><sup>1</sup>
+                <a target="_blank" href="https://web.stanford.edu/~schwager/">Mac Schwager</a><sup>1</sup>
+                </span>
+            </div>
+            <div class="is-size-5 affiliation">
+                <sup>1</sup>Stanford University
+            </div>
+            <br>
+            <!-- <div class="affiliation-note">
+                <sup>*</sup> indicates equal contributions
+            </div> -->
+            <div class="button-container">
+            </div>
+            </div>
+        </div>
+        </div>
+    </div>
+    </section>
+      
+
+    <div class="buttons is-centered" style="display: flex; justify-content: center; gap: 10px; max-width: 600px; margin: auto;">
+        <a class="button is-primary" style="flex: 1; max-width: 180px; text-align: center;" href="https://qianzhong-chen.github.io/gradnav.github.io/" target="_blank">Prev. Work</a>
+        <a class="button is-primary" style="flex: 1; max-width: 180px; text-align: center;" href="https://ieeexplore.ieee.org/document/11297793" target="_blank">Paper</a>
+        <a class="button is-primary" style="flex: 1; max-width: 180px; text-align: center;" href="https://www.arxiv.org/abs/2506.14009" target="_blank">Arxiv</a>
+        <a class="button is-link" style="flex: 1; max-width: 180px; text-align: center;" href="https://github.com/Qianzhong-Chen/grad_nav.git" target="_blank">Code</a>
+    </div>
+    
+    
+    
+    
+
+    <section class="hero teaser">
+        <div class="container is-max-widescreen">
+            <div class="hero-body">
+                <div class="container">
+                    <div class="columns is-vcentered  is-centered">
+                        <video id="teaser" muted loop controls height="100%" width="100%">
+            <source src="media/videos/grad_nav_pp.mp4"
+                    type="video/mp4">
+          </video>
+                        </br>
+                    </div>
+                    <br>
+                    <h2 class="subtitle has-text-centered">
+                    </h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="container is-max-widescreen">
+            <div class="columns is-centered has-text-centered">
+                <div class="column is-four-fifths">
+                    <h2 class="title is-3">Abstract</h2>
+                    <div class="content has-text-justified">
+                        <p>
+                            Autonomous drones capable of interpreting and executing high-level language instructions in unstructured environments remain a long-standing goal. Yet existing approaches are constrained by their dependence on hand-crafted skills, extensive parameter tuning, or computationally intensive models unsuitable for onboard use. We introduce GRaD-Nav++, a lightweight Vision-Language-Action (VLA) framework that runs fully onboard and follows natural-language commands in real time. Our policy is trained in a photorealistic 3D Gaussian Splatting (3DGS) simulator via Differentiable Reinforcement Learning (DiffRL), enabling efficient learning of low-level control from visual and linguistic inputs. At its core is a Mixture-of-Experts (MoE) action head, which adaptively routes computation to improve generalization while mitigating forgetting. In multi-task generalization experiments, GRaD-Nav++ achieves a success rate of 83% on trained tasks and 75% on unseen tasks in simulation. When deployed on real hardware, it attains 67% success on trained tasks and 50% on unseen ones. In multi-environment adaptation experiments, GRaD-Nav++ achieves an average success rate of 81% across diverse simulated environments and 67% across varied real-world settings. These results establish a new benchmark for fully onboard Vision-Language-Action (VLA) flight and demonstrate that compact, efficient models can enable reliable, language-guided navigation without relying on external infrastructure.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="rounded">
+            <div class="rows">
+                <h2 class="title is-3">Overview of GRaD-Nav++</h2>
+                <div class="column1 has-text-centered">
+                    <img src="media/figures/model_structure.png" alt="arch-imag" style="width:80%">
+                </div>
+                <p class="content has-text-justified">
+                    Our GRaD-Nav++ architecture leverages a Vision-Language Model (VLM) to  offer the down stream policy network an informative and semantically rich representation of the environment given high-level language commands. The mixture of experts (MoE) action head adaptively routes computation through specialized experts to enhance generalization and mitigate forgetting when learning multiple tasks. The entire model is trained end-to-end via Differentiable Reinforcement Learning (DiffRL) in a photorealistic 3D Gaussian Splatting (3DGS) simulator, enabling efficient learning of low-level control from visual and linguistic inputs.
+                </p>
+            </div>
+
+            <hr class="rounded">
+            <div class="rows">
+                <h2 class="title is-3">Results of GRaD-Nav++</h2>
+            
+                <h4 class="title is-4">Multi Long-Horizon Tasks Generalization Experiment</h4>
+                <div class="column1">
+                    <img src="media/figures/long_task.png" alt="arch-imag" style="width:100%">
+                </div>
+                <p class="content has-text-justified">
+                    Example trajectories of untrained long horizon tasks.
+                    The instructions are “GO THROUGH gate then STOP over
+                    CART” (left) and “FLY past the RIGHT side of the gate then
+                    STOP over MONITOR” (right).
+                </p>
+                <h4 class="title is-4">Multi Environment Adaptation Experiment</h4>
+                <div class="column1">
+                    <img src="media/figures/multi_env.png" alt="arch-imag" style="width:100%">
+                </div>
+                <p class="content has-text-justified">
+                    Demonstration of multi-environment adaptation in real-world experiments using video frame overlay visualization. The
+                    top row shows the drone flying to the left of, through, above, and to the right of the gate in the middle-gate environment.
+                    The bottom row shows the drone executing the same directional tasks in the left-gate environment. Red arrowed curves
+                    illustrate the approximate flight trajectories. The learned policy demonstrates robust generalization to varying environments,
+                    adapting to changes in gate positions and the presence of distractor objects.
+                </p>
+
+                <h4 class="title is-4">Task Shift Experiment</h4>
+                <div class="column1">
+                    <img src="media/figures/task_shift.png" alt="arch-imag" style="width:100%">
+                </div>
+                <p class="content has-text-justified">
+                    Task-switching experiment with instruction change at
+                    step 100. Left: Experiment scene showing the drone flying
+                    past the gate. Right: Normalized cosine similarity between
+                    text and visual embeddings over time, reflecting the VLM's
+                    ability to re-ground the new instruction.
+                </p>
+
+                <h4 class="title is-4">MoE Loading</h4>
+                <div class="column1 has-text-centered">
+                    <img src="media/figures/moe.png" alt="arch-imag" style="width:70%">
+                </div>
+
+                <p class="content has-text-justified">
+                    Experts' usage intensity when executing the same task (“GO THROUGH gate”) at different surrounding environments (top-left gate, bottom-middle gate). The results
+                    demonstrate that the MoE architecture adaptively allocates
+                    expert resources according to the specific demands of each
+                    environment.
+                </p>
+
+            </div>
+
+            <hr class="rounded">
+            <div class="rows">
+                <h2 class="title is-3">Citations</h2>
+                <p class="content has-text-justified">
+                    If you find our work useful in your research, please consider citing:
+                </p>
+                <pre><code>
+@article{chen2025grad,
+  title={Grad-nav++: Vision-language model enabled visual drone navigation with gaussian radiance fields and differentiable dynamics},
+  author={Chen, Qianzhong and Gao, Naixiang and Huang, Suning and Low, JunEn and Chen, Timothy and Sun, Jiankai and Schwager, Mac},
+  journal={IEEE Robotics and Automation Letters},
+  volume={11},
+  number={2},
+  pages={1418--1425},
+  year={2025},
+  publisher={IEEE}
+}
+                </code></pre>
+            </div>
+            
+            
+
+    </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="columns is-centered">
+                <div class="column">
+                    <div class="content has-text-centered">
+                        <p>
+                            Website template borrowed from <a href="https://nerfies.github.io">Nerfies</a>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+
+</body>
+
+</html>

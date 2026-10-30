@@ -1,0 +1,77 @@
+                                         IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED DECEMBER, 2020                                                                         1
+
+
+
+
+                                              FUEL: Fast UAV Exploration using Incremental
+                                               Frontier Structure and Hierarchical Planning
+                                                                              Boyu Zhou, Yichen Zhang, Xinyi Chen and Shaojie Shen
+
+
+
+
+                                            Abstract—Autonomous exploration is a fundamental problem
+                                         for various applications of unmanned aerial vehicles(UAVs).
+                                         Existing methods, however, were demonstrated to insufficient
+                                         exploration rate, due to the lack of efficient global coverage,
+arXiv:2010.11561v2 [cs.RO] 26 Dec 2020
+
+
+
+
+                                         conservative motion plans and low decision frequencies. In this
+                                         paper, we propose FUEL, a hierarchical framework that can sup-
+                                         port Fast UAV ExpLoration in complex unknown environments.
+                                         We maintain crucial information in the entire space required by
+                                         exploration planning by a frontier information structure (FIS),
+                                         which can be updated incrementally when the space is explored.
+                                         Supported by the FIS, a hierarchical planner plans exploration
+                                         motions in three steps, which find efficient global coverage paths,
+                                         refine a local set of viewpoints and generate minimum-time                               (a) A cluttered environment for the exploration tests.
+                                         trajectories in sequence. We present extensive benchmark and
+                                         real-world tests, in which our method completes the exploration
+                                         tasks with unprecedented efficiency (3-8 times faster) compared
+                                         to state-of-the-art approaches. Our method will be made open
+                                         source to benefit the community1 .
+                                           Index Terms—Aerial Systems: Applications; Aerial Systems:
+                                         Perception and Autonomy; Motion and Path Planning
+
+
+                                                                  I. I NTRODUCTION
+
+                                         U     NMANNED aerial vehicles, especially quadrotors have
+                                               gained widespread popularity in various applications,
+                                         such as inspection, precision agriculture, and search and
+                                         rescue. Among the tasks, autonomous exploration, in which                                  (b) The online built map and executed trajectory.
+                                         the vehicle explores and maps the unknown environment to                      Fig. 1. A quadrotor autonomous exploration test conducted in a complex
+                                                                                                                       indoor scene. Video of the experiments is available at: https://www.youtube.
+                                         gather information, is a fundamental component.                               com/watch?v= dGgZUrWk-8.
+                                            Various exploration planning methods have been proposed
+                                         in recent years, with some real-world experiments presented
+                                         [1]–[4]. However, most of them demonstrate a low/medium                       however, disallows quadrotors to fully exploit their dynamic
+                                         exploration rate, which is unsatisfactory for many large-scale                capability to fulfill the missions. Last but not least, many
+                                         real-world applications. First of all, many existing planners                 methods suffer from high computational overhead and can
+                                         plan exploring motions in greedy manners, such as maximizing                  not respond quickly and frequently to environmental changes.
+                                         the immediate information gain, or navigating to the closest                  However, to enable faster exploration, it is desirable to replan
+                                         unknown region. The greedy strategies ignore global opti-                     new motions immediately whenever new information of the
+                                         mality and therefore result in low overall efficiency. Besides,               environment is available.
+                                         most methods generate rather conservative motions in order                       Motivated by the above facts, this paper proposes FUEL,
+                                         to guarantee information gain and safety simultaneously in                    a hierarchical framework that can support Fast UAV
+                                         previously unknown environments. Low-speed exploration,                       ExpLoration in complex environments. We introduce a frontier
+                                                                                                                       information structure (FIS), which contains essential informa-
+                                           Manuscript received: October, 15, 2020; Accepted December, 13, 2020.        tion in the entire space required by exploration planning. The
+                                         This paper was recommended for publication by Editor Pauline Pounds upon
+                                         evaluation of the Associate Editor and Reviewers’ comments. This work
+                                                                                                                       structure can be updated efficiently and incrementally when
+                                         was supported by Research Grants Council (RGC) project no.16213717, ITC       new information is collected, so it is capable of supporting
+                                         project no.ITT/027/19GP, HDJI lab. All authors are with the Department of     high-frequency planning. Based on the FIS, a hierarchical
+                                         Electronic and Computer Engineering, Hong Kong University of Science and
+                                         Technology, Hong Kong, China. {bzhouai, yzhangec, xchencq,
+                                                                                                                       planner generates exploring motion in three coarse-to-fine
+                                         eeshaojie}@connect.ust.hk. Digital Object Identifier (DOI): see top           steps. It starts by finding a global exploration tour that is op-
+                                         of this page.                                                                 timal in the context of accumulated environment information.
+                                           1 To be released at https://github.com/HKUST-Aerial-Robotics/FUEL
+                                                                                                                       Then, viewpoints on a local segment of the tour are refined,
+                                                                                                                       further improving the exploration rate. Finally, a safe, dynam-
+                                         ©2020 IEEE. Personal use of this material is permitted. Permission from IEEE must be obtained for all other uses.
+

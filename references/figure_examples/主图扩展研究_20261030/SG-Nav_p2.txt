@@ -1,0 +1,74 @@
+                                                                Q: Where is                 ?
+                                 TV                                                                                            TV
+                                                                                         Table
+                                                                            Sofa
+
+                                                Room Level
+                                Table
+                 Sofa                   Chair                    Living Room Furniture                                                Chair
+                                                Group Level
+                                                                                                                       Sofa   Table
+                                                Object Level
+                                        Chair                                 Living room Sofa                                        Chair
+    Living Room Furniture
+
+                                                                   Subgraph related to TV
+          Desk                  Sofa                                                                            Desk           Sofa
+
+                  Living room
+
+                                                                A: Opposite to sofa.
+
+
+                 In living room, TV and sofa                   Our SG-Nav                        Conventional                 TV is next to {sofa,
+                  are on both sides of table.                    Agent                              Agent                       chair, table}.
+
+
+Figure 1: Different from previous zero-shot object navigation methods [46; 52] that directly prompt
+LLM with text of nearby object categories, we construct a hierarchical 3D scene graph to represent
+the observed environment and prompts LLM to fully exploit the structure information in the graph.
+Our SG-Nav preserves fine-grained scene context and makes reasonable and explainable decisions.
+
+
+environment visually, they select the categories of objects near each frontier to prompt LLM and rate
+the possibility of each frontier. While these approaches achieve zero-shot object navigation, there
+are still some drawbacks in their design: (1) they prompt LLM with only the text of nearby object
+categories, which is less informative and lacks scene context such as spatial relationship; (2) they
+let LLM directly output the possibility for each frontier, which is an abstract task and does not fully
+utilizes the reasoning ability of the LLM. As a result, their reasoning process is not explainable and
+the performance is far from satisfactory.
+In this paper, we propose a new object navigation framework namely SG-Nav, which fully exploits
+the reasoning ability of LLM for zero-shot navigation planning with high accuracy and fast speed. As
+shown in Figure 1, different from previous LLM-based object navigation framework that prompts
+LLM with only text of object categories and directly outputs probability, SG-Nav represents the
+complicated 3D environment in an online updated hierarchical 3D scene graph and utilizes it to
+hierarchically prompt LLM for reliable and explainable decision making. Benefit from the scene
+graph representation, we further design a graph-based re-perception mechanism to empower the
+object navigation framework with the ability to correct perception error. Specifically, we first
+construct an online 3D hierarchical scene graph along with the exploration of the agent. Since there
+are many levels and nodes in the scene graph, it is challenging to build the scene graph in real
+time. To solve this problem, we propose to densely connect the newly detected nodes to previous
+nodes in an incremental manner. We design a new form of prompt to control the computational
+complexity of this dense connecting process linear to the number of new nodes, which is followed by
+a pruning process to discard less informative edges. With the 3D scene graph, we divide it into several
+subgraphs and propose a hierarchical chain-of-thought to let LLM perceive the structural information
+in each subgraph for explainable probability prediction. Then we interpolate the probability of each
+subgraph to the frontiers for decision making, which can be further explained by summarizing the
+reasoning process for the most related subgraphs. Moreover, we also notice that previous object
+navigation framework fails when detecting out a false positive goal object. So we propose a graph-
+based re-perception mechanism to judge the credibility of the observed goal object by accumulating
+relevant probability of subgraphs. The agent will give up goal object with low credibility for robust
+navigation. We conduct extensive experiments on MP3D, HM3D and RoboTHOR environments.
+Our SG-Nav achieves state-of-the-art zero-shot performance on all benchmarks, surpassing previous
+top-performance zero-shot method by more than 10% in terms of SR. SG-Nav can also explain the
+reason for its decision at each step, making it more practical in human-agent interaction scenarios.
+
+
+2      Related Works
+
+Object-goal Navigation: Objec-goal navigation methods can be divided into two categories: end-to-
+end RL methods [38; 29; 43; 44; 26; 25; 50] and explicit modular-based methods [6; 32; 48; 11; 46;
+
+
+                                                                               2
+

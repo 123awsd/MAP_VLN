@@ -7,7 +7,7 @@ Build with `make pdf` (XeLaTeX and BibTeX), or select XeLaTeX and `root.tex` in 
 `../figures/final/` contains the figures cited by the manuscript. Editable sources
 are organized by figure number under `../figures/source/`.
 
-This is the active paper project inside `/home/uav/map_VLN/LogicFly-paper/`.
+This is the paper branch of the shared repository at `/home/uav/map_VLN/PRE_MAP_VLN/`.
 Run `make pdf` here or from the project root. See `../README.md` for the figure
 index, source provenance, and submission packaging commands.
 

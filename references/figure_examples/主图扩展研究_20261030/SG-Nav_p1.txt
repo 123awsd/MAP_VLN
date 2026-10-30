@@ -1,0 +1,62 @@
+                                                 SG-Nav: Online 3D Scene Graph Prompting for
+                                                   LLM-based Zero-shot Object Navigation
+
+
+                                                             Hang Yin1∗, Xiuwei Xu1∗† , Zhenyu Wu2 , Zhou Jie1 , Jiwen Lu1‡
+                                                                                  1
+                                                                                    Tsinghua University
+                                                                  2
+                                                                    Beijing University of Posts and Telecommunications
+arXiv:2410.08189v1 [cs.CV] 10 Oct 2024
+
+
+
+
+                                                                     {yinh23, xxw21}@mails.tsinghua.edu.cn
+                                                           wuzhenyu@bupt.edu.cn, {jzhou, lujiwen}@tsinghua.edu.cn
+
+
+
+                                                                                            Abstract
+
+                                                     In this paper, we propose a new framework for zero-shot object navigation. Existing
+                                                     zero-shot object navigation methods prompt LLM with the text of spatially closed
+                                                     objects, which lacks enough scene context for in-depth reasoning. To better
+                                                     preserve the information of environment and fully exploit the reasoning ability of
+                                                     LLM, we propose to represent the observed scene with 3D scene graph. The scene
+                                                     graph encodes the relationships between objects, groups and rooms with a LLM-
+                                                     friendly structure, for which we design a hierarchical chain-of-thought prompt to
+                                                     help LLM reason the goal location according to scene context by traversing the
+                                                     nodes and edges. Moreover, benefit from the scene graph representation, we further
+                                                     design a re-perception mechanism to empower the object navigation framework
+                                                     with the ability to correct perception error. We conduct extensive experiments on
+                                                     MP3D, HM3D and RoboTHOR environments, where SG-Nav surpasses previous
+                                                     state-of-the-art zero-shot methods by more than 10% SR on all benchmarks, while
+                                                     the decision process is explainable. To the best of our knowledge, SG-Nav is
+                                                     the first zero-shot method that achieves even higher performance than supervised
+                                                     object navigation methods on the challenging MP3D benchmark. Project page.
+
+
+                                         1       Introduction
+                                         Object navigation, which requires an agent to navigate to an object specified by its category in
+                                         unknown environment [3], is a fundamental problem in a wide range of robotic tasks. Thanks to the
+                                         advancements in deep learning and reinforcement learning (RL), modular-based object navigation
+                                         approaches [6; 32; 48] have achieved impressive performance in recent years, which caches the visual
+                                         perception results of the RGB-D observation into semantic map and learns a policy to predict actions
+                                         according to this map. However, conventional methods rely on time-consuming training in simulation
+                                         environment, which only works well on specific datasets and can only handle limited categories of
+                                         goal object.
+                                         In order to solve above limitations and enhance the generalization ability of object navigation, zero-
+                                         shot object navigation has received increasing attention. In the zero-shot setting, the system does
+                                         not require any training or finetuning before applied to real-world scenarios, and the goal category
+                                         can be freely specified by text in an open-vocabulary manner. Since training data is unavailable,
+                                         recent zero-shot object navigation methods [46; 52] leverage large language models (LLM) [36; 1]
+                                         instead of RL agent to perform decision-making processes, where the extensive knowledge in LLM
+                                         helps to address various common-sense reasoning problems in zero-shot. In these works, the LLM is
+                                         required to select a frontier for the agent to explore the unobserved area. As LLM cannot perceive the
+                                             ∗
+                                                 Equal contribution. † Project lead. ‡ Corresponding author.
+
+
+                                         38th Conference on Neural Information Processing Systems (NeurIPS 2024).
+

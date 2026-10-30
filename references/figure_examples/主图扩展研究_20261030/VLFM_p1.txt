@@ -1,0 +1,49 @@
+                                                                       VLFM: Vision-Language Frontier Maps
+                                                                         for Zero-Shot Semantic Navigation
+                                                       Naoki Yokoyama1,2 , Sehoon Ha2 , Dhruv Batra2 , Jiuguang Wang1 , Bernadette Bucher1
+arXiv:2312.03275v1 [cs.RO] 6 Dec 2023
+
+
+
+
+                                        Fig. 1: VLFM achieves state-of-the-art semantic Object Goal Navigation performance in unfamiliar environments, without task-specific
+                                        training, pre-built maps, or prior knowledge of the surroundings. It utilizes a vision-language model to explore the environment, capitalizing
+                                        on visual semantic cues that are likely to guide the agent towards the goal to explore the environment more efficiently than a greedy
+                                        frontier-based exploration agent.
+                                           Abstract— Understanding how humans leverage semantic                                         I. I NTRODUCTION
+                                        knowledge to navigate unfamiliar environments and decide
+                                        where to explore next is pivotal for developing robots capable           How do humans navigate in novel environments? The pro-
+                                        of human-like search behaviors. We introduce a zero-shot                 cess of human navigation in unfamiliar environments is
+                                        navigation approach, Vision-Language Frontier Maps (VLFM),               complex, often relying on a combination of explicit maps
+                                        which is inspired by human reasoning and designed to navigate            and internal knowledge. This internal knowledge is typically
+                                        towards unseen semantic objects in novel environments. VLFM
+                                        builds occupancy maps from depth observations to identify                an accumulation of semantic knowledge, which can be used
+                                        frontiers, and leverages RGB observations and a pre-trained              to infer the layout of the space, including the locations of
+                                        vision-language model to generate a language-grounded value              specific objects and geometric configurations. For instance,
+                                        map. VLFM then uses this map to identify the most promising              we know that toilets and showers are usually found together
+                                        frontier to explore for finding an instance of a given target            in bathrooms, often located near bedrooms. Natural language
+                                        object category. We evaluate VLFM in photo-realistic environ-
+                                        ments from the Gibson, Habitat-Matterport 3D (HM3D), and                 can further enhance this prior semantic knowledge, depend-
+                                        Matterport 3D (MP3D) datasets within the Habitat simulator.              ing on the context.
+                                        Remarkably, VLFM achieves state-of-the-art results on all three             In the development of robots capable of human-like navi-
+                                        datasets as measured by success weighted by path length                  gation, learned foundation models that mimic this human rea-
+                                        (SPL) for the Object Goal Navigation task. Furthermore, we               soning process can be invaluable. Many methods, known as
+                                        show that VLFM’s zero-shot nature enables it to be readily
+                                        deployed on real-world robots such as the Boston Dynamics                zero-shot methods, utilize these models to facilitate semantic
+                                        Spot mobile manipulation platform. We deploy VLFM on Spot                navigation without any task-specific training or fine-tuning.
+                                        and demonstrate its capability to efficiently navigate to target         Zero-shot methods are convenient because they can be easily
+                                        objects within an office building in the real world, without any         adapted or repurposed for future robotic systems performing
+                                        prior knowledge of the environment. The accomplishments of               complex tasks, and they provide intermediate representations
+                                        VLFM underscore the promising potential of vision-language
+                                        models in advancing the field of semantic navigation. Videos of          that improve interpretability. The remarkable performance of
+                                        real world deployment can be viewed at naoki.io/vlfm.                    large language models (LLMs) and vision-language models
+                                                                                                                 (VLMs) has facilitated task-independent solutions for the
+                                                                                                                 semantic inference of out-of-view scene information [1]–[3].
+                                                                                                                    In this work, we propose Vision-Language Frontier Maps
+                                                                                                                 (VLFM), a zero-shot approach for target-driven semantic
+                                          1 Work done during NY’s internship. JW and BB are with the Boston
+                                                                                                                 navigation to an unseen object in a novel environment.
+                                        Dynamics AI Institute {jw,bbucher}@theaiinstitute.com
+                                          2 NY, SH, and DB are with the Georgia Institute of Technology          VLFM builds occupancy maps from depth observations
+                                        {nyokoyama,sehoonha,dbatra}@gatech.edu                                   to identify frontiers of the explored map region. To find
+

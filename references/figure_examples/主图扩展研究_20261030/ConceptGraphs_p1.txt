@@ -1,0 +1,78 @@
+                                            ConceptGraphs: Open-Vocabulary 3D Scene Graphs for Perception and Planning
+                                                                                                     https://concept-graphs.github.io/
+                                                         Qiao Gu†∗1 , Ali Kuwajerwala†∗2 , Sacha Morin∗2 , Krishna Murthy Jatavallabhula∗3 ,
+                                                           Bipasha Sen2 , Aditya Agarwal2 , Corban Rivera5 , William Paul5 , Kirsty Ellis2 ,
+                                                                      Rama Chellappa6 , Chuang Gan7 , Celso Miguel de Melo4 ,
+                                                              Joshua B. Tenenbaum3 , Antonio Torralba3 , Florian Shkurti1 Liam Paull2 ,
+                                              1 University of Toronto, 2 Université de Montréal, 3 MIT, 4 DEVCOM ARL, 5 JHU APL, 6 JHU, 7 UMass
+
+                                                                                                                                    Object: cabinet                  Queries with Both Image and Language Context
+                                               “A picture of a boat”                                                                                                       Find something this guy would play with
+                                                                                                                                    Center: (x, y, z)
+
+                                              Object Caption                                                              3D Object Detection
+arXiv:2309.16650v1 [cs.RO] 28 Sep 2023
+
+
+
+
+                                                                                                                                                                                          ConceptGraphs
+
+
+
+
+                                                                                                                                                                                      Traversability Estimation
+                                                                                                                                                             Can I push this object        ConceptGraphs: “Yes! It's probably a piece of
+                                                                                                                                                             and traverse through?        green fabric. You can push it without damage.”
+
+
+
+
+                                               A white sofa with 3                                                                The ottoman is on
+                                               pillows on the top.                                                                   the carpet.
+
+                                             Scene Structure                                                                Spatial Reasoning
+
+
+                                                                                     ConceptGraphs                     My wrist hurts from using
+                                                                                                                        my screwdriver all day.                           I'm craving something
+                                                               Pick up the                                                Anything to help?                                  fizzy and sweet.
+                                                            “cuddly quacker”
+                                                                                                                        ConceptGraphs: Go to                               ConceptGraphs: Go to
+                                                                                                                        object 18, a power drill                           object 37, a soda can
+
+                                                                               Open-vocabulary Pick and Place                                              Complex Text Queries
+
+
+                                         Fig. 1: ConceptGraphs builds open-vocabulary 3D scene graphs. We (a) design an object-based mapping system that only assumes
+                                         class-agnostic instance masks and fuses them to 3D, (b) interprets and extracts language tags for each mapped instance leveraging large
+                                         vision-language models, and (c) builds a graph of object spatial relationships by leveraging priors encoded in large language models. The
+                                         object-centric nature of ConceptGraphs allows easy map maintenance and promotes scalability, and the graph structure provides relational
+                                         information within the scene. Furthermore, our scene graph representations are easily mapped to natural language formats to interface
+                                         with LLMs, enabling them to answer complex scene queries and granting robots access to useful facts about surrounding objects, such
+                                         as traversability and utility. We implement and demonstrate ConceptGraphs on a number of real-world robotics tasks across wheeled and
+                                         legged mobile robot platforms. (Webpage) (Explainer Video)
+                                            Abstract— For robots to perform a wide variety of tasks, they                                               I. I NTRODUCTION
+                                         require a 3D representation of the world that is semantically
+                                         rich, yet compact and efficient for task-driven perception                      Scene representation is one of the key design choices
+                                         and planning. Recent approaches have attempted to leverage
+                                         features from large vision-language models to encode semantics               that can facilitate downstream planning for a variety of
+                                         in 3D representations. However, these approaches tend to                     tasks, including mobility and manipulation. Robots need
+                                         produce maps with per-point feature vectors, which do not                    to build these representations online from onboard sen-
+                                         scale well in larger environments, nor do they contain semantic              sors as they navigate through an environment. For efficient
+                                         spatial relationships between entities in the environment, which             execution of complex tasks such representations should
+                                         are useful for downstream planning. In this work, we propose
+                                         ConceptGraphs, an open-vocabulary graph-structured represen-                 be: scalable and efficient to maintain, as the volume of the
+                                         tation for 3D scenes. ConceptGraphs is built by leveraging 2D                scene and the duration of the robot’s operation increases;
+                                         foundation models and fusing their output to 3D by multi-                    open-vocabulary, not limited to making inferences about a
+                                         view association. The resulting representations generalize to                set of concepts that is predefined at training time, but capable
+                                         novel semantic classes, without the need to collect large 3D                 of handling new objects and concepts at inference time; and
+                                         datasets or finetune models. We demonstrate the utility of this
+                                         representation through a number of downstream planning tasks                 with a flexible level of detail to enable planning over a range
+                                         that are specified through abstract (language) prompts and                   of tasks, from ones that require dense geometric information
+                                         require complex reasoning over spatial and semantic concepts.                for mobility and manipulation, to ones that need abstract
+                                         To explore the full scope of our experiments and results, we                 semantic information and object-level affordance information
+                                         encourage readers to visit our project webpage.                              for task planning. We propose ConceptGraphs, a 3D scene
+                                                                                                                      representation method for robot perception and planning that
+                                           †Project Lead *Equal Contribution                                          satisfies all the above requirements.
+

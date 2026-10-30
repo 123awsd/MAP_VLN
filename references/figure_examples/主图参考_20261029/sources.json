@@ -1,0 +1,67 @@
+[
+  {
+    "name": "OnFly",
+    "url": "https://arxiv.org/html/2603.10682v1",
+    "images": [
+      {
+        "local": "OnFly_image_3.png",
+        "url": "https://arxiv.org/html/2603.10682v1/imgs/header.jpg",
+        "alt": "Refer to caption"
+      }
+    ]
+  },
+  {
+    "name": "AirHunt",
+    "url": "https://arxiv.org/html/2601.12742v1",
+    "images": [
+      {
+        "local": "AirHunt_image_3.png",
+        "url": "https://arxiv.org/html/2601.12742v1/teaser-3.png",
+        "alt": "[Uncaptioned image]"
+      }
+    ]
+  },
+  {
+    "name": "SPF",
+    "url": "https://arxiv.org/html/2509.22653v1",
+    "images": [
+      {
+        "local": "SPF_image_3.png",
+        "url": "https://arxiv.org/html/2509.22653v1/teaser-crop.png",
+        "alt": "Refer to caption"
+      }
+    ]
+  },
+  {
+    "name": "GRaD_Nav_v1",
+    "url": "https://arxiv.org/html/2506.14009v1",
+    "images": [
+      {
+        "local": "GRaD_Nav_v1_image_3.png",
+        "url": "https://arxiv.org/html/2506.14009v1/GRaD_Nav_pp_model.png",
+        "alt": "Refer to caption"
+      }
+    ]
+  },
+  {
+    "name": "GRaD_Nav_project",
+    "url": "https://qianzhong-chen.github.io/gradnavpp.github.io/",
+    "images": [
+      {
+        "local": "GRaD_Nav_project_image_1.png",
+        "url": "https://qianzhong-chen.github.io/gradnavpp.github.io/media/figures/model_structure.png",
+        "alt": "arch-imag"
+      },
+      {
+        "local": "GRaD_Nav_project_image_2.png",
+        "url": "https://qianzhong-chen.github.io/gradnavpp.github.io/media/figures/long_task.png",
+        "alt": "arch-imag"
+      },
+      {
+        "local": "GRaD_Nav_project_image_3.png",
+        "url": "https://qianzhong-chen.github.io/gradnavpp.github.io/media/figures/multi_env.png",
+        "alt": "arch-imag"
+      }
+    ]
+  }
+]

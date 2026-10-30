@@ -1,0 +1,23 @@
+{
+  "source": "\u771f\u673a\u5b9e\u9a8c\u7d20\u6750/\u6210\u529f\u573a\u6b21/\u5b9e\u9a8c\u5ba44\u4efb\u52a1\u52a0\u4e3b\u52a8\u641c\u7d22/02_\u5730\u56fe\u4e0e\u573a\u666f/voxel_snapshot",
+  "occupied_cells_displayed": 14109,
+  "boundary_faces": 34926,
+  "resolution_m": 0.2,
+  "display_crop_world_xyz": {
+    "x": [
+      -43,
+      21
+    ],
+    "y": [
+      -10,
+      18
+    ],
+    "z": [
+      -0.3,
+      1.9
+    ]
+  },
+  "geometry": "Boundary mesh of archived occupied voxels; no floor or walls inferred or extruded.",
+  "trajectory": "Recorded onboard EKF body positions, unmodified coordinates.",
+  "status": "Geometry presentation study, not an installed manuscript figure."
+}

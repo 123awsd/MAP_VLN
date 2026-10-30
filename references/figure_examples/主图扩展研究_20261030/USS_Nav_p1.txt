@@ -1,0 +1,51 @@
+                                          USS-Nav: Unified Spatio-Semantic Scene Graph for Lightweight UAV
+                                                             Zero-Shot Object Navigation
+                                                Weiqi Gai1,3 , Yuman Gao2,3 , Yuan Zhou2,3 , Yufan Xie1 , Zhiyang Liu3 , Yuze Wu2,3 , Xin Zhou2,3
+                                                                                Fei Gao†,2,3 , and Zhijun Meng†,1
+arXiv:2602.00708v2 [cs.RO] 3 Feb 2026
+
+
+
+
+                                        Fig. 1: Overview of the proposed framework deployed on a resource-constrained UAV for Zero-Shot Object Navigation in a
+                                        real-world environment. The system incrementally constructs a Global Spatial Connectivity Graph visualized as a wireframe
+                                        and concurrently instantiates semantic objects to form a unified spatio-semantic scene graph. This hierarchical representation
+                                        supports dynamic region partitioning, enabling the Large Language Model for efficient, coarse-to-fine decision making.
+
+
+                                           Abstract— Zero-Shot Object Navigation in unknown envi-                  form. Furthermore, ablation studies confirm the effectiveness of
+                                        ronments poses significant challenges for Unmanned Aerial                  our framework, showing substantial improvements in Success
+                                        Vehicles (UAVs) due to the conflict between high-level semantic            weighted by Path Length (SPL). The source code will be made
+                                        reasoning requirements and limited onboard computational                   publicly available to foster further research.
+                                        resources. To address this, we present USS-Nav, a lightweight
+                                        framework that incrementally constructs a Unified Spatio-                                       I. I NTRODUCTION
+                                        Semantic scene graph and enables efficient Large Language
+                                        Model (LLM)-augmented Zero-Shot Object Navigation in un-                      Driven by the inherent agility and superior mobility of
+                                        known environments. Specifically, we introduce an incremen-                multirotor Unmanned Aerial Vehicles (UAVs), their de-
+                                        tal Spatial Connectivity Graph generation method utilizing                 mand in real-world applications is rapidly increasing [1].
+                                        polyhedral expansion to capture global geometric topology,                 Incorporating semantic perception and understanding enables
+                                        which is dynamically partitioned into semantic regions via
+                                                                                                                   UAVs to transcend simple point-to-point obstacle avoidance,
+                                        graph clustering. Concurrently, open-vocabulary object seman-
+                                        tics are instantiated and anchored to this topology to form                unlocking the ability to autonomously explore and reason
+                                        a hierarchical environmental representation. Leveraging this               about previously unseen spaces. This capability is pivotal for
+                                        hierarchical structure, we present a coarse-to-fine exploration            Zero-Shot Object Navigation, empowering a UAV to execute
+                                        strategy: LLM grounded in the scene graph’s semantics to                   natural-language commands such as "find a sofa in the living
+                                        determine global target regions, while a local planner optimizes
+                                                                                                                   room" or "locate a suitable place for sleeping" without any
+                                        frontier coverage based on information gain. Experimental
+                                        results demonstrate that our framework outperforms state-of-               prior knowledge of the scene layout.
+                                        the-art methods in terms of computational efficiency and real-                Prior works are commonly demonstrated in simulation [2]
+                                        time update frequency (15 Hz) on a resource-constrained plat-              or on ground robots [3], [4] with plentiful compute and
+                                                                                                                   power. In contrast, UAVs operate under strict size, weight,
+                                          † Corresponding authors: Fei Gao and Zhijun Meng
+                                          1 School                                                                 and power (SWaP) constraints, making such heavy pipelines
+                                                    of Aeronautic Science and Engineering, Beihang University,
+                                        Beijing 100191, China.                                                     difficult to deploy and run in real time. To make Zero-Shot
+                                          2 State Key Laboratory of Industrial Control Technology, Zhejiang Uni-
+                                                                                                                   Object Navigation practical on such constrained aerial plat-
+                                        versity, Hangzhou 310027, China.                                           forms, we identify two critical challenges: a) Lack of a uni-
+                                          3 Differential Robotics, Hangzhou 311121, China.
+                                          E-mail: {gaiwq, mengzhijun}@buaa.edu.cn                                  fied spatial-semantic representation, and b) Prohibitive com-
+                                          E-mail: fgaoaa@zju.edu.cn                                                putational burdens imposed by limited onboard resources.
+

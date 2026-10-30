@@ -1,0 +1,169 @@
+{
+  "canvas": [
+    3600,
+    1659
+  ],
+  "crops": {
+    "global": [
+      151,
+      225,
+      2452,
+      1120
+    ],
+    "recovery": [
+      0,
+      114,
+      865,
+      848
+    ]
+  },
+  "global_rect": [
+    40,
+    100,
+    2720,
+    1057.9747935680139
+  ],
+  "recovery_rect": [
+    2820,
+    105,
+    740,
+    627.9306358381504
+  ],
+  "global_ratio": 1.1820947414167753,
+  "recovery_ratio": 0.8554913294797688,
+  "labels": [
+    {
+      "text": "\u201cCheck the laptop, toolbox, microwave and cup; find the laptop if it is absent.\u201d",
+      "left": 574.7890625,
+      "top": 12,
+      "width": 1650.421875,
+      "height": 52
+    },
+    {
+      "text": "Recovery: A \u2192 1",
+      "left": 2820,
+      "top": 14,
+      "width": 348.53125,
+      "height": 50
+    },
+    {
+      "text": "A",
+      "left": 2153.6083733908044,
+      "top": 573.0011510339212,
+      "width": 30.328125,
+      "height": 42
+    },
+    {
+      "text": "1",
+      "left": 2487.7330205420835,
+      "top": 721.3778359066243,
+      "width": 23.359375,
+      "height": 42
+    },
+    {
+      "text": "2",
+      "left": 2617.7954763174575,
+      "top": 479.9860558938793,
+      "width": 23.359375,
+      "height": 42
+    },
+    {
+      "text": "3",
+      "left": 1123.9229601810725,
+      "top": 626.2196008714579,
+      "width": 23.359375,
+      "height": 42
+    },
+    {
+      "text": "4",
+      "left": 265.6936036200691,
+      "top": 531.2071250706639,
+      "width": 23.359375,
+      "height": 42
+    },
+    {
+      "text": "Recorded flight",
+      "left": 138,
+      "top": 1156,
+      "width": 269.078125,
+      "height": 40
+    },
+    {
+      "text": "Recovery",
+      "left": 558,
+      "top": 1156,
+      "width": 168.96875,
+      "height": 40
+    },
+    {
+      "text": "Start",
+      "left": 850,
+      "top": 1156,
+      "width": 84.484375,
+      "height": 40
+    },
+    {
+      "text": "5 m",
+      "left": 2648.387722132518,
+      "top": 1158,
+      "width": 63.359375,
+      "height": 38
+    },
+    {
+      "text": "A",
+      "left": 3123.045524112062,
+      "top": 292.8748922017268,
+      "width": 30.328125,
+      "height": 42
+    },
+    {
+      "text": "1",
+      "left": 3362.693147808141,
+      "top": 404.8426473485252,
+      "width": 23.359375,
+      "height": 42
+    },
+    {
+      "text": "A  Initial check: not found",
+      "left": 2820,
+      "top": 750,
+      "width": 452.578125,
+      "height": 43
+    },
+    {
+      "text": "1  Laptop found",
+      "left": 2820,
+      "top": 1118,
+      "width": 275.859375,
+      "height": 43
+    },
+    {
+      "text": "(1) Laptop",
+      "left": 277.7890625,
+      "top": 1583,
+      "width": 195.421875,
+      "height": 46
+    },
+    {
+      "text": "(2) Toolbox",
+      "left": 950.0234375,
+      "top": 1583,
+      "width": 216.953125,
+      "height": 46
+    },
+    {
+      "text": "(3) Microwave",
+      "left": 1604.1953125,
+      "top": 1583,
+      "width": 274.609375,
+      "height": 46
+    },
+    {
+      "text": "(4) Cup",
+      "left": 2353.59375,
+      "top": 1583,
+      "width": 141.8125,
+      "height": 46
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+Article                                                                                                            https://doi.org/10.1038/s41467-026-74358-5
+
+
+and stateless manner. Without durable internal models of external                          Motivated by these biological principles, we introduce Brain-
+space, agents struggle to consolidate coherent spatial representa-                    inspired Spatial Cognition for Navigation (BSC-Nav), a uniﬁed frame-
+tions or perform reasoning beyond immediate stimuli, resulting in                     work that instantiates cognitive spatial intelligence in embodied
+fragmented knowledge, short-sighted planning, and poor general-                       agents via structured spatial memory (Fig. 1b). BSC-Nav explicitly
+ization. Addressing these limitations requires a paradigm shift from                  constructs spatial knowledge via two synergistic branches: a landmark
+reactive processing to memory-centric spatial cognition, which                        memory module, which encodes durable associations between salient
+supports persistent representations and compositional reasoning                       environmental cues and 3D spatial locations to instantiate landmarks;
+over time and space.                                                                  and a cognitive map module, which accumulates egocentric observa-
+     Compared to artiﬁcial systems, biological spatial cognition                      tions along movement trajectories as route knowledge and then
+offers a robust and compelling template. Decades of neuroscience                      organizes the voxelized trajectories into allocentric, map-like repre-
+research revealed that organisms consolidate spatial knowledge into                   sentations as survey knowledge. Compared to previous embodied
+three distinct yet interconnected forms16,17 (Fig. 1a): landmarks, which              navigation frameworks conﬁned to localized modeling with a single
+encode stable associations of salient environmental cues to support                   granularity, such as purely dense grids30,31 or sparse topologies32,33, the
+localization and contextual understanding23,24; route knowledge,                      hierarchical spatial architecture of BSC-Nav achieves the decoupling of
+which captures egocentric movement trajectories between land-                         spatial knowledge while incorporating targeted adaptive update
+marks for habitual navigation and path integration25; and survey                      mechanisms. This allows spatial knowledge to continuously evolve as
+knowledge, which integrates multiple routes into allocentric, map-                    the agent explores external environments, overcoming the limitations
+like representations that support ﬂexible inference, shortcut dis-                    of singular, static spatial representations.
+covery, and detour planning26. These spatial representations are                           BSC-Nav further incorporates a working memory module that
+accessed and coordinated via working memory27, especially visual-                     dynamically retrieves and combines spatial representations from
+spatial working memory28,29, enabling adaptive retrieval, composi-                    landmark memory and the cognitive map, thereby aligning semantic
+tion, and generalization based on task demands and environmental                      goals with grounded spatial actions. Each component interfaces
+familiarity.                                                                          seamlessly with large-scale foundation models: visual foundation
+
+
+
+
+Fig. 1 | The BSC-Nav framework for cognitive spatial intelligence. a Structured       knowledge. Upon task invocation, (iii) a working memory module dynamically
+spatial memory in biological brains, comprising landmarks, route knowledge, and       composes relevant spatial knowledge for adaptive planning and reasoning.
+survey knowledge. b The BSC-Nav framework instantiates structured spatial             c Structured spatial memory enables not only universal navigation but also higher-
+memory in embodied agents. Environment observations (RGB-D images and agent           level spatial-aware skills. The human and brain illustrations in (a) were adapted
+poses) are processed by (i) a landmark memory module encodes and retrieves            (with added layers and annotations) from SciDraw artwork, licensed under CC-BY
+durable associations of multi-modal environmental cues as the landmarks; and (ii) a   4.0 (https://creativecommons.org/licenses/by/4.0/). Sources: https://doi.org/10.
+cognitive map module accumulates and organizes movement trajectories as the           5281/zenodo.3925989,https://doi.org/10.5281/zenodo.3926189.
+route knowledge into allocentric, map-like representations as the survey
+
+
+
+Nature Communications |                  (2026) 17:8061                                                                                                               2
+

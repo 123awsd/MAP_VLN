@@ -1,0 +1,67 @@
+                                                                         Visual Language Maps for Robot Navigation
+                                                                               Chenguang Huang1, Oier Mees1, Andy Zeng2, Wolfram Burgard3
+
+
+                                           Abstract— Grounding language to the visual observations of
+                                        a navigating agent can be performed using off-the-shelf visual-                           First move to the plant, then 3 meters south,
+                                        language models pretrained on Internet-scale data (e.g., image                            then go between the keyboad and the bowl
+                                        captions). While this is useful for matching images to natural
+                                        language descriptions of object goals, it remains disjoint from the
+                                        process of mapping the environment, so that it lacks the spatial preci-
+                                        sion of classic geometric maps. To address this problem, we propose
+                                        VLMaps, a spatial map representation that directly fuses pretrained
+arXiv:2210.05714v4 [cs.RO] 8 Mar 2023
+
+
+
+
+                                        visual-language features with a 3D reconstruction of the physical
+                                        world. VLMaps can be autonomously built from video feed on
+                                        robots using standard exploration approaches and enables natural
+                                        language indexing of the map without additional labeled data. Specif-
+                                        ically, when combined with large language models (LLMs), VLMaps
+                                        can be used to (i) translate natural language commands into a
+                                        sequence of open-vocabulary navigation goals (which, beyond prior
+                                        work, can be spatial by construction, e.g., “in between the sofa and      Fig. 1: VLMaps is a spatial map representation in which pretrained visual-
+                                        the TV” or “three meters to the right of the chair”) directly localized   language model features are fused into a 3D reconstruction of the physical
+                                        in the map, and (ii) can be shared among multiple robots with differ-     world. Spatially anchoring visual language features enables natural lan-
+                                        ent embodiments to generate new obstacle maps on-the-fly (by using        guage indexing in the map, which can be used to, e.g., localize landmarks
+                                        a list of obstacle categories). Extensive experiments carried out in      or spatial references with respect to landmarks – enabling zero-shot spatial
+                                        simulated and real-world environments show that VLMaps enable             goal navigation without additional data collection or model finetuning.
+                                        navigation according to more complex language instructions than
+                                        existing methods. Videos are available at https://vlmaps.github.io.
+                                                                                                                  may struggle to (i) recognize correspondences that associate
+                                                                I. INTRODUCTION                                   independent observations of the same object, to (ii) localize
+                                           People are excellent navigators of the physical world – due in         spatial goals e.g., “in between the sofa and the TV”, or to (iii)
+                                        part to their remarkable ability to build cognitive maps [1] that form    build persistent representations that can be shared across different
+                                        the basis of spatial memory [2], [3] to (i) localize landmarks at         embodiments, e.g., mobile robots, drones. Existing VLM-based so-
+                                        varying ontological levels, such as a book; on the shelf; in the living   lutions generalize to new object goals, but lose the spatial precision
+                                        room, or to (ii) determine whether the layout permits navigation          of classic geometric maps – is it possible to get the best of both?
+                                        between two points. Classic methods for robot navigation [4], [5]            In this work, we investigate the utility of a spatial visual-
+                                        build geometric maps for path planning and can parse goals from           language map representation VLMaps, which fuses pretrained
+                                        natural language commands [6], [7], but struggle to generalize            visual-language features from image observations directly with
+                                        to unseen instructions. Learning methods directly optimize for            a 3D reconstruction of the physical world. VLMaps can be
+                                        navigation policies grounded in language end-to-end (commands             effectively built from video feed on robots using standard
+                                        to actions) [8], [9], but require copious amounts of data.                exploration algorithms. When paired with large language models
+                                           Meanwhile, recent works show that visual-language models               (LLMs) in Socratic fashion [14], VLMaps can translate natural
+                                        (VLMs) [10], [11] pretrained on Internet-scale data (e.g., image          language instructions into a sequence of open-vocabulary goals,
+                                        captions) can be used out-of-the-box to ground language to the            directly localized in the map. A key aspect of VLMaps is that they
+                                        visual observations of a navigating agent, without additional data        are spatial, which enables them to:
+                                        collection or model fine-tuning. These models enable mobile               • Localize spatial goals beyond object-centric ones, e.g., “in
+                                        robots to handle new instructions that specify unseen object goals          between the TV and sofa” or “to the right of the chair” or
+                                        and can be combined with exploration algorithms to search for               “kitchen area” using code-writing LLMs, expanding beyond
+                                        the first instance of any object (CoW) [12] or traverse object-             capabilities of CoW or LM-Nav.
+                                        centric landmarks in graphs (LM-Nav) [13]. While promising,               • Generate new obstacle maps for new embodiments given
+                                        these methods predominantly use VLMs as critics to match image              natural language descriptions of landmark categories that they
+                                        observations to object goal descriptions, but do so in ways that            can or cannot traverse, e.g., “tables” are obstacles for a large
+                                        remain disjoint from the mapping of the environment. Without                mobile robot, but traversable for a drone.
+                                        grounding language onto a spatial representation, these systems
+                                                                                                                  Extensive experiments show that using VLMaps enables more
+                                          1 University of Freiburg, Germany.
+                                                                                                                  effective long-horizon multi-object goal navigation than baseline
+                                          2 Google Research, USA.
+                                          3 University of Technology Nuremberg, Germany.
+                                                                                                                  alternatives, e.g., CoW [12] and LM-Nav [13], and, in particular,
+                                          This work has been supported partly by the German Federal Ministry of   excels at enabling spatial open-vocabulary navigation tasks.
+                                        Education and Research under contract 01IS18040B-OML                      We also provide ablations on different ways of constructing
+

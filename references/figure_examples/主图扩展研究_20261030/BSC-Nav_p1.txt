@@ -1,0 +1,61 @@
+                                    Article                                                                                                      https://doi.org/10.1038/s41467-026-74358-5
+
+
+                                    Brain-inspired spatial intelligence for
+                                    embodied agents
+                                                                                                               1,2,4                     1,3,4
+                                    Received: 13 October 2025                            Shouwei Ruan             , Liyuan Wang              , Caixin Kang2, Qihui Zhu2, Songming Liu1,
+                                                                                         Xingxing Wei2          & Hang Su1
+                                    Accepted: 2 June 2026
+
+
+                                                                                         Spatial cognition enables adaptive goal-directed behavior through struc-
+                                        Check for updates                                tured internal models of space. Robust biological systems consolidate spa-
+                                                                                         tial knowledge into three interconnected forms: landmarks for salient cues,
+                  1234567890():,;
+1234567890():,;
+
+
+
+
+                                                                                         route knowledge for movement trajectories, and survey knowledge for map-
+                                                                                         like representations. While recent advances in multi-modal large language
+                                                                                         models (MLLMs) have enabled visual-language reasoning in embodied
+                                                                                         agents, these efforts lack structured spatial memory and instead operate
+                                                                                         reactively, limiting their generalization and adaptability in complex real-
+                                                                                         world environments. Here we present Brain-inspired Spatial Cognition for
+                                                                                         Navigation (BSC-Nav), a uniﬁed framework for constructing and leveraging
+                                                                                         structured spatial memory in embodied agents. BSC-Nav builds allocentric
+                                                                                         cognitive maps from egocentric trajectories and contextual cues, and
+                                                                                         dynamically retrieves spatial knowledge aligned with semantic goals. Inte-
+                                                                                         grated with powerful MLLMs, BSC-Nav achieves state-of-the-art efﬁcacy and
+                                                                                         efﬁciency across diverse embodied navigation tasks (e.g., improving success
+                                                                                         weighted by path length from 17.6% to 44.9% in instance-level navigation and
+                                                                                         from 42.7% to 53.1% in zero-shot long-horizon instruction-following), while
+                                                                                         also supporting versatile embodied behaviors in the real physical world.
+                                                                                         These results highlight a scalable path toward general-purpose spatial
+                                                                                         intelligence.
+
+
+                                    Spatial cognition, the ability to acquire, organize, exploit, and update           recognized as a foundational component of artiﬁcial general intelli-
+                                    knowledge about external space, is fundamental to both human beings                gence (AGI)3,9,10.
+                                    and artiﬁcial intelligence (AI)1,2. It underlies not only sensorimotor skills           Despite the rapid progress in multi-modal large language mod-
+                                    such as navigation and manipulation but also supports higher-level                 els (MLLMs) and growing efforts to equip embodied agents with
+                                    cognitive functions, including abstraction, planning, and reasoning. In            visual-language reasoning11–13, current artiﬁcial systems remain fun-
+                                    humans, generalizable spatial representations support interpretation               damentally limited in large-scale spatial cognition14, especially in
+                                    of sensory input, anticipation of future events, and ﬂexible adaptation            tasks requiring long-horizon navigation and mobile manipulation. A
+                                    to changing environments, from brewing coffee in a familiar kitchen to             central bottleneck lies in the lack of structured spatial memory15–17, a
+                                    navigating an unfamiliar city3–5. Given its broad relevance in embodied            mechanism for persistently encoding, organizing, and retrieving
+                                    interaction with the real physical world, spatial cognition has emerged            spatial knowledge about the environment. Most existing methods,
+                                    as a central theme across disciplines, driving advances in robotics6,              whether based on end-to-end reinforcement learning18–20 or modular
+                                    urban simulation7, and planetary-scale modeling8, while increasingly               pipelines with powerful MLLMs21,22, process observations in a reactive
+
+
+                                    1
+                                     Department of Computer Science and Technology, Institute for AI, BNRist Center, Tsinghua-Bosch Joint ML Center, THBI Lab, Tsinghua University,
+                                    Beijing, China. 2Institute of Artiﬁcial Intelligence, Beihang University, Beijing, China. 3Department of Psychological and Cognitive Sciences, Tsinghua Uni-
+                                    versity, Beijing, China. 4These authors contributed equally: Shouwei Ruan, Liyuan Wang.          e-mail: xxwei@buaa.edu.cn; suhangss@mail.tsinghua.edu.cn
+
+
+                                    Nature Communications |               (2026) 17:8061                                                                                                           1
+

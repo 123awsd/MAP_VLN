@@ -1,0 +1,104 @@
+                                                     Dynamic Open-Vocabulary 3D Scene Graphs for Long-term
+                                                             Language-Guided Mobile Manipulation
+                                               Zhijie Yan1 , Shufei Li2 , Zuoxu Wang1 B , Lixiu Wu3 , Han Wang4 , Jun Zhu4 , Lijiang Chen4 , Jihong Liu1
+                                                                                                          Update in
+                                           Perception                     Memroy                         each subtask
+                                                                                                                                                   Initial State                                      After modified                             Please move the pen on the cabinet into the
+                                                                                                                                                                                                                                                 green container and then give me the keys.
+                                                                                                                                                                   pen
+                                                 Recognize-Anything +        Low-level Semantic memory
+                                                  Grounding-DINO +                                                                                                       keys                                                                                                Task Planning
+                                              Segment Anything-2 + CLIP
+
+                                                                                                                                                                                                                                                       Large Language Model
+
+
+
+                                                                                                                                                                                                                                      Task 1-1      Go To         Object1: pen, object2: cabinet
+
+
+
+                                                                                                                                                                                                                                      Task 1-2     Pick Up                Object1: pen
+arXiv:2410.11989v2 [cs.RO] 17 Oct 2024
+
+
+
+
+                                                                                  High-level Scene Graph                                                                                                                              Task 1-3      Go To    Object1: green container, object2: None
+                                                                                             Floor
+
+                                                                                       on       on                                                                                                                                    Task 1-4      Place    Object1: pen, object2: green container
+                                                                                   cabinet   table
+
+                                                                             on       belong    on                   on
+                                                                           pen     handle    keys                 Green
+                                                                                                                container                                                                                                             Task 2-1      Go To         Object1: keys, object2: None
+
+
+
+                                                                                                                                                                                                                                      Task 2-2     Pick Up                Object1: keys
+
+
+                                                                                                                                    The environment has been manually modified.
+                                                                                                                                                                                                                                      Task 2-3      Go To         Object1: back, object2: None
+
+
+
+
+                                                                            Navigation / Manipulation
+                                                 Unlimited Start Point
+                                                                                                 target point
+
+
+
+                                                                                                                                                                                                            Place point
+                                                                           A* for path planning
+
+
+                                                                                                                                                    Grounding DINO +                                        Grounding DINO +
+                                                                                        start point                                                      SAM-2+                                                  SAM-2
+                                                                                                                                                        AnyGrasp
+
+
+                                                                                                                            Task 1-2: Pick up the pen on the cabinet              Task 1-4: Place the pen in the green container            Task 2-2: Pick up the keys
+                                                                             Task 1-1: Go To Pen
+
+                                         Fig. 1. Overview of Our DovSG System. DovSG is a mobile robotic system designed to perform long-term tasks in real-world environments. It can detect
+                                         changes in the scene during task execution, ensuring that subsequent subtasks are completed correctly. The system consists of five main components: perception,
+                                         memory, task planning, navigation, and manipulation. The memory module includes a lower-level semantic memory and a higher-level scene graph, both of
+                                         which are continuously updated as the robot explores the environment. This enables the robot to promptly detect manual changes (e.g., keys being moved from
+                                         cabinet to table) and make the necessary adjustments for subsequent tasks (such as correctly executing Task 2-2).
+
+                                            Abstract—Enabling mobile robots to perform long-term tasks                                                                      project page is available at: https://bjhyzj.github.io/dovsg-web.
+                                         in dynamic real-world environments is a formidable challenge,                                                                        Index Terms—3D scene graph, Long-term Tasks, Mobile
+                                         especially when the environment changes frequently due to human-                                                                   Manipulation, Open vocabulary
+                                         robot interactions or the robot’s own actions. Traditional methods
+                                         typically assume static scenes, which limits their applicability
+                                                                                                                                                                                                                          I. I NTRODUCTION
+                                         in the continuously changing real world. To overcome these
+                                         limitations, we present DovSG, a novel mobile manipulation                                                                            Mobile robot manipulation in real-world environments is
+                                         framework that leverages dynamic open-vocabulary 3D scene                                                                          increasingly expected to perform complex, long-term tasks
+                                         graphs and a language-guided task planning module for long-
+                                         term task execution. DovSG takes RGB-D sequences as input and                                                                      that require adaptability and resilience to changes. These
+                                         utilizes vision-language models (VLMs) for object detection to                                                                     dynamic environments are characterized by frequent alterations
+                                         obtain high-level object semantic features. Based on the segmented                                                                 caused by human activities, robot interactions, or the inherent
+                                         objects, a structured 3D scene graph is generated for low-level                                                                    variability of the surroundings. Traditional robotic systems
+                                         spatial relationships. Furthermore, an efficient mechanism for                                                                     often fall short in such settings because they typically rely on
+                                         locally updating the scene graph, allows the robot to adjust parts
+                                         of the graph dynamically during interactions without the need for                                                                  the assumption of a static or minimally changing environment
+                                         full scene reconstruction. This mechanism is particularly valuable                                                                 [1], [2], [3], [4]. This limitation restricts their applicability in
+                                         in dynamic environments, enabling the robot to continually adapt                                                                   real-world scenarios where adaptability is crucial.
+                                         to scene changes and effectively support the execution of long-                                                                       In this work, we enhance robotic capabilities by introducing a
+                                         term tasks. We validated our system in real-world environments
+                                                                                                                                                                            novel and practical robotic framework, the DovSG system. This
+                                         with varying degrees of manual modifications, demonstrating its
+                                         effectiveness and superior performance in long-term tasks. Our                                                                     framework comprises five key modules: perception, memory,
+                                                                                                                                                                            task planning, navigation, and manipulation, as illustrated in
+                                           1 School of Mechanical Engineering and Automation, Beihang University.                                                           Fig. 1. To address the challenge of scene perception, our per-
+                                           2 Centre for Advanced Robotics Technology Innovation, Nanyang Techno-
+                                                                                                                                                                            ception module integrates advanced tools such as Recognize-
+                                         logical University.                                                                                                                Anything[5], Grounding DINO[6], Segment Anything-2[7], and
+                                           3 School of Information Engineering, Minzu University of China.
+                                           4 Afanti Tech LLC.                                                                                                               CLIP[8] to detect objects or components and extract their
+                                           B Corresponding to zuoxu_wang@buaa.edu.cn                                                                                        semantic features. In the memory module, each object within
+

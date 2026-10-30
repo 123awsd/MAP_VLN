@@ -1,0 +1,13 @@
+[
+  {
+    "name": "USS_Nav",
+    "url": "https://arxiv.org/pdf/2602.00708v2",
+    "pdf": "USS_Nav.pdf",
+    "bytes": 8924918
+  },
+  {
+    "name": "RT_GuIDE",
+    "url": "https://arxiv.org/pdf/2409.18122",
+    "error": "('Connection broken: IncompleteRead(10042058 bytes read, 69816 more expected)', IncompleteRead(10042058 bytes read, 69816 more expected))"
+  }
+]

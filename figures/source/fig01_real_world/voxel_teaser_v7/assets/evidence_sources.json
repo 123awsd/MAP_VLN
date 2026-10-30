@@ -1,0 +1,23 @@
+{
+  "absent_onboard": {
+    "video": "\u771f\u673a\u5b9e\u9a8c\u7d20\u6750/\u6210\u529f\u573a\u6b21/\u5b9e\u9a8c\u5ba44\u4efb\u52a1\u52a0\u4e3b\u52a8\u641c\u7d22/01_\u98de\u884c\u8bb0\u5f55/flight_20261001_184127/flight_20261001_184127_rgb.mp4",
+    "seconds": 35.5,
+    "crop_xyxy": [
+      200,
+      170,
+      1260,
+      660
+    ]
+  },
+  "found_onboard": {
+    "encoded_video_seconds": 46.0,
+    "source": "trajectory_photo_draft/manifest.json"
+  },
+  "third_person_seconds": {
+    "laptop": 53,
+    "toolbox": 69,
+    "microwave": 129,
+    "cup": 163
+  },
+  "time_alignment": "Approximate event correspondence across independent video clocks."
+}

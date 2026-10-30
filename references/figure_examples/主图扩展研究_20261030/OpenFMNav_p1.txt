@@ -1,0 +1,74 @@
+                                                  OpenFMNav: Towards Open-Set Zero-Shot Object Navigation via
+                                                             Vision-Language Foundation Models
+
+                                                Yuxuan Kuang                 Hai Lin                                                      Meng Jiang
+                                               Peking University    University of Notre Dame                                        University of Notre Dame
+                                         kuangyuxuan@stu.pku.edu.cn      hlin1@nd.edu                                                  mjiang2@nd.edu
+
+
+
+                                                                    Abstract                           Close-Set:       Find the bed.         Find the goal!
+
+                                                                                                                    Find the bed with the
+                                                 Object navigation (ObjectNav) requires an                          blue mattress next to
+                                                                                                                         the window.
+                                                 agent to navigate through unseen environments
+arXiv:2402.10670v2 [cs.CL] 25 Mar 2024
+
+
+
+
+                                                                                                                    I'm exhausted. I need
+                                                 to find queried objects. Many previous methods                      to lie down and rest.
+                                                 attempted to solve this task by relying on su-                                                           Language-guided
+                                                                                                       Open-Set:        Find the bed.
+                                                 pervised or reinforcement learning, where they                                                            Exploration &
+                                                                                                                    Find the bed with the                   Exploitation
+                                                 are trained on limited household datasets with                     blue mattress next to
+                                                                                                                         the window.                     Foundation Models
+                                                 close-set objects. However, two key challenges
+                                                                                                                    I'm exhausted. I need                  VLM      LLM
+                                                 are unsolved: understanding free-form natural                       to lie down and rest.
+                                                 language instructions that demand open-set ob-
+                                                 jects, and generalizing to new environments in        Figure 1: Leveraging foundation models, our proposed
+                                                 a zero-shot manner. Aiming to solve the two           OpenFMNav can follow free-form natural language in-
+                                                 challenges, in this paper, we propose OpenFM-         structions with open-set objects and achieve effective
+                                                 Nav, an Open-set Foundation Model based               zero-shot object navigation.
+                                                 framework for zero-shot object Navigation. We
+                                                 first unleash the reasoning abilities of large lan-
+                                                 guage models (LLMs) to extract proposed ob-           gate through unseen environments to find queried
+                                                 jects from natural language instructions that
+                                                                                                       objects. Compared to other robotic tasks, it is par-
+                                                 meet the user’s demand. We then leverage
+                                                 the generalizability of large vision language
+                                                                                                       ticularly important because it is a prerequisite for
+                                                 models (VLMs) to actively discover and de-            robots to interact with objects. To address this issue,
+                                                 tect candidate objects from the scene, build-         several household datasets and benchmarks, such
+                                                 ing a Versatile Semantic Score Map (VSSM).            as MP3D (Chang et al., 2017), Gibson (Xia et al.,
+                                                 Then, by conducting common sense reasoning            2018) and HM3D (Ramakrishnan et al., 2021) are
+                                                 on VSSM, our method can perform effective             proposed. Many previous studies (Chaplot et al.,
+                                                 language-guided exploration and exploitation          2020a; Ramrakhya et al., 2022; Zhang et al., 2023)
+                                                 of the scene and finally reach the goal. By
+                                                                                                       have attempted to solve this problem through su-
+                                                 leveraging the reasoning and generalizing abil-
+                                                 ities of foundation models, our method can            pervised or reinforcement learning, where they are
+                                                 understand free-form human instructions and           trained on particular household datasets above with
+                                                 perform effective open-set zero-shot naviga-          close-set objects and comparable environments.
+                                                 tion in diverse environments. Extensive exper-           However, there are two significant challenges
+                                                 iments on the HM3D ObjectNav benchmark                remaining unsolved. First, as shown in Fig 1, in
+                                                 show that our method surpasses all the strong
+                                                                                                       many scenarios, instead of only mentioning an ob-
+                                                 baselines on all metrics, proving our method’s
+                                                 effectiveness. Furthermore, we perform real           ject category (e.g., “Find the bed.”), humans often
+                                                 robot demonstrations to validate our method’s         provide free-form instructions, either specifying
+                                                 open-set-ness and generalizability to real-world      objects with specific characteristics (e.g., “Find the
+                                                 environments.1                                        bed with the blue mattress next to the window.”),
+                                                                                                       or expressing their demand without explicitly men-
+                                         1       Introduction
+                                                                                                       tioning the object (e.g., “I’m exhausted. I need
+                                         As a fundamental task in robotics and embodied                to lie down and rest.”). These natural language
+                                         AI, object navigation requires an agent to navi-              instructions may demand open-set objects not in-
+                                             1
+                                             We show further information and demo videos on            cluded in the training vocabulary. In such cases, ex-
+                                         https://yxkryptonite.github.io/OpenFMNav/.                    isting supervised or reinforcement learning-based
+

@@ -1,0 +1,65 @@
+model (LLM). This alignment allows the LLM to convert navigation instructions to DCoN without
+manual annotations. More importantly, DCoN is not a static and simple instruction decomposition
+but a generic navigation strategy that updates with the newly explored environment. During the
+navigation, the next navigation action and landmarks in DCoN will be dynamically updated at every
+decision-making step with observed objects considering LLM’s inner commonsense about room
+layout and human habits. This way, DCoN can inspire InstructNav to align semantic labels, efficiently
+explore the unseen environment, and conduct commonsense reasoning about landmarks.
+
+                                                                                        “Walk forward to the painting        “Go forward to the chair and
+           “Find some flowers”                         “Find a sofa.”                   and turn left to find the status.”   turn right to the trash bin.”
+
+           Apartment                             Library                                                        Gallery           Library
+
+
+
+
+        “Walk forward to the paper box. Then, turn right to find a potted plant.”            “Go straight to the office area and help me seek something
+                                                                                             refreshing to drink.”
+
+             Office                                                                          Office
+
+
+
+
+                                               “Go forward and turn left and get        “Go across the plant and             “Walk forward and turn left to the
+         “I want to wash my clothes”           me something to read.”                   turn left to the poster.”            hallway and find a classroom.”
+
+
+           Apartment                             Library                                   Library                             Teaching Building
+
+
+
+
+           Object Goal Navigation        Demand-driven Navigation           Visual Language Navigation          VLN + ObjectNav        VLN + DDN
+
+
+Figure 1: InstructNav can follow different types of navigation instructions in diverse indoor scenes.
+
+With unified DCoN planning, the ensuing challenge is how to control the robot by this linguistic
+planning. To address this problem, we propose Multi-sourced Value Maps, which represents key
+elements in instruction navigation, including action, landmark, and history trajectory, on four value
+maps to decide the next waypoint and actionable trajectories. The Action Value Map and Semantic
+Value Map are created according to the next DCoN action and landmarks. They can encourage
+the robot to follow the specified action and move toward navigation landmarks. The Trajectory
+Value Map is established based on the navigation trajectory to avoid repetitive movement. Although
+these value maps can deal with simple instructions, there still exist difficulties when navigation
+instructions require multimodal reasoning. For example, the Semantic Value Map struggles to figure
+out which table on the map is "the front dining table" while the Action Value Map fails to represent
+"walk between". To improve InstructNav’s capability on multimodal reasoning, we further design an
+Intuition Value Map. The multimodal large model [10]’s prediction on the next navigation area is
+projected on the Intuition Value Map to guide the robot. At each decision step, these value maps are
+synthesized to plan the next waypoint. Their collaboration form InstrcutNav’s generic instruction
+navigation capability, which single semantic map-based methods like [11] [12] cannot realize.
+In this work, our primary contribution is InstructNav, the first generic instruction navigation system
+that can execute different types of instructions in the continuous environment without any navigation
+training or pre-built maps. To reach this goal, we introduce Dynamic Chain-of-Navigation to unify
+different types of navigation instructions into a standard planning paradigm. We create Multi-sourced
+Value Maps to model the effect of key elements in instruction navigation. This way, the linguistic
+DCoN planning can be converted into robot actionable trajectories. With InstructNav, we first
+achieve zero-shot performance on the R2R-CE task [3] and outperform a wide array of task-training
+methods. Furthermore, InstructNav achieves 10.48% and 86.34% improvement on the zero-shot
+
+
+                                                                                    2
+

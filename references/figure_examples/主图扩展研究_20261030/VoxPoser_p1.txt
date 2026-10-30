@@ -1,0 +1,68 @@
+                VoxPoser: Composable 3D Value Maps
+           for Robotic Manipulation with Language Models
+          Wenlong Huang1 , Chen Wang1 , Ruohan Zhang1 , Yunzhu Li1,2 , Jiajun Wu1 , Li Fei-Fei1
+                    1
+                      Stanford University 2 University of Illinois Urbana-Champaign
+
+
+
+                  Abstract: Large language models (LLMs) are shown to possess a wealth of ac-
+                  tionable knowledge that can be extracted for robot manipulation in the form of
+                  reasoning and planning. Despite the progress, most still rely on pre-defined mo-
+                  tion primitives to carry out the physical interactions with the environment, which
+                  remains a major bottleneck. In this work, we aim to synthesize robot trajecto-
+                  ries, i.e., a dense sequence of 6-DoF end-effector waypoints, for a large variety of
+                  manipulation tasks given an open-set of instructions and an open-set of objects.
+                  We achieve this by first observing that LLMs excel at inferring affordances and
+                  constraints given a free-form language instruction. More importantly, by leverag-
+                  ing their code-writing capabilities, they can interact with a vision-language model
+                  (VLM) to compose 3D value maps to ground the knowledge into the observation
+                  space of the agent. The composed value maps are then used in a model-based
+                  planning framework to zero-shot synthesize closed-loop robot trajectories with
+                  robustness to dynamic perturbations. We further demonstrate how the proposed
+                  framework can benefit from online experiences by efficiently learning a dynam-
+                  ics model for scenes that involve contact-rich interactions. We present a large-
+                  scale study of the proposed method in both simulated and real-robot environments,
+                  showcasing the ability to perform a large variety of everyday manipulation tasks
+                  specified in free-form natural language. Project website: voxposer.github.io.
+
+                  Keywords: Manipulation, Large Language Models, Model-based Planning
+
+
+               Open the top drawer, and
+               watch out for that vase!
+
+
+      Large                   Vision
+      Language                Language
+                                                    “Sort trash to blue tray”   “Take out bread from toaster”      “Take out a napkin”       “Turn open vitamin bottle”
+      Model                   Model
+                      Code
+                       </>
+
+
+      z
+
+
+           y
+  x
+                                                   “Measure weight of apple”         “Close top drawer”         “Sweep trash into dustpan”   “Unplug charger for phone”
+          Motion Planning
+
+
+
+
+                    3D Value Map
+
+ high                                      high
+ cost                                     reward     “Hang towel on rack”       “Press down moisturizer pump”      “Set table for pasta”          “Turn on lamp”
+
+Figure 1: VOX P OSER extracts language-conditioned affordances and constraints from LLMs and grounds
+them to the perceptual space using VLMs, using a code interface and without additional training to either com-
+ponent. The composed map is referred to as a 3D value map, which enables zero-shot synthesis of trajectories
+for large varieties of everyday manipulation tasks with an open-set of instructions and an open-set of objects.
+          Correspondence to Wenlong Huang <wenlongh@stanford.edu>.
+
+
+7th Conference on Robot Learning (CoRL 2023), Atlanta, USA.
+

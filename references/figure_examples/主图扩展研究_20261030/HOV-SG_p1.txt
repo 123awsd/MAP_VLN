@@ -1,0 +1,67 @@
+                                             Hierarchical Open-Vocabulary 3D Scene Graphs
+                                                for Language-Grounded Robot Navigation
+                                            Abdelrhman Werby1* ,          Chenguang Huang1* ,       Martin Büchner1* ,          Abhinav Valada1 ,        Wolfram Burgard2
+                                                                        1 University of Freiburg     2 University of Technology Nuremberg
+
+
+
+
+                                           Abstract—Recent open-vocabulary robot mapping methods
+                                        enrich dense geometric maps with pre-trained visual-language
+arXiv:2403.17846v2 [cs.RO] 3 Jun 2024
+
+
+
+
+                                        features. While these maps allow for the prediction of point-wise
+                                        saliency maps when queried for a certain language concept, large-
+                                        scale environments and abstract queries beyond the object level
+                                        still pose a considerable hurdle, ultimately limiting language-
+                                        grounded robotic navigation. In this work, we present HOV-                                               ﬂoor 1
+                                                                                                                                                            oﬃce
+                                        SG, a hierarchical open-vocabulary 3D scene graph mapping
+                                        approach for language-grounded indoor robot navigation. Lever-                                                         bean bag   Goal
+                                        aging open-vocabulary vision foundation models, we first obtain                     ﬂoor 2
+
+                                        state-of-the-art open-vocabulary segment-level maps in 3D and
+                                        subsequently construct a 3D scene graph hierarchy consisting
+                                        of floor, room, and object concepts, each enriched with open-                                                     Find the bean bag in
+                                                                                                                                                          the oﬃce on ﬂoor 1.
+                                        vocabulary features. Our approach is able to represent multi-
+                                        story buildings and allows robotic traversal of those using a                                                         Building
+                                        cross-floor Voronoi graph. HOV-SG is evaluated on three distinct                                                    Floors
+                                                                                                                    Start                                 Rooms
+                                        datasets and surpasses previous baselines in open-vocabulary
+                                                                                                                                                        Objects
+                                        semantic accuracy on the object, room, and floor level while                                                  Navigational
+                                        producing a 75% reduction in representation size compared to                                                  Graph
+                                        dense open-vocabulary maps. In order to prove the efficacy and      Fig. 1: HOV-SG enables the construction of accurate open-vocabulary 3D
+                                        generalization capabilities of HOV-SG, we showcase successful       scene graphs for large-scale and multi-story environments and enables robots
+                                        long-horizon language-conditioned robot navigation within real-     to navigate in them effectively.
+                                        world multi-story environments. We provide code and trial video
+                                        data at: https://hovsg.github.io.
+
+                                                                  I. I NTRODUCTION                          open-vocabulary semantics, representing larger scenes while
+                                           Humans acquire conceptual knowledge about the world as           abstracting still poses a considerable hurdle. Scalable scene
+                                        a whole and concrete objects in particular through multi-           representations generated from real-world perception inputs
+                                        modal experiences. These semantic experiences are paramount         should generally fulfill the following requirements: 1) Object-
+                                        to object recognition and language as well as reasoning and         centricity and abstraction in terms of hierarchies, 2) efficiency
+                                        planning [1, 2]. Cognitive maps store this information based on     regarding storage capacity as well as actionability, 3) true
+                                        sensor fusion, fragmentation, and hierarchical structure. This      open-vocabulary indexing and easy querying.
+                                        is central to the human ability to navigate the physical world         A number of works approach this using 3D scene graph
+                                        [3, 4, 5]. Recently, language proved to be an effective link        structures [18, 19, 20] that excel at representing larger envi-
+                                        between intelligent systems and humans and can enable robot         ronments efficiently. At the same time, they constitute a useful
+                                        autonomy in complex human-centered environments [6, 7, 8,           interface to semantic tokens used for prompting large language
+                                        9, 10, 11, 12, 13, 14].                                             models (LLM). Nonetheless, most approaches rely on closed-
+                                           Classical methods for robot navigation build dense spa-          set semantics with the exception of ConceptGraphs [14] that
+                                        tial maps of high accuracy using approaches to simulta-             focuses on smaller scenes.
+                                        neous localization and mapping (SLAM) [15]. Those give                 In this work, we present Hierarchical Open-Vocabulary 3D
+                                        rise to fine-grained navigation and manipulation based on           Scene Graphs, short HOV-SG. Our approach abstracts from
+                                        geometric goal specifications. Recent advances have combined        dense open-vocabulary maps and allows the indexing of three
+                                        dense maps with pre-trained zero-shot vision-language mod-          distinct concepts, namely floors, rooms as well as objects.
+                                        els, which facilitates open-vocabulary indexing of observed         We utilize open-vocabulary vision-language models [21, 22]
+                                        environments [9, 10, 11, 16, 13, 17, 12]. While these ap-           across all concepts in order to construct 3D scene graph
+                                        proaches marry the area of classical robotics with modern           hierarchies that span multi-story environments while main-
+                                                                                                            taining a small memory footprint. Given its concept-centric
+                                          ∗ Equal contribution.                                             nature, the HOV-SG representation is promptable using LLMs.
+

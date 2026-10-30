@@ -1,0 +1,98 @@
+[
+  {
+    "name": "FUEL",
+    "pdf": "LogicFly-paper/references/figure_examples/候选视角生成/papers/FUEL.pdf",
+    "page": 1,
+    "image": "FUEL_p1.png",
+    "exit_code": 0,
+    "caption_context": "Fig. 1. A quadrotor autonomous exploration test conducted in a complex\n                                                                                                                       indoor scene. Video of the experiments is available at: https://www.youtube.\n                                         gather information, is a fundamental component.                               com/watch?v= dGgZUrWk-8.\n                                            Various exploration planning methods have been proposed\n                                       "
+  },
+  {
+    "name": "FALCON",
+    "pdf": "LogicFly-paper/references/figure_examples/候选视角生成/papers/FALCON.pdf",
+    "page": 1,
+    "image": "FALCON_p1.png",
+    "exit_code": 0,
+    "caption_context": "Fig. 1. A quadrotor with limited sensor field of view (FoV) autonomously explored a challenging cluttered indoor environment of dimension 24 × 6 × 2 m3 .\n                                         The online constructed volumetric map and the flight trajectory with the yaw direction as a purple arrow are shown in the top-left image. Two detailed close-ups\n                                         of the bridges from the volumetric map result are displayed in the right images. Video of the experiments is available at https://youtu.be/BGH5T2kPbWw.\n\n"
+  },
+  {
+    "name": "VLMaps",
+    "pdf": "LogicFly-paper/references/figure_examples/候选视角生成/papers/VLMaps.pdf",
+    "page": 1,
+    "image": "VLMaps_p1.png",
+    "exit_code": 0,
+    "caption_context": "Fig. 1: VLMaps is a spatial map representation in which pretrained visual-\n                                        the TV” or “three meters to the right of the chair”) directly localized   language model features are fused into a 3D reconstruction of the physical\n                                        in the map, and (ii) can be shared among multiple robots with differ-     world. Spatially anchoring visual language features enables natural lan-\n                                        ent embodiments to generate new obstacle maps on-the-fly (b"
+  },
+  {
+    "name": "ConceptGraphs",
+    "pdf": "LogicFly-paper/references/figure_examples/候选视角生成/papers/ConceptGraphs.pdf",
+    "page": 1,
+    "image": "ConceptGraphs_p1.png",
+    "exit_code": 0,
+    "caption_context": "Fig. 1: ConceptGraphs builds open-vocabulary 3D scene graphs. We (a) design an object-based mapping system that only assumes\n                                         class-agnostic instance masks and fuses them to 3D, (b) interprets and extracts language tags for each mapped instance leveraging large\n                                         vision-language models, and (c) builds a graph of object spatial relationships by leveraging priors encoded in large language models. The\n                                         object-centric nature of Con"
+  },
+  {
+    "name": "HOV-SG",
+    "pdf": "LogicFly-paper/references/figure_examples/语义恢复参考/扩展调研_20261024/papers/HOV-SG.pdf",
+    "page": 1,
+    "image": "HOV-SG_p1.png",
+    "exit_code": 0,
+    "caption_context": "Fig. 1: HOV-SG enables the construction of accurate open-vocabulary 3D\n                                        generalization capabilities of HOV-SG, we showcase successful       scene graphs for large-scale and multi-story environments and enables robots\n                                        long-horizon language-conditioned robot navigation within real-     to navigate in them effectively.\n                                        world multi-story environments. We provide code and trial video\n                                        data at: "
+  },
+  {
+    "name": "DovSG",
+    "pdf": "LogicFly-paper/references/figure_examples/语义恢复参考/前期参考调研_20261024/papers/DovSG.pdf",
+    "page": 1,
+    "image": "DovSG_p1.png",
+    "exit_code": 0,
+    "caption_context": "Fig. 1. Overview of Our DovSG System. DovSG is a mobile robotic system designed to perform long-term tasks in real-world environments. It can detect\n                                         changes in the scene during task execution, ensuring that subsequent subtasks are completed correctly. The system consists of five main components: perception,\n                                         memory, task planning, navigation, and manipulation. The memory module includes a lower-level semantic memory and a higher-level scene graph, both of\n         "
+  },
+  {
+    "name": "InstructNav",
+    "pdf": "LogicFly-paper/references/figure_examples/语义恢复参考/扩展调研_20261024/papers/InstructNav.pdf",
+    "page": 1,
+    "image": "InstructNav_p1.png",
+    "exit_code": 0,
+    "caption_context": ""
+  },
+  {
+    "name": "VLFM",
+    "pdf": "LogicFly-paper/references/figure_examples/语义恢复参考/前期参考调研_20261024/papers/VLFM.pdf",
+    "page": 1,
+    "image": "VLFM_p1.png",
+    "exit_code": 0,
+    "caption_context": "Fig. 1: VLFM achieves state-of-the-art semantic Object Goal Navigation performance in unfamiliar environments, without task-specific\n                                        training, pre-built maps, or prior knowledge of the surroundings. It utilizes a vision-language model to explore the environment, capitalizing\n                                        on visual semantic cues that are likely to guide the agent towards the goal to explore the environment more efficiently than a greedy\n                                        frontier-based explo"
+  },
+  {
+    "name": "OpenFMNav",
+    "pdf": "LogicFly-paper/references/figure_examples/语义恢复参考/早期补充原图/OpenFMNav.pdf",
+    "page": 1,
+    "image": "OpenFMNav_p1.png",
+    "exit_code": 0,
+    "caption_context": "Figure 1: Leveraging foundation models, our proposed\n                                                 a zero-shot manner. Aiming to solve the two           OpenFMNav can follow free-form natural language in-\n                                                 challenges, in this paper, we propose OpenFM-         structions with open-set objects and achieve effective\n                                                 Nav, an Open-set Foundation Model based               zero-shot object navigation.\n                                                 fra"
+  },
+  {
+    "name": "VoxPoser",
+    "pdf": "LogicFly-paper/references/figure_examples/候选视角生成/papers/VoxPoser.pdf",
+    "page": 1,
+    "image": "VoxPoser_p1.png",
+    "exit_code": 0,
+    "caption_context": "Figure 1: VOX P OSER extracts language-conditioned affordances and constraints from LLMs and grounds\nthem to the perceptual space using VLMs, using a code interface and without additional training to either com-\nponent. The composed map is referred to as a 3D value map, which enables zero-shot synthesis of trajectories\nfor large varieties of everyday manipulation tasks with an open-set of instructions and an open-set of objects.\n          Correspondence to Wenlong Huang <wenlongh@stanford.edu>.\n\n\n7th Conference on Robot Learning (CoRL 2023), At"
+  },
+  {
+    "name": "SG-Nav",
+    "pdf": "LogicFly-paper/references/figure_examples/语义恢复参考/前期参考调研_20261024/papers/SG-Nav.pdf",
+    "page": 1,
+    "image": "SG-Nav_p1.png",
+    "exit_code": 0,
+    "caption_context": ""
+  },
+  {
+    "name": "BSC-Nav",
+    "pdf": "LogicFly-paper/references/figure_examples/语义恢复参考/扩展调研_20261024/papers/BSC-Nav.pdf",
+    "page": 1,
+    "image": "BSC-Nav_p1.png",
+    "exit_code": 0,
+    "caption_context": ""
+  }
+]

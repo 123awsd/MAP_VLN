@@ -1,0 +1,60 @@
+                                                                                                                                                                                                       1
+
+
+
+
+                                               FALCON: Fast Autonomous Aerial Exploration
+                                                    using Coverage Path Guidance
+                                                                     Yichen Zhang∗ , Xinyi Chen∗ , Chen Feng, Boyu Zhou† , and Shaojie Shen
+arXiv:2407.00577v2 [cs.RO] 16 May 2025
+
+
+
+
+                                         Fig. 1. A quadrotor with limited sensor field of view (FoV) autonomously explored a challenging cluttered indoor environment of dimension 24 × 6 × 2 m3 .
+                                         The online constructed volumetric map and the flight trajectory with the yaw direction as a purple arrow are shown in the top-left image. Two detailed close-ups
+                                         of the bridges from the volumetric map result are displayed in the right images. Video of the experiments is available at https://youtu.be/BGH5T2kPbWw.
+
+                                            Abstract—This paper introduces FALCON, a novel Fast                           date FALCON’s practical capability in complex and challenging
+                                         Autonomous expLoration framework using COverage path                             environments. The source code of both the exploration planner
+                                         guidaNce, which aims at setting a new performance benchmark                      FALCON and the exploration planner evaluation environment
+                                         in the field of autonomous aerial exploration. Despite recent                    has been released to benefit the community1 .
+                                         advancements in the domain, existing exploration planners of-
+                                         ten suffer from inefficiencies such as frequent revisitations of                    Index Terms—Aerial Systems: Perception and Autonomy,
+                                         previously explored regions. FALCON effectively harnesses the                    Aerial Systems: Applications, Motion and Path Planning, Au-
+                                         full potential of online generated coverage paths in enhancing                   tonomous Exploration.
+                                         exploration efficiency. The framework begins with an incremental
+                                         connectivity-aware space decomposition and connectivity graph
+                                         construction, which facilitate efficient coverage path planning.                                            I. I NTRODUCTION
+                                         Subsequently, a hierarchical planner generates a coverage path
+                                                                                                                                UTONOMOUS exploration is the task of mapping un-
+                                         spanning the entire unexplored space, serving as a global guid-
+                                         ance. Then, a local planner optimizes the frontier visitation order,
+                                         minimizing traversal time while consciously incorporating the
+                                                                                                                          A     known environments with mobile robots. It is a funda-
+                                                                                                                          mental component of various robotics applications, such as
+                                         intention of the global guidance. Finally, minimum-time smooth
+                                         and safe trajectories are produced to visit the frontier viewpoints.             structural inspection [1]–[3], 3D reconstruction [4]–[6], sub-
+                                         For fair and comprehensive benchmark experiments, we intro-                      terranean navigation [7]–[9], and search and rescue operations
+                                         duce a lightweight exploration planner evaluation environment                    [10]–[12]. Thanks to their agility and flexibility, aerial robots
+                                         that allows for comparing exploration planners across a variety                  are well-suited for these applications in environments that are
+                                         of testing scenarios using an identical quadrotor simulator.                     hazardous or inaccessible to human operators. For example,
+                                         Additionally, an in-depth analysis and evaluation is conducted to
+                                         highlight the significant performance advantages of FALCON in                    during underground cave mining or fire rescue operations,
+                                         comparison with the state-of-the-art exploration planners based                  an autonomous aerial robot can efficiently construct detailed
+                                         on objective criteria. Extensive ablation studies demonstrate the                maps of the unknown spaces and gather valuable information
+                                         effectiveness of each component in the proposed framework.                       for object searching and survivor rescue. Due to the limited
+                                         Real-world experiments conducted fully onboard further vali-                     battery life of aerial robot platforms, it is crucial to develop
+                                           ∗ Yichen Zhang and Xinyi Chen are co-first authors.
+                                                                                                                          efficient exploration planners that cover accessible space as
+                                           † Corresponding author: Boyu Zhou.                                             fast as possible.
+                                           This work was supported by HKUST Postgraduate Studentship and                     Various existing methodologies have been proposed to en-
+                                         HKUST-DJI Joint Innovation Laboratory.                                           hance exploration efficiency [13, 14]. Early techniques, such as
+                                           Yichen Zhang, Xinyi Chen, Chen Feng and Shaojie Shen are with the
+                                         Department of Electronic and Computer Engineering, Hong Kong University          frontier-based [15] and next-best-view-based [16] approaches,
+                                         of Science and Technology, Hong Kong, China.                                     typically employ a greedy strategy that selects the next target
+                                           Boyu Zhou is with the Southern University of Science and Technology,           according to immediate rewards. This shortsighted strategy
+                                         Shenzhen, China, and the Sun Yat-Sen University, Zhuhai, China.
+                                           {yzhangec,xchencq,cfengag,eeshaojie}@ust.hk
+                                           uv.boyuzhou@gmail.com                                                             1 https://github.com/HKUST-Aerial-Robotics/FALCON
+

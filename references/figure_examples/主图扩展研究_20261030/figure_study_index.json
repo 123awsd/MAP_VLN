@@ -1,0 +1,359 @@
+[
+  {
+    "name": "FALCON",
+    "role": "Fig. 1 · PDF p.1",
+    "pdf": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/候选视角生成/papers/FALCON.pdf",
+    "page": 1,
+    "box_fraction": [
+      0.07,
+      0.17,
+      0.96,
+      0.4
+    ],
+    "notes": "最接近本任务：长条三维总轨迹、下排实拍、右侧局部放大整合为一个紧凑矩形。可借鉴实测体素几何的清晰轮廓；不是把稀疏点云简单染灰。",
+    "url": "https://arxiv.org/abs/2407.00577",
+    "kind": "paper_figure",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/FALCON_figure.png",
+    "render_dpi": 240,
+    "initial_pixel_crop": [
+      143,
+      449,
+      1958,
+      1105
+    ]
+  },
+  {
+    "name": "USS-Nav",
+    "role": "Fig. 1 · 已与下载的论文 PDF 核对",
+    "image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/d4e448ba664fe6f2e2ab415d11f14d8f.jpg",
+    "notes": "已核对是你原参考目录中的那张图。竖排观察图紧靠三维主场景，信息密度高。借鉴场景与观察列的比例；硬件资源统计、房间分区标签不属于本稿主图重点。",
+    "url": "https://arxiv.org/abs/2602.00708",
+    "kind": "project_image",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/d4e448ba664fe6f2e2ab415d11f14d8f.jpg"
+  },
+  {
+    "name": "HOV-SG",
+    "role": "Fig. 1 · PDF p.1",
+    "pdf": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/语义恢复参考/扩展调研_20261024/papers/HOV-SG.pdf",
+    "page": 1,
+    "box_fraction": [
+      0.5,
+      0.25,
+      0.96,
+      0.495
+    ],
+    "notes": "三维场景占主位，观察图贴近相关区域，连接短而明确。可借鉴观察图与空间位置的关系；本实验为单层场景，不照搬其楼层展开和房间命名。",
+    "url": "https://hovsg.github.io/",
+    "kind": "paper_figure",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/HOV-SG_figure.png",
+    "render_dpi": 240,
+    "initial_pixel_crop": [
+      1020,
+      660,
+      1958,
+      1304
+    ]
+  },
+  {
+    "name": "ActiveSplat",
+    "role": "作者项目页 teaser · 数据集实验呈现",
+    "image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/ActiveSplat_img1.png",
+    "notes": "空间质感参考：完整的墙、地面和物体表面让轨迹有依托。作者此处展示数据集上的映射与重建；不应当作我们的真机照片，也不能用配色冒充同等重建质量。",
+    "url": "https://li-yuetao.github.io/ActiveSplat/",
+    "kind": "project_image",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/ActiveSplat_img1.png"
+  },
+  {
+    "name": "See, Point, Fly",
+    "role": "Fig. 1",
+    "image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图参考_20261029/SPF_image_3.png",
+    "notes": "局部场景、连续轨迹和短指令构成独立案例，空间范围经过选择。可借鉴局部放大和相机位姿表达；不必把整条空走廊当成最大画面。",
+    "url": "https://arxiv.org/html/2509.22653v1",
+    "kind": "project_image",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图参考_20261029/SPF_image_3.png"
+  },
+  {
+    "name": "ConceptGraphs",
+    "role": "Fig. 1 · PDF p.1",
+    "pdf": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/候选视角生成/papers/ConceptGraphs.pdf",
+    "page": 1,
+    "box_fraction": [
+      0.07,
+      0.23,
+      0.96,
+      0.525
+    ],
+    "notes": "完整的剖开式三维场景、少量语义突出和任务示例形成层次。可借鉴场景切面与主次关系；不直接照搬彩色语义分区和多种任务模块。",
+    "url": "https://concept-graphs.github.io/",
+    "kind": "paper_figure",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/ConceptGraphs_figure.png",
+    "render_dpi": 240,
+    "initial_pixel_crop": [
+      143,
+      607,
+      1958,
+      1372
+    ]
+  },
+  {
+    "name": "VLMaps",
+    "role": "Fig. 1 · PDF p.1",
+    "pdf": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/候选视角生成/papers/VLMaps.pdf",
+    "page": 1,
+    "box_fraction": [
+      0.51,
+      0.15,
+      0.96,
+      0.37
+    ],
+    "notes": "场景、机器人和语言约束在一个主要视图中读完，路径依附于可理解的物体。提醒我们：清楚的真实场景关系比增加图例和标注更重要。",
+    "url": "https://vlmaps.github.io/",
+    "kind": "paper_figure",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/VLMaps_figure.png",
+    "render_dpi": 240,
+    "initial_pixel_crop": [
+      1040,
+      396,
+      1958,
+      960
+    ]
+  },
+  {
+    "name": "VLFM",
+    "role": "Fig. 1 · PDF p.1",
+    "pdf": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/语义恢复参考/前期参考调研_20261024/papers/VLFM.pdf",
+    "page": 1,
+    "box_fraction": [
+      0.07,
+      0.18,
+      0.96,
+      0.48
+    ],
+    "notes": "在有纹理的场景上直接读出目标、起点和路线差异，外围说明克制。可借鉴路线可读性；不是本任务的三维高度和观察位姿展示模板。",
+    "url": "https://naoki.io/portfolio/vlfm",
+    "kind": "paper_figure",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/VLFM_figure.png",
+    "render_dpi": 240,
+    "initial_pixel_crop": [
+      143,
+      475,
+      1958,
+      1123
+    ]
+  },
+  {
+    "name": "IGL-Nav",
+    "role": "作者项目页展示图",
+    "image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/IGL_Nav_img1.png",
+    "notes": "大幅实拍、跨时刻机器人叠加和下方渲染序列表达运动。多时刻实例需要一致的画面坐标；当前移动跟拍不能未经配准直接套用这种叠加。",
+    "url": "https://gwxuan.github.io/IGL-Nav/",
+    "kind": "project_image",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/IGL_Nav_img1.png"
+  },
+  {
+    "name": "FUEL",
+    "role": "Fig. 1 · PDF p.1",
+    "pdf": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/候选视角生成/papers/FUEL.pdf",
+    "page": 1,
+    "box_fraction": [
+      0.54,
+      0.2,
+      0.96,
+      0.56
+    ],
+    "notes": "真实实验照片与在线地图相互验证。可借鉴实物与地图配对；高度或占用着色有其含义，不为了视觉丰富随意增加彩虹色。",
+    "url": "https://arxiv.org/abs/2010.11561",
+    "kind": "paper_figure",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/FUEL_figure.png",
+    "render_dpi": 240,
+    "initial_pixel_crop": [
+      1102,
+      528,
+      1958,
+      1543
+    ]
+  },
+  {
+    "name": "GRaD-Nav++",
+    "role": "作者项目页长期任务示例",
+    "image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图参考_20261029/GRaD_Nav_project_image_2.png",
+    "notes": "实景背景中的轨迹具有直观空间关系。可借鉴动作表达；轨迹、机器人实例与背景的一致性需要真实位姿和投影，不用手绘线替代记录。",
+    "url": "https://qianzhong-chen.github.io/gradnavpp.github.io/",
+    "kind": "project_image",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图参考_20261029/GRaD_Nav_project_image_2.png"
+  },
+  {
+    "name": "OnFly",
+    "role": "Fig. 1",
+    "image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图参考_20261029/OnFly_image_3.png",
+    "notes": "实拍场景是视觉主体，平台、机载图和重建形成不同层次。当前作者偏好白底三维图，因此主要学习主次关系，不继续照搬照片混合背景。",
+    "url": "https://arxiv.org/html/2603.10682v1",
+    "kind": "project_image",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图参考_20261029/OnFly_image_3.png"
+  },
+  {
+    "name": "AirHunt",
+    "role": "Fig. 1",
+    "image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图参考_20261029/AirHunt_image_3.png",
+    "notes": "大幅鸟瞰实拍承载完整路线，硬件和机载图居次。当前没有这种覆盖全路线的外部视角；不把它当成仅靠换版式就能复刻的方案。",
+    "url": "https://arxiv.org/html/2601.12742v1",
+    "kind": "project_image",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图参考_20261029/AirHunt_image_3.png"
+  },
+  {
+    "name": "InstructNav",
+    "role": "Fig. 1 · PDF p.2",
+    "pdf": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/语义恢复参考/扩展调研_20261024/papers/InstructNav.pdf",
+    "page": 2,
+    "box_fraction": [
+      0.17,
+      0.2,
+      0.78,
+      0.535
+    ],
+    "notes": "用多种真实任务图证明泛化能力，短指令紧跟照片。适合能力集锦；本图是一条连续多任务飞行，不能拆成互不关联的照片展板。",
+    "url": "https://arxiv.org/abs/2406.04882",
+    "kind": "paper_figure",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/InstructNav_figure.png",
+    "render_dpi": 240,
+    "initial_pixel_crop": [
+      347,
+      528,
+      1591,
+      1408
+    ]
+  },
+  {
+    "name": "VoxPoser",
+    "role": "Fig. 1 · PDF p.1",
+    "pdf": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/候选视角生成/papers/VoxPoser.pdf",
+    "page": 1,
+    "box_fraction": [
+      0.1,
+      0.575,
+      0.96,
+      0.79
+    ],
+    "notes": "少量机制示意配合密集、统一裁剪的真实任务图，形成稳定网格。可借鉴图像尺度统一；不让辅助图与三维主图争夺同等权重。",
+    "url": "https://proceedings.mlr.press/v229/huang23b.html",
+    "kind": "paper_figure",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/VoxPoser_figure.png",
+    "render_dpi": 240,
+    "initial_pixel_crop": [
+      204,
+      1518,
+      1958,
+      2180
+    ]
+  },
+  {
+    "name": "SG-Nav",
+    "role": "Fig. 1 · PDF p.2",
+    "pdf": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/语义恢复参考/前期参考调研_20261024/papers/SG-Nav.pdf",
+    "page": 2,
+    "box_fraction": [
+      0.17,
+      0.09,
+      0.8,
+      0.3
+    ],
+    "notes": "用三维室内模型和相反的路线行为解释方法差异，叙事明确。可借鉴“一个空间事件讲清一个贡献”；不复制任务无关的图结构、对话和房间标签。",
+    "url": "https://arxiv.org/abs/2410.08189",
+    "kind": "paper_figure",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/SG-Nav_figure.png",
+    "render_dpi": 240,
+    "initial_pixel_crop": [
+      347,
+      238,
+      1632,
+      787
+    ]
+  },
+  {
+    "name": "DovSG",
+    "role": "Fig. 1 · PDF p.1",
+    "pdf": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/语义恢复参考/前期参考调研_20261024/papers/DovSG.pdf",
+    "page": 1,
+    "box_fraction": [
+      0.07,
+      0.14,
+      0.96,
+      0.49
+    ],
+    "notes": "系统总览通过感知、记忆、规划和执行模块串联真实任务。它适合方法总图；不作为当前真机主图骨架，避免回到汇报式模块堆叠。",
+    "url": "https://arxiv.org/abs/2410.11989",
+    "kind": "paper_figure",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/DovSG_figure.png",
+    "render_dpi": 240,
+    "initial_pixel_crop": [
+      143,
+      370,
+      1958,
+      1240
+    ]
+  },
+  {
+    "name": "OpenFMNav",
+    "role": "Fig. 1 · PDF p.1",
+    "pdf": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/语义恢复参考/早期补充原图/OpenFMNav.pdf",
+    "page": 1,
+    "box_fraction": [
+      0.51,
+      0.2,
+      0.96,
+      0.425
+    ],
+    "notes": "以语言输入和成功/失败对照说明问题设置。可以学习简洁地交代输入；对本图的真机轨迹质感帮助有限，不作为主要视觉参考。",
+    "url": "https://arxiv.org/abs/2402.10670",
+    "kind": "paper_figure",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/OpenFMNav_figure.png",
+    "render_dpi": 240,
+    "initial_pixel_crop": [
+      1012,
+      561,
+      1906,
+      1159
+    ]
+  },
+  {
+    "name": "Splat-Nav",
+    "role": "Fig. 1 · 系统流程图",
+    "image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/Splat_Nav_img1.png",
+    "notes": "这是系统流程型 Fig. 1，而非纯实验主图。可借鉴三维场景与定位/规划的联系；不把复杂工作流带进当前真机执行主图。",
+    "url": "https://arxiv.org/html/2403.02751v3",
+    "kind": "project_image",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/Splat_Nav_img1.png"
+  },
+  {
+    "name": "RT-GuIDE",
+    "role": "作者项目页系统图 · 非 Fig. 1 裁图",
+    "image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/RT_GuIDE_img1.png",
+    "notes": "作者项目页的系统图把重建、拓扑和轨迹放在同一链条。适合方法图参考；当前不是要重画系统流程，因此不直接套用模块框。",
+    "url": "https://tyuezhan.github.io/RT_GuIDE/",
+    "kind": "project_image",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/RT_GuIDE_img1.png"
+  },
+  {
+    "name": "BSC-Nav",
+    "role": "Fig. 1 · PDF p.2",
+    "pdf": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/语义恢复参考/扩展调研_20261024/papers/BSC-Nav.pdf",
+    "page": 2,
+    "box_fraction": [
+      0.065,
+      0.38,
+      0.95,
+      0.84
+    ],
+    "notes": "图形、字体和层级经过统一，但内容是认知机制与系统框架。可借鉴标注密度和字体一致性，不照搬与真机轨迹无关的流程模块。",
+    "url": "https://www.nature.com/articles/s41467-026-74358-5",
+    "kind": "paper_figure",
+    "figure_image": "/home/uav/map_VLN/PRE_MAP_VLN/references/figure_examples/主图扩展研究_20261030/BSC-Nav_figure.png",
+    "render_dpi": 240,
+    "initial_pixel_crop": [
+      129,
+      1002,
+      1886,
+      2203
+    ]
+  }
+]

@@ -1,0 +1,53 @@
+                                        InstructNav: Zero-shot System for Generic Instruction
+                                               Navigation in Unexplored Environment
+                                              Yuxing Long123* , Wenzhe Cai4* , Hongcheng Wang123 , Guanqi Zhan5 and Hao Dong123†
+                                                      1 CFCS, School of Computer Science, Peking University 2 PKU-Agibot Lab
+                                            3 National Key Laboratory for Multimedia Information Processing, School of Computer Science,
+
+                                                Peking University 4 School of Automation, Southeast University 5 University of Oxford
+arXiv:2406.04882v1 [cs.RO] 7 Jun 2024
+
+
+
+
+                                                   Abstract: Enabling robots to navigate following diverse language instructions in
+                                                   unexplored environments is an attractive goal for human-robot interaction. How-
+                                                   ever, this goal is challenging because different navigation tasks require different
+                                                   strategies. The scarcity of instruction navigation data hinders training an instruc-
+                                                   tion navigation model with varied strategies. Therefore, previous methods are all
+                                                   constrained to one specific type of navigation instruction. In this work, we propose
+                                                   InstructNav, a generic instruction navigation system. InstructNav makes the first
+                                                   endeavor to handle various instruction navigation tasks without any navigation
+                                                   training or pre-built maps. To reach this goal, we introduce Dynamic Chain-of-
+                                                   Navigation (DCoN) to unify the planning process for different types of navigation
+                                                   instructions. Furthermore, we propose Multi-sourced Value Maps to model key ele-
+                                                   ments in instruction navigation so that linguistic DCoN planning can be converted
+                                                   into robot actionable trajectories. With InstructNav, we complete the R2R-CE task
+                                                   in a zero-shot way for the first time and outperform many task-training methods.
+                                                   Besides, InstructNav also surpasses the previous SOTA method by 10.48% on
+                                                   the zero-shot Habitat ObjNav and by 86.34% on demand-driven navigation DDN.
+                                                   Real robot experiments on diverse indoor scenes further demonstrate our method’s
+                                                   robustness in coping with the environment and instruction variations. The project
+                                                   webpage is https://sites.google.com/view/instructnav.
+
+                                        1     Introduction
+                                        Instructing the robot to navigate in the unexplored indoor scene via natural language is user-friendly,
+                                        which has drawn considerable interest within the robotic community [1][2][3][4][5]. A plausible
+                                        future direction is to develop the robot that can understand and execute a large variety of instructions.
+                                        This will greatly expand the application scenarios of instruction navigation robots. However, different
+                                        types of instructions emphasize different navigation strategies. For example, object goal navigation
+                                        approaches [6][7] primarily concentrate on performing efficient exploration to find the target object
+                                        in unseen environments; visual language navigation methods [8][9] focus on following step-by-
+                                        step instruction; demand-driven navigation [5] works are geared towards conducting demand-based
+                                        commonsense reasoning. There are significant differences among their navigation strategies, which
+                                        makes training an instruction navigation model that can follow diverse instructions difficult. The
+                                        scarcity of instruction navigation data exacerbates this difficulty. Therefore, almost all previous works
+                                        are limited to executing one type of navigation instructions and cannot adapt to other types. This
+                                        raises the question - Can we develop a zero-shot system for generic instruction navigation in the
+                                        unexplored environment?
+                                        The first challenge lies in how to unify different types of instructions. To reach this goal, we
+                                        propose a generic navigation planning paradigm called Dynamic Chain-of-Navigation (DCoN). The
+                                        DCoN models critical elements in navigation - actions and landmarks, as well as their consequential
+                                        relationship. It inherently corresponds to the Chain-of-Thought thinking process of the large language
+                                             * Joint first authors † Corresponding Author (hao.dong@pku.edu.cn)
+

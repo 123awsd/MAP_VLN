@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="IGL-Nav: Incremental 3D Gaussian Localization for Image-goal Navigation">
+    <meta name="author" content="Wenxuan Guo, Xiuwei Xu, Hang Yin, Ziwei Wang, Jianjiang Feng, Jie Zhou, Jiwen Lu">
+
+    <title>IGL-Nav: Incremental 3D Gaussian Localization for Image-goal Navigation</title>
+    <!-- Bootstrap core CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+          integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
+          crossorigin="anonymous">
+    <!-- Custom styles for this template -->
+    <link href="offcanvas.css" rel="stylesheet">
+    <style>
+    .bibtexsection {
+        background-color: #f8f9fa;
+        padding:5px 5px 5px 5px;
+        font-family: monospace;
+        white-space: pre-wrap;      
+        word-break: break-word;    
+        overflow-x: auto;       
+        border-radius: 5px;
+        font-size: 13px;
+    }
+    </style>
+</head>
+
+<body>
+<div class="jumbotron jumbotron-fluid">
+    <div class="container"></div>
+    <h2>IGL-Nav: Incremental 3D Gaussian Localization for Image-goal Navigation</h2>
+    <p>
+        <span style="white-space: nowrap; font-size:larger">
+            <a href="https://GWxuan.github.io/">Wenxuan Guo</a><sup>1*</sup>&nbsp;&nbsp;
+            <a href="https://xuxw98.github.io/">Xiuwei Xu</a><sup>1*</sup>&nbsp;&nbsp;
+            <a href="https://bagh2178.github.io/">Hang Yin</a><sup>1</sup>&nbsp;&nbsp;
+            <a href="https://ziweiwangthu.github.io/">Ziwei Wang</a><sup>2</sup>&nbsp;&nbsp;
+            <a href="https://ivg.au.tsinghua.edu.cn/~jfeng/index.html">Jianjiang Feng</a><sup>1</sup>&nbsp;&nbsp;
+            <a href="https://scholar.google.com/citations?user=6a79aPwAAAAJ&hl=en&authuser=1">Jie Zhou</a><sup>1</sup>&nbsp;&nbsp;
+            <a href="http://ivg.au.tsinghua.edu.cn/Jiwen_Lu/">Jiwen Lu</a><sup>1</sup>
+        </span>
+        <br><br>
+        <sup>1</sup>Tsinghua University&nbsp;&nbsp;<sup>2</sup>Nanyang Technological University
+        <br><br>
+        <a href="https://arxiv.org/abs/2508.00823" target="_blank" style="color: #1E90FF;">
+            <img src="https://img.icons8.com/material-outlined/24/000000/file.png" alt="paper" style="vertical-align: middle;">
+            &nbsp;Paper (arXiv)
+        </a>&nbsp;&nbsp;&nbsp;&nbsp;
+        <a href="https://github.com/GWxuan/IGL-Nav" target="_blank" style="color: #1E90FF;">
+            <img src="https://img.icons8.com/material-outlined/24/000000/github.png" alt="code" style="vertical-align: middle;">
+            &nbsp;Code (GitHub)
+        </a>
+    </p>
+    <hr>
+</div>
+
+<div class="container">
+    <div class="vcontainer">
+        <iframe class='video' src="https://www.youtube.com/embed/gOo6_I-zHYs" frameborder="0"
+                allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen></iframe>
+    </div>
+    <p>
+        If video does not load, click <a href="https://cloud.tsinghua.edu.cn/f/076aea5d0f2d477687de/?dl=1">HERE</a> to download.
+    </p>
+
+    <div class="section">
+        <h2>Abstract</h2>
+        <hr>
+        <p>
+            Visual navigation with an image as goal is a fundamental and challenging problem. 
+            Conventional methods either rely on end-to-end RL learning or modular-based policy 
+            with topological graph or BEV map as memory, which cannot fully model the geometric 
+            relationship between the explored 3D environment and the goal image. In order to 
+            efficiently and accurately localize the goal image in 3D space, we build our navigation 
+            system upon the renderable 3D gaussian (3DGS) representation. However, due to the 
+            computational intensity of 3DGS optimization and the large search space of 6-DoF 
+            camera pose, directly leveraging 3DGS for image localization during agent exploration 
+            process is prohibitively inefficient. To this end, we propose IGL-Nav, an Incremental 
+            3D Gaussian Localization framework for efficient and 3D-aware image-goal navigation. 
+            Specifically, we incrementally update the scene representation as new images arrive 
+            with feed-forward monocular prediction. Then we coarsely localize the goal by leveraging 
+            the geometric information for discrete space matching, which can be equivalent to 
+            efficient 3D convolution. When the agent is close to the goal, we finally solve the fine 
+            target pose with optimization via differentiable rendering. The proposed IGL-Nav 
+            outperforms existing state-of-the-art methods by a large margin across diverse 
+            experimental configurations. It can also handle the more challenging free-view image-goal 
+            setting and be deployed on real-world robotic platform using a cellphone to capture 
+            goal image at arbitrary pose.
+        </p>
+    
+        <!-- Teaser figure inside abstract -->
+        <div class="row align-items-center">
+            <div class="col justify-content-center text-center">
+                <img src="img/Figure1.png" alt="teaser" width="80%">
+                <p class="text-muted" style="font-size: 90%; margin-top: 10px;">
+                    IGL-Nav effectively guides the agent to reach free-view image goal via incremental 3D Gaussian localization.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Approach</h2>
+        <hr>
+        <p><b>Overall pipeline of IGL-Nav.</b> We maintain an incremental 3D Gaussian Splatting (3DGS) representation with feed-forward prediction and perform coarse-to-fine goal localization using both 3D convolution and differentiable rendering.</p>
+        <div class="row align-items-center">
+            <div class="col justify-content-center text-center">
+                <img src="img/Figure4.png" alt="pipeline" width="70%">
+            </div>
+        </div>
+
+        <hr>
+        <p><b>Illustration of IGL-Nav.</b> (a) We maintain an incremental 3DGS scene representation with feed-forward prediction. (b) The coarse target localization is modeled as a 5-dimension matching problem, which is efficiently implemented by leveraging the target embedding as 3D convolutional kernel. (c) Fine target localization via differentiable 3DGS rendering and matching-constrained optimization.</p>
+        <div class="row align-items-center">
+            <div class="col justify-content-center text-center">
+                <img src="img/Figure2.png" alt="3dgs" width="98%">
+            </div>
+        </div>
+
+        <hr>
+        <p><b>Modeling of the camera pose space.</b> (a) Line <b>LR</b> is almost always parallel to the ground. (b) Line <b>AO'</b> is parallel to Plane <b>XOY</b>. Plane <b>AO'B</b> is perpendicular to Plane <b>XOY</b>.</p>
+        <div class="row align-items-center">
+            <div class="col justify-content-center text-center">
+                <img src="img/Figure3.png" alt="pose_space" width="60%">
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Experiments</h2>
+
+        <hr>
+        <p><b>Image-goal navigation benchmark (Habitat).</b> IGL-Nav achieves state-of-the-art performance across all difficulty levels.</p>
+        <div class="row align-items-center">
+            <div class="col justify-content-center text-center">
+                <img src="img/Table1.png" alt="table1" width="95%">
+            </div>
+        </div>
+        <br>
+        <p><b>Free-view image-goal navigation results.</b> IGL-Nav outperforms all baselines in both zero-shot and supervised settings.</p>
+        <div class="row align-items-center">
+            <div class="col justify-content-center text-center">
+                <img src="img/Table2.png" alt="table2" width="95%">
+            </div>
+        </div>
+
+        <hr>
+        <p><b>Real-world deployment results of IGL-Nav.</b> A robot is guided to a cellphone-captured goal image with free view, successfully reaching the target in complex indoor scenes.</p>
+        <div class="row align-items-center">
+            <div class="col justify-content-center text-center">
+                <img src="img/Figure7.png" alt="real_world" width="95%">
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Bibtex</h2>
+        <hr>
+            <div class="bibtexsection">
+    @article{guo2025iglnav, 
+            title={IGL-Nav: Incremental 3D Gaussian Localization for Image-goal Navigation}, 
+            author={Wenxuan Guo and Xiuwei Xu and Hang Yin and Ziwei Wang and Jianjiang Feng and Jie Zhou and Jiwen Lu},
+            journal={arXiv preprint arXiv:2508.00823},
+            year={2025}
+    }
+            </div>
+        </div>
+    </div>
+    <hr>
+</div>
+
+
+
+
+<p><center>
+    <div id="clustrmaps-widget" style="width:20%">
+        <script type="text/javascript" id="clustrmaps" src="//clustrmaps.com/map_v2.js?d=imzzpr9dwguDABNG7l2EE7GrM25W6fy8qyT83m4aPno&cl=ffffff&w=a"></script>    
+    </div>        
+    <br>
+    &copy; Wenxuan Guo | Last update: March. 13, 2025
+</center></p>
+
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+        integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
+        integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3ZV9zzTtmI3UksdQRVvoxMfooAo"
+        crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js"
+        integrity="sha384-OgVRvuATP1z7JjHLkuOU7Xw704+h835Lr+6QL9UvYjZE3Ipu6Tp75j7Bh/kR0JKI"
+        crossorigin="anonymous"></script>
+</body>
+</html>

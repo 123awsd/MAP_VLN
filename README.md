@@ -1,9 +1,9 @@
 # LogicFly paper
 
-论文的独立工作目录。后续正文、图件和图注修改以这里为准。
+这是 `/home/uav/map_VLN/PRE_MAP_VLN` 同一个 Git 仓库中的 `paper` 分支。论文和系统代码通过切换分支使用，日常工作只使用这一个仓库。
 
 ```text
-LogicFly-paper/
+PRE_MAP_VLN/             # 当前分支：paper
 ├── manuscript/          正文、参考文献、IEEE 模板与编译输出
 ├── figures/
 │   ├── final/           正文实际引用的 9 张图
@@ -55,7 +55,7 @@ Fig. 4 最新的单行四幅工作稿位于 `fig04_room_partitioning/single_row/
 
 绘图源文件包含 SVG、Blender 场景、版面脚本及相关图片。SVG/Blender 可直接编辑；部分脚本重算候选、分割或轨迹时仍需原项目的算法、环境及实验数据。源脚本保留其原来的数据路径约定，迁移本身没有重写这些算法或声称所有绘图都已脱离原始数据。
 
-代码项目仍在 `/home/uav/map_VLN/PRE_MAP_VLN`。大模型权重、原始视频、点云及运行缓存继续由代码项目和原素材目录管理。
+系统代码保存在同一仓库的 `real-fly`、`main` 等代码分支。大模型权重、原始视频、点云及运行缓存保留在本地数据目录和原素材目录中，不纳入论文分支；这些被忽略的本地数据不会随分支切换自动消失。
 [migration_inventory.json](figures/source/migration_inventory.json) 记录文件原路径、新路径和留在上游的输入，便于追溯。
 
 ## 写作约定
@@ -68,10 +68,18 @@ Fig. 4 最新的单行四幅工作稿位于 `fig04_room_partitioning/single_row/
 ## 迁移记录
 
 2026-10-28 从 `PRE_MAP_VLN/论文/TASE_英文初稿/` 整理至此。正文内容和 9 张引用图件均保留当前版本，仅调整 LaTeX 图件路径。
-旧目录与原绘图目录暂时保留为历史来源，后续论文维护使用本目录。
+2026-10-30 将论文和代码的两份本地克隆统一回 `/home/uav/map_VLN/PRE_MAP_VLN`，保留最新论文提交和新图稿，并将原未提交代码保存到 `real-fly` 的本地检查点。原迁移清单和校验记录保留当时的历史路径。
 
 ## 版本管理
 
-本目录对应 `123awsd/MAP_VLN` 仓库的 `paper` 分支；该分支根目录采用上述论文结构。
-系统代码由 `real-fly` 等代码分支维护。论文和代码分支按文件或明确的提交同步，不进行整分支合并。
-后续论文提交和上传均在本目录进行。
+日常只在 `/home/uav/map_VLN/PRE_MAP_VLN` 操作 `123awsd/MAP_VLN` 仓库：
+
+```bash
+cd /home/uav/map_VLN/PRE_MAP_VLN
+git switch paper       # 论文、图件和参考资料
+git switch real-fly    # 系统代码和真机工作
+git switch main        # main 分支的代码
+```
+
+切换前先提交或暂存当前修改。Git 管理的文件随分支切换；未跟踪文件和被忽略的数据仍保留在本地。不要再为论文另建克隆或工作树。
+论文和代码分支按文件或明确的提交同步，不进行整分支合并。

@@ -1,0 +1,149 @@
+[
+  {
+    "name": "USS_Nav",
+    "url": "https://arxiv.org/html/2602.00708v1",
+    "images": [
+      {
+        "file": "USS_Nav_img1.png",
+        "source": "https://arxiv.org/html/2602.00708v1/figs/skeleton_gen.png",
+        "size": [
+          3868,
+          1155
+        ],
+        "alt": "Refer to caption"
+      },
+      {
+        "file": "USS_Nav_img2.png",
+        "source": "https://arxiv.org/html/2602.00708v1/figs/region_segmentation.jpg",
+        "size": [
+          1993,
+          1558
+        ],
+        "alt": "Refer to caption"
+      },
+      {
+        "file": "USS_Nav_img3.png",
+        "source": "https://arxiv.org/html/2602.00708v1/figs/object_process.jpg",
+        "size": [
+          2502,
+          1947
+        ],
+        "alt": "Refer to caption"
+      }
+    ]
+  },
+  {
+    "name": "Splat_Nav",
+    "url": "https://arxiv.org/html/2403.02751v3",
+    "images": [
+      {
+        "file": "Splat_Nav_img1.png",
+        "source": "https://arxiv.org/html/2403.02751v3/figures/explainers/SplatNavpipeline.png",
+        "size": [
+          1279,
+          661
+        ],
+        "alt": "Refer to caption"
+      },
+      {
+        "file": "Splat_Nav_img2.png",
+        "source": "https://arxiv.org/html/2403.02751v3/figures/explainers/NeRF_vs_GS.png",
+        "size": [
+          1280,
+          338
+        ],
+        "alt": "Refer to caption"
+      },
+      {
+        "file": "Splat_Nav_img3.png",
+        "source": "https://arxiv.org/html/2403.02751v3/figures/explainers/splatplan_explainer.png",
+        "size": [
+          4720,
+          1320
+        ],
+        "alt": "Refer to caption"
+      }
+    ]
+  },
+  {
+    "name": "RT_GuIDE",
+    "url": "https://tyuezhan.github.io/RT_GuIDE/",
+    "images": [
+      {
+        "file": "RT_GuIDE_img1.png",
+        "source": "https://tyuezhan.github.io/RT_GuIDE/static/images/system_diagram_ral.png",
+        "size": [
+          2666,
+          1224
+        ],
+        "alt": "system diagram"
+      }
+    ]
+  },
+  {
+    "name": "ActiveSplat",
+    "url": "https://li-yuetao.github.io/ActiveSplat/",
+    "images": [
+      {
+        "file": "ActiveSplat_img1.png",
+        "source": "https://li-yuetao.github.io/ActiveSplat/media/figures/teaser.png",
+        "size": [
+          2011,
+          1195
+        ],
+        "alt": "Teaser"
+      },
+      {
+        "file": "ActiveSplat_img2.png",
+        "source": "https://li-yuetao.github.io/ActiveSplat/media/figures/system-overview.png",
+        "size": [
+          1786,
+          1105
+        ],
+        "alt": "System Overview"
+      },
+      {
+        "file": "ActiveSplat_img3.png",
+        "source": "https://li-yuetao.github.io/ActiveSplat/media/figures/reconstruction-results.png",
+        "size": [
+          2475,
+          946
+        ],
+        "alt": ""
+      }
+    ]
+  },
+  {
+    "name": "IGL_Nav",
+    "url": "https://gwxuan.github.io/IGL-Nav/",
+    "images": [
+      {
+        "file": "IGL_Nav_img1.png",
+        "source": "https://gwxuan.github.io/IGL-Nav/img/Figure1.png",
+        "size": [
+          2363,
+          1597
+        ],
+        "alt": "teaser"
+      },
+      {
+        "file": "IGL_Nav_img2.png",
+        "source": "https://gwxuan.github.io/IGL-Nav/img/Figure4.png",
+        "size": [
+          1635,
+          938
+        ],
+        "alt": "pipeline"
+      },
+      {
+        "file": "IGL_Nav_img3.png",
+        "source": "https://gwxuan.github.io/IGL-Nav/img/Figure2.png",
+        "size": [
+          2743,
+          1170
+        ],
+        "alt": "3dgs"
+      }
+    ]
+  }
+]
