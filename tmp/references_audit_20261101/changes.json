@@ -1,0 +1,320 @@
+{
+  "anderson2018r2r": {
+    "booktitle": {
+      "before": "Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition",
+      "after": "Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR)"
+    }
+  },
+  "krantz2020vlnce": {
+    "doi": {
+      "before": null,
+      "after": "10.1007/978-3-030-58604-1_7"
+    },
+    "booktitle": {
+      "before": "European Conference on Computer Vision",
+      "after": "Proc. Eur. Conf. Comput. Vis. (ECCV)"
+    },
+    "volume": {
+      "before": null,
+      "after": "12373"
+    },
+    "title": {
+      "before": "Beyond the Nav-Graph: Vision-and-Language Navigation in Continuous Environments",
+      "after": "Beyond the {Nav-Graph}: Vision-and-Language Navigation in Continuous Environments"
+    },
+    "series": {
+      "before": null,
+      "after": "Lecture Notes Comput. Sci."
+    }
+  },
+  "shridhar2020alfred": {
+    "booktitle": {
+      "before": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition",
+      "after": "Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)"
+    }
+  },
+  "song2024lhvln": {
+    "booktitle": {
+      "before": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition",
+      "after": "Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)"
+    }
+  },
+  "zhou2024navgpt": {
+    "booktitle": {
+      "before": "Proceedings of the AAAI Conference on Artificial Intelligence",
+      "after": "Proc. AAAI Conf. Artif. Intell."
+    }
+  },
+  "chen2024mapgpt": {
+    "booktitle": {
+      "before": "Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics",
+      "after": "Proc. 62nd Annu. Meeting Assoc. Comput. Linguistics (ACL), Vol. 1: Long Papers"
+    }
+  },
+  "jiang2025spatialgpt": {
+    "booktitle": {
+      "before": "Proceedings of the 33rd ACM International Conference on Advances in Geographic Information Systems",
+      "after": "Proc. 33rd ACM Int. Conf. Adv. Geographic Inf. Syst. (SIGSPATIAL)"
+    }
+  },
+  "huang2023vlmaps": {
+    "booktitle": {
+      "before": "IEEE International Conference on Robotics and Automation",
+      "after": "Proc. IEEE Int. Conf. Robot. Autom. (ICRA)"
+    }
+  },
+  "gu2024conceptgraphs": {
+    "booktitle": {
+      "before": "IEEE International Conference on Robotics and Automation",
+      "after": "Proc. IEEE Int. Conf. Robot. Autom. (ICRA)"
+    }
+  },
+  "werby2024hovsg": {
+    "doi": {
+      "before": null,
+      "after": "10.15607/RSS.2024.XX.077"
+    },
+    "booktitle": {
+      "before": "Robotics: Science and Systems",
+      "after": "Proc. Robot.: Sci. Syst. (RSS)"
+    }
+  },
+  "ku2020rxr": {
+    "booktitle": {
+      "before": "Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing",
+      "after": "Proc. Conf. Empir. Methods Natural Lang. Process. (EMNLP)"
+    }
+  },
+  "qi2020reverie": {
+    "booktitle": {
+      "before": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition",
+      "after": "Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)"
+    }
+  },
+  "zhu2021soon": {
+    "booktitle": {
+      "before": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition",
+      "after": "Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)"
+    }
+  },
+  "hao2020prevalent": {
+    "booktitle": {
+      "before": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition",
+      "after": "Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)"
+    }
+  },
+  "wang2023scalevln": {
+    "booktitle": {
+      "before": "Proceedings of the IEEE/CVF International Conference on Computer Vision",
+      "after": "Proc. IEEE/CVF Int. Conf. Comput. Vis. (ICCV)"
+    }
+  },
+  "chen2021hamt": {
+    "booktitle": {
+      "before": "Advances in Neural Information Processing Systems",
+      "after": "Adv. Neural Inf. Process. Syst."
+    }
+  },
+  "chen2022duet": {
+    "booktitle": {
+      "before": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition",
+      "after": "Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)"
+    }
+  },
+  "wani2020multion": {
+    "booktitle": {
+      "before": "Advances in Neural Information Processing Systems",
+      "after": "Adv. Neural Inf. Process. Syst."
+    }
+  },
+  "song2022mtrack": {
+    "booktitle": {
+      "before": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition",
+      "after": "Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)"
+    }
+  },
+  "krantz2023ivln": {
+    "booktitle": {
+      "before": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition",
+      "after": "Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)"
+    }
+  },
+  "khanna2024goat": {
+    "booktitle": {
+      "before": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition",
+      "after": "Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)"
+    }
+  },
+  "busch2025onemap": {
+    "booktitle": {
+      "before": "IEEE International Conference on Robotics and Automation",
+      "after": "Proc. IEEE Int. Conf. Robot. Autom. (ICRA)"
+    }
+  },
+  "rosinol2020dsg": {
+    "booktitle": {
+      "before": "Proceedings of Robotics: Science and Systems",
+      "after": "Proc. Robot.: Sci. Syst. (RSS)"
+    }
+  },
+  "hughes2022hydra": {
+    "title": {
+      "before": "Hydra: A Real-Time Spatial Perception System for {3D} Scene Graph Construction and Optimization",
+      "after": "{Hydra}: A Real-Time Spatial Perception System for {3D} Scene Graph Construction and Optimization"
+    },
+    "booktitle": {
+      "before": "Proceedings of Robotics: Science and Systems",
+      "after": "Proc. Robot.: Sci. Syst. (RSS)"
+    }
+  },
+  "peng2023openscene": {
+    "booktitle": {
+      "before": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition",
+      "after": "Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)"
+    }
+  },
+  "shah2023lmnav": {
+    "series": {
+      "before": "Proceedings of Machine Learning Research",
+      "after": "Proc. Mach. Learn. Res."
+    },
+    "booktitle": {
+      "before": "Proceedings of the 6th Conference on Robot Learning",
+      "after": "Proc. 6th Conf. Robot Learn. (CoRL)"
+    }
+  },
+  "yu2023l3mvn": {
+    "booktitle": {
+      "before": "IEEE/RSJ International Conference on Intelligent Robots and Systems",
+      "after": "Proc. IEEE/RSJ Int. Conf. Intell. Robots Syst. (IROS)"
+    }
+  },
+  "zhang2026spatialnav": {
+    "doi": {
+      "before": null,
+      "after": "10.48550/arXiv.2601.06806"
+    }
+  },
+  "bhatt2025vlnzero": {
+    "doi": {
+      "before": null,
+      "after": "10.48550/arXiv.2509.18592"
+    }
+  },
+  "qiao2025opennav": {
+    "booktitle": {
+      "before": "IEEE International Conference on Robotics and Automation",
+      "after": "Proc. IEEE Int. Conf. Robot. Autom. (ICRA)"
+    }
+  },
+  "huang2026msgnav": {
+    "booktitle": {
+      "before": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition",
+      "after": "Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)"
+    }
+  },
+  "rana2023sayplan": {
+    "series": {
+      "before": null,
+      "after": "Proc. Mach. Learn. Res."
+    },
+    "booktitle": {
+      "before": "Proceedings of the Conference on Robot Learning",
+      "after": "Proc. 7th Conf. Robot Learn. (CoRL)"
+    }
+  },
+  "dai2024osgp": {
+    "booktitle": {
+      "before": "IEEE International Conference on Robotics and Automation",
+      "after": "Proc. IEEE Int. Conf. Robot. Autom. (ICRA)"
+    }
+  },
+  "ray2024tamp": {
+    "doi": {
+      "before": null,
+      "after": "10.48550/arXiv.2403.08094"
+    }
+  },
+  "huang2023innermonologue": {
+    "author": {
+      "before": "Wenlong Huang and Fei Xia and Ted Xiao and Harris Chan and Jacky Liang and Pete Florence and Andy Zeng and Jonathan Tompson and Igor Mordatch and Yevgen Chebotar and Pierre Sermanet and Tomas Jackson and Noah Brown and Linda Luu and Sergey Levine and Karol Hausman and Brian Ichter",
+      "after": "Wenlong Huang and Fei Xia and Ted Xiao and Harris Chan and Jacky Liang and Pete Florence and Andy Zeng and Jonathan Tompson and Igor Mordatch and Yevgen Chebotar and Pierre Sermanet and Noah Brown and Tomas Jackson and Linda Luu and Sergey Levine and Karol Hausman and Brian Ichter"
+    },
+    "series": {
+      "before": "Proceedings of Machine Learning Research",
+      "after": "Proc. Mach. Learn. Res."
+    },
+    "booktitle": {
+      "before": "Proceedings of the 6th Conference on Robot Learning",
+      "after": "Proc. 6th Conf. Robot Learn. (CoRL)"
+    }
+  },
+  "carion2025sam3": {
+    "author": {
+      "before": "Nicolas Carion and Laura Gustafson and Yuan-Ting Hu and others",
+      "after": "Nicolas Carion and Laura Gustafson and Yuan-Ting Hu and Shoubhik Debnath and Ronghang Hu and Didac Suris and Chaitanya Ryali and Kalyan Vasudev Alwala and Haitham Khedr and Andrew Huang and Jie Lei and Tengyu Ma and Baishan Guo and Arpit Kalla and Markus Marks and Joseph Greer and Meng Wang and Peize Sun and Roman R{\\\"a}dle and Triantafyllos Afouras and Effrosyni Mavroudi and Katherine Xu and Tsung-Han Wu and Yu Zhou and Liliane Momeni and Rishi Hazra and Shuangrui Ding and Sagar Vaze and Francois Porcher and Feng Li and Siyuan Li and Aishwarya Kamath and Ho Kei Cheng and Piotr Doll{\\'a}r and Nikhila Ravi and Kate Saenko and Pengchuan Zhang and Christoph Feichtenhofer"
+    }
+  },
+  "zhang2024falcon": {
+    "journal": {
+      "before": "IEEE Transactions on Robotics",
+      "after": "IEEE Trans. Robot."
+    },
+    "year": {
+      "before": "2024",
+      "after": "2025"
+    }
+  },
+  "detone2026boxer": {
+    "doi": {
+      "before": null,
+      "after": "10.48550/arXiv.2604.05212"
+    }
+  },
+  "ren2025super": {
+    "journal": {
+      "before": "Science Robotics",
+      "after": "Sci. Robot."
+    },
+    "pages": {
+      "before": "eado6187",
+      "after": null
+    },
+    "note": {
+      "before": null,
+      "after": "Art. no. eado6187"
+    }
+  },
+  "wang2022minco": {
+    "journal": {
+      "before": "IEEE Transactions on Robotics",
+      "after": "IEEE Trans. Robot."
+    }
+  },
+  "savva2019habitat": {
+    "title": {
+      "before": "Habitat: A Platform for Embodied {AI} Research",
+      "after": "{Habitat}: A Platform for Embodied {AI} Research"
+    },
+    "booktitle": {
+      "before": "Proceedings of the IEEE/CVF International Conference on Computer Vision",
+      "after": "Proc. IEEE/CVF Int. Conf. Comput. Vis. (ICCV)"
+    }
+  },
+  "ramakrishnan2021hm3d": {
+    "volume": {
+      "before": null,
+      "after": "1"
+    },
+    "booktitle": {
+      "before": "Advances in Neural Information Processing Systems Datasets and Benchmarks Track",
+      "after": "Proc. Neural Inf. Process. Syst. Track Datasets Benchmarks"
+    }
+  },
+  "xu2021fastlio": {
+    "journal": {
+      "before": "IEEE Robotics and Automation Letters",
+      "after": "IEEE Robot. Autom. Lett."
+    }
+  }
+}

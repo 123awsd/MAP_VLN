@@ -1,0 +1,32 @@
+[
+  {
+    "method": "no_cptg_full",
+    "episodes": 546,
+    "successes": 354,
+    "sr_percent": 64.83516483516483,
+    "spl_n": 546,
+    "spl_percent": 58.45109773078697,
+    "outer_run_ct_s": 35.63106419903221,
+    "previous_mixed_ct_s": 35.63106419903221
+  },
+  {
+    "method": "cptg_fixed_views",
+    "episodes": 546,
+    "successes": 528,
+    "sr_percent": 96.7032967032967,
+    "spl_n": 546,
+    "spl_percent": 78.03090206040149,
+    "outer_run_ct_s": 11.653604483505301,
+    "previous_mixed_ct_s": 11.653604483505301
+  },
+  {
+    "method": "full_cptg_jtvp",
+    "episodes": 546,
+    "successes": 528,
+    "sr_percent": 96.7032967032967,
+    "spl_n": 546,
+    "spl_percent": 82.14536783721492,
+    "outer_run_ct_s": 11.786090331042281,
+    "previous_mixed_ct_s": 6.390435296470197
+  }
+]

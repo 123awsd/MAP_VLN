@@ -1,0 +1,545 @@
+% !TeX program = xelatex
+\RequirePackage[OT1]{fontenc}
+\documentclass[letterpaper,10pt,journal]{IEEEtran}
+\usepackage{fontspec}
+\setmainfont{TeX Gyre Termes}
+\setsansfont{TeX Gyre Heros}
+\setmonofont{TeX Gyre Cursor}
+\usepackage{amsmath,amssymb,bm,graphicx,booktabs,tabularx,array,url,cite,balance,float}
+\graphicspath{{../figures/final/}}
+\interdisplaylinepenalty=2500
+\newenvironment{practitioners}{\renewcommand{\abstractname}{Note to Practitioners}\begin{abstract}}{\end{abstract}}
+\newcommand{\pose}{\bm{q}}
+\newcommand{\NA}{N/A}
+\title{\LARGE\bf Language-Guided Aerial Navigation with Conditional Task Graphs and Joint Task--Viewpoint Planning}
+\author{Anonymous Author(s)}
+\markboth{IEEE Transactions on Automation Science and Engineering}{Anonymous Author(s): LogicFly}
+\begin{document}
+\bstctlcite{IEEEexample:BSTcontrol}
+\maketitle
+\thispagestyle{empty}
+\pagestyle{empty}
+\begin{abstract}
+Long-horizon aerial inspection requires efficient travel among multiple targets while respecting task dependencies, acquiring visual evidence, and responding to missing objects. We present \textbf{LogicFly}, a language-guided aerial navigation framework that combines a reusable hierarchical semantic--geometric map with conditional task reasoning and observation-aware planning. A \textbf{Conditional Partial-Order Task Graph (CPTG)} separates mandatory precedence from observation-triggered branches and distinguishes navigation anchors from verification targets. \textbf{Joint Task--Viewpoint Planning (JTVP)} jointly optimizes task order and three-dimensional observation poses within a fixed-size receding horizon. By optimizing a bounded task window and executing only the first visit before replanning, LogicFly limits the combinatorial planning problem while supporting many subtasks within one mission. Online verification and semantic-region recovery update task states after negative observations, while safe-corridor-constrained trajectory optimization supports aerial execution. Across 854 simulation episodes in six indoor scenes, LogicFly achieves a 96.96\% strict full-task success rate and 0.8394 success weighted by path length. An additional simulation completes all 15 subtasks of a single instruction within the evaluation time budget. Physical UAV experiments further demonstrate multi-target execution with conditional logic and recovery in indoor environments.
+\end{abstract}
+
+\begin{practitioners}
+LogicFly is applicable to search tasks in a wide range of indoor environments whose structural layouts remain relatively stable. An operator may issue a long natural-language request containing several checks, mandatory precedence relations, freely ordered subtasks, and observation-dependent alternatives. The framework converts such requests into a conditional partial-order task graph and jointly selects the order and three-dimensional camera viewpoints of currently executable tasks. Negative visual evidence can trigger bounded semantic-region search and replanning rather than immediate failure. Its practical benefit is to reduce unnecessary travel while preserving the logic of the request and acquiring task-specific visual evidence. Deployment requires a previously constructed semantic--geometric map, calibrated RGB-D sensing, and localization in the map frame. The demonstrated platform uses an NVIDIA Jetson Orin NX (16 GB), a PX4 flight controller, a Livox Mid-360 LiDAR, and an Intel RealSense D435 depth camera, with FAST-LIO localization. The tested operating limits are a linear speed of $1.0~\mathrm{m/s}$, acceleration of $1.0~\mathrm{m/s^2}$, and yaw rate of $1.0~\mathrm{rad/s}$. Performance depends on map quality, perception reliability, and the coverage of candidate viewpoints; changes that invalidate the stored map may require renewed exploration or online recovery.
+\end{practitioners}
+
+\begin{IEEEkeywords}
+Aerial robotics, task and motion planning, vision-and-language navigation, semantic mapping.
+\end{IEEEkeywords}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{最新真机实验首图.pdf}
+\caption{Real-world execution of a multi-target instruction by LogicFly. The UAV first fails to detect the laptop at its instructed location, performs semantic recovery, and then verifies the laptop, toolbox, microwave state, and water bottle. The map panel shows the executed route, while numbered views document the recovery and task-verification sequence.}
+\label{fig:real-world-main}
+\end{figure*}
+
+\section{Introduction}
+As unmanned aerial vehicles (UAVs) are increasingly deployed in intelligent building inspection, indoor security, and emergency response, enabling autonomous navigation guided by complex natural-language instructions has become an important research challenge. Real-world missions often involve multiple spatial regions and target objects, subject to ordering constraints, conditional dependencies, and dynamic task requirements. Successfully executing such missions requires UAVs to go beyond conventional perception and motion planning by integrating spatial-semantic representations, efficient multi-goal task planning, and logical reasoning. Effective task planning is also essential to minimize redundant travel and maximize mission efficiency within limited flight time. Moreover, visual occlusions, uncertain target locations, and environmental changes demand adaptive decision-making based on real-time observations, rather than reliance on predefined task sequences. Vision-and-Language Navigation (VLN) benchmarks such as R2R~\cite{anderson2018r2r} and VLN-CE~\cite{krantz2020vlnce} have advanced instruction following in discrete and continuous environments, while ALFRED~\cite{shridhar2020alfred} and long-horizon VLN~\cite{song2024lhvln} extend embodied reasoning toward compositional tasks. Nevertheless, most existing formulations remain centered on a single goal, a prescribed route, or a short sequence of actions. They do not directly address long-range aerial instructions that combine multiple subtasks, logical dependencies, spatial relations, and observation-dependent alternatives.
+
+Recent language-model-based VLN methods use observation histories~\cite{zhou2024navgpt}, map-guided prompting~\cite{chen2024mapgpt}, or structured spatial memory~\cite{jiang2025spatialgpt} for navigation. Persistent semantic representations provide reusable spatial memory and target anchors~\cite{huang2023vlmaps,gu2024conceptgraphs,werby2024hovsg}. Despite these advances, existing approaches still struggle with complex logical constraints, multi-target coordination, and redundant exploration in large-scale environments. Their predominantly goal-by-goal decisions leave task dependencies and observation-driven changes insufficiently integrated with geometric planning. Long-horizon aerial missions therefore require coordinated task ordering, informative observation viewpoints, and recovery from missing or occluded targets to improve both full-task success and execution efficiency.
+
+To address these challenges, we propose \textbf{LogicFly}, a language-guided aerial navigation framework for long-range, multi-subtask instructions with complex logical dependencies, as illustrated in Fig.~\ref{fig:overview}. LogicFly comprises four collaborative modules. First, autonomous exploration constructs a reusable hierarchical 3D semantic--geometric representation of free space, floors, rooms, cross-floor transitions, and open-vocabulary object instances. Second, a \textbf{Conditional Partial-Order Task Graph (CPTG)} converts an instruction into executable subtasks while separating mandatory precedence from observation-triggered branches and navigation anchors from verification targets. Third, \textbf{Joint Task--Viewpoint Planning (JTVP)} jointly selects executable-task order and collision-free 3D observation poses within a receding horizon, accounting for travel cost, visibility, and terminal observation quality. Fourth, a closed-loop perception and execution module verifies task outcomes, generates smooth trajectories, and invokes bounded recovery after negative observations through local viewpoint retry, semantic-region search, belief revision, and replanning.
+
+We evaluate LogicFly on 854 valid episodes generated from 152 instruction cases across six HM3D scenes. The benchmark includes single- and multi-target tasks, single- and cross-floor navigation, precedence constraints, conditional branches, spatial relations, verified absence, semantic recovery, and target disambiguation. LogicFly achieves a 97.0\% strict full-task success rate and an SPL of 0.84, including 96.70\% success on multi-target tasks. Ablation studies show that CPTG is critical to reliable multi-target execution, while JTVP improves path efficiency at the same success rate and comparable completion time. We further deploy LogicFly on a physical UAV in multiple real indoor environments, demonstrating reliable execution of long-range, multi-subtask navigation instructions with complex logical dependencies.
+
+The main contributions of this paper are summarized as follows:
+\begin{itemize}
+\setlength{\itemsep}{0pt}
+\setlength{\parsep}{0pt}
+\item We present \textbf{LogicFly}, an end-to-end aerial navigation framework that reuses an autonomously constructed hierarchical semantic--geometric representation to execute long-range instructions containing multiple subtasks and complex logical dependencies.
+\item We propose a \textbf{Conditional Partial-Order Task Graph (CPTG)} that explicitly represents mandatory precedence, freely schedulable tasks, observation-triggered branches, and distinct navigation and verification targets.
+\item We develop \textbf{Joint Task--Viewpoint Planning (JTVP)} and an observation-driven recovery mechanism to couple task ordering with 3D evidence acquisition, reduce geometric travel, and respond autonomously to negative observations.
+\item We conduct extensive simulation and real-world evaluations, demonstrating high strict full-task success, improved efficiency over representative baselines, and reliable deployment on a physical UAV in complex indoor tasks.
+\end{itemize}
+
+
+
+\section{Related Work}
+\subsection{Long-Horizon and Multi-Target Vision--Language Navigation}
+
+Early VLN benchmarks established instruction following along a route~\cite{anderson2018r2r,ku2020rxr}, object grounding~\cite{qi2020reverie,zhu2021soon}, and continuous-space navigation~\cite{krantz2020vlnce}. PREVALENT~\cite{hao2020prevalent} and ScaleVLN~\cite{wang2023scalevln} improve learned navigation through multimodal pre-training and large-scale instruction--trajectory generation, while HAMT~\cite{chen2021hamt} and DUET~\cite{chen2022duet} preserve temporal or graph-structured navigation history. These methods substantially improve route following, but their task abstraction remains dominated by a single destination or a sequential instruction whose action order is largely fixed.
+
+Subsequent work extends navigation toward longer and repeated missions. MultiON~\cite{wani2020multion} evaluates semantic-map memory through a prescribed sequence of object goals and shows that performance falls sharply as task complexity increases. M-TRACK~\cite{song2022mtrack} decomposes long ALFRED instructions into sequential milestones and checks progress before advancing, whereas LH-VLN~\cite{song2024lhvln} introduces multi-stage tasks and dynamic memory for long-horizon consistency. Iterative VLN~\cite{krantz2023ivln} studies experience reuse across episodes, and GOAT-Bench~\cite{khanna2024goat} evaluates lifelong navigation to sequences of open-vocabulary goals specified by multiple modalities. OneMap~\cite{busch2025onemap} further retains open-vocabulary semantic observations across consecutive object searches. These advances establish the importance of persistent memory and multi-goal evaluation; however, their subgoals are generally presented in a prescribed order or handled as consecutive independent queries. Their sequential goal interfaces provide limited support for scheduling independent subtasks and revising downstream task logic from verification outcomes. LogicFly addresses these limitations with CPTG, which preserves mandatory dependencies while retaining freedom among unordered subtasks and activating or skipping branches from online observations. JTVP optimizes task order and observation poses within a fixed-size window, executes the first visit, and replans from updated evidence, bounding the combinatorial optimization by the planning horizon.
+
+\subsection{Semantic--Geometric Memory and Zero-Shot Navigation}
+
+Persistent maps reduce repeated exploration by separating environmental knowledge from the current query. 3D Dynamic Scene Graphs~\cite{rosinol2020dsg} and Hydra~\cite{hughes2022hydra} organize metric geometry, places, rooms, objects, and agents in hierarchical representations, while OpenScene~\cite{peng2023openscene} supports open-vocabulary queries over 3D features. VLMaps~\cite{huang2023vlmaps} grounds spatial language in language-aligned maps; ConceptGraphs~\cite{gu2024conceptgraphs} and HOV-SG~\cite{werby2024hovsg} extend this idea to open-vocabulary object graphs and building-scale hierarchies. Collectively, these representations provide reusable target anchors and spatial context, but a map alone does not specify how several logically related observation goals should be scheduled or verified.
+
+LLM- and VLM-based navigation agents exploit such context without task-specific VLN training. LM-Nav~\cite{shah2023lmnav} composes pretrained language, vision, and navigation models, and L3MVN~\cite{yu2023l3mvn} uses language-model commonsense to select semantic frontiers. NavGPT~\cite{zhou2024navgpt} reasons over observations and navigation history, while MapGPT~\cite{chen2024mapgpt}, SpatialGPT~\cite{jiang2025spatialgpt}, and SpatialNav~\cite{zhang2026spatialnav} use explicit maps or scene graphs to improve spatial reasoning. VLN-Zero~\cite{bhatt2025vlnzero} combines rapid exploration with compact scene-graph memory, and Open-Nav~\cite{qiao2025opennav} brings zero-shot reasoning to continuous environments. Most recently, MSGNav~\cite{huang2026msgnav} preserves visual evidence in a multimodal 3D scene graph and introduces visibility-based terminal-viewpoint selection. This progression improves spatial memory, exploration, and final-goal visibility, yet typically optimizes the next action or viewpoint for one active goal. Efficient multi-target execution remains a challenge: goal-by-goal planning underuses ordering freedom, while target-not-found observations require coordinated changes to task logic and search. LogicFly addresses these limitations with JTVP and CPTG. JTVP jointly selects executable tasks and 3D observation poses using collision-aware travel costs. CPTG retains resolved outcomes, pending tasks, prerequisites, and conditional states as compact structured memory across planning cycles. Negative evidence updates regional confidence and triggers local or semantic-region recovery, reducing redundant movement and improving robustness to missing targets and stale semantic anchors.
+
+\subsection{Language-Grounded Task and Motion Planning}
+
+Scene-graph planning connects high-level language semantics with geometric feasibility. SayPlan~\cite{rana2023sayplan} searches hierarchical 3D scene graphs, combines LLM planning with a classical planner, and uses simulator feedback to revise infeasible plans. OSGP~\cite{dai2024osgp} translates natural-language missions into linear temporal logic and performs optimal hierarchical search with LLM guidance. Ray \emph{et al.}~\cite{ray2024tamp} derive sparse task-and-motion planning domains from hierarchical 3D scene graphs, reducing computation on irrelevant objects. Complementarily, Inner Monologue~\cite{huang2023innermonologue} shows that success detection and environment feedback improve closed-loop language-model planning.
+
+These approaches address increasingly expressive task specifications and provide feedback at the symbolic or motion-feasibility level. However, they generally treat semantic objects or symbolic actions as planning goals rather than task-conditioned visual observations. Consequently, camera-pose quality, collision-aware travel between alternative observation poses, and recovery from target-not-found evidence are not optimized together. LogicFly closes this gap through a geometry-aware execution abstraction: CPTG preserves precedence and conditional logic, JTVP jointly selects executable tasks and 3D observation poses, and online evidence updates both task state and semantic-region search. Coupled with collision-free trajectory generation, this design turns language-level plans into efficient closed-loop aerial execution and prevents a single negative observation from prematurely terminating the overall instruction.
+
+
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{workflow_10_28_qwen_hd.pdf}
+\caption{Overview of LogicFly. A natural-language instruction and an autonomously explored hierarchical semantic--geometric representation are converted into a CPTG and an executable task set. JTVP jointly selects task order and 3D observation poses within a receding horizon. The first planned visit is then executed and verified online; the resulting observations update the task and search states, revise semantic map priors, and trigger recovery and replanning when necessary.}
+\label{fig:overview}
+\end{figure*}
+
+\section{System Overview}
+\label{sec:system-overview}
+
+
+
+
+LogicFly is a language-guided aerial navigation framework designed to execute long-range instructions involving multiple subtasks and complex logical dependencies. As illustrated in Fig.~\ref{fig:overview}, the framework integrates reusable environment representation, language-based task reasoning, joint task--viewpoint planning, and closed-loop execution. Given a natural-language instruction, a preconstructed semantic--geometric map, and the current UAV state, LogicFly determines which subtasks are currently executable, selects suitable three-dimensional observation poses, generates collision-free trajectories, and continuously updates its decisions according to online visual evidence. The overall system consists of four core modules.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth,trim=55.6bp 188.9bp 49.4bp 189.9bp,clip]{探索建图(1).pdf}
+\caption{Construction of the hierarchical semantic--geometric map. RGB-D observations provide object instances, while point-cloud processing yields room regions; these are integrated with exploration data in the 3D map.}
+\label{fig:semantic-map-construction}
+\end{figure*}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.88\columnwidth]{房间分割.png}
+\caption{Room-partitioning pipeline. The input point cloud is processed to extract walls, identify room cores, and produce the final room partition.}
+\label{fig:room-segmentation}
+\end{figure}
+
+The first module performs autonomous exploration and hierarchical semantic mapping. Before task execution, the UAV explores the initially unknown environment while collecting registered RGB-D observations and constructing a geometric representation of occupied, free, and unobserved space. Open-vocabulary object instances are localized in three dimensions and organized together with floors, rooms, and cross-floor connectivity into a hierarchical semantic--geometric map. This reusable representation provides collision-free navigable space for motion planning and semantic anchors for grounding subsequent language instructions, thereby avoiding repeated exploration during recurring search and inspection missions.
+
+The second module converts the natural-language instruction into a Conditional Partial-Order Task Graph (CPTG). The CPTG represents instruction-grounded subtasks as graph nodes while explicitly separating mandatory precedence constraints from observation-triggered conditional branches. Each subtask distinguishes the navigation anchor, which specifies the region to be visited, from the visual verification target, which defines the evidence that must be observed. This representation preserves ordering flexibility among independent subtasks while maintaining the logical context required to activate, skip, or terminate downstream branches according to online observations. It therefore serves as a compact task-state memory throughout zero-shot, long-horizon execution.
+
+The third module performs Joint Task--Viewpoint Planning (JTVP). For the currently executable subtasks, the system generates feasible 3D observation-pose candidates according to target geometry, spatial relations, camera visibility, and collision constraints. JTVP then jointly selects the task order and observation pose associated with each selected task by considering collision-aware travel cost, geometric visibility, and terminal observation quality. The optimization is conducted within a bounded receding horizon, and only the first planned visit is committed before replanning. Consequently, the combinatorial ordering problem is bounded by the planning horizon and the retained candidate count, while newly acquired observations can be incorporated without invalidating a long open-loop plan.
+
+The fourth module closes the perception--planning--execution loop. Text-prompted SAM~3.1~\cite{carion2025sam3} and Boxer are integrated to detect task-relevant targets and estimate their three-dimensional locations from RGB-D observations. Once JTVP produces a geometric route, a safe-corridor-constrained MINCO optimizer converts the collision-free path into a smooth and dynamically executable UAV trajectory. After reaching the selected observation pose, the system evaluates the acquired visual evidence, updates the corresponding CPTG state, and activates the next set of executable subtasks.
+
+To handle negative observations caused by occlusion, inaccurate semantic anchors, environmental changes, or genuinely absent targets, LogicFly incorporates an observation-driven recovery mechanism. When the expected target is not detected, the system first attempts local reinspection from nearby alternative viewpoints. If the local candidates are exhausted without sufficient evidence, the search is expanded to task-relevant semantic regions. Regional confidence is updated according to newly observed coverage, enabling the planner to prioritize insufficiently inspected areas and suppress redundant revisits. The updated task state, semantic confidence, and candidate viewpoints are then returned to JTVP for replanning. This closed-loop process continues until all required subtasks are resolved or a task-specific absence condition is established.
+
+\section{METHODOLOGY}
+\label{sec:methodology}
+
+The core design philosophy of LogicFly is to leverage the general-purpose reasoning capabilities of VLMs for semantic understanding and task-level decision making, while ensuring stable UAV motion through collision-aware trajectory optimization. This hierarchical integration couples language-grounded task reasoning, reusable semantic--geometric mapping, joint task--viewpoint planning, and safe trajectory execution, enabling reliable long-horizon aerial navigation in complex indoor environments. As illustrated in Fig.~\ref{fig:overview}, the system is composed of four core modules: reusable hierarchical mapping, Conditional Partial-Order Task Graph construction, Joint Task--Viewpoint Planning, and closed-loop perception and execution. This section elaborates on the design principles and implementation details of each module, progressing from reusable representation to task-level planning and finally to online execution and recovery.
+
+\subsection{Reusable 3D Semantic--Geometric Map}
+\label{sec:semantic-representation}
+
+The robot first explores an initially unknown environment and constructs a reusable hierarchical semantic--geometric representation from onboard observations. The geometric component $\mathcal M_g$ records occupied, observed-free, and unknown 3D space, while the semantic component $\mathcal M_s$ organizes floors, rooms, cross-floor transitions, and open-vocabulary object instances in a shared global frame. We use FALCON~\cite{zhang2024falcon} for autonomous aerial exploration; the resulting trajectories support the acquisition of RGB-D observations, camera poses, and occupancy evidence. The updated perception and room modules below convert these observations into auditable object instances and supported room regions without filling unknown space as free or silently assigning it to a room. This representation supplies semantic anchors for task grounding and geometric free space for navigation. Figure~\ref{fig:semantic-map-construction} summarizes its construction from exploration data.
+
+\subsubsection{Target Recognition and Multi-View 3D Fusion}
+
+The mapping front end uses text-prompted SAM~3.1 in image mode rather than video tracking. It applies a fixed indoor vocabulary and a confidence threshold specified in Experimental Setup. Each RGB frame returns a 2D proposal, category, confidence, and instance mask. The mask preserves foreground depth only inside its proposal footprint and suppresses box-background depth before calibrated RGB-D pixels are lifted into the world frame. Boxer~\cite{detone2026boxer} then estimates the oriented 3D instance
+\begin{equation}
+\mathbf{o}_{t,k}
+=\bigl(\mathbf{c}_{t,k},\mathbf{s}_{t,k},\mathbf{R}_{t,k},
+\ell_{t,k},p_{t,k}\bigr),
+\label{eq:boxer-observation}
+\end{equation}
+In~\eqref{eq:boxer-observation}, $t$ is the exact source-frame identity; $k$ is the proposal index; $\mathbf{c}$, $\mathbf{s}$, and $\mathbf{R}$ are the center, size, and orientation, respectively; and $\ell$ and $p$ are the category and confidence.
+
+Multi-view fusion first applies class-consistent non-maximum suppression and then associates proposals using 3D overlap and semantic agreement. Exact capture timestamps are retained as frame identities, and at most the highest-confidence proposal from each frame contributes to one fused instance. The association thresholds and minimum independent-frame requirement are fixed in Experimental Setup. Category names and semantic IDs are jointly tie-broken deterministically. Let $\mathcal I_j$ be the proposals associated with fused instance $j$, and let $\mathcal T_j=\{t\mid\exists k:(t,k)\in\mathcal I_j\}$ be their distinct source frames. The confidence-weighted center is computed as
+\begin{equation}
+\widehat{\mathbf{c}}_{j}=
+\frac{\sum_{(t,k)\in\mathcal I_j}p_{t,k}\mathbf{c}_{t,k}}
+     {\sum_{(t,k)\in\mathcal I_j}p_{t,k}},
+\qquad
+\lvert\mathcal T_j\rvert\geq n_{\mathrm{mv}}.
+\label{eq:multiview-fusion}
+\end{equation}
+The fused instance obtained from~\eqref{eq:multiview-fusion} becomes the semantic anchor used by room assignment and subsequent language tasks. During online verification, detections enter through the same RGB-D projection interface; known instances use their map IDs, while an unmatched same-category detection becomes a novel online track only after satisfying the minimum-frame and spatial-consistency settings specified in Experimental Setup.
+
+\subsubsection{Wall- and Observation-Supported Room Partitioning}
+
+Room partitioning is performed independently on a horizontal grid for each floor. Wall points extracted from measured geometry are projected into a barrier set $\mathcal W$; a bounded local morphological closing only bridges sampling gaps and never hallucinates unknown wall points. The grid resolution and closing neighborhood are fixed in Experimental Setup. Let $\mathcal G$ denote the horizontal grid and let $\Omega_0\subseteq\mathcal G$ be the candidate floor domain. To prevent walls or interpolation holes from becoming room evidence, we combine multiple independent support sets: near-horizontal measured surfaces $\mathcal S_h$, multi-height free-space observations $\mathcal S_f$, multi-frame depth-ray coverage $\mathcal S_r$, and recorded trajectory coverage $\mathcal S_t$. Each support set is projected onto $\mathcal G$ and represented as a set of grid cells. The effective partition domain is defined as
+\begin{equation}
+\Omega=(\Omega_0\setminus\mathcal W)\cap
+\bigl(\mathcal S_h\cup\mathcal S_f\cup\mathcal S_r\cup\mathcal S_t\bigr).
+\label{eq:supported-room-domain}
+\end{equation}
+According to~\eqref{eq:supported-room-domain}, $\Omega$ contains cells that are not blocked by walls and have support from at least one evidence source. A cell without independent support is excluded from the room partition but is not labeled as exterior or occupied; flight feasibility remains determined by the independent 3D occupancy map.
+
+On $\Omega$, we compute the Euclidean distance transform $d(\mathbf{x})$ to the domain boundary. Broad room interiors have larger clearance than doorways, corridors, and room boundaries. We therefore define the interior cores as
+\begin{equation}
+\mathcal C=\left\{\mathbf{x}\in\Omega\,\middle|\,
+d(\mathbf{x})>\tau_c\right\},
+\label{eq:room-core}
+\end{equation}
+where $\tau_c$ is the interior-clearance threshold in~\eqref{eq:room-core} and is specified in Experimental Setup. Connected components smaller than $A_{\min}$ are discarded, with $A_{\min}$ fixed in Experimental Setup. Each retained core is a spatial marker rather than a semantic room label. Marker-controlled watershed propagation runs on $-d$ with grid-connected, multi-source priority-queue flooding and is restricted to $\Omega$; it therefore stops at wall barriers and unsupported boundaries, while low-clearance connections become bottlenecks between competing cores. A small enclosed region is merged into its sole labeled neighbor only when its boundary wall support is weak and it does not border unsupported open space. A supported connected component without a marker remains untyped rather than receiving an artificial seed.
+
+Room categories are assigned only after geometry: measured RGB frames whose camera positions lie in a region are paired with that region's fused 3D objects and passed to a multimodal classifier over a fixed set of room categories. The frame-count setting is given in Experimental Setup. Insufficient evidence yields ``unknown'', and the classifier cannot change the room boundary or occupancy map. Figure~\ref{fig:room-segmentation} summarizes the room-partitioning pipeline, from the input point cloud through wall and room-core extraction to the final partition.
+\subsection{Conditional Partial-Order Task Graph}
+\label{sec:cptg}
+
+Given a natural-language instruction $I$, the system constructs a \textbf{Conditional Partial-Order Task Graph}
+\begin{equation}
+\mathcal G_T=(\mathcal V,\mathcal E_{\mathrm{prec}},\mathcal R_{\mathrm{cond}}),
+\label{eq:cptg-definition}
+\end{equation}
+where $\mathcal V$ denotes language-grounded subtasks, $\mathcal E_{\mathrm{prec}}$ specifies mandatory precedence relations, and $\mathcal R_{\mathrm{cond}}$ contains observation-dependent activation and skip rules. Each task in~\eqref{eq:cptg-definition} stores its action, semantic target, navigation anchor, verification predicate, spatial constraints, room/floor scope, prerequisites, and search policy. Before execution, the graph is rejected if entity references are invalid, dependencies are inconsistent, or the precedence relation contains a cycle. Figure~\ref{fig:cptg} illustrates the resulting task representation.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{conditional_task_graph.pdf}
+\caption{From a natural-language instruction to a CPTG. The task parser constructs task nodes with navigation anchors, semantic targets, and verification predicates; precedence and conditional edges encode mandatory ordering and observation-dependent activation.}
+\label{fig:cptg}
+\end{figure*}
+
+For each task, the \textbf{navigation anchor} defines the observation region, the \textbf{semantic target} specifies the entity to detect, and the \textbf{verification predicate} defines the requested evidence. Spatial relations constrain grounding and candidate generation; their satisfaction is recorded geometrically and required by the strict full-task evaluator.
+
+Let $\mathcal R_t$ denote tasks whose task-level outcomes have been resolved and $\mathcal A_t$ the active pending tasks. The currently executable set is
+\begin{equation}
+\mathcal E_t=
+\left\{i\in\mathcal A_t\,\middle|\,
+\operatorname{pred}(i)\subseteq\mathcal R_t\right\}.
+\label{eq:executable-task-set}
+\end{equation}
+Resolved outcomes are interpreted by $\mathcal R_{\mathrm{cond}}$ to activate or skip downstream conditional tasks. Thus, only tasks satisfying~\eqref{eq:executable-task-set} enter the planner. Each conditional source is resolved according to its observation policy, either at the first designated viewpoint or after a terminal search outcome. Separating mandatory precedence from conditional activation prevents observation-dependent alternatives from being incorrectly imposed as unconditional order constraints. CPTG thus determines the executable tasks, while JTVP plans their order and observation poses.
+
+\subsection{Task-Conditioned Observation and Motion Modeling}
+\label{sec:jtvp}
+
+For each executable task $i$, its navigation anchor and spatial constraints define a task-specific 3D observation region, such as an object, support surface, surrounding area, lower region, or relation-defined area.
+
+The candidate observation pose indexed by $k$ is $\mathbf{q}_i^k=(x_i^k,y_i^k,z_i^k,\psi_i^k)$, where $(x_i^k,y_i^k,z_i^k)$ is the camera position and $\psi_i^k$ is yaw. Candidates are sampled at multiple distances, azimuths, and feasible heights, with yaw oriented toward the observation region; vertical visibility is handled by candidate height and the camera field of view.
+
+Let $\mathcal P_i$ denote samples from the observation region and $\mathcal V_i(\mathbf{q})\subseteq\mathcal P_i$ the samples visible from $\mathbf{q}$ under camera field-of-view and line-of-sight constraints. We define the geometric coverage as
+\begin{equation}
+Q_i(\mathbf{q})=
+\frac{\lvert\mathcal V_i(\mathbf{q})\rvert}
+{\max\{1,\lvert\mathcal P_i\rvert\}}.
+\label{eq:geometric-coverage}
+\end{equation}
+Candidates violating occupancy, flight-height, spatial-relation, or required-visibility constraints are discarded. The remaining poses are scored using the coverage in~\eqref{eq:geometric-coverage}:
+\begin{equation}
+\begin{aligned}
+C_i^{\mathrm{view}}(\mathbf{q})={}&
+\beta_d\frac{|d-d_i^{\mathrm{pref}}|}{\ell_0}
++\beta_Q\bigl[1-Q_i(\mathbf{q})\bigr]\\
+&+\beta_z\frac{|z-\bar z_i|}{\ell_0}
++\beta_r\frac{d_i^{\mathrm{ref}}(\mathbf{q})}{\ell_0}
++\beta_b\frac{d_i^{\mathrm{between}}(\mathbf{q})}{\ell_0}.
+\end{aligned}
+\label{eq:view-cost}
+\end{equation}
+Here, $d$ is the sampled horizontal standoff from the anchor's bounding footprint, $d_i^{\mathrm{pref}}$ is its preferred value, $z$ is the candidate height, and $\bar z_i$ is the mean observation-region height. Let $a(\mathbf q)$ identify the anchor that generated a candidate, $\mathbf c_{a,xy}$ its horizontal center, $\mathbf x(\mathbf q)=(x,y)$ the candidate's horizontal position, and $\mathcal B_i$ the instruction's reference objects. The relation terms, measured in meters, are
+\begin{equation}
+\begin{aligned}
+d_i^{\mathrm{ref}}(\mathbf q)
+&=\min_{b\in\mathcal B_i}\|\mathbf c_{a(\mathbf q),xy}-\mathbf c_{b,xy}\|_2,\\
+d_i^{\mathrm{between}}(\mathbf q)
+&=\operatorname{dist}\bigl(\mathbf x(\mathbf q),
+[\mathbf c_{b_1,xy},\mathbf c_{b_2,xy}]\bigr).
+\end{aligned}
+\label{eq:relation-costs}
+\end{equation}
+The first term is zero when $\mathcal B_i$ is empty; it compares alternative anchors and is constant across views of the same anchor. The second term is used only for a ``between'' relation with two distinct reference centers and is the distance to their closed line segment. Let $\mathbf h=\mathbf c_{b_2,xy}-\mathbf c_{b_1,xy}$ and $u=(\mathbf x(\mathbf q)-\mathbf c_{b_1,xy})^{\mathsf T}\mathbf h/\|\mathbf h\|_2^2$ be the normalized projection parameter; the hard filter requires $u\in[-0.05,1.05]$ and segment distance at most $\max(0.75\,\mathrm m,d_{i,\max}/2)$, where $d_{i,\max}$ is the maximum sampling standoff. Coincident reference centers are rejected. Other inapplicable terms are zero. The reference length $\ell_0$ makes~\eqref{eq:view-cost} dimensionless. Hard feasibility is enforced before scoring, so a low soft cost cannot compensate for an unsafe or unobservable pose. All weights are nonnegative and given in Section~V-A. The retained set $\mathcal Q_i=\{\mathbf q_i^1,\ldots,\mathbf q_i^{K_i}\}$ preserves diverse feasible viewpoints.
+
+Figure~\ref{fig:viewpoint-generation} illustrates the sampling and feasibility-filtering process.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{视角选择.png}
+\caption{Viewpoint sampling and filtering for a dining-table target. Sampled poses are rejected when occluded or collision-prone; the remaining feasible views are retained for observation.}
+\label{fig:viewpoint-generation}
+\end{figure}
+
+For candidate poses $\mathbf{q}_a$ and $\mathbf{q}_b$, a 3D A$^*$ query returns a collision-free polyline $P_t(\mathbf{q}_a,\mathbf{q}_b)=\{\mathbf{p}_1,\ldots,\mathbf{p}_N\}$ when the transition is reachable. Let $\Delta\psi_{ab}=\operatorname{wrap}(\psi_b-\psi_a)$. The path length and motion-time proxy are defined, respectively, as
+\begin{subequations}\label{eq:motion-cost}
+\begin{align}
+L_t(\mathbf{q}_a,\mathbf{q}_b)
+&=\sum_{u=1}^{N-1}\lVert\mathbf{p}_{u+1}-\mathbf{p}_u\rVert_2,
+\label{eq:path-length}\\
+\widehat T_t(\mathbf{q}_a,\mathbf{q}_b)
+&=\max\left\{
+\frac{L_t(\mathbf{q}_a,\mathbf{q}_b)}{v_{\mathrm{nom}}},
+\frac{|z_b-z_a|}{v_z},
+\frac{|\Delta\psi_{ab}|}{\omega_\psi}
+\right\}.
+\label{eq:motion-time}
+\end{align}
+\end{subequations}
+Here, $v_{\mathrm{nom}}>0$ is a nominal speed along the three-dimensional polyline in~\eqref{eq:motion-time}, while $v_z>0$ and $\omega_\psi>0$ set nominal climb and yaw rates. The wrap operator returns an angle in $[-\pi,\pi)$. The maximum models concurrent translation and yaw as a ranking heuristic, not the duration of the optimized trajectory. Cross-floor detours and intermediate ascents or descents contribute to $L_t$; the second term accounts only for net altitude change. Acceleration, intermediate vertical-rate constraints, and observation dwell are handled during execution rather than predicted by this proxy. Unreachable transitions have $L_t=\widehat T_t=+\infty$.
+
+Figure~\ref{fig:jtvp-illustration} shows A*-guided trajectory refinement after a negative observation, including route replanning and trajectory optimization.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{联合规划_1.png}
+\caption{Joint task--viewpoint planning and trajectory refinement. After an observation returns no target, the planner replans and produces a collision-free trajectory guided by A*.}
+\label{fig:jtvp-illustration}
+\end{figure}
+
+\subsection{Receding-Horizon Joint Task--Viewpoint Planning}
+
+At each planning cycle, the planner selects a local task window $\mathcal W_t\subseteq\mathcal E_t$ with $|\mathcal W_t|\leq H$. Tasks are prioritized by their best candidate's current-position distance plus terminal cost, with task IDs breaking ties; recovery can focus the window on the task under reinspection. Every predecessor of a task in $\mathcal E_t$ is already resolved. Thus, no additional precedence constraint is needed within this window; newly enabled successors enter a later planning cycle.
+
+Candidate poses are grouped by physical location and prioritized using current-pose distance, motion-time estimate, and observation score. The retained set $\widetilde{\mathcal Q}_{i,t}\subseteq\mathcal Q_i$ maintains representative viewpoints across semantic locations and is progressively augmented when alternatives are needed.
+
+Given $m=|\mathcal W_t|>0$, let $\Pi(\mathcal W_t)$ be all permutations of the window and $\mathcal K_{i,t}=\{k:\mathbf q_i^k\in\widetilde{\mathcal Q}_{i,t}\}$. JTVP jointly selects $\pi\in\Pi(\mathcal W_t)$, visiting each task exactly once, and one observation pose $\mathbf{q}_r=\mathbf{q}_{\pi_r}^{k_r}$ for each selected task, with $\mathbf{q}_0=\mathbf{q}_t^{\mathrm{robot}}$. Let $\iota(\mathbf{q})$ denote the task associated with candidate $\mathbf{q}$. We define the dimensionless transition score as
+\begin{equation}
+c_t(\mathbf{q}_a,\mathbf{q}_b)=
+\eta_L\frac{L_t(\mathbf{q}_a,\mathbf{q}_b)}{\ell_0}
++\eta_T\frac{\widehat T_t(\mathbf{q}_a,\mathbf{q}_b)}{\tau_0}
++\eta_V C_{\iota(\mathbf{q}_b)}^{\mathrm{view}}(\mathbf{q}_b),
+\label{eq:transition-score}
+\end{equation}
+where $\tau_0$ is a reference time. Using~\eqref{eq:transition-score}, JTVP solves
+\begin{equation}
+\begin{aligned}
+\underset{\pi,\mathbf{k}}{\operatorname{minimize}}\quad
+&\sum_{r=1}^{m}c_t(\mathbf{q}_{r-1},\mathbf{q}_r)\\
+\operatorname{subject\ to}\quad
+&\pi\in\Pi(\mathcal W_t),\quad k_r\in\mathcal K_{\pi_r,t},\\
+&\mathbf q_r=\mathbf q_{\pi_r}^{k_r},\quad r=1,\ldots,m,\\
+&L_t(\mathbf{q}_{r-1},\mathbf{q}_r)<\infty,\quad r=1,\ldots,m.
+\end{aligned}
+\label{eq:jtvp}
+\end{equation}
+The joint planning problem in~\eqref{eq:jtvp} is solved using subset dynamic programming. Let $D(S,i,k)$ be the minimum cost of visiting exactly $S\subseteq\mathcal W_t$ and ending at $\mathbf q_i^k$, where $i\in S$ and $k\in\mathcal K_{i,t}$. Invalid or unreachable states have value $+\infty$, as do unreachable transition scores. For nonempty $S$ and $j\in\mathcal W_t\setminus S$, the initialization, recurrence, and terminal cost are
+\begin{subequations}\label{eq:subset-dp}
+\begin{align}
+D(\{i\},i,k)&=c_t(\mathbf{q}_0,\mathbf{q}_i^k),
+\label{eq:dp-init}\\
+D(S\cup\{j\},j,\ell)&=
+\min_{\substack{i\in S,\,k\in\mathcal K_{i,t}}}\notag\\
+&\quad\left[D(S,i,k)+c_t(\mathbf{q}_i^k,\mathbf{q}_j^\ell)\right],
+\label{eq:dp-recurrence}\\
+J_t^\star&=\min_{\substack{i\in\mathcal W_t,\,k\in\mathcal K_{i,t}}}
+D(\mathcal W_t,i,k).
+\label{eq:dp-terminal}
+\end{align}
+\end{subequations}
+The recurrence is evaluated for $\ell\in\mathcal K_{j,t}$; a minimum over an empty set is $+\infty$. An empty window yields an empty plan with zero cost: execution finishes only if all required outcomes are resolved, otherwise it reports unresolved tasks. Empty candidate sets or an infinite terminal cost trigger expansion from representative views to the full available pool. If no feasible plan is found, planning terminates with failure rather than marking the task verified. For a finite terminal cost, backtracking through~\eqref{eq:subset-dp} returns the optimal order and poses for the selected window and candidate sets. Only the first visit is executed before replanning from the updated robot pose, task state, candidate set, and semantic evidence. This receding-horizon policy preserves the efficiency of multi-task lookahead without committing later visits to assumptions that subsequent observations may invalidate. With $K=\max_{i\in\mathcal W_t}|\mathcal K_{i,t}|$ and cached transition costs, the subset DP uses $O(2^m m^2K^2)$ time and $O(2^m mK)$ memory. Since $m\leq H$, the exponential dependence is limited to the local window. Task screening, candidate generation, and A$^*$ queries still depend on the available tasks and map size; retaining views per location does not impose a global constant $K$ when additional locations are admitted. The 15-subtask timing in Section~V-B measures the complete planner under this policy.
+
+\subsection{Safe-Corridor-Constrained Trajectory Optimization}
+
+After JTVP selects the next task and observation pose, the trajectory optimizer connects the discrete A$^*$ route to the start and goal, constructs geometric safe corridors, and optimizes one continuous trajectory. Safe corridors $\mathcal K_r$ are generated from measured point-cloud clearance and Configuration-Space Iterative Regional Inflation (CIRI)~\cite{ren2025super} geometric seeds, and the resulting piecewise polynomial trajectory is optimized with MINCO~\cite{wang2022minco}. Unknown voxels are treated as blocked, narrow passages are represented by local guide centerlines and centered half-space constraints, and adjacent corridor intersections are checked to prevent a smoothed curve from cutting across a wall.
+
+For $R$ trajectory pieces, the position on piece $r$ is a seventh-degree polynomial,
+\begin{equation}
+\mathbf p_r(\tau)=\sum_{h=0}^{7}\mathbf a_{r,h}\tau^h,
+\qquad \tau\in[0,T_r],\quad T_r>0.
+\label{eq:trajectory-piece}
+\end{equation}
+MINCO determines the coefficients from internal interpolation points $\mathbf U=(\mathbf u_1,\ldots,\mathbf u_{R-1})$, durations $\mathbf T$, and prescribed endpoint position, velocity, acceleration, and jerk. Adjacent pieces share derivatives through order three. Internal points are parameterized in the corresponding corridor intersections. Writing $\mathbf p=\mathcal M(\mathbf U,\mathbf T)$ for this minimum-snap parameterization, the optimization is
+\begin{equation}
+\begin{aligned}
+\min_{\mathbf U,\,\mathbf T>\mathbf 0}\quad
+&\sum_{r=1}^{R}\int_0^{T_r}\|\mathbf p_r^{(4)}(\tau)\|_2^2\,d\tau
++\rho\sum_{r=1}^{R}T_r\\
+&+J_{\mathrm{corr}}(\mathbf p,\mathbf T)
++J_{\mathrm{dyn}}(\mathbf p,\mathbf T),
+\end{aligned}
+\label{eq:minco-safe-corridor}
+\end{equation}
+where $\rho>0$ trades trajectory duration against snap energy. Let corridor $\mathcal K_r$ have normalized half-space constraints $\mathbf n_{r,f}^{\mathsf T}\mathbf p+b_{r,f}\leq0$. The soft penalties have the explicit form
+\begin{equation}
+\begin{aligned}
+J_{\mathrm{corr}}&=\lambda_c\sum_{r,f}\int_0^{T_r}
+\phi_\mu(\mathbf n_{r,f}^{\mathsf T}\mathbf p_r+b_{r,f})\,d\tau,\\
+J_{\mathrm{dyn}}&=\sum_{r}\sum_{d\in\mathcal D}\lambda_d
+\int_0^{T_r}\phi_\mu(g_d(\mathbf p_r,\tau))\,d\tau.
+\end{aligned}
+\label{eq:minco-penalties}
+\end{equation}
+Here, $\mathcal D$ indexes enabled dynamic penalties. Translational penalties use $g_d=\|\mathbf p_r^{(d)}\|_2^2-b_d^2$ for derivative orders $d=1,2,3$ and limits $b_d$ on speed, acceleration, and jerk. Enabled body-rate and thrust penalties use the corresponding differential-flatness quantities and configured bounds. The nonnegative weights carry the units needed to combine these terms. For smoothing parameter $\mu>0$, the implementation uses the one-sided penalty
+\begin{equation}
+\phi_\mu(x)=
+\begin{cases}
+0,&x\leq0,\\
+(\mu-x/2)(x/\mu)^3,&0<x<\mu,\\
+x-\mu/2,&x\geq\mu,
+\end{cases}
+\label{eq:smooth-penalty}
+\end{equation}
+Penalty integrals use trapezoidal quadrature with at least 40 subdivisions per piece. Endpoint states, MINCO continuity, positive durations, and internal-point corridor membership are imposed by parameterization; whole-piece corridor and dynamic violations are penalized during optimization and checked before acceptance. Optional guide-attraction and regional-height terms supplement this formulation. Snap limits are checked on the resulting trajectory rather than introduced as a separate snap-limit penalty.
+
+Yaw is generated separately from the position polynomial. A direction-following reference is blended toward the required observation yaw, unwrapped, and sampled at intervals no greater than $0.01\,\mathrm s$. A rate-limited profile with prescribed start and terminal yaw is then formed and linearly interpolated. A phase too short to satisfy the yaw-rate bound is rejected.
+
+Trajectory validation uses a maximum temporal step of $0.03\,\mathrm s$ and a maximum speed-based spatial step of $0.01\,\mathrm m$. For a validation interval of duration $\Delta$ with speed bound $v_{\max}^{\mathrm{poly}}$ obtained from the polynomial, the distance to the fixed collision point cloud satisfies
+\begin{equation}
+\min_{\tau}d_{\mathrm{cloud}}(\mathbf p(\tau))
+\geq \min_j d_{\mathrm{cloud}}(\mathbf p(\tau_j))
+-\tfrac12v_{\max}^{\mathrm{poly}}\Delta.
+\label{eq:clearance-bound}
+\end{equation}
+This follows from the 1-Lipschitz property of distance and sampling both ends of each interval. The reserved clearance must exceed the collision margin. This bound concerns the supplied collision geometry; finite sampling alone is not a continuous-time guarantee. Corridor, regional-height, derivative, and yaw-rate checks must also pass before acceptance. Replanning retains the committed prefix and regenerates the remaining route.
+
+\subsection{Observation-Driven Semantic Revision and Recovery}
+\label{sec:recovery}
+
+At the selected observation pose, RGB observations acquired during motion contribute semantic evidence, while terminal RGB-D observations provide open-vocabulary detections, depth-based 3D projections, and geometric verification cues. A positive online verification advances the task state. A negative terminal observation is handled according to the task-specific not-found policy: it may trigger another local viewpoint, bounded semantic recovery, a terminal absence result, or an observation-dependent branch.
+
+Open-vocabulary detections are lifted into the global frame using depth and camera pose. Same-category observations are associated with mapped instances through spatial consistency, while unassociated detections are accumulated across views for subsequent scene-graph revision.
+
+For tasks configured for semantic recovery, LogicFly distinguishes three levels of negative evidence. A \textbf{pose-level miss} removes the attempted candidate while keeping the task active. \textbf{Region-level exhaustion} invokes alternative room--functional-region hypotheses grounded in the hierarchy; these hypotheses become geometric observation regions and are ranked using semantic relevance, coverage, and travel cost. A \textbf{task-level negative outcome} is produced when the task-specific stopping condition is reached, after which CPTG updates downstream logic. Within semantic recovery, newly covered portions of an unproductive region reduce its belief, shifting search toward alternative hypotheses.
+
+For a semantic recovery region $r$, let $\mathcal P_r$ be its fixed sample set and $\mathcal O_{r,n}$ the samples already covered before verification $n$, initialized as $\mathcal O_{r,0}=\varnothing$. With visible samples $\mathcal V_r(\mathbf q_n)$, define
+\begin{equation}
+\begin{aligned}
+\delta_{r,n}&=\frac{|\mathcal V_r(\mathbf q_n)\setminus\mathcal O_{r,n}|}
+{\max(1,|\mathcal P_r|)},\\
+\mathcal O_{r,n+1}&=\mathcal O_{r,n}\cup\mathcal V_r(\mathbf q_n).
+\end{aligned}
+\label{eq:recovery-coverage}
+\end{equation}
+The task-local confidence $b_{r,0}$ is initialized from semantic relevance: high, medium, low, and fallback hypotheses receive $1.0$, $0.6$, $0.3$, and $0.15$. Registration preserves an existing region's accumulated state. If $y_n\in\{0,1\}$ indicates successful target verification and $Q_r(\mathbf q_n)$ is geometric view quality, the update is
+\begin{equation}
+b_{r,n+1}=
+\begin{cases}
+1,&y_n=1,\\
+b_{r,n}\bigl[1-\alpha\delta_{r,n}Q_r(\mathbf q_n)\bigr],&y_n=0,
+\end{cases}
+\label{eq:recovery-belief}
+\end{equation}
+with detector reliability $\alpha=0.80$. These scores remain in $[0,1]$ and are not normalized across regions or interpreted as a posterior probability distribution. Repeated inspection of already covered samples gives $\delta_{r,n}=0$, avoiding repeated confidence reduction from the same coverage.
+
+Recovery views replace the ordinary terminal score by
+\begin{equation}
+C_{r,n}^{\mathrm{rec}}(\mathbf q)=
+1.5(1-b_{r,n})+0.6\widehat c_r+0.8[1-Q_r(\mathbf q)].
+\label{eq:recovery-score}
+\end{equation}
+Here, $\widehat c_r$ is the min--max normalized coverage-route cost across proposed regions, set to zero if all costs coincide. The route estimate greedily selects up to four views by newly covered samples, sums their A$^*$ travel lengths, and adds $2\,\mathrm m$ times the uncovered fraction; an unreachable estimate receives a $10^3\,\mathrm m$ sentinel cost. Thus, confidence and coverage affect terminal quality, while travel from the current pose remains in~\eqref{eq:transition-score}.
+
+The recovery procedure is: (1) verify the selected view and update~\eqref{eq:recovery-coverage}--\eqref{eq:recovery-belief}; (2) remove a missed view and retry unused local candidates; (3) on local exhaustion, admit permitted semantic-region hypotheses and rescore using~\eqref{eq:recovery-score}; and (4) resolve the task when verification succeeds or its declared observation/search policy terminates. The implementation allows at most three alternative hypotheses per request and four distinct locations per task. A first-viewpoint branch is decided at that designated observation rather than delayed for exhaustive search. Exhausting this budget means ``not found within the prescribed search policy'', not proof of global nonexistence; only a matching task predicate accepts that negative outcome. An unresolved positive-search goal or an episode timeout remains a failure.
+
+Novel detections are accumulated online through spatially consistent multi-view fusion and materialized in the updated scene graph after execution. Thus, task states and semantic-region beliefs can affect replanning within the current execution, whereas newly created object instances support later use of the revised map.
+
+After each terminal verification, the system updates the task state, candidate poses, and semantic search prior, recomputes $\mathcal E_t$, and invokes JTVP from the current robot pose. When a task reaches a task-level outcome, CPTG additionally updates $\mathcal R_t$ and evaluates $\mathcal R_{\mathrm{cond}}$ to activate or skip downstream conditional tasks. This closes the loop among task logic, 3D observation, geometric motion, and online semantic evidence.
+
+\subsection{Methodology Summary}
+
+LogicFly presents a hierarchical perception--reasoning--motion framework for long-horizon aerial navigation. It first builds a semantic--geometric representation that grounds object evidence and room structure in observed geometry. Natural-language instructions are then organized into a Conditional Partial-Order Task Graph (CPTG), enabling precedence constraints and observation-dependent branches to be reasoned about jointly with task-conditioned viewpoints. Within a receding-horizon planning scheme, the system coordinates task selection, viewpoint generation, and collision-aware motion, while safe-corridor-constrained MINCO optimization converts the selected discrete route into a dynamically feasible trajectory. Terminal observations close the loop by verifying task outcomes and updating semantic evidence, candidate viewpoints, and task states. Once a task reaches its terminal outcome, the updated semantic confidence is used to revise the semantic map by incorporating newly verified instances and the corresponding scene-graph updates. Through this integration of semantic task reasoning and geometric motion generation, LogicFly supports reliable execution of complex multi-target instructions in unknown indoor environments.
+
+\begin{table*}[t!]
+\caption{Benchmark results grouped by task difficulty and floor scope. The clean schedule contains 270 single-floor and 38 cross-floor single-target episodes, and 364 single-floor and 182 cross-floor multi-target episodes. SR and SPL are percentages; CT is averaged over successful episodes. A dash indicates no successful episode. OneMap uses its ordered-category projection. Bold denotes the best result in each task group.}
+\label{tab:main}\centering\small\renewcommand{\arraystretch}{1.15}
+\begin{tabular*}{0.94\textwidth}{@{\extracolsep{\fill}}llcccccc@{}}\toprule
+\raisebox{-8pt}[0pt][0pt]{Task difficulty}&\raisebox{-8pt}[0pt][0pt]{Method}&\multicolumn{3}{c}{Single-floor}&\multicolumn{3}{c}{Cross-floor}\\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}
+&&SR$\uparrow$ (\%)&SPL$\uparrow$ (\%)&CT$\downarrow$ (s)&SR$\uparrow$ (\%)&SPL$\uparrow$ (\%)&CT$\downarrow$ (s)\\\midrule
+\raisebox{-22.9pt}[0pt][0pt]{Single-target}&SpatialNav&8.15&5.89&22.35&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}\\
+&SpatialGPT&10.37&2.69&115.39&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}\\
+&MapGPT&27.78&14.35&42.95&18.42&13.08&81.57\\
+&OneMap&52.59&35.45&77.32&21.05&20.30&49.88\\
+&LogicFly&\textbf{97.78}&\textbf{87.28}&\textbf{8.19}&\textbf{94.74}&\textbf{86.03}&\textbf{8.99}\\\midrule
+\raisebox{-11.45pt}[0pt][0pt]{Multi-target}&MapGPT&1.10&0.73&96.02&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}\\
+&OneMap&12.36&8.16&150.13&6.59&6.59&90.59\\
+&LogicFly&\textbf{96.70}&\textbf{82.49}&\textbf{10.33}&\textbf{96.70}&\textbf{81.45}&\textbf{14.70}\\\bottomrule
+\end{tabular*}
+\end{table*}
+
+\section{Experiments}
+We evaluate LogicFly through simulation, ablation studies, and real-world UAV experiments, covering benchmark performance, the contributions of CPTG and JTVP, and practical deployment.
+
+\subsection{Experimental Setup}
+\textbf{Evaluation benchmark.}
+We evaluate all methods in the Habitat simulator~\cite{savva2019habitat} on six HM3D~\cite{ramakrishnan2021hm3d} scenes: 00070, 00166, 00273, 00290, 00337, and 00409. The benchmark contains 152 language instructions, including 61 short single-target instructions, 60 long-horizon instructions confined to a single floor, and 31 long-horizon cross-floor instructions. Using the valid initial-state seeds and two repeated trials, each method is evaluated over 854 episodes. The benchmark covers ordered execution, conditional branches, target absence, failure recovery, spatial relations, and instance disambiguation.
+
+\textbf{Evaluation metrics.}
+We report task Success Rate (SR), Success weighted by Path Length (SPL), and Completion Time (CT). An episode is considered successful only when all required task outcomes are completed while satisfying the instruction-level ordering, branching, spatial, recovery, and disambiguation constraints. Reaching the correct objects without satisfying the complete instruction is counted as a failure. For an episode $e$ with a defined geometric reference route, the reported path-efficiency metric is
+\begin{equation}
+\mathrm{SPL}_e=S_e\frac{L_e^{\mathrm{ref}}}
+{\max\{L_e^{\mathrm{ref}},L_e,\varepsilon_L\}},
+\qquad \varepsilon_L=10^{-9}\,\mathrm m,
+\label{eq:task-spl}
+\end{equation}
+where $S_e\in\{0,1\}$ is strict task success and $L_e$ is the sum of three-dimensional distances along the recorded trajectory. The evaluator constructs $L_e^{\mathrm{ref}}$ retrospectively using the required tasks selected by the recorded conditional-source observation, retaining instruction precedence and branch ordering. If that source was never observed, all potentially required tasks remain in the reference problem. It uses the same voxel geometry, a finite generated candidate set, A$^*$ transition costs, and the joint planner's weighted objective; $L_e^{\mathrm{ref}}$ is the length of the resulting route, not a certified shortest path in continuous space or a pure path-length optimum. This reference construction is separate from the online policy and does not provide future branch outcomes to the robot.
+
+For a required target-absence judgment, the frozen search-anchor center is used as the reference endpoint, with the planner's nearest-free-voxel adjustment. These episodes are therefore included when that anchor yields a valid reference route. No unique endpoint or no feasible reference route makes SPL undefined. For applicable episodes, failures and timeouts contribute zero; the denominator is the number of applicable episodes, not the number of successful episodes. The recorded LogicFly results have 854 applicable episodes in Table~\ref{tab:main}, including 54 target-absence episodes, and all 546 multi-target episodes are applicable in Table~\ref{tab:ablation}. Under the implemented numerical convention, $L_e^{\mathrm{ref}}=0$ yields zero even if $L_e=0$; otherwise~\eqref{eq:task-spl} lies in $[0,1]$. Group scores are arithmetic means over their applicable episodes.
+
+\textbf{Baselines.}
+We compare LogicFly against four representative map-based and spatial-reasoning navigation methods. OneMap~\cite{busch2025onemap} is a zero-shot multi-object navigation method that constructs a real-time open-vocabulary feature map and queries the unified map to locate multiple target categories. MapGPT~\cite{chen2024mapgpt} is an LLM-based VLN method that incorporates an environment map into the language prompt and adaptively updates its planned route according to the explored topology. SpatialGPT~\cite{jiang2025spatialgpt} performs zero-shot VLN by maintaining a structured spatial memory and applying spatial chain-of-thought reasoning to select navigation actions. SpatialNav~\cite{zhang2026spatialnav} represents perceived objects and their spatial relations using a spatial scene graph, which supports graph-conditioned reasoning for zero-shot navigation.
+
+\textbf{Implementation details.}
+LogicFly first compiles each instruction into a conditional and precedence-constrained task graph, which is subsequently executed by the proposed task-graph runner. Reusable semantic maps are constructed from registered RGB-D observations. The mapping front end uses SAM~3.1 in image mode with a fixed vocabulary of 30 indoor object categories and a confidence threshold of $0.50$. Video tracking is disabled. Boxer lifts the accepted masks into 3-D and performs multi-view instance fusion using an IoU threshold of $0.20$, an instance-confidence threshold of $0.45$, and a minimum of four observations. During task execution, online object evidence is obtained from calibrated RGB-D observations using open-vocabulary recognition and is projected into the world frame using the estimated camera pose and aligned depth.
+
+Room partitioning uses a $0.05\,\mathrm{m}$ horizontal grid, a $3\times3$ wall-closing neighborhood, an interior-clearance threshold of $\tau_c=0.45\,\mathrm{m}$, and a minimum core area of $A_{\min}=0.04\,\mathrm{m}^2$. Horizontal-surface support requires $|n_z|\geq0.90$ and a projected support distance within $0.12\,\mathrm{m}$. Free-space support requires observations at at least two of four heights, $0.45$, $0.85$, $1.25$, and $1.65\,\mathrm{m}$ above the floor, with a $0.09\,\mathrm{m}$ proximity tolerance. Depth-ray support requires at least three source frames, and trajectory support uses a $0.15\,\mathrm{m}$ radius. A region can merge into its sole neighbor only when the boundary wall fraction is below $0.20$ and the boundary does not touch unsupported open space. Room classification uses up to two selected RGB views and a confidence threshold of $0.65$; insufficient evidence yields an unknown label. Online fusion associates same-category novel detections within $0.75\,\mathrm{m}$ and requires at least two supporting observations before materializing a new instance.
+
+The joint task-and-viewpoint planner retains up to three representative viewpoints per location and uses a receding planning horizon of $H=3$ tasks. In~\eqref{eq:view-cost}, $(\beta_d,\beta_Q,\beta_z,\beta_r,\beta_b)=(1,1,0.10,0.15,0.15)$. In~\eqref{eq:transition-score}, $(\eta_L,\eta_T,\eta_V)=(1,0.25,2)$, with reference scales $\ell_0=1\,\mathrm{m}$ and $\tau_0=1\,\mathrm{s}$. The nominal path speed, climb speed, and yaw rate are $1.0\,\mathrm{m/s}$, $0.5\,\mathrm{m/s}$, and $1.0\,\mathrm{rad/s}$, respectively. A collision safety margin of $0.10\,\mathrm{m}$ is enforced during trajectory generation in both simulated and real-world experiments. All language-model components use Qwen3.8-Flash. Semantic recovery generates at most three alternative hypotheses per request and permits at most four distinct location hypotheses per task, with up to three viewpoints retained per location. Local reinspection exhausts the finite candidate pool before advancing to another permitted location. High-, medium-, and low-relevance region priors are $1.0$, $0.6$, and $0.3$, respectively; the fallback prior is $0.15$. Negative-evidence updates use detector reliability $0.80$ and newly covered samples, with scoring weights of $1.5$, $0.6$, and $0.8$ for belief deficiency, normalized coverage cost, and view-quality deficiency, respectively. Task-specific branch and not-found policies determine whether a negative observation immediately resolves a task or invokes bounded recovery. All perception, planning, and recovery parameters are fixed across scenes and episode repetitions.
+
+\textbf{Runtime protocol.}
+Each evaluation process is subject to a fixed time limit of 240 s. A timeout or execution error is counted as a failed episode. For LogicFly, CT is measured using its native completion timestamp and excludes one-time map preparation. For the comparison methods, CT is measured from process startup to task completion. CT is averaged over successful episodes only.
+
+\subsection{Comparison with Baseline Methods in Simulation}
+We compare LogicFly with HM3D adaptations of OneMap~\cite{busch2025onemap}, MapGPT~\cite{chen2024mapgpt}, SpatialGPT~\cite{jiang2025spatialgpt}, and SpatialNav~\cite{zhang2026spatialnav}. All methods run on the same 854-episode clean schedule. OneMap retains its native ordered-category projection, which omits relations, conditional branches, verified absence, recovery, and return constraints. All baselines and LogicFly are evaluated using the same frozen strict full-task evaluator. SpatialGPT and SpatialNav do not successfully complete any cross-floor episode, resulting in an SR of 0\%; therefore, their remaining cross-floor metrics are not reported.
+
+As shown in Table~\ref{tab:main}, LogicFly consistently outperforms the compared methods across target count and floor scope. On single-target tasks, it reaches 97.78\% SR, 87.28\% SPL, and 8.19 s CT on single-floor episodes, and 94.74\% SR, 86.03\% SPL, and 8.99 s CT on cross-floor episodes. On the harder multi-target tasks, it maintains a 96.70\% SR on both floor scopes, with SPL values of 82.49\% and 81.45\% and CT values of 10.33 s and 14.70 s for single-floor and cross-floor episodes, respectively. SpatialGPT and SpatialNav have no successful multi-target episodes and are therefore omitted from that block. Across the full 854-episode schedule, LogicFly completes 828 episodes for a 96.96\% strict full-task SR and an overall SPL of 0.8394.
+
+\textbf{Execution with more subtasks.}
+In an additional cross-floor simulation in scene 00337, LogicFly completes all 15 subtasks of a single natural-language instruction in one mission. With the same fixed planning horizon $H=3$, language parsing and native navigation share a 240 s deadline; the complete run takes 148.96 s, including 59.24 s for parsing and 89.72 s for navigation. The 95th-percentile planning-call latency is 7.95 s. This run demonstrates completion beyond the planning-window size without a timeout; it is a single-run scalability demonstration rather than an estimate of the maximum supported task count.
+
+Figure~\ref{fig:simulation-execution} presents a qualitative execution example in a three-floor Habitat environment. LogicFly completes the cross-floor route and all required subtasks, with terminal views providing visual evidence for each successful outcome.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{habitat_long_instruction_en.png}
+\caption{Examples of long-instruction execution in Habitat. Each row pairs a natural-language instruction with the corresponding sequence of first-person observations, covering freely ordered subtasks and observation-dependent search or verification.}
+\label{fig:simulation-execution}
+\end{figure*}
+
+All baselines retain their native planning, action, and stopping interfaces. OneMap receives the protocol-defined ordered-category projection, whereas MapGPT, SpatialGPT, and SpatialNav receive the frozen task specification through their native interfaces. Timeouts and algorithm failures remain unsuccessful terminal outcomes.
+
+\subsection{Ablation Studies}
+\begin{table}[H]
+\caption{Ablation results on the multi-target subset of 546 episodes. SR and SPL are percentages. CT uses the same outer-run timing field for all variants and is averaged over successful episodes.}
+\label{tab:ablation}\centering\small\setlength{\tabcolsep}{6pt}
+\begin{tabular}{lrrr}\toprule
+Variant&SR$\uparrow$ (\%)&SPL$\uparrow$ (\%)&CT$\downarrow$ (s)\\\midrule
+w/o CPTG&64.84&58.45&35.63\\
+CPTG + fixed views&\textbf{96.70}&78.03&\textbf{11.65}\\
+CPTG + JTVP&\textbf{96.70}&\textbf{82.15}&11.79\\\bottomrule
+\end{tabular}
+\end{table}
+
+We evaluate CPTG and JTVP on the 546 multi-target episodes from the frozen six-scene HM3D schedule. This subset includes ordered, freely schedulable, conditional-branch, verified-absence, semantic-recovery, spatial-relation, cross-floor, and target-disambiguation tasks. The analysis contains 1638 end-to-end variant records; the full-method records reuse the corresponding native benchmark runs. CT is aggregated from the outer-run completion times for all three variants, including the original native results for the reused full-method runs.
+
+All variants are executed end to end using the native Habitat runner, online open-vocabulary verification, and the same strict evaluator. They share identical scene representations, start poses, motion constraints, termination rules, and evaluation settings. \emph{w/o CPTG} removes task dependencies, conditional rules, and task-conditioned candidate generation, retaining only target labels, coarse room/floor scopes, generic observation constraints, and fixed language order. \emph{CPTG + fixed views} retains CPTG and task-order optimization but uses one independently selected fixed observation pose per task. \emph{CPTG + JTVP} jointly optimizes task ordering and observation viewpoints. The evaluator requires every required outcome and effective order, forbids visits to skipped branches, and checks spatial/reference constraints.
+
+As shown in Table~\ref{tab:ablation}, removing CPTG reduces multi-target SR to 64.84\% and SPL to 58.45\%, while increasing successful-task CT to 35.63 s. Without an explicit task graph, the system cannot reliably enforce precedence relations, activate observation-dependent branches, or distinguish required tasks from skipped alternatives. This leads to incorrect execution orders, unnecessary visits, and repeated recovery attempts, demonstrating that CPTG is the principal contributor to full-task correctness. Restoring CPTG with fixed viewpoints raises SR by 31.86 percentage points to 96.70\%, increases SPL to 78.03\%, and reduces CT to 11.65 s. These improvements show that explicit task dependencies and conditional transitions eliminate most logical execution failures and substantially reduce redundant motion. Replacing the independently selected fixed viewpoints with JTVP preserves the same 96.70\% SR while further increasing SPL by 4.12 percentage points to 82.15\% with comparable CT (11.79 s versus 11.65 s). Thus, CPTG primarily ensures correct execution of the complete instruction, whereas JTVP improves path efficiency by jointly selecting task order and observation poses according to travel and terminal-view costs. The measured CT does not indicate a runtime reduction over fixed viewpoints. The 30 timeout outcomes of w/o CPTG remain in the 546-episode denominator for both SR and SPL, with zero SPL assigned to these unsuccessful episodes.
+
+\subsection{Evaluation in Real-World Environments}
+\textbf{Experimental platform.}
+We conduct real-world experiments using a custom-built quadrotor equipped with an NVIDIA Jetson Orin NX (16 GB), a PX4 flight controller, a Livox Mid-360 LiDAR, and an Intel RealSense D435 depth camera. The D435 provides synchronized $640\times480$ RGB and depth observations for online verification and 3D projection. FAST-LIO~\cite{xu2021fastlio} provides onboard localization, while LiDAR-based occupancy mapping supports real-time trajectory optimization. The UAV is constrained to a maximum linear velocity of $1.0~\mathrm{m/s}$, linear acceleration of $1.0~\mathrm{m/s^2}$, and angular velocity of $1.0~\mathrm{rad/s}$.
+
+\textbf{Task completion and failures.}
+We evaluate 10 long-horizon flight missions across five distinct real-world scenes. LogicFly successfully completes eight missions, yielding a task success rate of $8/10=80\%$. Both failed missions are attributed to errors in target recognition. These results demonstrate multi-task execution across different indoor environments and identify target recognition as the source of the observed mission failures.
+
+As illustrated in Fig.~\ref{fig:real-world-main}, LogicFly completes a four-task instruction end to end with a physical UAV in a real multi-room environment. After the laptop is not found at its instructed location, the UAV performs semantic recovery in the reading room, then verifies the laptop, toolbox, microwave state, and water bottle. The map panel provides a bird's-eye visualization of the executed route, while numbered views document the recovery and verification sequence.
+
+Figures~\ref{fig:real-world-home}--\ref{fig:real-world-office2} show representative observations from the confined indoor home and two office deployments.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{real_world_home_cropped.pdf}
+\caption{Representative flight observations and visual detections from the confined indoor home deployment.}
+\label{fig:real-world-home}
+\end{figure}
+
+\begin{figure*}[t]
+\begin{minipage}[t]{\columnwidth}
+\centering
+\includegraphics[width=\linewidth]{real_world_office1_cropped.pdf}
+\caption{Representative flight observations and visual detections from Office Area 1.}
+\label{fig:real-world-office1}
+\end{minipage}\hfill
+\begin{minipage}[t]{\columnwidth}
+\centering
+\includegraphics[width=\linewidth]{real_world_office2_cropped.pdf}
+\caption{Representative flight observations and visual detections from Office Area 2.}
+\label{fig:real-world-office2}
+\end{minipage}
+\end{figure*}
+\raggedbottom
+
+\section{Conclusion}
+We presented \textbf{LogicFly}, a language-guided aerial navigation framework built around CPTG and JTVP. CPTG separates precedence and observation-triggered branches; JTVP selects task order and observation poses with 3D path and terminal costs within a bounded window. Verification and constrained recovery update subsequent decisions.
+
+Under the 854-episode full evaluation, our method achieves a 96.96\% strict full-task SR and a 0.8394 SPL, including a 96.70\% SR on multi-target tasks. Multi-target ablations further verify the role of CPTG in executing complex task logic and the contribution of JTVP to path efficiency at comparable completion time. In addition, we deploy the system on a custom quadrotor UAV and complete multi-target tasks with logical dependencies in real indoor rooms, demonstrating its practical deployability. We hope this work will encourage the development of vision-and-language navigation beyond single-goal route following toward efficient closed-loop autonomous execution of tasks with complex logic.
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+\end{document}

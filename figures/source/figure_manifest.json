@@ -1,36 +1,35 @@
 [
   {
     "number": 1,
-    "final": "figures/final/real_world_execution.png",
+    "final": "figures/final/最新真机实验首图.pdf",
     "source": "figures/source/fig01_real_world",
-    "original_source": "画图/主图/local_vggt/logicfly_no_fpv_tilted_figure",
-    "final_sha256": "48d388856858bcb95baebc434125985e37c99d4354d69bf6e21ce82f923c29a9",
-    "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+    "original_source": "User-provided file: figures/final/最新真机实验首图.pdf",
+    "final_sha256": "4d10831c1f0f697925e64827a5e5d6dad980a72871301387747ab8ce30a55995",
+    "regeneration_dependencies": "User-provided final PDF; editable source was not supplied."
   },
   {
     "number": 2,
-    "final": "figures/final/system_overview.png",
+    "final": "figures/final/workflow_10_28_qwen_hd.pdf",
     "source": "figures/source/fig02_system_overview",
     "original_source": "PRE_MAP_VLN/paper/system_overview",
-    "final_sha256": "2a6ea6231372936dc2f5d057740e5a9ec16fc26eaeb6e53cae3d23f8dbad0e71",
+    "final_sha256": "e679dc08e1c0a7316666187d159468f7acbe35ec2257578ccebe2a3c64f6efcd",
     "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
   },
   {
     "number": 3,
-    "final": "figures/final/stage1_mapping_pipeline.jpg",
+    "final": "figures/final/探索建图(1).pdf",
     "source": "figures/source/fig03_mapping_pipeline",
     "original_source": "素材处理后/第一阶段/阶段对照",
-    "final_sha256": "a2fbcfcf326b4c64b5de3315acea979d968062f83affc07911e1d72e15fc4f63",
+    "final_sha256": "1bcdcc5ab15f978e94bffefc4cba9e2894cbd6985f39fe9ce71eb06216d2cb9c",
     "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
   },
   {
     "number": 4,
-    "final": "figures/final/room_segmentation_en.pdf",
+    "final": "figures/final/房间分割.png",
     "source": "figures/source/fig04_room_partitioning",
     "original_source": "画图/房间分割",
-    "final_sha256": "a6dcab59a4e7083e458f1ef4a8e97891c7a3ac2a20cfb7edc5b81707ea50c660",
-    "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN.",
-    "installed_variant": "single_column/room_segmentation_en.pdf"
+    "final_sha256": "e2170e05a067b92c7a36a894c52b9464873530eb1b2efc897c498c9f65d4edd2",
+    "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
   },
   {
     "number": 5,
@@ -42,34 +41,34 @@
   },
   {
     "number": 6,
-    "final": "figures/final/viewpoint_generation_en.pdf",
+    "final": "figures/final/视角选择.png",
     "source": "figures/source/fig06_viewpoint_generation",
     "original_source": "画图/候选视角生成_新版",
-    "final_sha256": "af462721c2e1076d6b0cc89af27a5377b89468784eebe7bdb0c5ff237957d299",
+    "final_sha256": "67bccf2aabf3fad365523d6a3b7461c1394b1d07d346acf9873287013e3a10fe",
     "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
   },
   {
     "number": 7,
-    "final": "figures/final/joint_task_viewpoint_planning_en.pdf",
+    "final": "figures/final/联合规划_1.png",
     "source": "figures/source/fig07_joint_planning",
     "original_source": "画图/联合任务视角规划",
-    "final_sha256": "d596f54547e3281e215106ec9165de7e8affb61194c9ae437b3f24dd899efd7d",
+    "final_sha256": "7731dd6d0efe001a9c5197d42b2483a8386baa6172e9d42a92c7af6d6982fc4a",
     "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
   },
   {
     "number": 8,
-    "final": "figures/final/semantic_recovery_en.pdf",
-    "source": "figures/source/fig08_semantic_recovery",
-    "original_source": "画图/语义恢复与地图更新/habitat_reference_draft/clear_rooms",
-    "final_sha256": "d1d14a9b3800a522acc7e8002378a9a9e972da3f2b0ebff9f00141eb9c6946a2",
-    "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
-  },
-  {
-    "number": 9,
     "final": "figures/final/habitat_long_instruction_en.png",
     "source": "figures/source/fig09_habitat_execution",
     "original_source": "画图/Habitat长指令执行",
     "final_sha256": "a5f7d728f67538dc64b96f4b839ad6188cff3b124a59e351784f5a39612125af",
     "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+  },
+  {
+    "number": 9,
+    "final": "figures/final/多个真机实验(2).pdf",
+    "source": "figures/source/fig09_11_real_world",
+    "original_source": "User-provided file: figures/final/多个真机实验(2).pdf",
+    "final_sha256": "486ee0e533a967d9e4bf16f9912fbf6c970d8643401b62194136f50fffd3c61a",
+    "regeneration_dependencies": "User-provided final PDF; included without cropping. Previous separate figures are archived in source/fig09_11_real_world/previous_cropped_figures/."
   }
 ]

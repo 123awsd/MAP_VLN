@@ -1,0 +1,537 @@
+{
+  "song2024lhvln": {
+    "url": "https://openaccess.thecvf.com/content/CVPR2025/html/Song_Towards_Long-Horizon_Vision-Language_Navigation_Platform_Benchmark_and_Method_CVPR_2025_paper.html",
+    "match": 1.0,
+    "bibtex": "@InProceedings{Song_2025_CVPR,\n    author    = {Song, Xinshuai and Chen, Weixing and Liu, Yang and Chen, Weikai and Li, Guanbin and Lin, Liang},\n    title     = {Towards Long-Horizon Vision-Language Navigation: Platform, Benchmark and Method},\n    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},\n    month     = {June},\n    year      = {2025},\n    pages     = {12078-12088}\n}",
+    "meta": [
+      {
+        "name": "citation_title",
+        "content": "Towards Long-Horizon Vision-Language Navigation: Platform, Benchmark and Method"
+      },
+      {
+        "name": "citation_author",
+        "content": "Song, Xinshuai"
+      },
+      {
+        "name": "citation_author",
+        "content": "Chen, Weixing"
+      },
+      {
+        "name": "citation_author",
+        "content": "Liu, Yang"
+      },
+      {
+        "name": "citation_author",
+        "content": "Chen, Weikai"
+      },
+      {
+        "name": "citation_author",
+        "content": "Li, Guanbin"
+      },
+      {
+        "name": "citation_author",
+        "content": "Lin, Liang"
+      },
+      {
+        "name": "citation_publication_date",
+        "content": "2025"
+      },
+      {
+        "name": "citation_conference_title",
+        "content": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition"
+      },
+      {
+        "name": "citation_firstpage",
+        "content": "12078"
+      },
+      {
+        "name": "citation_lastpage",
+        "content": "12088"
+      },
+      {
+        "name": "citation_pdf_url",
+        "content": "https://openaccess.thecvf.com/content/CVPR2025/papers/Song_Towards_Long-Horizon_Vision-Language_Navigation_Platform_Benchmark_and_Method_CVPR_2025_paper.pdf"
+      }
+    ]
+  },
+  "zhu2021soon": {
+    "url": "https://openaccess.thecvf.com/content/CVPR2021/html/Zhu_SOON_Scenario_Oriented_Object_Navigation_With_Graph-Based_Exploration_CVPR_2021_paper.html",
+    "match": 1.0,
+    "bibtex": "@InProceedings{Zhu_2021_CVPR,\n    author    = {Zhu, Fengda and Liang, Xiwen and Zhu, Yi and Yu, Qizhi and Chang, Xiaojun and Liang, Xiaodan},\n    title     = {SOON: Scenario Oriented Object Navigation With Graph-Based Exploration},\n    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},\n    month     = {June},\n    year      = {2021},\n    pages     = {12689-12699}\n}",
+    "meta": [
+      {
+        "name": "citation_title",
+        "content": "SOON: Scenario Oriented Object Navigation With Graph-Based Exploration"
+      },
+      {
+        "name": "citation_author",
+        "content": "Zhu, Fengda"
+      },
+      {
+        "name": "citation_author",
+        "content": "Liang, Xiwen"
+      },
+      {
+        "name": "citation_author",
+        "content": "Zhu, Yi"
+      },
+      {
+        "name": "citation_author",
+        "content": "Yu, Qizhi"
+      },
+      {
+        "name": "citation_author",
+        "content": "Chang, Xiaojun"
+      },
+      {
+        "name": "citation_author",
+        "content": "Liang, Xiaodan"
+      },
+      {
+        "name": "citation_publication_date",
+        "content": "2021"
+      },
+      {
+        "name": "citation_conference_title",
+        "content": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition"
+      },
+      {
+        "name": "citation_firstpage",
+        "content": "12689"
+      },
+      {
+        "name": "citation_lastpage",
+        "content": "12699"
+      },
+      {
+        "name": "citation_pdf_url",
+        "content": "https://openaccess.thecvf.com/content/CVPR2021/papers/Zhu_SOON_Scenario_Oriented_Object_Navigation_With_Graph-Based_Exploration_CVPR_2021_paper.pdf"
+      }
+    ]
+  },
+  "wang2023scalevln": {
+    "url": "https://openaccess.thecvf.com/content/ICCV2023/html/Wang_Scaling_Data_Generation_in_Vision-and-Language_Navigation_ICCV_2023_paper.html",
+    "match": 1.0,
+    "bibtex": "@InProceedings{Wang_2023_ICCV,\n    author    = {Wang, Zun and Li, Jialu and Hong, Yicong and Wang, Yi and Wu, Qi and Bansal, Mohit and Gould, Stephen and Tan, Hao and Qiao, Yu},\n    title     = {Scaling Data Generation in Vision-and-Language Navigation},\n    booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},\n    month     = {October},\n    year      = {2023},\n    pages     = {12009-12020}\n}",
+    "meta": [
+      {
+        "name": "citation_title",
+        "content": "Scaling Data Generation in Vision-and-Language Navigation"
+      },
+      {
+        "name": "citation_author",
+        "content": "Wang, Zun"
+      },
+      {
+        "name": "citation_author",
+        "content": "Li, Jialu"
+      },
+      {
+        "name": "citation_author",
+        "content": "Hong, Yicong"
+      },
+      {
+        "name": "citation_author",
+        "content": "Wang, Yi"
+      },
+      {
+        "name": "citation_author",
+        "content": "Wu, Qi"
+      },
+      {
+        "name": "citation_author",
+        "content": "Bansal, Mohit"
+      },
+      {
+        "name": "citation_author",
+        "content": "Gould, Stephen"
+      },
+      {
+        "name": "citation_author",
+        "content": "Tan, Hao"
+      },
+      {
+        "name": "citation_author",
+        "content": "Qiao, Yu"
+      },
+      {
+        "name": "citation_publication_date",
+        "content": "2023"
+      },
+      {
+        "name": "citation_conference_title",
+        "content": "Proceedings of the IEEE/CVF International Conference on Computer Vision"
+      },
+      {
+        "name": "citation_firstpage",
+        "content": "12009"
+      },
+      {
+        "name": "citation_lastpage",
+        "content": "12020"
+      },
+      {
+        "name": "citation_pdf_url",
+        "content": "https://openaccess.thecvf.com/content/ICCV2023/papers/Wang_Scaling_Data_Generation_in_Vision-and-Language_Navigation_ICCV_2023_paper.pdf"
+      }
+    ]
+  },
+  "chen2022duet": {
+    "url": "https://openaccess.thecvf.com/content/CVPR2022/html/Chen_Think_Global_Act_Local_Dual-Scale_Graph_Transformer_for_Vision-and-Language_Navigation_CVPR_2022_paper.html",
+    "match": 1.0,
+    "bibtex": "@InProceedings{Chen_2022_CVPR,\n    author    = {Chen, Shizhe and Guhur, Pierre-Louis and Tapaswi, Makarand and Schmid, Cordelia and Laptev, Ivan},\n    title     = {Think Global, Act Local: Dual-Scale Graph Transformer for Vision-and-Language Navigation},\n    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},\n    month     = {June},\n    year      = {2022},\n    pages     = {16537-16547}\n}",
+    "meta": [
+      {
+        "name": "citation_title",
+        "content": "Think Global, Act Local: Dual-Scale Graph Transformer for Vision-and-Language Navigation"
+      },
+      {
+        "name": "citation_author",
+        "content": "Chen, Shizhe"
+      },
+      {
+        "name": "citation_author",
+        "content": "Guhur, Pierre-Louis"
+      },
+      {
+        "name": "citation_author",
+        "content": "Tapaswi, Makarand"
+      },
+      {
+        "name": "citation_author",
+        "content": "Schmid, Cordelia"
+      },
+      {
+        "name": "citation_author",
+        "content": "Laptev, Ivan"
+      },
+      {
+        "name": "citation_publication_date",
+        "content": "2022"
+      },
+      {
+        "name": "citation_conference_title",
+        "content": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition"
+      },
+      {
+        "name": "citation_firstpage",
+        "content": "16537"
+      },
+      {
+        "name": "citation_lastpage",
+        "content": "16547"
+      },
+      {
+        "name": "citation_pdf_url",
+        "content": "https://openaccess.thecvf.com/content/CVPR2022/papers/Chen_Think_Global_Act_Local_Dual-Scale_Graph_Transformer_for_Vision-and-Language_Navigation_CVPR_2022_paper.pdf"
+      }
+    ]
+  },
+  "song2022mtrack": {
+    "url": "https://openaccess.thecvf.com/content/CVPR2022/html/Song_One_Step_at_a_Time_Long-Horizon_Vision-and-Language_Navigation_With_Milestones_CVPR_2022_paper.html",
+    "match": 1.0,
+    "bibtex": "@InProceedings{Song_2022_CVPR,\n    author    = {Song, Chan Hee and Kil, Jihyung and Pan, Tai-Yu and Sadler, Brian M. and Chao, Wei-Lun and Su, Yu},\n    title     = {One Step at a Time: Long-Horizon Vision-and-Language Navigation With Milestones},\n    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},\n    month     = {June},\n    year      = {2022},\n    pages     = {15482-15491}\n}",
+    "meta": [
+      {
+        "name": "citation_title",
+        "content": "One Step at a Time: Long-Horizon Vision-and-Language Navigation With Milestones"
+      },
+      {
+        "name": "citation_author",
+        "content": "Song, Chan Hee"
+      },
+      {
+        "name": "citation_author",
+        "content": "Kil, Jihyung"
+      },
+      {
+        "name": "citation_author",
+        "content": "Pan, Tai-Yu"
+      },
+      {
+        "name": "citation_author",
+        "content": "Sadler, Brian M."
+      },
+      {
+        "name": "citation_author",
+        "content": "Chao, Wei-Lun"
+      },
+      {
+        "name": "citation_author",
+        "content": "Su, Yu"
+      },
+      {
+        "name": "citation_publication_date",
+        "content": "2022"
+      },
+      {
+        "name": "citation_conference_title",
+        "content": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition"
+      },
+      {
+        "name": "citation_firstpage",
+        "content": "15482"
+      },
+      {
+        "name": "citation_lastpage",
+        "content": "15491"
+      },
+      {
+        "name": "citation_pdf_url",
+        "content": "https://openaccess.thecvf.com/content/CVPR2022/papers/Song_One_Step_at_a_Time_Long-Horizon_Vision-and-Language_Navigation_With_Milestones_CVPR_2022_paper.pdf"
+      }
+    ]
+  },
+  "krantz2023ivln": {
+    "url": "https://openaccess.thecvf.com/content/CVPR2023/html/Krantz_Iterative_Vision-and-Language_Navigation_CVPR_2023_paper.html",
+    "match": 1.0,
+    "bibtex": "@InProceedings{Krantz_2023_CVPR,\n    author    = {Krantz, Jacob and Banerjee, Shurjo and Zhu, Wang and Corso, Jason and Anderson, Peter and Lee, Stefan and Thomason, Jesse},\n    title     = {Iterative Vision-and-Language Navigation},\n    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},\n    month     = {June},\n    year      = {2023},\n    pages     = {14921-14930}\n}",
+    "meta": [
+      {
+        "name": "citation_title",
+        "content": "Iterative Vision-and-Language Navigation"
+      },
+      {
+        "name": "citation_author",
+        "content": "Krantz, Jacob"
+      },
+      {
+        "name": "citation_author",
+        "content": "Banerjee, Shurjo"
+      },
+      {
+        "name": "citation_author",
+        "content": "Zhu, Wang"
+      },
+      {
+        "name": "citation_author",
+        "content": "Corso, Jason"
+      },
+      {
+        "name": "citation_author",
+        "content": "Anderson, Peter"
+      },
+      {
+        "name": "citation_author",
+        "content": "Lee, Stefan"
+      },
+      {
+        "name": "citation_author",
+        "content": "Thomason, Jesse"
+      },
+      {
+        "name": "citation_publication_date",
+        "content": "2023"
+      },
+      {
+        "name": "citation_conference_title",
+        "content": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition"
+      },
+      {
+        "name": "citation_firstpage",
+        "content": "14921"
+      },
+      {
+        "name": "citation_lastpage",
+        "content": "14930"
+      },
+      {
+        "name": "citation_pdf_url",
+        "content": "https://openaccess.thecvf.com/content/CVPR2023/papers/Krantz_Iterative_Vision-and-Language_Navigation_CVPR_2023_paper.pdf"
+      }
+    ]
+  },
+  "khanna2024goat": {
+    "url": "https://openaccess.thecvf.com/content/CVPR2024/html/Khanna_GOAT-Bench_A_Benchmark_for_Multi-Modal_Lifelong_Navigation_CVPR_2024_paper.html",
+    "match": 1.0,
+    "bibtex": "@InProceedings{Khanna_2024_CVPR,\n    author    = {Khanna, Mukul and Ramrakhya, Ram and Chhablani, Gunjan and Yenamandra, Sriram and Gervet, Theophile and Chang, Matthew and Kira, Zsolt and Chaplot, Devendra Singh and Batra, Dhruv and Mottaghi, Roozbeh},\n    title     = {GOAT-Bench: A Benchmark for Multi-Modal Lifelong Navigation},\n    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},\n    month     = {June},\n    year      = {2024},\n    pages     = {16373-16383}\n}",
+    "meta": [
+      {
+        "name": "citation_title",
+        "content": "GOAT-Bench: A Benchmark for Multi-Modal Lifelong Navigation"
+      },
+      {
+        "name": "citation_author",
+        "content": "Khanna, Mukul"
+      },
+      {
+        "name": "citation_author",
+        "content": "Ramrakhya, Ram"
+      },
+      {
+        "name": "citation_author",
+        "content": "Chhablani, Gunjan"
+      },
+      {
+        "name": "citation_author",
+        "content": "Yenamandra, Sriram"
+      },
+      {
+        "name": "citation_author",
+        "content": "Gervet, Theophile"
+      },
+      {
+        "name": "citation_author",
+        "content": "Chang, Matthew"
+      },
+      {
+        "name": "citation_author",
+        "content": "Kira, Zsolt"
+      },
+      {
+        "name": "citation_author",
+        "content": "Chaplot, Devendra Singh"
+      },
+      {
+        "name": "citation_author",
+        "content": "Batra, Dhruv"
+      },
+      {
+        "name": "citation_author",
+        "content": "Mottaghi, Roozbeh"
+      },
+      {
+        "name": "citation_publication_date",
+        "content": "2024"
+      },
+      {
+        "name": "citation_conference_title",
+        "content": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition"
+      },
+      {
+        "name": "citation_firstpage",
+        "content": "16373"
+      },
+      {
+        "name": "citation_lastpage",
+        "content": "16383"
+      },
+      {
+        "name": "citation_pdf_url",
+        "content": "https://openaccess.thecvf.com/content/CVPR2024/papers/Khanna_GOAT-Bench_A_Benchmark_for_Multi-Modal_Lifelong_Navigation_CVPR_2024_paper.pdf"
+      }
+    ]
+  },
+  "peng2023openscene": {
+    "url": "https://openaccess.thecvf.com/content/CVPR2023/html/Peng_OpenScene_3D_Scene_Understanding_With_Open_Vocabularies_CVPR_2023_paper.html",
+    "match": 1.0,
+    "bibtex": "@InProceedings{Peng_2023_CVPR,\n    author    = {Peng, Songyou and Genova, Kyle and Jiang, Chiyu {\\textquotedblleft}Max{\\textquotedblright} and Tagliasacchi, Andrea and Pollefeys, Marc and Funkhouser, Thomas},\n    title     = {OpenScene: 3D Scene Understanding With Open Vocabularies},\n    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},\n    month     = {June},\n    year      = {2023},\n    pages     = {815-824}\n}",
+    "meta": [
+      {
+        "name": "citation_title",
+        "content": "OpenScene: 3D Scene Understanding With Open Vocabularies"
+      },
+      {
+        "name": "citation_author",
+        "content": "Peng, Songyou"
+      },
+      {
+        "name": "citation_author",
+        "content": "Genova, Kyle"
+      },
+      {
+        "name": "citation_author",
+        "content": "Jiang, Chiyu “Max”"
+      },
+      {
+        "name": "citation_author",
+        "content": "Tagliasacchi, Andrea"
+      },
+      {
+        "name": "citation_author",
+        "content": "Pollefeys, Marc"
+      },
+      {
+        "name": "citation_author",
+        "content": "Funkhouser, Thomas"
+      },
+      {
+        "name": "citation_publication_date",
+        "content": "2023"
+      },
+      {
+        "name": "citation_conference_title",
+        "content": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition"
+      },
+      {
+        "name": "citation_firstpage",
+        "content": "815"
+      },
+      {
+        "name": "citation_lastpage",
+        "content": "824"
+      },
+      {
+        "name": "citation_pdf_url",
+        "content": "https://openaccess.thecvf.com/content/CVPR2023/papers/Peng_OpenScene_3D_Scene_Understanding_With_Open_Vocabularies_CVPR_2023_paper.pdf"
+      }
+    ]
+  },
+  "huang2026msgnav": {
+    "url": "https://openaccess.thecvf.com/content/CVPR2026/html/Huang_MSGNav_Unleashing_the_Power_of_Multi-modal_3D_Scene_Graph_for_CVPR_2026_paper.html",
+    "match": 1.0,
+    "bibtex": "@InProceedings{Huang_2026_CVPR,\n    author    = {Huang, Xun and Zhao, Shijia and Wang, Yunxiang and Lu, Xin and Zhang, Wanfa and Qu, Rongsheng and Li, Weixin and Wang, Yunhong and Wen, Chenglu},\n    title     = {MSGNav: Unleashing the Power of Multi-modal 3D Scene Graph for Zero-Shot Embodied Navigation},\n    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},\n    month     = {June},\n    year      = {2026},\n    pages     = {37154-37163}\n}",
+    "meta": [
+      {
+        "name": "citation_title",
+        "content": "MSGNav: Unleashing the Power of Multi-modal 3D Scene Graph for Zero-Shot Embodied Navigation"
+      },
+      {
+        "name": "citation_author",
+        "content": "Huang, Xun"
+      },
+      {
+        "name": "citation_author",
+        "content": "Zhao, Shijia"
+      },
+      {
+        "name": "citation_author",
+        "content": "Wang, Yunxiang"
+      },
+      {
+        "name": "citation_author",
+        "content": "Lu, Xin"
+      },
+      {
+        "name": "citation_author",
+        "content": "Zhang, Wanfa"
+      },
+      {
+        "name": "citation_author",
+        "content": "Qu, Rongsheng"
+      },
+      {
+        "name": "citation_author",
+        "content": "Li, Weixin"
+      },
+      {
+        "name": "citation_author",
+        "content": "Wang, Yunhong"
+      },
+      {
+        "name": "citation_author",
+        "content": "Wen, Chenglu"
+      },
+      {
+        "name": "citation_publication_date",
+        "content": "2026"
+      },
+      {
+        "name": "citation_conference_title",
+        "content": "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition"
+      },
+      {
+        "name": "citation_firstpage",
+        "content": "37154"
+      },
+      {
+        "name": "citation_lastpage",
+        "content": "37163"
+      },
+      {
+        "name": "citation_pdf_url",
+        "content": "https://openaccess.thecvf.com/content/CVPR2026/papers/Huang_MSGNav_Unleashing_the_Power_of_Multi-modal_3D_Scene_Graph_for_CVPR_2026_paper.pdf"
+      }
+    ]
+  }
+}

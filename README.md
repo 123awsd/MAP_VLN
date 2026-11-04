@@ -1,9 +1,9 @@
 # LogicFly paper
 
-这是 `/home/uav/map_VLN/PRE_MAP_VLN` 同一个 Git 仓库中的 `paper` 分支。论文和系统代码通过切换分支使用，日常工作只使用这一个仓库。
+论文的独立工作目录。后续正文、图件和图注修改以这里为准。
 
 ```text
-PRE_MAP_VLN/             # 当前分支：paper
+LogicFly-paper/
 ├── manuscript/          正文、参考文献、IEEE 模板与编译输出
 ├── figures/
 │   ├── final/           正文实际引用的 9 张图
@@ -36,51 +36,43 @@ make bundle    # 生成可独立编译的投稿源码包
 
 | 图号 | 内容 | 定稿文件，位于 figures/final/ | 源文件，位于 figures/source/ |
 | --- | --- | --- | --- |
-| 1 | 真机执行主图 | `real_world_execution.png` | `fig01_real_world/` |
-| 2 | 系统总览 | `system_overview.png` | `fig02_system_overview/` |
-| 3 | 第一阶段建图流程 | `stage1_mapping_pipeline.jpg` | `fig03_mapping_pipeline/` |
-| 4 | 房间分割 | `room_segmentation_en.pdf` | `fig04_room_partitioning/` |
+| 1 | 真机执行主图 | `11.1真机首图.pdf` | `fig01_real_world/` |
+| 2 | 系统总览 | `workflow_10_28_qwen_hd.pdf` | `fig02_system_overview/` |
+| 3 | 第一阶段建图流程 | `探索建图(1).pdf` | `fig03_mapping_pipeline/` |
+| 4 | 房间分割 | `房间分割.png` | `fig04_room_partitioning/` |
 | 5 | 条件任务图 | `conditional_task_graph.pdf` | `fig05_task_graph/` |
-| 6 | 候选视角生成 | `viewpoint_generation_en.pdf` | `fig06_viewpoint_generation/` |
-| 7 | 联合规划与轨迹生成 | `joint_task_viewpoint_planning_en.pdf` | `fig07_joint_planning/` |
-| 8 | 语义恢复 | `semantic_recovery_en.pdf` | `fig08_semantic_recovery/` |
-| 9 | Habitat 执行示例 | `habitat_long_instruction_en.png` | `fig09_habitat_execution/` |
+| 6 | 候选视角生成 | `视角选择.png` | `fig06_viewpoint_generation/` |
+| 7 | 联合规划与轨迹生成 | `联合规划_1.png` | `fig07_joint_planning/` |
+| 8 | Habitat 执行示例 | `habitat_long_instruction_en.png` | `fig09_habitat_execution/` |
+| 9 | 多场景真机实验：室内住宅、办公室 1 和办公室 2 | `多个真机实验(2).pdf` | `fig09_11_real_world/` |
 
 `final/` 是正文引用图件的唯一入口。源目录里的草稿、预览和新变体不会自动替换定稿。
-Fig. 4 正文采用 `fig04_room_partitioning/single_column/` 中的单栏两行两列、无底部图例版本，从左上 (a) 依次经过右上 (b)、右下 (c)，到左下 (d)；三个箭头完整连接流程，图内标题为 8.5 pt，正文图注为 9 pt。第二层倾斜分区及 SAM 3.1 目标框叠加工作稿位于 `fig04_room_partitioning/oblique_l2/`。
+Fig. 4 最新的单行四幅工作稿位于 `fig04_room_partitioning/single_row/`；第二层倾斜分区及 SAM 3.1 目标框叠加图位于 `fig04_room_partitioning/oblique_l2/`。
 
-每幅图的 `SOURCE_INFO.json` 记录原始来源；[figure_manifest.json](figures/source/figure_manifest.json) 记录定稿文件、图号和当前定稿的校验值。
+每幅图的 `SOURCE_INFO.json` 记录原始来源；[figure_manifest.json](figures/source/figure_manifest.json) 记录定稿文件、图号和迁移时的校验值。
 
 ## 绘图和实验数据
 
 绘图源文件包含 SVG、Blender 场景、版面脚本及相关图片。SVG/Blender 可直接编辑；部分脚本重算候选、分割或轨迹时仍需原项目的算法、环境及实验数据。源脚本保留其原来的数据路径约定，迁移本身没有重写这些算法或声称所有绘图都已脱离原始数据。
 
-系统代码保存在同一仓库的 `real-fly`、`main` 等代码分支。大模型权重、原始视频、点云及运行缓存不纳入论文分支。本机已配置本地分支切换钩子：查看论文时，将残留的代码运行文件收纳到 `/home/uav/map_VLN/PRE_MAP_VLN-local-data/code/`；切回代码分支时，自动恢复到原路径。论文编译缓存则在代码分支下收纳到该数据目录的 `paper/` 中。
-该数据目录不含 Git 仓库，保存的是原有本地文件；请与仓库一起保留。
+代码项目仍在 `/home/uav/map_VLN/PRE_MAP_VLN`。大模型权重、原始视频、点云及运行缓存继续由代码项目和原素材目录管理。
 [migration_inventory.json](figures/source/migration_inventory.json) 记录文件原路径、新路径和留在上游的输入，便于追溯。
 
 ## 写作约定
 
+- 目标识别和 MINCO 真机实现的论文描述以 `origin/real-fly` 为事实来源；详见 [IMPLEMENTATION_SOURCE.md](IMPLEMENTATION_SOURCE.md)。
 - 正面、准确地描述方法、贡献和结果，避免无必要的制作备注与重复免责声明。
-- 作者已确认跨房间飞行、在线识别、条件分支、局部视点重试和跨房间恢复搜索均已完成线下真机验证，不将其列为未来工作。
+- 方法和系统实现章节写完整算法：目标识别为 SAM 3.1--Boxer，轨迹优化为 A* 几何引导、安全走廊约束和 MINCO 连续优化。真机当前接线程度和实验边界只在 Physical UAV Experiments 中仔细说明。
 - 对比和消融结果按当前稿保留，补充时使用已核实的实验数据。
 - 图件修改先在对应 `source/figXX_.../` 内完成，确认后再更新 `final/` 和正文图注。
 
 ## 迁移记录
 
 2026-10-28 从 `PRE_MAP_VLN/论文/TASE_英文初稿/` 整理至此。正文内容和 9 张引用图件均保留当前版本，仅调整 LaTeX 图件路径。
-2026-10-30 将论文和代码的两份本地克隆统一回 `/home/uav/map_VLN/PRE_MAP_VLN`，保留最新论文提交和新图稿，并将原未提交代码保存到 `real-fly` 的本地检查点。原迁移清单和校验记录保留当时的历史路径。
+旧目录与原绘图目录暂时保留为历史来源，后续论文维护使用本目录。
 
 ## 版本管理
 
-日常只在 `/home/uav/map_VLN/PRE_MAP_VLN` 操作 `123awsd/MAP_VLN` 仓库：
-
-```bash
-cd /home/uav/map_VLN/PRE_MAP_VLN
-git switch paper       # 论文、图件和参考资料
-git switch real-fly    # 系统代码和真机工作
-git switch main        # main 分支的代码
-```
-
-切换前先提交或暂存当前修改。Git 管理的文件随分支切换；本机的 `.git/hooks/post-checkout` 另外负责上述本地运行文件的自动收纳和恢复。这是本机配置，不会随提交上传。不要再为论文另建克隆或工作树。
-论文和代码分支按文件或明确的提交同步，不进行整分支合并。
+本目录对应 `123awsd/MAP_VLN` 仓库的 `paper` 分支；该分支根目录采用上述论文结构。
+系统代码由 `real-fly` 等代码分支维护。论文和代码分支按文件或明确的提交同步，不进行整分支合并。
+后续论文提交和上传均在本目录进行。

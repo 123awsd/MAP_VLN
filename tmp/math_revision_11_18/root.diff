@@ -1,0 +1,236 @@
+--- root.before.tex
++++ root.tex
+@@ -113,7 +113,7 @@
+ 
+ The second module converts the natural-language instruction into a Conditional Partial-Order Task Graph (CPTG). The CPTG represents instruction-grounded subtasks as graph nodes while explicitly separating mandatory precedence constraints from observation-triggered conditional branches. Each subtask distinguishes the navigation anchor, which specifies the region to be visited, from the visual verification target, which defines the evidence that must be observed. This representation preserves ordering flexibility among independent subtasks while maintaining the logical context required to activate, skip, or terminate downstream branches according to online observations. It therefore serves as a compact task-state memory throughout zero-shot, long-horizon execution.
+ 
+-The third module performs Joint Task--Viewpoint Planning (JTVP). For the currently executable subtasks, the system generates feasible 3D observation-pose candidates according to target geometry, spatial relations, camera visibility, and collision constraints. JTVP then jointly selects the task order and observation pose associated with each selected task by considering collision-aware travel cost, geometric visibility, and terminal observation quality. The optimization is conducted within a bounded receding horizon, and only the first planned visit is committed before replanning. Consequently, the computation depends on the fixed planning horizon rather than the total number of subtasks, while newly acquired observations can be incorporated without invalidating a long open-loop plan.
++The third module performs Joint Task--Viewpoint Planning (JTVP). For the currently executable subtasks, the system generates feasible 3D observation-pose candidates according to target geometry, spatial relations, camera visibility, and collision constraints. JTVP then jointly selects the task order and observation pose associated with each selected task by considering collision-aware travel cost, geometric visibility, and terminal observation quality. The optimization is conducted within a bounded receding horizon, and only the first planned visit is committed before replanning. Consequently, the combinatorial ordering problem is bounded by the planning horizon and the retained candidate count, while newly acquired observations can be incorporated without invalidating a long open-loop plan.
+ 
+ The fourth module closes the perception--planning--execution loop. Text-prompted SAM~3.1~\cite{carion2025sam3} and Boxer are integrated to detect task-relevant targets and estimate their three-dimensional locations from RGB-D observations. Once JTVP produces a geometric route, a safe-corridor-constrained MINCO optimizer converts the collision-free path into a smooth and dynamically executable UAV trajectory. After reaching the selected observation pose, the system evaluates the acquired visual evidence, updates the corresponding CPTG state, and activates the next set of executable subtasks.
+ 
+@@ -219,12 +219,23 @@
+ \beta_d\frac{|d-d_i^{\mathrm{pref}}|}{\ell_0}
+ +\beta_Q\bigl[1-Q_i(\mathbf{q})\bigr]\\
+ &+\beta_z\frac{|z-\bar z_i|}{\ell_0}
+-+\beta_r\frac{d_i^{\mathrm{ref}}}{\ell_0}
+-+\beta_b\frac{d_i^{\mathrm{between}}}{\ell_0}.
+++\beta_r\frac{d_i^{\mathrm{ref}}(\mathbf{q})}{\ell_0}
+++\beta_b\frac{d_i^{\mathrm{between}}(\mathbf{q})}{\ell_0}.
+ \end{aligned}
+ \label{eq:view-cost}
+ \end{equation}
+-Here, $d$ is the sampling distance, $d_i^{\mathrm{pref}}$ is the preferred observation distance, $\bar z_i$ is the mean observation-region height, $d_i^{\mathrm{ref}}$ and $d_i^{\mathrm{between}}$ encode task-dependent spatial relations, and $\ell_0$ is a reference length. Inapplicable terms are zero. Hard feasibility is enforced before evaluating~\eqref{eq:view-cost} so that a low soft cost cannot compensate for an unsafe or unobservable pose. All weights are nonnegative, and their implementation values are reported in Section~V-A. The retained set $\mathcal Q_i=\{\mathbf{q}_i^1,\ldots,\mathbf{q}_i^{K_i}\}$ preserves diverse feasible viewpoints.
++Here, $d$ is the sampled horizontal standoff from the anchor's bounding footprint, $d_i^{\mathrm{pref}}$ is its preferred value, $z$ is the candidate height, and $\bar z_i$ is the mean observation-region height. Let $a(\mathbf q)$ identify the anchor that generated a candidate, $\mathbf c_{a,xy}$ its horizontal center, $\mathbf x(\mathbf q)=(x,y)$ the candidate's horizontal position, and $\mathcal B_i$ the instruction's reference objects. The relation terms, measured in meters, are
++\begin{equation}
++\begin{aligned}
++d_i^{\mathrm{ref}}(\mathbf q)
++&=\min_{b\in\mathcal B_i}\|\mathbf c_{a(\mathbf q),xy}-\mathbf c_{b,xy}\|_2,\\
++d_i^{\mathrm{between}}(\mathbf q)
++&=\operatorname{dist}\bigl(\mathbf x(\mathbf q),
++[\mathbf c_{b_1,xy},\mathbf c_{b_2,xy}]\bigr).
++\end{aligned}
++\label{eq:relation-costs}
++\end{equation}
++The first term is zero when $\mathcal B_i$ is empty; it compares alternative anchors and is constant across views of the same anchor. The second term is used only for a ``between'' relation with two distinct reference centers and is the distance to their closed line segment. Let $\mathbf h=\mathbf c_{b_2,xy}-\mathbf c_{b_1,xy}$ and $u=(\mathbf x(\mathbf q)-\mathbf c_{b_1,xy})^{\mathsf T}\mathbf h/\|\mathbf h\|_2^2$ be the normalized projection parameter; the hard filter requires $u\in[-0.05,1.05]$ and segment distance at most $\max(0.75\,\mathrm m,d_{i,\max}/2)$, where $d_{i,\max}$ is the maximum sampling standoff. Coincident reference centers are rejected. Other inapplicable terms are zero. The reference length $\ell_0$ makes~\eqref{eq:view-cost} dimensionless. Hard feasibility is enforced before scoring, so a low soft cost cannot compensate for an unsafe or unobservable pose. All weights are nonnegative and given in Section~V-A. The retained set $\mathcal Q_i=\{\mathbf q_i^1,\ldots,\mathbf q_i^{K_i}\}$ preserves diverse feasible viewpoints.
+ 
+ Figure~\ref{fig:viewpoint-generation} illustrates the sampling and feasibility-filtering process.
+ 
+@@ -243,14 +254,14 @@
+ \label{eq:path-length}\\
+ \widehat T_t(\mathbf{q}_a,\mathbf{q}_b)
+ &=\max\left\{
+-\frac{L_t(\mathbf{q}_a,\mathbf{q}_b)}{v_{xy}},
++\frac{L_t(\mathbf{q}_a,\mathbf{q}_b)}{v_{\mathrm{nom}}},
+ \frac{|z_b-z_a|}{v_z},
+ \frac{|\Delta\psi_{ab}|}{\omega_\psi}
+ \right\}.
+ \label{eq:motion-time}
+ \end{align}
+ \end{subequations}
+-Here, $v_{xy}$ is the nominal translational speed used by~\eqref{eq:path-length}, while $v_z$ and $\omega_\psi$ parameterize the vertical and yaw components of~\eqref{eq:motion-time}.
++Here, $v_{\mathrm{nom}}>0$ is a nominal speed along the three-dimensional polyline in~\eqref{eq:motion-time}, while $v_z>0$ and $\omega_\psi>0$ set nominal climb and yaw rates. The wrap operator returns an angle in $[-\pi,\pi)$. The maximum models concurrent translation and yaw as a ranking heuristic, not the duration of the optimized trajectory. Cross-floor detours and intermediate ascents or descents contribute to $L_t$; the second term accounts only for net altitude change. Acceleration, intermediate vertical-rate constraints, and observation dwell are handled during execution rather than predicted by this proxy. Unreachable transitions have $L_t=\widehat T_t=+\infty$.
+ 
+ Figure~\ref{fig:jtvp-illustration} shows A*-guided trajectory refinement after a negative observation, including route replanning and trajectory optimization.
+ 
+@@ -263,11 +274,11 @@
+ 
+ \subsection{Receding-Horizon Joint Task--Viewpoint Planning}
+ 
+-At each planning cycle, the planner selects a local task window $\mathcal W_t\subseteq\mathcal E_t$ with $|\mathcal W_t|\leq H$, where $H$ specifies the maximum number of executable tasks jointly considered in the current planning problem.
++At each planning cycle, the planner selects a local task window $\mathcal W_t\subseteq\mathcal E_t$ with $|\mathcal W_t|\leq H$. Tasks are prioritized by their best candidate's current-position distance plus terminal cost, with task IDs breaking ties; recovery can focus the window on the task under reinspection. Every predecessor of a task in $\mathcal E_t$ is already resolved. Thus, no additional precedence constraint is needed within this window; newly enabled successors enter a later planning cycle.
+ 
+ Candidate poses are grouped by physical location and prioritized using current-pose distance, motion-time estimate, and observation score. The retained set $\widetilde{\mathcal Q}_{i,t}\subseteq\mathcal Q_i$ maintains representative viewpoints across semantic locations and is progressively augmented when alternatives are needed.
+ 
+-Given $m=|\mathcal W_t|$, JTVP jointly selects a task ordering $\pi=(\pi_1,\ldots,\pi_m)$ and one observation pose $\mathbf{q}_r=\mathbf{q}_{\pi_r}^{k_r}$ for each selected task, with $\mathbf{q}_0=\mathbf{q}_t^{\mathrm{robot}}$. Let $\iota(\mathbf{q})$ denote the task associated with candidate $\mathbf{q}$. We define the dimensionless transition score as
++Given $m=|\mathcal W_t|>0$, let $\Pi(\mathcal W_t)$ be all permutations of the window and $\mathcal K_{i,t}=\{k:\mathbf q_i^k\in\widetilde{\mathcal Q}_{i,t}\}$. JTVP jointly selects $\pi\in\Pi(\mathcal W_t)$, visiting each task exactly once, and one observation pose $\mathbf{q}_r=\mathbf{q}_{\pi_r}^{k_r}$ for each selected task, with $\mathbf{q}_0=\mathbf{q}_t^{\mathrm{robot}}$. Let $\iota(\mathbf{q})$ denote the task associated with candidate $\mathbf{q}$. We define the dimensionless transition score as
+ \begin{equation}
+ c_t(\mathbf{q}_a,\mathbf{q}_b)=
+ \eta_L\frac{L_t(\mathbf{q}_a,\mathbf{q}_b)}{\ell_0}
+@@ -281,50 +292,81 @@
+ \underset{\pi,\mathbf{k}}{\operatorname{minimize}}\quad
+ &\sum_{r=1}^{m}c_t(\mathbf{q}_{r-1},\mathbf{q}_r)\\
+ \operatorname{subject\ to}\quad
+-&\mathbf{q}_r\in\widetilde{\mathcal Q}_{\pi_r,t},\quad r=1,\ldots,m,\\
++&\pi\in\Pi(\mathcal W_t),\quad k_r\in\mathcal K_{\pi_r,t},\\
++&\mathbf q_r=\mathbf q_{\pi_r}^{k_r},\quad r=1,\ldots,m,\\
+ &L_t(\mathbf{q}_{r-1},\mathbf{q}_r)<\infty,\quad r=1,\ldots,m.
+ \end{aligned}
+ \label{eq:jtvp}
+ \end{equation}
+-The joint planning problem in~\eqref{eq:jtvp} is solved using subset dynamic programming. Let $D(S,i,k)$ be the minimum accumulated cost of visiting task subset $S\subseteq\mathcal W_t$ and ending at candidate $k$ of task $i$. Its initialization, recurrence, and terminal cost are
++The joint planning problem in~\eqref{eq:jtvp} is solved using subset dynamic programming. Let $D(S,i,k)$ be the minimum cost of visiting exactly $S\subseteq\mathcal W_t$ and ending at $\mathbf q_i^k$, where $i\in S$ and $k\in\mathcal K_{i,t}$. Invalid or unreachable states have value $+\infty$, as do unreachable transition scores. For nonempty $S$ and $j\in\mathcal W_t\setminus S$, the initialization, recurrence, and terminal cost are
+ \begin{subequations}\label{eq:subset-dp}
+ \begin{align}
+ D(\{i\},i,k)&=c_t(\mathbf{q}_0,\mathbf{q}_i^k),
+ \label{eq:dp-init}\\
+ D(S\cup\{j\},j,\ell)&=
+-\min_{\substack{i\in S,\,k}}
+-\left[D(S,i,k)+c_t(\mathbf{q}_i^k,\mathbf{q}_j^\ell)\right],
++\min_{\substack{i\in S,\,k\in\mathcal K_{i,t}}}\notag\\
++&\quad\left[D(S,i,k)+c_t(\mathbf{q}_i^k,\mathbf{q}_j^\ell)\right],
+ \label{eq:dp-recurrence}\\
+-J_t^\star&=\min_{\substack{i\in\mathcal W_t,\,k}}
++J_t^\star&=\min_{\substack{i\in\mathcal W_t,\,k\in\mathcal K_{i,t}}}
+ D(\mathcal W_t,i,k).
+ \label{eq:dp-terminal}
+ \end{align}
+ \end{subequations}
+-Backtracking through~\eqref{eq:subset-dp} returns the jointly optimized task order and observation poses. Only the first visit is executed before replanning from the updated robot pose, task state, candidate set, and semantic evidence. This receding-horizon policy preserves the efficiency of multi-task lookahead without committing later visits to assumptions that subsequent observations may invalidate.
++The recurrence is evaluated for $\ell\in\mathcal K_{j,t}$; a minimum over an empty set is $+\infty$. An empty window yields an empty plan with zero cost: execution finishes only if all required outcomes are resolved, otherwise it reports unresolved tasks. Empty candidate sets or an infinite terminal cost trigger expansion from representative views to the full available pool. If no feasible plan is found, planning terminates with failure rather than marking the task verified. For a finite terminal cost, backtracking through~\eqref{eq:subset-dp} returns the optimal order and poses for the selected window and candidate sets. Only the first visit is executed before replanning from the updated robot pose, task state, candidate set, and semantic evidence. This receding-horizon policy preserves the efficiency of multi-task lookahead without committing later visits to assumptions that subsequent observations may invalidate. With $K=\max_{i\in\mathcal W_t}|\mathcal K_{i,t}|$ and cached transition costs, the subset DP uses $O(2^m m^2K^2)$ time and $O(2^m mK)$ memory. Since $m\leq H$, the exponential dependence is limited to the local window. Task screening, candidate generation, and A$^*$ queries still depend on the available tasks and map size; retaining views per location does not impose a global constant $K$ when additional locations are admitted. The 15-subtask timing in Section~V-B measures the complete planner under this policy.
+ 
+ \subsection{Safe-Corridor-Constrained Trajectory Optimization}
+ 
+ After JTVP selects the next task and observation pose, the trajectory optimizer connects the discrete A$^*$ route to the start and goal, constructs geometric safe corridors, and optimizes one continuous trajectory. Safe corridors $\mathcal K_r$ are generated from measured point-cloud clearance and Configuration-Space Iterative Regional Inflation (CIRI)~\cite{ren2025super} geometric seeds, and the resulting piecewise polynomial trajectory is optimized with MINCO~\cite{wang2022minco}. Unknown voxels are treated as blocked, narrow passages are represented by local guide centerlines and centered half-space constraints, and adjacent corridor intersections are checked to prevent a smoothed curve from cutting across a wall.
+ 
+-The position along trajectory piece $r$ is represented by
+-\begin{equation}
+-\mathbf{p}_r(\tau)=\sum_{m=0}^{M}\mathbf{a}_{r,m}\tau^m,
+-\qquad 0\leq\tau\leq T_r,
++For $R$ trajectory pieces, the position on piece $r$ is a seventh-degree polynomial,
++\begin{equation}
++\mathbf p_r(\tau)=\sum_{h=0}^{7}\mathbf a_{r,h}\tau^h,
++\qquad \tau\in[0,T_r],\quad T_r>0.
+ \label{eq:trajectory-piece}
+ \end{equation}
+-In~\eqref{eq:trajectory-piece}, $\mathbf{a}_{r,m}$ is the $m$th coefficient, $M$ is the polynomial degree, and $T_r$ is the duration of piece $r$. The coefficients and piece durations are obtained from
++MINCO determines the coefficients from internal interpolation points $\mathbf U=(\mathbf u_1,\ldots,\mathbf u_{R-1})$, durations $\mathbf T$, and prescribed endpoint position, velocity, acceleration, and jerk. Adjacent pieces share derivatives through order three. Internal points are parameterized in the corresponding corridor intersections. Writing $\mathbf p=\mathcal M(\mathbf U,\mathbf T)$ for this minimum-snap parameterization, the optimization is
+ \begin{equation}
+ \begin{aligned}
+-\underset{\mathbf{p},\mathbf{T}}{\operatorname{minimize}}\quad
+-&J_{\mathrm{smooth}}(\mathbf{p},\mathbf{T})
+-+\lambda_cJ_{\mathrm{clear}}(\mathbf{p})\\
+-&\hspace{19mm}+\lambda_dJ_{\mathrm{dyn}}(\mathbf{p},\mathbf{T})
++\min_{\mathbf U,\,\mathbf T>\mathbf 0}\quad
++&\sum_{r=1}^{R}\int_0^{T_r}\|\mathbf p_r^{(4)}(\tau)\|_2^2\,d\tau
+++\rho\sum_{r=1}^{R}T_r\\
++&+J_{\mathrm{corr}}(\mathbf p,\mathbf T)
+++J_{\mathrm{dyn}}(\mathbf p,\mathbf T),
+ \end{aligned}
+ \label{eq:minco-safe-corridor}
+ \end{equation}
+-subject to endpoint states, inter-piece continuity, corridor membership $\mathbf{p}_r(\tau)\in\mathcal K_r$, velocity/acceleration/jerk/snap limits, and terminal yaw. The objective in~\eqref{eq:minco-safe-corridor} jointly penalizes smoothness, corridor-clearance deficiency, and dynamic cost, while continuous point-cloud validation remains the final safety authority. Optional height-floor and guide-tracking constraints are auxiliary and cannot override collision checks.
+-
+-The optimized trajectory is represented by per-piece polynomial coefficients, durations, yaw samples, and the associated collision geometry. Continuous samples are checked for corridor violation, speed/yaw-rate limits, regional height, and raw point-cloud clearance using the collision-clearance setting specified in Experimental Setup. A trajectory is accepted only after these geometric and dynamic checks pass. When replanning is triggered, the already committed prefix is retained and only the remaining route is regenerated.
++where $\rho>0$ trades trajectory duration against snap energy. Let corridor $\mathcal K_r$ have normalized half-space constraints $\mathbf n_{r,f}^{\mathsf T}\mathbf p+b_{r,f}\leq0$. The soft penalties have the explicit form
++\begin{equation}
++\begin{aligned}
++J_{\mathrm{corr}}&=\lambda_c\sum_{r,f}\int_0^{T_r}
++\phi_\mu(\mathbf n_{r,f}^{\mathsf T}\mathbf p_r+b_{r,f})\,d\tau,\\
++J_{\mathrm{dyn}}&=\sum_{r}\sum_{d\in\mathcal D}\lambda_d
++\int_0^{T_r}\phi_\mu(g_d(\mathbf p_r,\tau))\,d\tau.
++\end{aligned}
++\label{eq:minco-penalties}
++\end{equation}
++Here, $\mathcal D$ indexes enabled dynamic penalties. Translational penalties use $g_d=\|\mathbf p_r^{(d)}\|_2^2-b_d^2$ for derivative orders $d=1,2,3$ and limits $b_d$ on speed, acceleration, and jerk. Enabled body-rate and thrust penalties use the corresponding differential-flatness quantities and configured bounds. The nonnegative weights carry the units needed to combine these terms. For smoothing parameter $\mu>0$, the implementation uses the one-sided penalty
++\begin{equation}
++\phi_\mu(x)=
++\begin{cases}
++0,&x\leq0,\\
++(\mu-x/2)(x/\mu)^3,&0<x<\mu,\\
++x-\mu/2,&x\geq\mu,
++\end{cases}
++\label{eq:smooth-penalty}
++\end{equation}
++Penalty integrals use trapezoidal quadrature with at least 40 subdivisions per piece. Endpoint states, MINCO continuity, positive durations, and internal-point corridor membership are imposed by parameterization; whole-piece corridor and dynamic violations are penalized during optimization and checked before acceptance. Optional guide-attraction and regional-height terms supplement this formulation. Snap limits are checked on the resulting trajectory rather than introduced as a separate snap-limit penalty.
++
++Yaw is generated separately from the position polynomial. A direction-following reference is blended toward the required observation yaw, unwrapped, and sampled at intervals no greater than $0.01\,\mathrm s$. A rate-limited profile with prescribed start and terminal yaw is then formed and linearly interpolated. A phase too short to satisfy the yaw-rate bound is rejected.
++
++Trajectory validation uses a maximum temporal step of $0.03\,\mathrm s$ and a maximum speed-based spatial step of $0.01\,\mathrm m$. For a validation interval of duration $\Delta$ with speed bound $v_{\max}^{\mathrm{poly}}$ obtained from the polynomial, the distance to the fixed collision point cloud satisfies
++\begin{equation}
++\min_{\tau}d_{\mathrm{cloud}}(\mathbf p(\tau))
++\geq \min_j d_{\mathrm{cloud}}(\mathbf p(\tau_j))
++-\tfrac12v_{\max}^{\mathrm{poly}}\Delta.
++\label{eq:clearance-bound}
++\end{equation}
++This follows from the 1-Lipschitz property of distance and sampling both ends of each interval. The reserved clearance must exceed the collision margin. This bound concerns the supplied collision geometry; finite sampling alone is not a continuous-time guarantee. Corridor, regional-height, derivative, and yaw-rate checks must also pass before acceptance. Replanning retains the committed prefix and regenerates the remaining route.
+ 
+ \subsection{Observation-Driven Semantic Revision and Recovery}
+ \label{sec:recovery}
+@@ -334,6 +376,36 @@
+ Open-vocabulary detections are lifted into the global frame using depth and camera pose. Same-category observations are associated with mapped instances through spatial consistency, while unassociated detections are accumulated across views for subsequent scene-graph revision.
+ 
+ For tasks configured for semantic recovery, LogicFly distinguishes three levels of negative evidence. A \textbf{pose-level miss} removes the attempted candidate while keeping the task active. \textbf{Region-level exhaustion} invokes alternative room--functional-region hypotheses grounded in the hierarchy; these hypotheses become geometric observation regions and are ranked using semantic relevance, coverage, and travel cost. A \textbf{task-level negative outcome} is produced when the task-specific stopping condition is reached, after which CPTG updates downstream logic. Within semantic recovery, newly covered portions of an unproductive region reduce its belief, shifting search toward alternative hypotheses.
++
++For a semantic recovery region $r$, let $\mathcal P_r$ be its fixed sample set and $\mathcal O_{r,n}$ the samples already covered before verification $n$, initialized as $\mathcal O_{r,0}=\varnothing$. With visible samples $\mathcal V_r(\mathbf q_n)$, define
++\begin{equation}
++\begin{aligned}
++\delta_{r,n}&=\frac{|\mathcal V_r(\mathbf q_n)\setminus\mathcal O_{r,n}|}
++{\max(1,|\mathcal P_r|)},\\
++\mathcal O_{r,n+1}&=\mathcal O_{r,n}\cup\mathcal V_r(\mathbf q_n).
++\end{aligned}
++\label{eq:recovery-coverage}
++\end{equation}
++The task-local confidence $b_{r,0}$ is initialized from semantic relevance: high, medium, low, and fallback hypotheses receive $1.0$, $0.6$, $0.3$, and $0.15$. Registration preserves an existing region's accumulated state. If $y_n\in\{0,1\}$ indicates successful target verification and $Q_r(\mathbf q_n)$ is geometric view quality, the update is
++\begin{equation}
++b_{r,n+1}=
++\begin{cases}
++1,&y_n=1,\\
++b_{r,n}\bigl[1-\alpha\delta_{r,n}Q_r(\mathbf q_n)\bigr],&y_n=0,
++\end{cases}
++\label{eq:recovery-belief}
++\end{equation}
++with detector reliability $\alpha=0.80$. These scores remain in $[0,1]$ and are not normalized across regions or interpreted as a posterior probability distribution. Repeated inspection of already covered samples gives $\delta_{r,n}=0$, avoiding repeated confidence reduction from the same coverage.
++
++Recovery views replace the ordinary terminal score by
++\begin{equation}
++C_{r,n}^{\mathrm{rec}}(\mathbf q)=
++1.5(1-b_{r,n})+0.6\widehat c_r+0.8[1-Q_r(\mathbf q)].
++\label{eq:recovery-score}
++\end{equation}
++Here, $\widehat c_r$ is the min--max normalized coverage-route cost across proposed regions, set to zero if all costs coincide. The route estimate greedily selects up to four views by newly covered samples, sums their A$^*$ travel lengths, and adds $2\,\mathrm m$ times the uncovered fraction; an unreachable estimate receives a $10^3\,\mathrm m$ sentinel cost. Thus, confidence and coverage affect terminal quality, while travel from the current pose remains in~\eqref{eq:transition-score}.
++
++The recovery procedure is: (1) verify the selected view and update~\eqref{eq:recovery-coverage}--\eqref{eq:recovery-belief}; (2) remove a missed view and retry unused local candidates; (3) on local exhaustion, admit permitted semantic-region hypotheses and rescore using~\eqref{eq:recovery-score}; and (4) resolve the task when verification succeeds or its declared observation/search policy terminates. The implementation allows at most three alternative hypotheses per request and four distinct locations per task. A first-viewpoint branch is decided at that designated observation rather than delayed for exhaustive search. Exhausting this budget means ``not found within the prescribed search policy'', not proof of global nonexistence; only a matching task predicate accepts that negative outcome. An unresolved positive-search goal or an episode timeout remains a failure.
+ 
+ Novel detections are accumulated online through spatially consistent multi-view fusion and materialized in the updated scene graph after execution. Thus, task states and semantic-region beliefs can affect replanning within the current execution, whereas newly created object instances support later use of the revised map.
+ 
+@@ -369,12 +441,16 @@
+ We evaluate all methods in the Habitat simulator~\cite{savva2019habitat} on six HM3D~\cite{ramakrishnan2021hm3d} scenes: 00070, 00166, 00273, 00290, 00337, and 00409. The benchmark contains 152 language instructions, including 61 short single-target instructions, 60 long-horizon instructions confined to a single floor, and 31 long-horizon cross-floor instructions. Using the valid initial-state seeds and two repeated trials, each method is evaluated over 854 episodes. The benchmark covers ordered execution, conditional branches, target absence, failure recovery, spatial relations, and instance disambiguation.
+ 
+ \textbf{Evaluation metrics.}
+-We report task Success Rate (SR), Success weighted by Path Length (SPL), and Completion Time (CT). An episode is considered successful only when all required task outcomes are completed while satisfying the instruction-level ordering, branching, spatial, recovery, and disambiguation constraints. Reaching the correct objects without satisfying the complete instruction is counted as a failure. For episode $e$, SPL is computed as
++We report task Success Rate (SR), Success weighted by Path Length (SPL), and Completion Time (CT). An episode is considered successful only when all required task outcomes are completed while satisfying the instruction-level ordering, branching, spatial, recovery, and disambiguation constraints. Reaching the correct objects without satisfying the complete instruction is counted as a failure. For an episode $e$ with a defined geometric reference route, the reported path-efficiency metric is
+ \begin{equation}
+ \mathrm{SPL}_e=S_e\frac{L_e^{\mathrm{ref}}}
+-{\max(L_e^{\mathrm{ref}},L_e)},
+-\end{equation}
+-where $S_e$ is the strict binary task-success indicator, $L_e$ is the executed trajectory length, and $L_e^{\mathrm{ref}}$ is the shortest feasible path length under the same task constraints. SPL is not applicable to target-absence episodes.
++{\max\{L_e^{\mathrm{ref}},L_e,\varepsilon_L\}},
++\qquad \varepsilon_L=10^{-9}\,\mathrm m,
++\label{eq:task-spl}
++\end{equation}
++where $S_e\in\{0,1\}$ is strict task success and $L_e$ is the sum of three-dimensional distances along the recorded trajectory. The evaluator constructs $L_e^{\mathrm{ref}}$ retrospectively using the required tasks selected by the recorded conditional-source observation, retaining instruction precedence and branch ordering. If that source was never observed, all potentially required tasks remain in the reference problem. It uses the same voxel geometry, a finite generated candidate set, A$^*$ transition costs, and the joint planner's weighted objective; $L_e^{\mathrm{ref}}$ is the length of the resulting route, not a certified shortest path in continuous space or a pure path-length optimum. This reference construction is separate from the online policy and does not provide future branch outcomes to the robot.
++
++For a required target-absence judgment, the frozen search-anchor center is used as the reference endpoint, with the planner's nearest-free-voxel adjustment. These episodes are therefore included when that anchor yields a valid reference route. No unique endpoint or no feasible reference route makes SPL undefined. For applicable episodes, failures and timeouts contribute zero; the denominator is the number of applicable episodes, not the number of successful episodes. The recorded LogicFly results have 854 applicable episodes in Table~\ref{tab:main}, including 54 target-absence episodes, and all 546 multi-target episodes are applicable in Table~\ref{tab:ablation}. Under the implemented numerical convention, $L_e^{\mathrm{ref}}=0$ yields zero even if $L_e=0$; otherwise~\eqref{eq:task-spl} lies in $[0,1]$. Group scores are arithmetic means over their applicable episodes.
+ 
+ \textbf{Baselines.}
+ We compare LogicFly against four representative map-based and spatial-reasoning navigation methods. OneMap~\cite{busch2025onemap} is a zero-shot multi-object navigation method that constructs a real-time open-vocabulary feature map and queries the unified map to locate multiple target categories. MapGPT~\cite{chen2024mapgpt} is an LLM-based VLN method that incorporates an environment map into the language prompt and adaptively updates its planned route according to the explored topology. SpatialGPT~\cite{jiang2025spatialgpt} performs zero-shot VLN by maintaining a structured spatial memory and applying spatial chain-of-thought reasoning to select navigation actions. SpatialNav~\cite{zhang2026spatialnav} represents perceived objects and their spatial relations using a spatial scene graph, which supports graph-conditioned reasoning for zero-shot navigation.
+@@ -384,7 +460,7 @@
+ 
+ Room partitioning uses a $0.05\,\mathrm{m}$ horizontal grid, a $3\times3$ wall-closing neighborhood, an interior-clearance threshold of $\tau_c=0.45\,\mathrm{m}$, and a minimum core area of $A_{\min}=0.04\,\mathrm{m}^2$. Horizontal-surface support requires $|n_z|\geq0.90$ and a projected support distance within $0.12\,\mathrm{m}$. Free-space support requires observations at at least two of four heights, $0.45$, $0.85$, $1.25$, and $1.65\,\mathrm{m}$ above the floor, with a $0.09\,\mathrm{m}$ proximity tolerance. Depth-ray support requires at least three source frames, and trajectory support uses a $0.15\,\mathrm{m}$ radius. A region can merge into its sole neighbor only when the boundary wall fraction is below $0.20$ and the boundary does not touch unsupported open space. Room classification uses up to two selected RGB views and a confidence threshold of $0.65$; insufficient evidence yields an unknown label. Online fusion associates same-category novel detections within $0.75\,\mathrm{m}$ and requires at least two supporting observations before materializing a new instance.
+ 
+-The joint task-and-viewpoint planner retains up to three representative viewpoints per location and uses a receding planning horizon of $H=3$ tasks. In~\eqref{eq:view-cost}, $(\beta_d,\beta_Q,\beta_z,\beta_r,\beta_b)=(1,1,0.10,0.15,0.15)$. In~\eqref{eq:transition-score}, $(\eta_L,\eta_T,\eta_V)=(1,0.25,2)$, with reference scales $\ell_0=1\,\mathrm{m}$ and $\tau_0=1\,\mathrm{s}$. The nominal horizontal velocity, vertical velocity, and yaw rate are $1.0\,\mathrm{m/s}$, $0.5\,\mathrm{m/s}$, and $1.0\,\mathrm{rad/s}$, respectively. A collision safety margin of $0.10\,\mathrm{m}$ is enforced during trajectory generation in both simulated and real-world experiments. All language-model components use Qwen3.8-Flash. Semantic recovery generates at most three alternative hypotheses per request and permits at most four distinct location hypotheses per task, with up to three viewpoints retained per location. Local reinspection exhausts the finite candidate pool before advancing to another permitted location. High-, medium-, and low-relevance region priors are $1.0$, $0.6$, and $0.3$, respectively; the fallback prior is $0.15$. Negative-evidence updates use detector reliability $0.80$ and newly covered samples, with scoring weights of $1.5$, $0.6$, and $0.8$ for belief deficiency, normalized coverage cost, and view-quality deficiency, respectively. Task-specific branch and not-found policies determine whether a negative observation immediately resolves a task or invokes bounded recovery. All perception, planning, and recovery parameters are fixed across scenes and episode repetitions.
++The joint task-and-viewpoint planner retains up to three representative viewpoints per location and uses a receding planning horizon of $H=3$ tasks. In~\eqref{eq:view-cost}, $(\beta_d,\beta_Q,\beta_z,\beta_r,\beta_b)=(1,1,0.10,0.15,0.15)$. In~\eqref{eq:transition-score}, $(\eta_L,\eta_T,\eta_V)=(1,0.25,2)$, with reference scales $\ell_0=1\,\mathrm{m}$ and $\tau_0=1\,\mathrm{s}$. The nominal path speed, climb speed, and yaw rate are $1.0\,\mathrm{m/s}$, $0.5\,\mathrm{m/s}$, and $1.0\,\mathrm{rad/s}$, respectively. A collision safety margin of $0.10\,\mathrm{m}$ is enforced during trajectory generation in both simulated and real-world experiments. All language-model components use Qwen3.8-Flash. Semantic recovery generates at most three alternative hypotheses per request and permits at most four distinct location hypotheses per task, with up to three viewpoints retained per location. Local reinspection exhausts the finite candidate pool before advancing to another permitted location. High-, medium-, and low-relevance region priors are $1.0$, $0.6$, and $0.3$, respectively; the fallback prior is $0.15$. Negative-evidence updates use detector reliability $0.80$ and newly covered samples, with scoring weights of $1.5$, $0.6$, and $0.8$ for belief deficiency, normalized coverage cost, and view-quality deficiency, respectively. Task-specific branch and not-found policies determine whether a negative observation immediately resolves a task or invokes bounded recovery. All perception, planning, and recovery parameters are fixed across scenes and episode repetitions.
+ 
+ \textbf{Runtime protocol.}
+ Each evaluation process is subject to a fixed time limit of 240 s. A timeout or execution error is counted as a failed episode. For LogicFly, CT is measured using its native completion timestamp and excludes one-time map preparation. For the comparison methods, CT is measured from process startup to task completion. CT is averaged over successful episodes only.
