@@ -1,0 +1,1639 @@
+{
+  "status": "height-limited draft",
+  "assumptions": [
+    "unverified 0.0254 m per GLB unit",
+    "surface-sampled occupancy; remaining map cells assumed free",
+    "manually estimated 3D object boxes",
+    "not measured execution or certified collision free",
+    "small illustrative drone radius 0.10 m with reduced 0.04 m map safety margin",
+    "flight altitude limited to 0.65\u20131.75 m under assumed scene scale"
+  ],
+  "targets": [
+    {
+      "id": "room_A",
+      "floor_id": 1,
+      "semantic_type": "bedroom",
+      "camera_height_band_m": [
+        0.65,
+        1.8
+      ],
+      "objects": [
+        {
+          "id": "object_A",
+          "label": "bed",
+          "center_xyz_m": [
+            -8.8265,
+            -3.3528,
+            0.381
+          ],
+          "size_xyz_m": [
+            1.8034,
+            1.8288000000000002,
+            0.762
+          ],
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "id": "room_B",
+      "floor_id": 1,
+      "semantic_type": "study",
+      "camera_height_band_m": [
+        0.65,
+        1.8
+      ],
+      "objects": [
+        {
+          "id": "object_B",
+          "label": "desk",
+          "center_xyz_m": [
+            -6.400799999999999,
+            -4.9022,
+            0.4826
+          ],
+          "size_xyz_m": [
+            0.7111999999999998,
+            2.2352000000000003,
+            0.9652
+          ],
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "id": "room_C",
+      "floor_id": 1,
+      "semantic_type": "bathroom",
+      "camera_height_band_m": [
+        0.65,
+        1.8
+      ],
+      "objects": [
+        {
+          "id": "object_C",
+          "label": "sink",
+          "center_xyz_m": [
+            -8.724899999999998,
+            -7.3787,
+            0.4572
+          ],
+          "size_xyz_m": [
+            0.7873999999999999,
+            0.5842,
+            0.9144
+          ],
+          "probability": 1.0
+        }
+      ]
+    },
+    {
+      "id": "room_D",
+      "floor_id": 1,
+      "semantic_type": "living",
+      "camera_height_band_m": [
+        0.65,
+        1.8
+      ],
+      "objects": [
+        {
+          "id": "object_D",
+          "label": "sofa",
+          "center_xyz_m": [
+            -0.4064,
+            -4.3815,
+            0.5461
+          ],
+          "size_xyz_m": [
+            1.0668,
+            2.3113999999999995,
+            1.0922
+          ],
+          "probability": 1.0
+        }
+      ]
+    }
+  ],
+  "tasks": {
+    "tasks": [
+      {
+        "id": "A",
+        "target": {
+          "label": "bed",
+          "room_id": "room_A"
+        },
+        "spatial_constraints": {
+          "visibility_required": true,
+          "height_range_m": [
+            0.8,
+            1.6
+          ]
+        },
+        "prerequisites": [],
+        "active_initially": true
+      },
+      {
+        "id": "B",
+        "target": {
+          "label": "desk",
+          "room_id": "room_B"
+        },
+        "spatial_constraints": {
+          "visibility_required": true,
+          "height_range_m": [
+            0.8,
+            1.6
+          ]
+        },
+        "prerequisites": [],
+        "active_initially": true
+      },
+      {
+        "id": "C",
+        "target": {
+          "label": "sink",
+          "room_id": "room_C"
+        },
+        "spatial_constraints": {
+          "visibility_required": true,
+          "height_range_m": [
+            0.8,
+            1.6
+          ]
+        },
+        "prerequisites": [],
+        "active_initially": true
+      },
+      {
+        "id": "D",
+        "target": {
+          "label": "sofa",
+          "room_id": "room_D"
+        },
+        "spatial_constraints": {
+          "visibility_required": true,
+          "height_range_m": [
+            0.8,
+            1.6
+          ]
+        },
+        "prerequisites": [],
+        "active_initially": true
+      }
+    ]
+  },
+  "candidates": {
+    "A": [
+      {
+        "id": "A__object_A__r1.00__025",
+        "task_id": "A",
+        "object_id": "object_A",
+        "object_label": "bed",
+        "room_id": "room_A",
+        "room_type": "bedroom",
+        "floor_id": 1,
+        "pose": {
+          "x": -7.192013217671385,
+          "y": -4.987286782328615,
+          "z": 1.6,
+          "yaw": 2.3561944901923444
+        },
+        "target_xyz_m": [
+          -8.8265,
+          -3.3528,
+          0.381
+        ],
+        "search_region_center_xyz_m": [
+          -8.8265,
+          -3.3528,
+          0.381
+        ],
+        "search_region_size_xyz_m": [
+          1.8034,
+          1.8288000000000002,
+          0.762
+        ],
+        "anchor_object_id": null,
+        "location_hypothesis_id": "object_A",
+        "distance_to_box_surface_m": 1.0273053506627385,
+        "preferred_observation_distance_m": 1.0273053506627385,
+        "observation_distance_source": "geometry_fov_auto",
+        "line_of_sight": true,
+        "candidate_angle_rad": 5.497787143782138,
+        "region_type": "instance_region",
+        "region_sample_count": 9,
+        "visible_region_sample_ids": [
+          2,
+          5,
+          8
+        ],
+        "view_quality": 0.3333333333333333,
+        "vertical_fov_deg": 70.0,
+        "horizontal_fov_deg": 90.0,
+        "height_fov_validated": true,
+        "height_generation": "region_fov_interval",
+        "height_collision_validated": true,
+        "collision_validation": "falcon_raw_free_3d",
+        "reference_distance_m": null,
+        "reference_object_ids": [],
+        "reference_visible": [],
+        "target_reference_relation": null,
+        "between_distance_m": null,
+        "terminal_cost": 0.7885666666666667
+      },
+      {
+        "id": "A__object_A__r1.00__000",
+        "task_id": "A",
+        "object_id": "object_A",
+        "object_label": "bed",
+        "room_id": "room_A",
+        "room_type": "bedroom",
+        "floor_id": 1,
+        "pose": {
+          "x": -7.253672808284393,
+          "y": -2.4447277974742314,
+          "z": 1.2,
+          "yaw": -2.6179938779914944
+        },
+        "target_xyz_m": [
+          -8.8265,
+          -3.3528,
+          0.381
+        ],
+        "search_region_center_xyz_m": [
+          -8.8265,
+          -3.3528,
+          0.381
+        ],
+        "search_region_size_xyz_m": [
+          1.8034,
+          1.8288000000000002,
+          0.762
+        ],
+        "anchor_object_id": null,
+        "location_hypothesis_id": "object_A",
+        "distance_to_box_surface_m": 0.5319363806255873,
+        "preferred_observation_distance_m": 1.0273053506627385,
+        "observation_distance_source": "geometry_fov_auto",
+        "line_of_sight": true,
+        "candidate_angle_rad": 0.5235987755982988,
+        "region_type": "instance_region",
+        "region_sample_count": 9,
+        "visible_region_sample_ids": [
+          2,
+          5,
+          8
+        ],
+        "view_quality": 0.3333333333333333,
+        "vertical_fov_deg": 70.0,
+        "horizontal_fov_deg": 90.0,
+        "height_fov_validated": true,
+        "height_generation": "region_fov_interval",
+        "height_collision_validated": true,
+        "collision_validation": "falcon_raw_free_3d",
+        "reference_distance_m": null,
+        "reference_object_ids": [],
+        "reference_visible": [],
+        "target_reference_relation": null,
+        "between_distance_m": null,
+        "terminal_cost": 1.2439356367038181
+      },
+      {
+        "id": "A__object_A__r1.00__003",
+        "task_id": "A",
+        "object_id": "object_A",
+        "object_label": "bed",
+        "room_id": "room_A",
+        "room_type": "bedroom",
+        "floor_id": 1,
+        "pose": {
+          "x": -7.918427797474231,
+          "y": -1.7799728082843937,
+          "z": 1.2,
+          "yaw": -2.0943951023931957
+        },
+        "target_xyz_m": [
+          -8.8265,
+          -3.3528,
+          0.381
+        ],
+        "search_region_center_xyz_m": [
+          -8.8265,
+          -3.3528,
+          0.381
+        ],
+        "search_region_size_xyz_m": [
+          1.8034,
+          1.8288000000000002,
+          0.762
+        ],
+        "anchor_object_id": null,
+        "location_hypothesis_id": "object_A",
+        "distance_to_box_surface_m": 0.5319363806255873,
+        "preferred_observation_distance_m": 1.0273053506627385,
+        "observation_distance_source": "geometry_fov_auto",
+        "line_of_sight": true,
+        "candidate_angle_rad": 1.0471975511965976,
+        "region_type": "instance_region",
+        "region_sample_count": 9,
+        "visible_region_sample_ids": [
+          2,
+          5,
+          8
+        ],
+        "view_quality": 0.3333333333333333,
+        "vertical_fov_deg": 70.0,
+        "horizontal_fov_deg": 90.0,
+        "height_fov_validated": true,
+        "height_generation": "region_fov_interval",
+        "height_collision_validated": true,
+        "collision_validation": "falcon_raw_free_3d",
+        "reference_distance_m": null,
+        "reference_object_ids": [],
+        "reference_visible": [],
+        "target_reference_relation": null,
+        "between_distance_m": null,
+        "terminal_cost": 1.2439356367038181
+      }
+    ],
+    "B": [
+      {
+        "id": "B__object_B__r1.00__031",
+        "task_id": "B",
+        "object_id": "object_B",
+        "object_label": "desk",
+        "room_id": "room_B",
+        "room_type": "study",
+        "floor_id": 1,
+        "pose": {
+          "x": -4.361730041094853,
+          "y": -4.3558328512008035,
+          "z": 0.8,
+          "yaw": -2.879793265790644
+        },
+        "target_xyz_m": [
+          -6.400799999999999,
+          -4.9022,
+          0.4826
+        ],
+        "search_region_center_xyz_m": [
+          -6.400799999999999,
+          -4.9022,
+          0.4826
+        ],
+        "search_region_size_xyz_m": [
+          0.7111999999999998,
+          2.2352000000000003,
+          0.9652
+        ],
+        "anchor_object_id": null,
+        "location_hypothesis_id": "object_B",
+        "distance_to_box_surface_m": 0.9381914863737598,
+        "preferred_observation_distance_m": 0.9381914863737598,
+        "observation_distance_source": "geometry_fov_auto",
+        "line_of_sight": true,
+        "candidate_angle_rad": 0.2617993877991494,
+        "region_type": "instance_region",
+        "region_sample_count": 9,
+        "visible_region_sample_ids": [
+          0,
+          1,
+          3,
+          4,
+          6,
+          7,
+          8
+        ],
+        "view_quality": 0.7777777777777778,
+        "vertical_fov_deg": 70.0,
+        "horizontal_fov_deg": 90.0,
+        "height_fov_validated": true,
+        "height_generation": "region_fov_interval",
+        "height_collision_validated": true,
+        "collision_validation": "falcon_raw_free_3d",
+        "reference_distance_m": null,
+        "reference_object_ids": [],
+        "reference_visible": [],
+        "target_reference_relation": null,
+        "between_distance_m": null,
+        "terminal_cost": 0.2539622222222222
+      },
+      {
+        "id": "B__object_B__r1.00__037",
+        "task_id": "B",
+        "object_id": "object_B",
+        "object_label": "desk",
+        "room_id": "room_B",
+        "room_type": "study",
+        "floor_id": 1,
+        "pose": {
+          "x": -4.90809718989405,
+          "y": -3.4094971898940507,
+          "z": 0.8,
+          "yaw": -2.356194490192345
+        },
+        "target_xyz_m": [
+          -6.400799999999999,
+          -4.9022,
+          0.4826
+        ],
+        "search_region_center_xyz_m": [
+          -6.400799999999999,
+          -4.9022,
+          0.4826
+        ],
+        "search_region_size_xyz_m": [
+          0.7111999999999998,
+          2.2352000000000003,
+          0.9652
+        ],
+        "anchor_object_id": null,
+        "location_hypothesis_id": "object_B",
+        "distance_to_box_surface_m": 0.9381914863737598,
+        "preferred_observation_distance_m": 0.9381914863737598,
+        "observation_distance_source": "geometry_fov_auto",
+        "line_of_sight": true,
+        "candidate_angle_rad": 0.7853981633974483,
+        "region_type": "instance_region",
+        "region_sample_count": 9,
+        "visible_region_sample_ids": [
+          1,
+          3,
+          4,
+          6,
+          7,
+          8
+        ],
+        "view_quality": 0.6666666666666666,
+        "vertical_fov_deg": 70.0,
+        "horizontal_fov_deg": 90.0,
+        "height_fov_validated": true,
+        "height_generation": "region_fov_interval",
+        "height_collision_validated": true,
+        "collision_validation": "falcon_raw_free_3d",
+        "reference_distance_m": null,
+        "reference_object_ids": [],
+        "reference_visible": [],
+        "target_reference_relation": null,
+        "between_distance_m": null,
+        "terminal_cost": 0.36507333333333336
+      }
+    ],
+    "C": [
+      {
+        "id": "C__object_C__r1.00__020",
+        "task_id": "C",
+        "object_id": "object_C",
+        "object_label": "sink",
+        "room_id": "room_C",
+        "room_type": "bathroom",
+        "floor_id": 1,
+        "pose": {
+          "x": -9.34884008645934,
+          "y": -6.754759913540659,
+          "z": 0.8,
+          "yaw": -0.7853981633974476
+        },
+        "target_xyz_m": [
+          -8.724899999999998,
+          -7.3787,
+          0.4572
+        ],
+        "search_region_center_xyz_m": [
+          -8.724899999999998,
+          -7.3787,
+          0.4572
+        ],
+        "search_region_size_xyz_m": [
+          0.7873999999999999,
+          0.5842,
+          0.9144
+        ],
+        "anchor_object_id": null,
+        "location_hypothesis_id": "object_C",
+        "distance_to_box_surface_m": 0.39215795211232496,
+        "preferred_observation_distance_m": 0.39215795211232496,
+        "observation_distance_source": "geometry_fov_auto",
+        "line_of_sight": true,
+        "candidate_angle_rad": 2.356194490192345,
+        "region_type": "instance_region",
+        "region_sample_count": 9,
+        "visible_region_sample_ids": [
+          1,
+          2,
+          5,
+          8
+        ],
+        "view_quality": 0.4444444444444444,
+        "vertical_fov_deg": 70.0,
+        "horizontal_fov_deg": 90.0,
+        "height_fov_validated": true,
+        "height_generation": "region_fov_interval",
+        "height_collision_validated": true,
+        "collision_validation": "falcon_raw_free_3d",
+        "reference_distance_m": null,
+        "reference_object_ids": [],
+        "reference_visible": [],
+        "target_reference_relation": null,
+        "between_distance_m": null,
+        "terminal_cost": 0.5898355555555556
+      },
+      {
+        "id": "C__object_C__r1.00__024",
+        "task_id": "C",
+        "object_id": "object_C",
+        "object_label": "sink",
+        "room_id": "room_C",
+        "room_type": "bathroom",
+        "floor_id": 1,
+        "pose": {
+          "x": -8.393346646345902,
+          "y": -6.1413260387430615,
+          "z": 1.6,
+          "yaw": -1.832595714594046
+        },
+        "target_xyz_m": [
+          -8.724899999999998,
+          -7.3787,
+          0.4572
+        ],
+        "search_region_center_xyz_m": [
+          -8.724899999999998,
+          -7.3787,
+          0.4572
+        ],
+        "search_region_size_xyz_m": [
+          0.7873999999999999,
+          0.5842,
+          0.9144
+        ],
+        "anchor_object_id": null,
+        "location_hypothesis_id": "object_C",
+        "distance_to_box_surface_m": 0.7907972080822606,
+        "preferred_observation_distance_m": 0.39215795211232496,
+        "observation_distance_source": "geometry_fov_auto",
+        "line_of_sight": true,
+        "candidate_angle_rad": 1.3089969389957472,
+        "region_type": "instance_region",
+        "region_sample_count": 9,
+        "visible_region_sample_ids": [
+          2
+        ],
+        "view_quality": 0.1111111111111111,
+        "vertical_fov_deg": 70.0,
+        "horizontal_fov_deg": 90.0,
+        "height_fov_validated": true,
+        "height_generation": "region_fov_interval",
+        "height_collision_validated": true,
+        "collision_validation": "falcon_raw_free_3d",
+        "reference_distance_m": null,
+        "reference_object_ids": [],
+        "reference_visible": [],
+        "target_reference_relation": null,
+        "between_distance_m": null,
+        "terminal_cost": 1.4018081448588244
+      }
+    ],
+    "D": [
+      {
+        "id": "D__object_D__r1.00__064",
+        "task_id": "D",
+        "object_id": "object_D",
+        "object_label": "sofa",
+        "room_id": "room_D",
+        "room_type": "living",
+        "floor_id": 1,
+        "pose": {
+          "x": -2.619410635164243,
+          "y": -4.974474412533745,
+          "z": 1.2,
+          "yaw": 0.2617993877991494
+        },
+        "target_xyz_m": [
+          -0.4064,
+          -4.3815,
+          0.5461
+        ],
+        "search_region_center_xyz_m": [
+          -0.4064,
+          -4.3815,
+          0.5461
+        ],
+        "search_region_size_xyz_m": [
+          1.0668,
+          2.3113999999999995,
+          1.0922
+        ],
+        "anchor_object_id": null,
+        "location_hypothesis_id": "object_D",
+        "distance_to_box_surface_m": 1.018222905054462,
+        "preferred_observation_distance_m": 1.018222905054462,
+        "observation_distance_source": "geometry_fov_auto",
+        "line_of_sight": true,
+        "candidate_angle_rad": 3.4033920413889427,
+        "region_type": "instance_region",
+        "region_sample_count": 9,
+        "visible_region_sample_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          7,
+          8
+        ],
+        "view_quality": 0.8888888888888888,
+        "vertical_fov_deg": 70.0,
+        "horizontal_fov_deg": 90.0,
+        "height_fov_validated": true,
+        "height_generation": "region_fov_interval",
+        "height_collision_validated": true,
+        "collision_validation": "falcon_raw_free_3d",
+        "reference_distance_m": null,
+        "reference_object_ids": [],
+        "reference_visible": [],
+        "target_reference_relation": null,
+        "between_distance_m": null,
+        "terminal_cost": 0.17650111111111116
+      },
+      {
+        "id": "D__object_D__r1.00__059",
+        "task_id": "D",
+        "object_id": "object_D",
+        "object_label": "sofa",
+        "room_id": "room_D",
+        "room_type": "living",
+        "floor_id": 1,
+        "pose": {
+          "x": -2.619410635164243,
+          "y": -3.7885255874662542,
+          "z": 1.6,
+          "yaw": -0.2617993877991498
+        },
+        "target_xyz_m": [
+          -0.4064,
+          -4.3815,
+          0.5461
+        ],
+        "search_region_center_xyz_m": [
+          -0.4064,
+          -4.3815,
+          0.5461
+        ],
+        "search_region_size_xyz_m": [
+          1.0668,
+          2.3113999999999995,
+          1.0922
+        ],
+        "anchor_object_id": null,
+        "location_hypothesis_id": "object_D",
+        "distance_to_box_surface_m": 1.018222905054462,
+        "preferred_observation_distance_m": 1.018222905054462,
+        "observation_distance_source": "geometry_fov_auto",
+        "line_of_sight": true,
+        "candidate_angle_rad": 2.8797932657906435,
+        "region_type": "instance_region",
+        "region_sample_count": 9,
+        "visible_region_sample_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          7,
+          8
+        ],
+        "view_quality": 0.8888888888888888,
+        "vertical_fov_deg": 70.0,
+        "horizontal_fov_deg": 90.0,
+        "height_fov_validated": true,
+        "height_generation": "region_fov_interval",
+        "height_collision_validated": true,
+        "collision_validation": "falcon_raw_free_3d",
+        "reference_distance_m": null,
+        "reference_object_ids": [],
+        "reference_visible": [],
+        "target_reference_relation": null,
+        "between_distance_m": null,
+        "terminal_cost": 0.21650111111111117
+      },
+      {
+        "id": "D__object_D__r1.00__072",
+        "task_id": "D",
+        "object_id": "object_D",
+        "object_label": "sofa",
+        "room_id": "room_D",
+        "room_type": "living",
+        "floor_id": 1,
+        "pose": {
+          "x": -1.551938598789866,
+          "y": -6.365631055135305,
+          "z": 0.8,
+          "yaw": 1.0471975511965972
+        },
+        "target_xyz_m": [
+          -0.4064,
+          -4.3815,
+          0.5461
+        ],
+        "search_region_center_xyz_m": [
+          -0.4064,
+          -4.3815,
+          0.5461
+        ],
+        "search_region_size_xyz_m": [
+          1.0668,
+          2.3113999999999995,
+          1.0922
+        ],
+        "anchor_object_id": null,
+        "location_hypothesis_id": "object_D",
+        "distance_to_box_surface_m": 1.018222905054462,
+        "preferred_observation_distance_m": 1.018222905054462,
+        "observation_distance_source": "geometry_fov_auto",
+        "line_of_sight": true,
+        "candidate_angle_rad": 4.1887902047863905,
+        "region_type": "instance_region",
+        "region_sample_count": 9,
+        "visible_region_sample_ids": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          8
+        ],
+        "view_quality": 0.7777777777777778,
+        "vertical_fov_deg": 70.0,
+        "horizontal_fov_deg": 90.0,
+        "height_fov_validated": true,
+        "height_generation": "region_fov_interval",
+        "height_collision_validated": true,
+        "collision_validation": "falcon_raw_free_3d",
+        "reference_distance_m": null,
+        "reference_object_ids": [],
+        "reference_visible": [],
+        "target_reference_relation": null,
+        "between_distance_m": null,
+        "terminal_cost": 0.2476122222222222
+      }
+    ]
+  },
+  "planner_profile": {
+    "unknown_is_blocked": true,
+    "vehicle_radius_xy_m": 0.1,
+    "vehicle_radius_z_m": 0.1,
+    "safety_margin_m": 0.04,
+    "minimum_esdf_distance_m": 0.14,
+    "preferred_esdf_distance_m": 0.7,
+    "clearance_cost_weight": 0.0,
+    "coarse_resolution_m": 0.1,
+    "connectivity": 26,
+    "nearest_free_radius_m": 0.4,
+    "esdf_version_bands_m": [
+      0.35,
+      0.5,
+      0.7,
+      0.8
+    ],
+    "maximum_expansions": 2000000
+  },
+  "start_xyz_yaw": [
+    -2.5,
+    -7.0,
+    1.1,
+    0.0
+  ],
+  "plan": {
+    "format": "pre_map_vln.mission_plan.v1",
+    "planner": "subset_dp_astar_3d",
+    "visits": [
+      {
+        "sequence": 0,
+        "task_id": "D",
+        "candidate_id": "D__object_D__r1.00__072",
+        "object_id": "object_D",
+        "pose": {
+          "x": -1.551938598789866,
+          "y": -6.365631055135305,
+          "z": 0.8,
+          "yaw": 1.0471975511965972
+        },
+        "terminal_cost": 0.2476122222222222
+      },
+      {
+        "sequence": 1,
+        "task_id": "B",
+        "candidate_id": "B__object_B__r1.00__031",
+        "object_id": "object_B",
+        "pose": {
+          "x": -4.361730041094853,
+          "y": -4.3558328512008035,
+          "z": 0.8,
+          "yaw": -2.879793265790644
+        },
+        "terminal_cost": 0.2539622222222222
+      },
+      {
+        "sequence": 2,
+        "task_id": "C",
+        "candidate_id": "C__object_C__r1.00__024",
+        "object_id": "object_C",
+        "pose": {
+          "x": -8.393346646345902,
+          "y": -6.1413260387430615,
+          "z": 1.6,
+          "yaw": -1.832595714594046
+        },
+        "terminal_cost": 1.4018081448588244
+      },
+      {
+        "sequence": 3,
+        "task_id": "A",
+        "candidate_id": "A__object_A__r1.00__025",
+        "object_id": "object_A",
+        "pose": {
+          "x": -7.192013217671385,
+          "y": -4.987286782328615,
+          "z": 1.6,
+          "yaw": 2.3561944901923444
+        },
+        "terminal_cost": 0.7885666666666667
+      }
+    ],
+    "segments": [
+      {
+        "to_task_id": "D",
+        "length_m": 1.2438793109825905,
+        "from_xyz_m": [
+          -2.5,
+          -7.0,
+          1.1
+        ],
+        "points_xyz_m": [
+          [
+            -2.45,
+            -6.95,
+            1.15
+          ],
+          [
+            -2.3500000000000005,
+            -6.8500000000000005,
+            1.15
+          ],
+          [
+            -2.25,
+            -6.750000000000001,
+            1.15
+          ],
+          [
+            -2.1500000000000004,
+            -6.65,
+            1.05
+          ],
+          [
+            -2.0500000000000007,
+            -6.550000000000001,
+            1.05
+          ],
+          [
+            -1.950000000000001,
+            -6.550000000000001,
+            1.05
+          ],
+          [
+            -1.8499999999999996,
+            -6.45,
+            0.9500000000000001
+          ],
+          [
+            -1.75,
+            -6.45,
+            0.9500000000000001
+          ],
+          [
+            -1.6500000000000004,
+            -6.45,
+            0.9500000000000001
+          ],
+          [
+            -1.5500000000000007,
+            -6.3500000000000005,
+            0.8500000000000001
+          ]
+        ],
+        "vertical_distance_m": 0.2999999999999998,
+        "minimum_clearance_m": 0.7681145668029785,
+        "geometry_map_version": 2,
+        "map_epoch_uuid": "home-p3-height-limited",
+        "planner_profile_hash": "30cc3324feb83304b6556c0ad5beca76dc4be1f4120efb374c384ab87a7155c8"
+      },
+      {
+        "to_task_id": "B",
+        "length_m": 5.1899494936611665,
+        "from_xyz_m": [
+          -1.551938598789866,
+          -6.365631055135305,
+          0.8
+        ],
+        "points_xyz_m": [
+          [
+            -1.5500000000000007,
+            -6.3500000000000005,
+            0.8500000000000001
+          ],
+          [
+            -1.6500000000000004,
+            -6.45,
+            0.8500000000000001
+          ],
+          [
+            -1.75,
+            -6.45,
+            0.8500000000000001
+          ],
+          [
+            -1.8499999999999996,
+            -6.45,
+            0.8500000000000001
+          ],
+          [
+            -1.950000000000001,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -2.0500000000000007,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -2.1500000000000004,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -2.25,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -2.3500000000000005,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -2.45,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -2.5500000000000007,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -2.6500000000000004,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -2.75,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -2.8500000000000005,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -2.95,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -3.0500000000000007,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -3.1500000000000004,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -3.25,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -3.3500000000000005,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -3.45,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -3.5500000000000007,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -3.6500000000000004,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -3.75,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -3.8500000000000005,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -3.95,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -4.050000000000001,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -4.15,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -4.25,
+            -6.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -4.3500000000000005,
+            -6.45,
+            0.8500000000000001
+          ],
+          [
+            -4.3500000000000005,
+            -6.3500000000000005,
+            0.8500000000000001
+          ],
+          [
+            -4.3500000000000005,
+            -6.25,
+            0.8500000000000001
+          ],
+          [
+            -4.45,
+            -6.15,
+            0.8500000000000001
+          ],
+          [
+            -4.45,
+            -6.050000000000001,
+            0.8500000000000001
+          ],
+          [
+            -4.45,
+            -5.95,
+            0.8500000000000001
+          ],
+          [
+            -4.550000000000001,
+            -5.8500000000000005,
+            0.8500000000000001
+          ],
+          [
+            -4.550000000000001,
+            -5.75,
+            0.8500000000000001
+          ],
+          [
+            -4.550000000000001,
+            -5.65,
+            0.8500000000000001
+          ],
+          [
+            -4.550000000000001,
+            -5.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -4.550000000000001,
+            -5.45,
+            0.8500000000000001
+          ],
+          [
+            -4.45,
+            -5.3500000000000005,
+            0.8500000000000001
+          ],
+          [
+            -4.3500000000000005,
+            -5.25,
+            0.8500000000000001
+          ],
+          [
+            -4.3500000000000005,
+            -5.15,
+            0.8500000000000001
+          ],
+          [
+            -4.3500000000000005,
+            -5.050000000000001,
+            0.8500000000000001
+          ],
+          [
+            -4.3500000000000005,
+            -4.95,
+            0.8500000000000001
+          ],
+          [
+            -4.3500000000000005,
+            -4.8500000000000005,
+            0.8500000000000001
+          ],
+          [
+            -4.3500000000000005,
+            -4.75,
+            0.8500000000000001
+          ],
+          [
+            -4.3500000000000005,
+            -4.65,
+            0.8500000000000001
+          ],
+          [
+            -4.3500000000000005,
+            -4.550000000000001,
+            0.8500000000000001
+          ],
+          [
+            -4.3500000000000005,
+            -4.45,
+            0.8500000000000001
+          ],
+          [
+            -4.3500000000000005,
+            -4.3500000000000005,
+            0.8500000000000001
+          ]
+        ],
+        "vertical_distance_m": 0.0,
+        "minimum_clearance_m": 0.20000000298023224,
+        "geometry_map_version": 2,
+        "map_epoch_uuid": "home-p3-height-limited",
+        "planner_profile_hash": "30cc3324feb83304b6556c0ad5beca76dc4be1f4120efb374c384ab87a7155c8"
+      },
+      {
+        "to_task_id": "C",
+        "length_m": 6.4684833585297214,
+        "from_xyz_m": [
+          -4.361730041094853,
+          -4.3558328512008035,
+          0.8
+        ],
+        "points_xyz_m": [
+          [
+            -4.3500000000000005,
+            -4.3500000000000005,
+            0.8500000000000001
+          ],
+          [
+            -4.45,
+            -4.45,
+            0.9500000000000001
+          ],
+          [
+            -4.550000000000001,
+            -4.550000000000001,
+            1.05
+          ],
+          [
+            -4.65,
+            -4.65,
+            1.15
+          ],
+          [
+            -4.65,
+            -4.75,
+            1.15
+          ],
+          [
+            -4.65,
+            -4.8500000000000005,
+            1.15
+          ],
+          [
+            -4.65,
+            -4.95,
+            1.15
+          ],
+          [
+            -4.65,
+            -5.050000000000001,
+            1.15
+          ],
+          [
+            -4.65,
+            -5.15,
+            1.15
+          ],
+          [
+            -4.65,
+            -5.25,
+            1.15
+          ],
+          [
+            -4.65,
+            -5.3500000000000005,
+            1.15
+          ],
+          [
+            -4.65,
+            -5.45,
+            1.15
+          ],
+          [
+            -4.65,
+            -5.550000000000001,
+            1.15
+          ],
+          [
+            -4.65,
+            -5.65,
+            1.15
+          ],
+          [
+            -4.65,
+            -5.75,
+            1.15
+          ],
+          [
+            -4.65,
+            -5.8500000000000005,
+            1.15
+          ],
+          [
+            -4.65,
+            -5.95,
+            1.15
+          ],
+          [
+            -4.65,
+            -6.050000000000001,
+            1.15
+          ],
+          [
+            -4.65,
+            -6.15,
+            1.15
+          ],
+          [
+            -4.65,
+            -6.25,
+            1.15
+          ],
+          [
+            -4.65,
+            -6.3500000000000005,
+            1.15
+          ],
+          [
+            -4.65,
+            -6.45,
+            1.15
+          ],
+          [
+            -4.75,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -4.8500000000000005,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -4.95,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -5.050000000000001,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -5.15,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -5.25,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -5.3500000000000005,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -5.45,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -5.550000000000001,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -5.65,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -5.750000000000001,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -5.8500000000000005,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -5.95,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -6.050000000000001,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -6.15,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -6.250000000000001,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -6.3500000000000005,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -6.450000000000001,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -6.550000000000001,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -6.65,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -6.75,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -6.8500000000000005,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -6.950000000000001,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -7.050000000000001,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -7.15,
+            -6.550000000000001,
+            1.25
+          ],
+          [
+            -7.25,
+            -6.45,
+            1.25
+          ],
+          [
+            -7.3500000000000005,
+            -6.3500000000000005,
+            1.35
+          ],
+          [
+            -7.450000000000001,
+            -6.25,
+            1.35
+          ],
+          [
+            -7.550000000000001,
+            -6.15,
+            1.45
+          ],
+          [
+            -7.65,
+            -6.050000000000001,
+            1.55
+          ],
+          [
+            -7.75,
+            -6.050000000000001,
+            1.55
+          ],
+          [
+            -7.8500000000000005,
+            -6.050000000000001,
+            1.55
+          ],
+          [
+            -7.950000000000001,
+            -6.050000000000001,
+            1.55
+          ],
+          [
+            -8.05,
+            -6.050000000000001,
+            1.55
+          ],
+          [
+            -8.15,
+            -6.050000000000001,
+            1.55
+          ],
+          [
+            -8.25,
+            -6.050000000000001,
+            1.55
+          ],
+          [
+            -8.350000000000001,
+            -6.15,
+            1.65
+          ]
+        ],
+        "vertical_distance_m": 0.7999999999999998,
+        "minimum_clearance_m": 0.20000000298023224,
+        "geometry_map_version": 2,
+        "map_epoch_uuid": "home-p3-height-limited",
+        "planner_profile_hash": "30cc3324feb83304b6556c0ad5beca76dc4be1f4120efb374c384ab87a7155c8"
+      },
+      {
+        "to_task_id": "A",
+        "length_m": 1.6970562748477152,
+        "from_xyz_m": [
+          -8.393346646345902,
+          -6.1413260387430615,
+          1.6
+        ],
+        "points_xyz_m": [
+          [
+            -8.350000000000001,
+            -6.15,
+            1.65
+          ],
+          [
+            -8.25,
+            -6.050000000000001,
+            1.65
+          ],
+          [
+            -8.15,
+            -5.95,
+            1.65
+          ],
+          [
+            -8.05,
+            -5.8500000000000005,
+            1.65
+          ],
+          [
+            -7.950000000000001,
+            -5.75,
+            1.65
+          ],
+          [
+            -7.8500000000000005,
+            -5.65,
+            1.65
+          ],
+          [
+            -7.75,
+            -5.550000000000001,
+            1.65
+          ],
+          [
+            -7.65,
+            -5.45,
+            1.65
+          ],
+          [
+            -7.550000000000001,
+            -5.3500000000000005,
+            1.65
+          ],
+          [
+            -7.450000000000001,
+            -5.25,
+            1.65
+          ],
+          [
+            -7.3500000000000005,
+            -5.15,
+            1.65
+          ],
+          [
+            -7.25,
+            -5.050000000000001,
+            1.65
+          ],
+          [
+            -7.15,
+            -4.95,
+            1.65
+          ]
+        ],
+        "vertical_distance_m": 0.0,
+        "minimum_clearance_m": 0.22360679507255554,
+        "geometry_map_version": 2,
+        "map_epoch_uuid": "home-p3-height-limited",
+        "planner_profile_hash": "30cc3324feb83304b6556c0ad5beca76dc4be1f4120efb374c384ab87a7155c8"
+      }
+    ],
+    "total_path_length_m": 14.599368438021195,
+    "total_terminal_cost": 2.6919492559699356,
+    "objective_cost": 23.73244376635273,
+    "estimated_time_s": 14.996707265566675,
+    "weights": {
+      "path_length": 1.0,
+      "flight_time": 0.25,
+      "terminal_quality": 2.0
+    },
+    "motion_limits": {
+      "horizontal_speed_mps": 1.0,
+      "climb_speed_mps": 0.5,
+      "yaw_rate_rps": 1.0
+    },
+    "start_xyz_yaw": [
+      -2.5,
+      -7.0,
+      1.1,
+      0.0
+    ],
+    "map_epoch_uuid": "home-p3-height-limited",
+    "geometry_map_version": 2,
+    "planner_profile_hash": "30cc3324feb83304b6556c0ad5beca76dc4be1f4120efb374c384ab87a7155c8"
+  },
+  "height_band_m": [
+    0.65,
+    1.75
+  ],
+  "removed_review_numbers": [
+    "B3",
+    "C2"
+  ],
+  "candidate_review_numbers": {
+    "A__object_A__r1.00__025": "A1",
+    "A__object_A__r1.00__000": "A2",
+    "A__object_A__r1.00__003": "A3",
+    "B__object_B__r1.00__031": "B1",
+    "B__object_B__r1.00__037": "B2",
+    "B__object_B__r1.00__040": "B3",
+    "C__object_C__r1.00__020": "C1",
+    "C__object_C__r1.00__013": "C2",
+    "C__object_C__r1.00__024": "C3",
+    "D__object_D__r1.00__064": "D1",
+    "D__object_D__r1.00__059": "D2",
+    "D__object_D__r1.00__072": "D3"
+  }
+}

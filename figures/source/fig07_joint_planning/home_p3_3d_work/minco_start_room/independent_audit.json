@@ -1,0 +1,24 @@
+{
+  "initial": {
+    "phases": 3,
+    "sample_count": 1667,
+    "altitude_min_m": 0.7995756621878335,
+    "altitude_max_m": 1.7894387978226278,
+    "voxel_invalid_samples": 0,
+    "voxel_invalid_sample_edges": 0,
+    "mesh_proximity_samples": 310,
+    "mesh_min_sample_distance_m": 0.1648771014230226,
+    "mesh_sampling_method": "approx 0.035 m spacing; no guarantee between samples"
+  },
+  "updated": {
+    "phases": 3,
+    "sample_count": 2464,
+    "altitude_min_m": 0.5233826766174776,
+    "altitude_max_m": 1.6984955448346077,
+    "voxel_invalid_samples": 107,
+    "voxel_invalid_sample_edges": 108,
+    "mesh_proximity_samples": 488,
+    "mesh_min_sample_distance_m": 0.1883460771276808,
+    "mesh_sampling_method": "approx 0.035 m spacing; no guarantee between samples"
+  }
+}

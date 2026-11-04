@@ -1,0 +1,135 @@
+{
+  "canvas": [
+    3600,
+    2190
+  ],
+  "map_ratio": 0.875,
+  "labels": [
+    {
+      "text": "\u201cCheck the laptop, toolbox, microwave and cup.",
+      "left": 1209.0078125,
+      "top": 122,
+      "width": 1181.984375,
+      "height": 61
+    },
+    {
+      "text": "If the laptop is absent, find it.\u201d",
+      "left": 1405.328125,
+      "top": 206,
+      "width": 789.34375,
+      "height": 64
+    },
+    {
+      "text": "A",
+      "left": 2386.0202198324355,
+      "top": 751.8543205326785,
+      "width": 31.78125,
+      "height": 44
+    },
+    {
+      "text": "1",
+      "left": 2694.978174477336,
+      "top": 666.1832444813231,
+      "width": 24.46875,
+      "height": 44
+    },
+    {
+      "text": "2",
+      "left": 2784.6232241225625,
+      "top": 1059.3224203113123,
+      "width": 24.46875,
+      "height": 44
+    },
+    {
+      "text": "3",
+      "left": 1558.9365624532286,
+      "top": 945.4648394154175,
+      "width": 24.46875,
+      "height": 44
+    },
+    {
+      "text": "4",
+      "left": 878.8351884856518,
+      "top": 1016.1590762238818,
+      "width": 24.46875,
+      "height": 44
+    },
+    {
+      "text": "(4) Cup",
+      "left": 379.84375,
+      "top": 523,
+      "width": 160.3125,
+      "height": 52
+    },
+    {
+      "text": "(1) Laptop found",
+      "left": 2962.3828125,
+      "top": 523,
+      "width": 355.234375,
+      "height": 52
+    },
+    {
+      "text": "(3) Microwave",
+      "left": 304.796875,
+      "top": 2093,
+      "width": 310.40625,
+      "height": 52
+    },
+    {
+      "text": "(2) Toolbox",
+      "left": 3017.359375,
+      "top": 2093,
+      "width": 245.28125,
+      "height": 52
+    },
+    {
+      "text": "UAV platform",
+      "left": 1775.7421875,
+      "top": 2113,
+      "width": 268.515625,
+      "height": 47
+    },
+    {
+      "text": "Recorded flight",
+      "left": 1170,
+      "top": 1732,
+      "width": 295.9375,
+      "height": 44
+    },
+    {
+      "text": "Recovery search",
+      "left": 1170,
+      "top": 1812,
+      "width": 330.125,
+      "height": 44
+    },
+    {
+      "text": "Start",
+      "left": 1170,
+      "top": 1892,
+      "width": 92.90625,
+      "height": 44
+    },
+    {
+      "text": "5 m",
+      "left": 1278.287374644134,
+      "top": 1993,
+      "width": 70.015625,
+      "height": 42
+    },
+    {
+      "text": "A \u2192 1",
+      "left": 2252.65625,
+      "top": 1737,
+      "width": 154.6875,
+      "height": 58
+    },
+    {
+      "text": "Laptop search",
+      "left": 2190.578125,
+      "top": 1816,
+      "width": 278.84375,
+      "height": 44
+    }
+  ]
+}

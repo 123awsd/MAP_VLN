@@ -1,0 +1,10 @@
+{
+  "spacing_m_max": 0.04,
+  "sampled_min_distance_m": {
+    "A": 0.15154510498047014,
+    "B": 0.21977799072265736,
+    "C": 0.17676082585521122,
+    "D": 0.8267482757424683
+  },
+  "warning": "Sampled centerline distance; not a continuous swept-volume proof. At most 0.02 m can be lost between samples."
+}

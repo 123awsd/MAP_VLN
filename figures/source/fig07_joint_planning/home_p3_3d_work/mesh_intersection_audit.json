@@ -1,0 +1,8 @@
+{
+  "route_edges": 119,
+  "triangle_intersections": [],
+  "limitations": [
+    "Tests route centreline intersections, not vehicle radius clearance.",
+    "Includes all GLB triangles, including any decorative, glass or non-collision meshes."
+  ]
+}

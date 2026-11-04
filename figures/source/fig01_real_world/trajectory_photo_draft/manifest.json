@@ -1,0 +1,158 @@
+{
+  "status": "Independent layout draft; not installed into figures/final.",
+  "flight": "flight_20261001_184127",
+  "geometry": "Archived measured LiDAR structural grid and author-approved room boundaries.",
+  "trajectory": "Recorded onboard EKF body-position estimate, not external ground truth.",
+  "photo_alignment": "Semantic event matching. Third-person and onboard video timestamps are separate clocks; correspondence is approximate.",
+  "instruction": "English abridgment of the archived Chinese four-task instruction; microwave clause is inspection only.",
+  "image_processing": "Rectangular crop, resize and JPEG encoding only. No generative image editing.",
+  "sources": [
+    {
+      "asset": "assets/task_1_laptop.jpg",
+      "path": "画图/主图/local_vggt/third_person_assets/rgb_053.jpg",
+      "sha256": "5db0998755e78639ce9a753866c33f57d2d7bf4ac8774ee878f513aced28d970",
+      "view": "third-person handheld follow camera",
+      "encoded_video_seconds": 53,
+      "crop_xyxy_pixels": [
+        350,
+        60,
+        3350,
+        2160
+      ],
+      "original_size": [
+        3840,
+        2160
+      ]
+    },
+    {
+      "asset": "assets/task_2_toolbox.jpg",
+      "path": "画图/主图/local_vggt/third_person_assets/rgb_069.jpg",
+      "sha256": "09ca0ef6ed9315e0f92d7411d000d4a1ad491557694d9ebdf471d523d911254e",
+      "view": "third-person handheld follow camera",
+      "encoded_video_seconds": 69,
+      "crop_xyxy_pixels": [
+        850,
+        0,
+        3350,
+        1750
+      ],
+      "original_size": [
+        3840,
+        2160
+      ]
+    },
+    {
+      "asset": "assets/task_3_microwave.jpg",
+      "path": "画图/主图/local_vggt/third_person_assets/rgb_129.jpg",
+      "sha256": "3c649cfe46255307b193bd88c701c7941795aa3baaf1d645ff8bbf33354ca3c2",
+      "view": "third-person handheld follow camera",
+      "encoded_video_seconds": 129,
+      "crop_xyxy_pixels": [
+        950,
+        450,
+        2950,
+        1850
+      ],
+      "original_size": [
+        3840,
+        2160
+      ]
+    },
+    {
+      "asset": "assets/task_4_cup.jpg",
+      "path": "画图/主图/local_vggt/third_person_assets/rgb_163.jpg",
+      "sha256": "9548ed4b301f2ee3c7653fe92dcb5dae57613573ebd359f35cf13509a5f5e695",
+      "view": "third-person handheld follow camera",
+      "encoded_video_seconds": 163,
+      "crop_xyxy_pixels": [
+        400,
+        144,
+        3280,
+        2160
+      ],
+      "original_size": [
+        3840,
+        2160
+      ]
+    },
+    {
+      "asset": "assets/recovery_absent.jpg",
+      "path": "画图/主图/local_vggt/third_person_assets/rgb_031.jpg",
+      "sha256": "c36ee726387aaa7ee16b98d7a6ba77e479933ca98652d387c7f588e7914040b7",
+      "view": "third-person handheld follow camera",
+      "encoded_video_seconds": 31,
+      "crop_xyxy_pixels": [
+        200,
+        650,
+        2950,
+        2000
+      ],
+      "original_size": [
+        3840,
+        2160
+      ]
+    },
+    {
+      "asset": "assets/recovery_search.jpg",
+      "path": "画图/主图/local_vggt/third_person_assets/rgb_047.jpg",
+      "sha256": "1d982ecea5d6e4bb7f7a0e6a65527f86b17f5742c2c895f835a61644359110b1",
+      "view": "third-person handheld follow camera",
+      "encoded_video_seconds": 47,
+      "crop_xyxy_pixels": [
+        900,
+        650,
+        3600,
+        1975
+      ],
+      "original_size": [
+        3840,
+        2160
+      ]
+    },
+    {
+      "asset": "assets/recovery_found.jpg",
+      "path": "真机实验素材/成功场次/实验室4任务加主动搜索/01_飞行记录/flight_20261001_184127/flight_20261001_184127_rgb.mp4",
+      "view": "onboard RGB camera",
+      "encoded_video_seconds": 46.0,
+      "crop_xyxy_pixels": [
+        150,
+        170,
+        1250,
+        710
+      ],
+      "original_size": [
+        1280,
+        720
+      ]
+    },
+    {
+      "asset": "assets/measured_walls.png",
+      "path": "真机实验素材/成功场次/实验室4任务加主动搜索/02_地图与场景/room_review_pcd/structure_grid.npy",
+      "sha256": "87afaa16bf9354bf5450aa76516d4e6b5c5dbf5d843ba8c27e32dd77ae7c8915",
+      "description": "Measured structural occupied cells; cropped in world XY and flipped for top-down display.",
+      "metadata": "真机实验素材/成功场次/实验室4任务加主动搜索/02_地图与场景/room_review_pcd/structure_grid.json"
+    },
+    {
+      "asset": "assets/map_geometry.json",
+      "path": "真机实验素材/成功场次/实验室4任务加主动搜索/02_地图与场景/room_review_pcd/rooms_approved.json",
+      "sha256": "c19f5a2e81d38a714f10d6e971d010f62f29e98dab7db7f1115c9b15f43bc3e1"
+    },
+    {
+      "asset": "assets/recorded_flight.csv",
+      "path": "画图/主图/local_vggt/odom_correction/odom.npy",
+      "sha256": "02b86655c173d04bbe59adfbdee05a22c1721a76914552468284e231f562430c",
+      "topic": "/ekf_quat/ekf_odom",
+      "position": "UAV body in recorded world frame",
+      "display_sampling": "Every eighth recorded sample, plus the last sample; no smoothing or geometry changes.",
+      "bag_seconds": [
+        50.728981733322144,
+        197.5495388507843
+      ]
+    },
+    {
+      "asset": "assets/flight_events.json",
+      "path": "画图/主图/local_vggt/odom_correction/events.json",
+      "sha256": "0a37c8dfe76465b21ac8ceced2010defcd05087e6e5f4cdbd64b384b6fbd0d7b"
+    }
+  ]
+}

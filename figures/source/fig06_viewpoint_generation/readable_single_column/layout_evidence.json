@@ -1,0 +1,55 @@
+{
+  "base_pdf_sha256": "af462721c2e1076d6b0cc89af27a5377b89468784eebe7bdb0c5ff237957d299",
+  "size_mm": [
+    88,
+    61.53117660618881
+  ],
+  "source_scene_clip_pt": [
+    288.0,
+    297.0,
+    4385.0,
+    2554.0
+  ],
+  "scene_geometry_changed": false,
+  "global_icon_scale": {
+    "dots": 1.33,
+    "occluded": 1.33,
+    "collision": 1.35,
+    "frustum": 1.12
+  },
+  "candidate_positions_changed": false,
+  "legend_layout": "two rows, two columns",
+  "legend_font_pt": 8.5,
+  "legend_symbol_boxes_pt": [
+    [
+      3.0,
+      143.41908329313364,
+      15.0,
+      153.41908329313364
+    ],
+    [
+      127.7244094488189,
+      143.41908329313364,
+      139.7244094488189,
+      153.41908329313364
+    ],
+    [
+      3.0,
+      159.41908329313364,
+      15.0,
+      169.41908329313364
+    ],
+    [
+      127.7244094488189,
+      159.41908329313364,
+      139.7244094488189,
+      169.41908329313364
+    ]
+  ],
+  "legend_labels": [
+    "Sampled viewpoints",
+    "Retained candidates",
+    "Occluded viewpoints",
+    "Collision rejected"
+  ]
+}

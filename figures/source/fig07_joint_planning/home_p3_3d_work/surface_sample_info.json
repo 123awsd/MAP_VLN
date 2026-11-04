@@ -1,0 +1,9 @@
+{
+  "source": "/home/uav/\u4e0b\u8f7d/home_-_p3.glb",
+  "samples": 1668697,
+  "seed": 7,
+  "axis_conversion": "Blender xyz = glTF (x,-z,y)",
+  "unit_scale_m_per_glb_unit": 0.0254,
+  "scale_status": "unverified assumption",
+  "collision_status": "approximate surface sample, not validated, no free-space observations"
+}

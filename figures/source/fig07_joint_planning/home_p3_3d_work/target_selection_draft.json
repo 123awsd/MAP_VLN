@@ -1,0 +1,51 @@
+{
+  "source": "/home/uav/下载/home_-_p3.glb",
+  "units": "GLB units; scale to metres not yet verified",
+  "status": "manual provisional bounds; no candidates or collision-checked paths",
+  "targets": [
+    {
+      "id": "A_bed_bedroom",
+      "bbox_xyz": [
+        -383,
+        -312,
+        -168,
+        -96,
+        0,
+        30
+      ]
+    },
+    {
+      "id": "B_desk_study",
+      "bbox_xyz": [
+        -266,
+        -238,
+        -237,
+        -149,
+        0,
+        38
+      ]
+    },
+    {
+      "id": "C_sink_bathroom",
+      "bbox_xyz": [
+        -359,
+        -328,
+        -302,
+        -279,
+        0,
+        36
+      ]
+    },
+    {
+      "id": "D_sofa_living",
+      "bbox_xyz": [
+        -37,
+        5,
+        -218,
+        -127,
+        0,
+        43
+      ]
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "markers": [
+    {
+      "id": "start",
+      "label": "Start",
+      "bag_seconds": 50.728981733322144,
+      "xyz_m": [
+        0.08199958297793908,
+        0.0033124705946930336,
+        1.1143660437981258
+      ]
+    },
+    {
+      "id": "A",
+      "label": "Laptop absent",
+      "bag_seconds": 68.30913186073303,
+      "xyz_m": [
+        8.338387312079329,
+        4.157053413508438,
+        0.6805063357350237
+      ]
+    },
+    {
+      "id": "1",
+      "label": "Laptop / reading room",
+      "bag_seconds": 88.46958303451538,
+      "xyz_m": [
+        15.705976677318848,
+        1.2645409064599993,
+        0.6915982334297708
+      ]
+    },
+    {
+      "id": "2",
+      "label": "Toolbox / storage room",
+      "bag_seconds": 105.20939898490906,
+      "xyz_m": [
+        16.173306995001823,
+        11.899192806390298,
+        1.976455779686698
+      ]
+    },
+    {
+      "id": "3",
+      "label": "Microwave / tea room",
+      "bag_seconds": 165.22096300125122,
+      "xyz_m": [
+        -15.990403571152317,
+        1.0200599730701647,
+        0.7573017728706045
+      ]
+    },
+    {
+      "id": "4",
+      "label": "Cup / recreation room",
+      "bag_seconds": 197.5495388507843,
+      "xyz_m": [
+        -36.328266717130916,
+        -0.17415651285765668,
+        0.29690207401228086
+      ]
+    }
+  ],
+  "recovery_bag_seconds": [
+    68.30913186073303,
+    88.46958303451538
+  ],
+  "interpretation": "Phase anchors from the flight log, associated with visual inspection/recovery events."
+}

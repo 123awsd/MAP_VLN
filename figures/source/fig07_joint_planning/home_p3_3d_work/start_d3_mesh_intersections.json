@@ -1,0 +1,10 @@
+{
+  "initial_plan": {
+    "edges": 147,
+    "mesh_intersections": 0
+  },
+  "updated_plan": {
+    "edges": 180,
+    "mesh_intersections": 0
+  }
+}

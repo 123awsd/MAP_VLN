@@ -1,0 +1,12 @@
+{
+  "format": "pre_map_vln.narrow_corridor_report.v2",
+  "enabled": false,
+  "clearance_threshold_m": 0.40000000000000002,
+  "max_width_m": 1,
+  "transition_length_m": 0.45000000000000001,
+  "max_half_width_m": 0.17999999999999999,
+  "min_half_width_m": 0.10000000000000001,
+  "margin_m": 0.029999999999999999,
+  "constraints": [
+  ]
+}
