@@ -1,27 +1,27 @@
 [
   {
     "number": 1,
-    "final": "figures/final/最新真机实验首图.pdf",
+    "final": "figures/final/11.1真机首图.pdf",
     "source": "figures/source/fig01_real_world",
     "original_source": "User-provided file: figures/final/最新真机实验首图.pdf",
-    "final_sha256": "4d10831c1f0f697925e64827a5e5d6dad980a72871301387747ab8ce30a55995",
-    "regeneration_dependencies": "User-provided final PDF; editable source was not supplied."
+    "final_sha256": "566418f6da75b5124b5d033de2f2ca710b99567add5fbaf152efea565c22f747",
+    "regeneration_dependencies": "Installed real-world execution figure."
   },
   {
     "number": 2,
-    "final": "figures/final/workflow_10_28_qwen_hd.pdf",
+    "final": "figures/final/systemoverview.pdf",
     "source": "figures/source/fig02_system_overview",
     "original_source": "PRE_MAP_VLN/paper/system_overview",
-    "final_sha256": "e679dc08e1c0a7316666187d159468f7acbe35ec2257578ccebe2a3c64f6efcd",
-    "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+    "final_sha256": "790a00a11df53c156aa4dad5e615a10c8108072b1c58bca2a45de7fa9c3bcc53",
+    "regeneration_dependencies": "Installed system pipeline figure."
   },
   {
     "number": 3,
-    "final": "figures/final/探索建图(1).pdf",
+    "final": "figures/final/探索流程图.pdf",
     "source": "figures/source/fig03_mapping_pipeline",
     "original_source": "素材处理后/第一阶段/阶段对照",
-    "final_sha256": "1bcdcc5ab15f978e94bffefc4cba9e2894cbd6985f39fe9ce71eb06216d2cb9c",
-    "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+    "final_sha256": "1f581a9c851c58b3e791956765a8d5582143956fbf6d69491dc992d4bef89cd1",
+    "regeneration_dependencies": "Installed exploration and mapping pipeline figure."
   },
   {
     "number": 4,
@@ -65,10 +65,10 @@
   },
   {
     "number": 9,
-    "final": "figures/final/多个真机实验(2).pdf",
+    "final": "figures/final/real_world_fig8_style.pdf",
     "source": "figures/source/fig09_11_real_world",
     "original_source": "User-provided file: figures/final/多个真机实验(2).pdf",
-    "final_sha256": "486ee0e533a967d9e4bf16f9912fbf6c970d8643401b62194136f50fffd3c61a",
-    "regeneration_dependencies": "User-provided final PDF; included without cropping. Previous separate figures are archived in source/fig09_11_real_world/previous_cropped_figures/."
+    "final_sha256": "4a72910411f88750b8ad772f6c7a024e85e25d013ce17dc28d2dacae91267446",
+    "regeneration_dependencies": "Four-row real-world execution figure; editable generation script and frames are in source/fig09_11_real_world/四场景重绘/."
   }
 ]

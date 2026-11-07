@@ -37,14 +37,14 @@ make bundle    # 生成可独立编译的投稿源码包
 | 图号 | 内容 | 定稿文件，位于 figures/final/ | 源文件，位于 figures/source/ |
 | --- | --- | --- | --- |
 | 1 | 真机执行主图 | `11.1真机首图.pdf` | `fig01_real_world/` |
-| 2 | 系统总览 | `workflow_10_28_qwen_hd.pdf` | `fig02_system_overview/` |
-| 3 | 第一阶段建图流程 | `探索建图(1).pdf` | `fig03_mapping_pipeline/` |
+| 2 | 系统总览 | `systemoverview.pdf` | `fig02_system_overview/` |
+| 3 | 第一阶段建图流程 | `探索流程图.pdf` | `fig03_mapping_pipeline/` |
 | 4 | 房间分割 | `房间分割.png` | `fig04_room_partitioning/` |
 | 5 | 条件任务图 | `conditional_task_graph.pdf` | `fig05_task_graph/` |
 | 6 | 候选视角生成 | `视角选择.png` | `fig06_viewpoint_generation/` |
 | 7 | 联合规划与轨迹生成 | `联合规划_1.png` | `fig07_joint_planning/` |
 | 8 | Habitat 执行示例 | `habitat_long_instruction_en.png` | `fig09_habitat_execution/` |
-| 9 | 多场景真机实验：室内住宅、办公室 1 和办公室 2 | `多个真机实验(2).pdf` | `fig09_11_real_world/` |
+| 9 | 多场景真机实验：居家多目标、实验室三目标及桌面目标搜索 | `real_world_fig8_style.pdf` | `fig09_11_real_world/` |
 
 `final/` 是正文引用图件的唯一入口。源目录里的草稿、预览和新变体不会自动替换定稿。
 Fig. 4 最新的单行四幅工作稿位于 `fig04_room_partitioning/single_row/`；第二层倾斜分区及 SAM 3.1 目标框叠加图位于 `fig04_room_partitioning/oblique_l2/`。
