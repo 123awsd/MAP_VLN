@@ -1,11 +1,11 @@
 [
   {
     "number": 1,
-    "final": "figures/final/11.1真机首图.pdf",
+    "final": "figures/final/真机实验1.pdf",
     "source": "figures/source/fig01_real_world",
-    "original_source": "User-provided file: figures/final/最新真机实验首图.pdf",
-    "final_sha256": "566418f6da75b5124b5d033de2f2ca710b99567add5fbaf152efea565c22f747",
-    "regeneration_dependencies": "Installed real-world execution figure."
+    "original_source": "User-provided PDF, archived at figures/source/fig01_real_world/用户提供_20261107/真机实验1.pdf",
+    "final_sha256": "ccfa35dd04d3fe4259f8442ad1e3226a259d8b9d1911b7914fb86ee0656896f9",
+    "regeneration_dependencies": "User-provided PDF, installed unchanged. Archived in figures/source/fig01_real_world/用户提供_20261107/真机实验1.pdf."
   },
   {
     "number": 2,

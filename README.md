@@ -36,7 +36,7 @@ make bundle    # 生成可独立编译的投稿源码包
 
 | 图号 | 内容 | 定稿文件，位于 figures/final/ | 源文件，位于 figures/source/ |
 | --- | --- | --- | --- |
-| 1 | 真机执行主图 | `11.1真机首图.pdf` | `fig01_real_world/` |
+| 1 | 真机执行主图 | `真机实验1.pdf` | `fig01_real_world/` |
 | 2 | 系统总览 | `systemoverview.pdf` | `fig02_system_overview/` |
 | 3 | 第一阶段建图流程 | `探索流程图.pdf` | `fig03_mapping_pipeline/` |
 | 4 | 房间分割 | `房间分割.png` | `fig04_room_partitioning/` |
