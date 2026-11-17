@@ -1,0 +1,16 @@
+{
+  "kind": "Native Habitat render at an authored pose; not an algorithm-run result.",
+  "pose_falcon": [
+    -2.65,
+    -5.25,
+    1.0,
+    2.219551327701258
+  ],
+  "source_scene": "/shared/PRE_MAP_VLN_hm3d7_v2/scenes/hm3d/train/00166-RaYrxWt5pR1/RaYrxWt5pR1.basis.glb",
+  "hfov": 90,
+  "resolution": [
+    1600,
+    1200
+  ],
+  "retouched": false
+}

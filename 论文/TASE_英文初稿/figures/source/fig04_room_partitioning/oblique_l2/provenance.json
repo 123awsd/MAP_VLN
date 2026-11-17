@@ -1,0 +1,59 @@
+{
+  "floor": 2,
+  "azimuth_degrees": -58.0,
+  "elevation_degrees": 26.0,
+  "projection": "Orthographic, zero-thickness XY floor plane",
+  "reference": "素材处理后/第一阶段/房间分割/场景00337_三层房间语义_浅色柔和阴影版.png",
+  "reference_parameters": "素材处理后/第一阶段/房间分割/生成说明.md",
+  "source": "/home/uav/map_VLN/PRE_MAP_VLN/outputs/coverage700_wall_room_preview/wall_structural_rooms/L2_constrained.npz",
+  "source_sha256": "b252cc58157b188e3ac35ed4f4cfba13f5cc7d44aa7219cf5858594a7d5f1b49",
+  "all_labels_rendered": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "colors": {
+    "9": "#76B9DC",
+    "12": "#F0C66C",
+    "2": "#85CDB0",
+    "8": "#ADA5D6",
+    "5": "#EEAD8F",
+    "13": "#80CBCE",
+    "1": "#76B9DC",
+    "11": "#85CDB0",
+    "3": "#F0C66C",
+    "4": "#ADA5D6",
+    "6": "#EEAD8F",
+    "10": "#80CBCE",
+    "7": "#F0C66C"
+  },
+  "checks": {
+    "floor": 2,
+    "saved_seeds_exact_match": true,
+    "saved_labels_exact_match": true,
+    "reprojected_walls_exact_match": true,
+    "observation_gate_exact_match": true,
+    "wall_overlap_cells": 0,
+    "fallback_seed_cells": 0,
+    "merges_in_this_example": [],
+    "hidden_fragments_in_this_example": [],
+    "unassigned_supported_cells": 3101,
+    "room_regions": 13,
+    "input_files": {
+      "PRE_MAP_VLN/outputs/coverage700_wall_room_preview/wall_structural_rooms/L2_constrained.npz": "b252cc58157b188e3ac35ed4f4cfba13f5cc7d44aa7219cf5858594a7d5f1b49",
+      "PRE_MAP_VLN/outputs/coverage700_wall_room_preview/wall_structural_evidence/L2_walls.npz": "ec9bb6b1e799aabcfa0278ba032c60250939ede4316b7dd750dbb2bce5a0b7e9",
+      "PRE_MAP_VLN/outputs/coverage700_wall_room_preview/wall_guided/measured/L2_rooms.npz": "90815131ad3092c9ef959f236eb69fa063c86f8e6e3675a569f58d9d562658fa"
+    }
+  },
+  "display": "Original latest room colors; neutral walls; subtle display-only shadow. No semantic category inference or geometry changes."
+}

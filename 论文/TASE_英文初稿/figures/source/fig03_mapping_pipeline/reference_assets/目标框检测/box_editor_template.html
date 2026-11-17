@@ -1,0 +1,111 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>3D物体框调节</title><style>body{margin:0;background:#f2f4f7;color:#243445;font:14px system-ui}header{background:white;padding:16px 22px;position:sticky;top:0;border-bottom:1px solid #ddd}h2{font-size:18px;margin:0 0 12px}.row{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:10px 0}label{display:flex;align-items:center;gap:6px}input[type=range]{width:110px;accent-color:#255fa1}button,select{padding:7px;border:1px solid #bcc6cf;border-radius:5px;background:white}.previews{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:16px}.preview{background:white;border:1px solid #dce1e7;border-radius:8px;overflow:hidden}.preview h3{font-size:15px;margin:14px 16px 0}canvas{display:block;width:100%;height:auto;background:white}@media(max-width:900px){.previews{grid-template-columns:1fr}}small{color:#697888}output{min-width:30px}</style>
+<header><h2>3D 物体框 · L2</h2><div class="row"><label>调节对象 <select id="target"><option value="all">全部物体框</option></select></label><label>框颜色 <input id="color" type="color" value="#9bbce0"></label><button id="reset">重置当前对象</button><button id="resetAll">应用默认配置</button><button id="export">导出物体框 PNG</button><button id="exportSemantic">导出语义几何地图 PNG</button><button id="save">保存参数</button><button id="load">加载参数</button><input id="file" type="file" accept="application/json" hidden></div>
+<div class="row" id="sliders"></div><div class="row"><span>两图同步样式</span><label>填充浅色程度 <input id="pastelMix" type="range" min="0" max="1" step="0.01" value="0.10"><output id="pastelMixv"></output></label><label>轮廓深浅 <input id="edgeDepth" type="range" min="0" max="1" step="0.01" value="0"><output id="edgeDepthv"></output></label></div><div class="row"><label>方位角 <input id="az" type="range" min="-180" max="180" value="-58"><output id="azv"></output></label><label>俯角 <input id="el" type="range" min="10" max="90" value="30"><output id="elv"></output></label><label><input id="outline" type="checkbox" checked>楼层虚线轮廓</label><label>虚线粗细 <input id="outlineWidth" type="range" min="0.1" max="10" step="0.1" value="3"><output id="outlineWidthv">3</output></label><label>虚线段长 <input id="dashLength" type="range" min="2" max="60" step="1" value="13"><output id="dashLengthv">13</output></label><label>虚线间隔 <input id="dashGap" type="range" min="1" max="40" step="1" value="9"><output id="dashGapv">9</output></label><label>虚线颜色 <input id="outlineColor" type="color" value="#8b9fab"></label><label>虚线加深 <input id="outlineDark" type="range" min="0" max="0.8" step="0.05" value="0"><output id="outlineDarkv">0</output></label><label><input id="transparent" type="checkbox">透明背景导出</label></div><small id="persistStatus">自动记住当前浏览器中的最近设置。</small><br><small>默认按流程图的点云与房间图协调明暗：浅色混合 10%、颜色浓度 1.25、房间颜色 82%、墙体深浅 92%。颜色浓度 1 为原色，0 为灰度，大于 1 更鲜明。大小修改仅用于图示，不更改检测数据。选单个框时显示辅助高亮，导出不含高亮。右图保留立体框，隐藏三维重叠体积达到较小框 70% 的重复框；优先保留较大框。左图保留全部框。</small></header><main class="previews"><section class="preview"><h3>物体框</h3><canvas id="canvas" width="3200" height="2200"></canvas></section><section class="preview"><h3>语义几何地图 · 立体框去重 <small id="dedupCount"></small></h3><div class="row" style="margin:12px 16px"><span>浅色实体框</span><label>框不透明度 <input id="semanticAlpha" type="range" min="0" max="1" step="0.01" value="1"><output id="semanticAlphav"></output></label><label>房间颜色浓度 <input id="roomStrength" type="range" min="0" max="1" step="0.01" value="0.82"><output id="roomStrengthv"></output></label><label>墙体深浅 <input id="wallStrength" type="range" min="0" max="1" step="0.01" value="0.92"><output id="wallStrengthv"></output></label></div><canvas id="semanticCanvas" width="3200" height="2200"></canvas></section></main>
+<script>
+const DATA=__DATA__, $=id=>document.getElementById(id),canvas=$('canvas'),ctx=canvas.getContext('2d'),semanticCanvas=$('semanticCanvas'),semanticCtx=semanticCanvas.getContext('2d');
+const defaults={size:1,height:1,saturation:1.25,alpha:1,edge:1,line:.55};let states=DATA.boxes.map(()=>({...defaults,color:null}));
+const defs=[['size','水平大小',.4,1.8,.05],['height','高度比例',.2,1.5,.02],['saturation','颜色浓度',0,6,.05],['alpha','面不透明度',0,1,.02],['edge','线不透明度',0,1,.02],['line','线宽',.3,4,.05]];
+for(const [id,label,min,max,step] of defs){const l=document.createElement('label');l.innerHTML=`${label} <input id="${id}" type="range" min="${min}" max="${max}" step="${step}" value="${defaults[id]}"><output id="${id}v"></output>`;$('sliders').append(l);$(id).oninput=()=>{selected().forEach(i=>states[i][id]=+$(id).value);render();}}
+DATA.boxes.forEach((b,i)=>{const o=document.createElement('option');o.value=i;o.textContent=`${i+1} · ${b.label}`;$('target').append(o)});
+function selected(){return $('target').value==='all'?states.map((s,i)=>i):[+$('target').value]}
+function sync(){const s=states[selected()[0]];defs.forEach(([id])=>$(id).value=s[id]);$('color').value=s.color||DATA.boxes[selected()[0]].color;render()}
+$('target').onchange=sync;$('color').oninput=()=>{selected().forEach(i=>states[i].color=$('color').value);render()};$('reset').onclick=()=>{selected().forEach(i=>states[i]={...defaults,color:null});sync()};$('resetAll').onclick=()=>{$('pastelMix').value=0.10;$('edgeDepth').value=0;$('semanticAlpha').value=1;$('roomStrength').value=0.82;$('wallStrength').value=0.92;states=states.map(()=>({...defaults,color:null}));$('outline').checked=true;$('az').value=-58;$('el').value=30;$('outlineWidth').value=3;$('outlineColor').value='#8b9fab';$('outlineDark').value=0;$('dashLength').value=13;$('dashGap').value=9;sync()};['az','el','outline','outlineWidth','outlineColor','outlineDark','dashLength','dashGap','transparent'].forEach(id=>$(id).oninput=()=>render());
+// Boost saturation; above 1 progressively reduce pastel lightness toward vivid midtones.
+function adjustSaturation(hex,factor){
+ const c=[1,3,5].map(k=>parseInt(hex.slice(k,k+2),16)/255),hi=Math.max(...c),lo=Math.min(...c),light=(hi+lo)/2,chroma=hi-lo;
+ if(chroma<1e-8)return c.map(v=>Math.round(v*255));
+ const sat=chroma/Math.max(1e-8,1-Math.abs(2*light-1));
+ const boost=Math.max(0,factor-1)/5;
+ const targetLight=light>0.5?light-(light-0.5)*boost:light;
+ const targetChroma=Math.min(1,sat*factor)*(1-Math.abs(2*targetLight-1));
+ return c.map(v=>Math.round(Math.max(0,Math.min(1,targetLight+(v-light)*targetChroma/chroma))*255));
+}
+function vertices(b,s){const [cx,cy,cz]=b.center,[sx,sy,sz]=b.size;const bottom=Math.max(.04,cz-sz/2-DATA.floor);const verts=[];for(const z of [bottom,bottom+sz*s.height])for(const [x,y] of [[-1,-1],[1,-1],[1,1],[-1,1]]){const dx=x*sx*s.size/2,dy=y*sy*s.size/2;verts.push([cx+dx*Math.cos(b.yaw)-dy*Math.sin(b.yaw),cy+dx*Math.sin(b.yaw)+dy*Math.cos(b.yaw),z])}return verts}
+const faces=[[0,1,2,3],[4,5,6,7],[0,1,5,4],[1,2,6,5],[2,3,7,6],[3,0,4,7]],edges=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+function polygonArea(p){return Math.abs(p.reduce((sum,a,i)=>{const b=p[(i+1)%p.length];return sum+a[0]*b[1]-a[1]*b[0]},0))/2}
+function intersectPolygon(subject,clip){
+ let out=subject;const cross=(a,b,p)=>(b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]);
+ for(let i=0;i<clip.length&&out.length;i++){
+  const a=clip[i],b=clip[(i+1)%clip.length],input=out;out=[];
+  for(let j=0;j<input.length;j++){
+   const p=input[j],q=input[(j+1)%input.length],dp=cross(a,b,p),dq=cross(a,b,q);
+   if(dp>=0)out.push(p);
+   if((dp>=0)!==(dq>=0)){const t=dp/(dp-dq);out.push([p[0]+t*(q[0]-p[0]),p[1]+t*(q[1]-p[1])])}
+  }
+ }
+ return out;
+}
+function deduplicatedBoxIds(){
+ const items=DATA.boxes.map((b,i)=>{const v=vertices(b,{size:1,height:1});return {i,poly:v.slice(0,4).map(p=>p.slice(0,2)),z0:v[0][2],z1:v[4][2],volume:b.size[0]*b.size[1]*b.size[2]}}).sort((a,b)=>b.volume-a.volume);
+ const kept=[];
+ for(const item of items){const duplicate=kept.some(k=>{const h=Math.min(k.z1,item.z1)-Math.max(k.z0,item.z0);return h>0&&polygonArea(intersectPolygon(item.poly,k.poly))*h/Math.max(1e-9,Math.min(item.volume,k.volume))>=.7});if(!duplicate)kept.push(item)}
+ return new Set(kept.map(k=>k.i));
+}
+for(const id of ['semanticAlpha','roomStrength','wallStrength','pastelMix','edgeDepth'])$(id).oninput=()=>render();
+const semanticBoxIds=deduplicatedBoxIds();$('dedupCount').textContent=`保留 ${semanticBoxIds.size}/${DATA.boxes.length}`;
+function render(exporting=false){for(const id of ['semanticAlpha','roomStrength','wallStrength','pastelMix','edgeDepth'])$(id+'v').textContent=Math.round(+$(id).value*100)+'%';$('dashLengthv').textContent=$('dashLength').value;$('dashGapv').textContent=$('dashGap').value;$('outlineWidthv').textContent=$('outlineWidth').value;$('outlineDarkv').textContent=Math.round(+$('outlineDark').value*100)+'%';defs.forEach(([id])=>$(id+'v').textContent=(+$(id).value).toFixed(2));$('azv').textContent=$('az').value+'°';$('elv').textContent=$('el').value+'°';drawView(ctx,false,exporting);drawView(semanticCtx,true,exporting);window.BOX_STATE={count:DATA.boxes.length,views:2,ready:true};if(!exporting)remember();}
+function drawView(ctx,withRooms,exporting){ctx.clearRect(0,0,3200,2200);if(!exporting||!$('transparent').checked){ctx.fillStyle='white';ctx.fillRect(0,0,3200,2200)}
+const az=+$('az').value*Math.PI/180,el=+$('el').value*Math.PI/180;function proj(p){const [x,y,z]=p;return [-Math.sin(az)*x+Math.cos(az)*y,Math.sin(el)*(Math.cos(az)*x+Math.sin(az)*y)-Math.cos(el)*z,Math.cos(el)*(Math.cos(az)*x+Math.sin(az)*y)+Math.sin(el)*z]}
+// Stable framing across size/opacity edits: include largest allowed geometry in bounds.
+const bounds=DATA.contours.flatMap(c=>c.map(p=>proj([...p,0])));DATA.boxes.forEach(b=>bounds.push(...vertices(b,{size:1.8,height:1.5}).map(proj)));
+const xs=bounds.map(p=>p[0]),ys=bounds.map(p=>p[1]);const lo=[Math.min(...xs),Math.min(...ys)],hi=[Math.max(...xs),Math.max(...ys)];const scale=Math.min(2900/(hi[0]-lo[0]),1900/(hi[1]-lo[1]));function screen(p){const q=proj(p);return [1600+(q[0]-(hi[0]+lo[0])/2)*scale,1100+(q[1]-(hi[1]+lo[1])/2)*scale,q[2]]}
+function path(points){ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]))}
+if(withRooms){
+ for(const room of DATA.rooms){path(room.polygon.map(p=>screen([...p,.02])));ctx.closePath();ctx.fillStyle='rgb('+[1,3,5].map(k=>Math.round(255+(parseInt(room.color.slice(k,k+2),16)-255)*+$('roomStrength').value)).join(',')+')';ctx.globalAlpha=1;ctx.fill();ctx.globalAlpha=1;ctx.strokeStyle='#F8FAFC';ctx.lineWidth=2;ctx.stroke();}
+ ctx.beginPath();for(const [x0,y0,x1,y1] of DATA.wallRects){const points=[[x0,y0],[x1,y0],[x1,y1],[x0,y1]].map(p=>screen([...p,.035]));points.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();}ctx.fillStyle='rgb('+[116,126,141].map(c=>Math.round(255+(c-255)*+$('wallStrength').value)).join(',')+')';ctx.fill();
+}
+if(!withRooms&&$('outline').checked){const hex=$('outlineColor').value,dark=+$('outlineDark').value;ctx.strokeStyle='rgb('+[1,3,5].map(k=>Math.round(parseInt(hex.slice(k,k+2),16)*(1-dark))).join(',')+')';ctx.lineWidth=+$('outlineWidth').value;ctx.setLineDash([+$('dashLength').value,+$('dashGap').value]);DATA.contours.forEach(c=>{path(c.map(p=>screen([...p,0])));ctx.closePath();ctx.stroke()});ctx.setLineDash([])}
+const prepared=DATA.boxes.map((b,i)=>{const s=states[i],v=vertices(b,s).map(screen),hex=s.color||b.color;const rgb=adjustSaturation(hex,s.saturation);return {i,s,v,rgb}}).filter(b=>!withRooms||semanticBoxIds.has(b.i));
+{
+ // Render filled faces and their borders together, back to front, so later faces
+ // cover earlier edge strokes rather than drawing every box edge on top.
+ const surfaces=[];
+ for(const b of prepared){
+  const center=b.v.reduce((sum,p)=>sum+p[2],0)/8;
+  const base=b.rgb.map(c=>Math.round(c+(255-c)*+$('pastelMix').value));
+  faces.forEach((face,index)=>{
+   const points=face.map(i=>b.v[i]),depth=points.reduce((sum,p)=>sum+p[2],0)/4;
+   if(depth<=center+1e-8)return;
+   const shade=index===1?1:index%2?.96:.91;
+   surfaces.push({points,depth,rgb:base.map(c=>Math.round(c*shade)),b});
+  });
+ }
+ surfaces.sort((a,b)=>a.depth-b.depth);
+ for(const f of surfaces){path(f.points);ctx.closePath();ctx.fillStyle=`rgba(${f.rgb},${withRooms?+$('semanticAlpha').value:f.b.s.alpha})`;ctx.fill();ctx.strokeStyle=`rgba(${[126,141,153].map(c=>Math.round(c*(1-+$('edgeDepth').value)))},${f.b.s.edge})`;ctx.lineWidth=f.b.s.line*2.5;ctx.lineJoin='round';ctx.stroke();}
+ if(!exporting&&$('target').value!=='all'){
+  const selected=prepared.find(b=>b.i===+$('target').value);
+  if(selected){ctx.strokeStyle='#203344';ctx.lineWidth=2;ctx.setLineDash([7,5]);edges.forEach(([a,b])=>{path([selected.v[a],selected.v[b]]);ctx.stroke()});ctx.setLineDash([])}
+ }
+ return;
+}
+}
+
+const saveHandles=new Map();
+async function download(blob,name){
+ if(!blob)return;
+ if(!window.showSaveFilePicker){alert('当前浏览器不支持直接覆盖保存，请使用 Chrome 或 Edge 打开此页面。');return;}
+ try{
+  let handle=saveHandles.get(name);
+  if(!handle){
+   const ext=name.slice(name.lastIndexOf('.')),mime=ext==='.json'?'application/json':ext==='.svg'?'image/svg+xml':'image/png';
+   handle=await window.showSaveFilePicker({suggestedName:name,types:[{description:ext.slice(1).toUpperCase(),accept:{[mime]:[ext]}}]});
+   saveHandles.set(name,handle);
+  }
+  const stream=await handle.createWritable();await stream.write(blob);await stream.close();
+  let status=document.getElementById('saveStatus');if(!status){status=document.createElement('small');status.id='saveStatus';const host=document.querySelector('.toolbar')||document.querySelector('header');host.append(status)}
+  status.textContent='已更新：'+handle.name;
+ }catch(e){if(e.name!=='AbortError'){saveHandles.delete(name);alert('保存失败：'+e.message)}}
+}
+
+function exportView(target,name){render(true);target.toBlob(b=>{if(b)download(b,name);render()},'image/png')}
+$('export').onclick=()=>exportView(canvas,'L2_Boxer_自定义.png');
+$('exportSemantic').onclick=()=>exportView(semanticCanvas,'L2_语义几何地图.png');
+const STORAGE_KEY='map_vln_box_display_v2';
+function settings(){return {format:'box-display-v1',source:DATA.source,semanticStyle:'color',pastelMix:+$('pastelMix').value,edgeDepth:+$('edgeDepth').value,semanticAlpha:+$('semanticAlpha').value,roomStrength:+$('roomStrength').value,wallStrength:+$('wallStrength').value,states,az:+$('az').value,el:+$('el').value,outline:$('outline').checked,outlineWidth:+$('outlineWidth').value,outlineColor:$('outlineColor').value,outlineDark:+$('outlineDark').value,dashLength:+$('dashLength').value,dashGap:+$('dashGap').value,transparent:$('transparent').checked}}
+function remember(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(settings()))}catch(e){$('persistStatus').textContent='浏览器不允许自动保存，请下载参数文件'}}
+function applySettings(d){if(d.format!=='box-display-v1'||d.states.length!==states.length)throw Error('参数文件不匹配');for(const s of d.states){if(s.saturation===undefined&&Number.isFinite(s.dark)){s.saturation=1;delete s.dark;}for(const [id,,min,max] of defs)if(!Number.isFinite(s[id])||s[id]<min||s[id]>max)throw Error('参数范围错误');if(s.color!==null&&!/^#[0-9a-f]{6}$/i.test(s.color))throw Error('颜色错误')}if(!Number.isFinite(d.az)||!Number.isFinite(d.el))throw Error('角度错误');for(const [id,fallback] of [['semanticAlpha',1],['roomStrength',0.82],['wallStrength',0.92],['pastelMix',0.10],['edgeDepth',0]])$(id).value=Number.isFinite(d[id])?Math.max(0,Math.min(1,d[id])):fallback;states=d.states;$('az').value=d.az;$('el').value=d.el;$('outline').checked=d.outline;$('outlineWidth').value=d.outlineWidth??3;$('outlineColor').value=d.outlineColor??'#8b9fab';$('outlineDark').value=d.outlineDark??0;$('dashLength').value=d.dashLength??13;$('dashGap').value=d.dashGap??9;$('transparent').checked=d.transparent;}
+$('save').onclick=()=>{remember();download(new Blob([JSON.stringify(settings(),null,2)],{type:'application/json'}),'L2_Boxer_显示参数.json')};
+$('load').onclick=()=>$('file').click();$('file').onchange=async()=>{try{const d=JSON.parse(await $('file').files[0].text());applySettings(d);sync()}catch(e){alert('无法加载：'+e.message)}$('file').value=''};
+try{const saved=localStorage.getItem(STORAGE_KEY);if(saved){applySettings(JSON.parse(saved));$('persistStatus').textContent='已恢复上次设置'}}catch(e){$('persistStatus').textContent='上次设置无法恢复，已使用默认值'}
+sync();
+</script></html>

@@ -1,0 +1,28 @@
+{
+  "format": "pre_map_vln.hm3d_l2_cutaway_blender.v1",
+  "source_glb": "/home/uav/map_VLN/PRE_MAP_VLN/data/versioned_data/hm3d-0.2/hm3d/example/00337-CFVBbU9Rsyb/CFVBbU9Rsyb.basis.glb",
+  "temporary_decoded_scene": true,
+  "coordinate_source": "/home/uav/map_VLN/PRE_MAP_VLN/outputs/stage1_3d/00337-CFVBbU9Rsyb/dormant_recovery_20260829/generated_3d_config.json",
+  "source_type": "official HM3D textured mesh",
+  "vertical_clip_blender_z": [
+    -0.12053801536560049,
+    2.2994619846343993
+  ],
+  "falcon_floor_z_m": 2.6,
+  "retained_wall_height_m": 2.3,
+  "camera_facing_cut_fraction": 0.0,
+  "view": {
+    "azimuth": -58.0,
+    "elevation": 26.0,
+    "projection": "orthographic"
+  },
+  "renderer": "Blender EEVEE",
+  "uses_pointcloud": false,
+  "uses_image_generation": false,
+  "boxer_csv": "/home/uav/map_VLN/PRE_MAP_VLN/outputs/room_pipeline/00337_dormant_recovery_20260829_boxfloorfix/L2_boxes.csv",
+  "box_count": 66,
+  "box_height_scale": 1.0,
+  "box_alpha": 0.13,
+  "exported_glb": "/home/uav/map_VLN/\u7d20\u6750\u5904\u7406\u540e/\u7b2c\u4e00\u9636\u6bb5/\u76ee\u6807\u6846\u68c0\u6d4b/\u573a\u666f00337_L2_HM3D\u539f\u573a\u666f_Boxer\u53e0\u52a0.glb",
+  "png": "/home/uav/map_VLN/\u7d20\u6750\u5904\u7406\u540e/\u7b2c\u4e00\u9636\u6bb5/\u76ee\u6807\u6846\u68c0\u6d4b/\u573a\u666f00337_L2_HM3D\u539f\u573a\u666f_Boxer\u53e0\u52a0.png"
+}

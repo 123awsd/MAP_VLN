@@ -1,10 +1,15 @@
-.PHONY: all pdf clean
+.PHONY: all pdf check bundle clean
 
 all: pdf
 
 pdf:
-	latexmk -xelatex -outdir=build root.tex
-	cp build/root.pdf root.pdf
+	$(MAKE) -C manuscript pdf
+
+check:
+	python3 figures/source/project_tools.py check
+
+bundle: check
+	python3 figures/source/project_tools.py bundle
 
 clean:
-	latexmk -c -outdir=build root.tex
+	$(MAKE) -C manuscript clean

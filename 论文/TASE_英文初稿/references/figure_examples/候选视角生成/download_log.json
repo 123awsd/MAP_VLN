@@ -1,0 +1,106 @@
+[
+  {
+    "id": "REVERIE",
+    "url": "https://openaccess.thecvf.com/content_CVPR_2020/papers/Qi_REVERIE_Remote_Embodied_Visual_Referring_Expression_in_Real_Indoor_Environments_CVPR_2020_paper.pdf",
+    "local_pdf": "papers/REVERIE.pdf",
+    "pages": 10,
+    "sha256": "1390a6736daee38df1e719ae7f97232d9bee49314376b5833c672b4cd7cf1b44",
+    "status": "verified_local"
+  },
+  {
+    "id": "SOON",
+    "url": "https://openaccess.thecvf.com/content/CVPR2021/papers/Zhu_SOON_Scenario_Oriented_Object_Navigation_With_Graph-Based_Exploration_CVPR_2021_paper.pdf",
+    "local_pdf": "papers/SOON.pdf",
+    "pages": 11,
+    "sha256": "94fcfff8ee6314e890a6cf8875c89d2b4e08022787126ce181ada2e7338a683b",
+    "status": "verified_local"
+  },
+  {
+    "id": "ConceptGraphs",
+    "url": "https://arxiv.org/pdf/2309.16650v1",
+    "local_pdf": "papers/ConceptGraphs.pdf",
+    "pages": 11,
+    "sha256": "1435b96cea1e15a8e1c07ea75a5805c8520925a176817aa78a5a5a178a4b2002",
+    "status": "verified_local"
+  },
+  {
+    "id": "VLMaps",
+    "url": "https://arxiv.org/pdf/2210.05714v4",
+    "local_pdf": "papers/VLMaps.pdf",
+    "pages": 11,
+    "sha256": "c7bb57c0defb3761526f740d187d215980b6a757eec14c7948d2d8c73c7b421d",
+    "status": "verified_local"
+  },
+  {
+    "id": "VoxPoser",
+    "url": "https://proceedings.mlr.press/v229/huang23b/huang23b.pdf",
+    "local_pdf": "papers/VoxPoser.pdf",
+    "pages": 23,
+    "sha256": "620e385ae0306eef6cb9b6b9c8a275c3b1370a0b00ecdf2866f28cbb9075d5dd",
+    "status": "verified_local"
+  },
+  {
+    "id": "FUEL",
+    "url": "https://arxiv.org/pdf/2010.11561v2",
+    "local_pdf": "papers/FUEL.pdf",
+    "pages": 8,
+    "sha256": "a0b6fde069a3ff62c5d41973a891070ac08deb24c5e7838bd92c97ce84476910",
+    "status": "verified_local"
+  },
+  {
+    "id": "SEE-2018",
+    "url": "https://arxiv.org/pdf/1802.08617v1",
+    "local_pdf": "papers/SEE-2018.pdf",
+    "pages": 8,
+    "sha256": "25ce8b719161c95b6ef782deb151b8e1df68705f38583aa90e270a1ca1f367e5",
+    "status": "verified_local"
+  },
+  {
+    "id": "SEE-Journal",
+    "url": "https://arxiv.org/pdf/2207.13684v4",
+    "local_pdf": "papers/SEE-Journal.pdf",
+    "pages": 25,
+    "sha256": "8ea43314be9b2c739699d74228e4460dd2a9863dddaefc55cf4401d53436e7b3",
+    "status": "verified_local"
+  },
+  {
+    "id": "BubbleExplorer",
+    "url": "https://arxiv.org/pdf/2304.00852v1",
+    "local_pdf": "papers/BubbleExplorer.pdf",
+    "pages": 8,
+    "sha256": "34170dbe70163f2538665ed12f00ff82febd9ce5a1a7804fdccb6899477ba542",
+    "status": "verified_local"
+  },
+  {
+    "id": "MA-SCVP",
+    "url": "https://arxiv.org/pdf/2304.00910v4",
+    "local_pdf": "papers/MA-SCVP.pdf",
+    "pages": 21,
+    "sha256": "fa374bc58459503f6e57b5a6236ef4401327f24c1695560ab7747413b0defe0b",
+    "status": "verified_local"
+  },
+  {
+    "id": "ConstrainedSpaces",
+    "url": "https://arxiv.org/pdf/2306.06969v1",
+    "local_pdf": "papers/ConstrainedSpaces.pdf",
+    "pages": 40,
+    "sha256": "7adbd7b506a9c3997ddd2bc61ef3d24e8a353d8d0bf9168d6c14575773a24258",
+    "status": "verified_local"
+  },
+  {
+    "id": "FALCON",
+    "url": "https://arxiv.org/pdf/2407.00577v2",
+    "local_pdf": "papers/FALCON.pdf",
+    "pages": 20,
+    "sha256": "a61dca1184fcc454d8e6a8724a70f1f4c0b1986d8f50d5eb1decf19453c22094",
+    "status": "verified_local"
+  },
+  {
+    "id": "SCONE",
+    "url": "https://arxiv.org/pdf/2208.10449v2",
+    "local_pdf": "papers/SCONE.pdf",
+    "pages": 23,
+    "sha256": "e14b4b1521a2376e2a5845b31ecce875d252651348b913186b56ad034289bf05",
+    "status": "verified_local"
+  }
+]

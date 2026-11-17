@@ -1,0 +1,34 @@
+{
+  "source": "../../poket\u7b2c\u4e09\u89c6\u89d2.MP4",
+  "frame_times_seconds": {
+    "01_laptop": [
+      19,
+      31,
+      37,
+      47,
+      53
+    ],
+    "02_toolbox": [
+      53,
+      59,
+      63,
+      66,
+      69
+    ],
+    "03_microwave": [
+      69,
+      87,
+      103,
+      127,
+      129
+    ],
+    "04_cup": [
+      129,
+      139,
+      149,
+      159,
+      163
+    ]
+  },
+  "alignment": "Visual event matching, not strict time synchronization. Reconstruction and trajectory panels unchanged from retained first-person version."
+}

@@ -1,0 +1,1550 @@
+
+--- PDF PAGE 1 ---
+This paper has been published in the proceedings of Robotics: Science and Systems, 2024. Please cite this paper as:
+@inproceedings{Ginting2024Seek,
+title = "{SEEK}: Semantic Reasoning for Object Goal Navigation
+in Real World Inspection Tasks",
+author = {Muhammad Fadhil Ginting and Sung-Kyun Kim and
+David D. Fan and
+Matteo Palieri and Mykel J. Kochenderfer and Ali-akbar Agha-mohammadi},
+year = {2024},
+booktitle = "Proc. of Robotics: Science and Systems",
+}
+arXiv:2405.09822v2  [cs.RO]  18 Nov 2024
+
+
+--- PDF PAGE 2 ---
+SEEK: Semantic Reasoning for Object Goal
+Navigation in Real World Inspection Tasks
+Muhammad Fadhil Ginting1, Sung-Kyun Kim2, David D. Fan2, Matteo Palieri2,
+Mykel J. Kochenderfer1, and Ali-akbar Agha-mohammadi2
+1Stanford University, 2Field AI
+Abstract—This paper addresses the problem of object-goal
+navigation in autonomous inspections in real-world environments.
+Object-goal navigation is crucial to enable effective inspections in
+various settings, often requiring the robot to identify the target
+object within a large search space. Current object inspection
+methods fall short of human efficiency because they typically
+cannot bootstrap prior and common sense knowledge as humans
+do. In this paper, we introduce a framework that enables robots
+to use semantic knowledge from prior spatial configurations
+of the environment and semantic common sense knowledge.
+We propose SEEK (Semantic Reasoning for Object Inspection
+Tasks) that combines semantic prior knowledge with the robot’s
+observations to search for and navigate toward target objects
+more efficiently. SEEK maintains two representations: a Dynamic
+Scene Graph (DSG) and a Relational Semantic Network (RSN).
+The RSN is a compact and practical model that estimates the
+probability of finding the target object across spatial elements in
+the DSG. We propose a novel probabilistic planning framework
+to search for the object using relational semantic knowledge.
+Our simulation analyses demonstrate that SEEK outperforms
+the classical planning and Large Language Models (LLMs)-based
+methods that are examined in this study in terms of efficiency
+for object-goal inspection tasks. We validated our approach on
+a physical legged robot in urban environments, showcasing its
+practicality and effectiveness in real-world inspection scenarios.
+I. INTRODUCTION
+Consider an autonomous robot searching and inspecting a
+target object in an unseen environment. For example, to inspect
+a fire extinguisher in a building, the robot needs to reason
+where it can find the object in the environment and search
+for the object efficiently. This task, known as an object-goal
+navigation problem, is one of the central problems in embodied
+AI research [3]. This capability is crucial in a wide range of
+real-world applications, including urban inspection [50, 7, 35],
+home robots [58], monitoring of oil and gas sites [24], and ex-
+ploration of subterranean environments [1, 52, 28]. This work
+addresses the object-goal navigation problem for autonomous
+inspection in unseen real-world environments (Fig. 1).
+Performing object-goal navigation in unseen environments
+presents three main challenges. The first challenge is the large
+search space for the robot to consider when deciding where
+to go and inspect. The target object may be located in one
+room among many rooms in a building, and thus, uninformed
+brute-force search can be significantly inefficient. The second
+challenge is the robot’s inherent inability to use experience
+and common sense knowledge. Unlike humans, who draw
+upon prior knowledge and contextual understanding to refine
+their search strategies, the current state-of-the-practice object
+Lock inspection
+Object inspection
+Object search
+Gauge inspection
+Fig. 1: Autonomous object inspections in urban buildings and
+construction sites. The robot needs to search and inspect the
+target object. In this paper, we proposed a method to guide the
+robot to find the object using relational semantic knowledge.
+search methods are confined to sensory information onboard
+the robot. The third challenge is detecting the object under
+perceptual uncertainty due to the limited sensing range, inter-
+object occlusion, and detection and localization errors of the
+perception model on the robot. For example, planning for
+object search without probabilistic reasoning of the object
+detection accuracy could lead to inefficient search policy when
+there are false positives of the object detection [25, 63]. Deci-
+sion making without probabilistic reasoning of prior semantic
+knowledge and perceptual uncertainty can lead to a myopic
+greedy policy or an overly conservative inefficient policy.
+These challenges underscore a fundamental barrier in object-
+goal navigation, highlighting the need for a new framework
+that mimics human reasoning capabilities.
+To address these challenges, we develop a framework that
+uses prior environment information and semantic knowledge in
+a probabilistic manner. While standard object-goal navigation
+problems only assume access to robot sensory readings [3], our
+approach can improve robot search efficiency by leveraging
+both i) prior spatial configuration and ii) relational semantic
+knowledge that are commonly accessible to humans perform-
+ing inspection tasks. The environment spatial configuration,
+such as room layouts, floor plans, blueprints, and Building
+Information Modeling (BIM) [54], provides a structured con-
+text for the robot to search the environment hierarchically.
+Additionally, relational semantic knowledge, such as typical
+locations of objects within the environment, can guide the
+
+
+--- PDF PAGE 3 ---
+object search. For instance, knowing that fire extinguishers
+are often found near entrances or kitchens, we can direct the
+robot to search those regions to locate the object. The advent
+of Large Language Models (LLMs) and language embeddings
+[9, 18] allows us to access this semantic knowledge without
+human assistance. By leveraging both spatial and semantic
+information, we can formulate a probabilistic optimization
+problem for more efficient and robust object-goal navigation
+under uncertainty. We solve for a non-myopic policy that
+prioritizes the region with a higher probability of containing
+the target object as well as takes into account the chance of not
+finding the target object in the selected region, its associated
+costs, and the best follow-up policy in a recursive fashion. This
+capability can set a new standard for object-goal navigation in
+real-world inspections.
+In this paper, we propose SEEK (Semantic Reasoning
+for Object Inspection Tasks), a framework for object-goal
+navigation that pushes the state-of-the-practice of real-world
+inspections. SEEK maintains two environment representations:
+Dynamic Scene Graph (DSG) and a novel Relational Se-
+mantic Network (RSN). The DSG is a hierarchical world
+representation generated from a prior spatial configuration
+of the environment. The RSN encodes relational semantic
+knowledge between objects and the regions or rooms in
+the environment. We then solve the object-goal navigation
+problem using a novel probabilistic planning framework with
+relational semantic knowledge. Using DSG and RSN, we first
+formulate the global planning problem as a Markov decision
+process (MDP) [33]. The computed global planning policy
+directs the robot to visit a room or perform local searches. We
+then use a finite state local controller to execute the global
+planning policy and search for the target object. This approach
+enables a principled way to probabilistically combine prior
+and common sense knowledge with the robot’s observation.
+In contrast with current state-of-the-art methods, which require
+resource-intensive models [20] or large amount of data [12],
+our RSN is a lightweight model trained with a small amount of
+data distilled from LLMs. This compact model size is crucial
+for real-world inspection robots, which often have limited
+computational resources and restricted internet access. The
+RSN updates its semantic knowledge over time based on the
+robot’s observations in the specific environment.
+To demonstrate the efficacy of SEEK, we evaluate our
+approach extensively in simulation and real-world inspections.
+First, we evaluate the efficiency of our approach against
+different classical and LLM-based planners in simulation using
+the Matterport3D datasets [11] in the Habitat simulator [45].
+Next, we compared our approach with an existing semantic-
+based inspection approach [25] in the Gazebo simulator and
+showed that our approach significantly improved the object
+search efficiency. Finally, we demonstrate our approach in real-
+world autonomous inspection scenarios in an office building.
+In summary, our technical contributions are as follows:
+1) We introduce SEEK, a framework that uses prior spatial
+configuration and relational semantic knowledge for
+semantic-guided navigation;
+2) We propose a method to build a relational semantic net-
+work (RSN) using common-sense knowledge contained
+in an LLM;
+3) We design a probabilistic planning algorithm for object-
+goal navigation with relational semantic knowledge;
+4) We validate our framework through simulation and real-
+world demonstrations with a legged robot.
+II. RELATED WORKS
+Planning for autonomous inspection: Our approach is
+related to planning methods for autonomous robot exploration
+and inspection in real-world environments. Coverage planning
+is a well-studied method to explore and map environments
+efficiently [8, 39, 10, 13, 4]. In addition to map the whole
+environment, inspection tasks often require the robot to closely
+examine specific target objects of interest in some part of the
+environment [29]. Current state-of-the-practice approaches to
+inspecting specific targets usually rely on predefining routes
+and observation points for the robot or placing identifiable
+tags, such as Apriltags [56] or QR codes [6], making the
+process labor-intensive for humans. Recent approaches to
+addressing this problem involve training an object detector
+and incorporating the detection model into the planning pro-
+cess [16, 26, 19, 25]. For instance, the SWAP planner [19]
+integrates volumetric exploration with semantics coverage and
+inspection behavior, while the SB2G [25] initially employs
+geometric coverage behavior and transitions to active semantic
+search when the robot detects the target object. However, these
+methods are often inefficient in locating the object, particularly
+in an environment with a large search space, because these
+methods make the robot cover all unexplored areas in the
+environment until it detects the target object. In our work,
+we use a semantic-guided global planner instead of geometric
+coverage when the robot does not detect the target object.
+We use relational semantic knowledge to guide the robot in
+searching promising regions in the environment.
+Semantic knowledge representation: Semantic knowledge
+equips robots with richer contextual information. Robots
+gather semantic information from their surroundings using
+techniques like object detection [42] and semantic segmen-
+tation [27]. This information can be represented in various
+forms, such as volumetric voxel maps [26], neural radiance
+fields (NeRF)[34], or 3D dynamic scene graphs (DSGs)[44]. In
+our work, we use a DSG to model the environment. The DSG’s
+structure aligns well with our hierarchical planning method,
+which utilizes multiple spatial abstraction layers within the
+DSG. The DSG can be constructed using floor plans because
+of the similarity in their structures. Moreover, the advance-
+ments in LLMs and vision-language models [15, 40] have led
+to the new paradigm of scene representations enriched with
+comprehensive semantic concepts and an extensive open-set
+object vocabulary [32, 46, 30]. Embedding human knowledge
+about semantic concepts and their interrelations enhances
+reasoning capabilities in planning. While open-vocabulary
+representations can augment our planning approach, we opt
+for a lightweight prediction model. This decision is driven by
+
+
+--- PDF PAGE 4 ---
+the need to deploy the model on robots with limited com-
+putational power and restricted internet access, especially in
+industrial inspection sites. In this work, we propose an object
+relationship representation that we call a Relational Semantic
+Network (RSN). The RSN distills knowledge from LLMs
+about the likelihood of encountering objects in various regions
+and refines its predictions based on the robot’s observations
+in the specific environment. Given the prior knowledge of the
+environment, the RSN is trained to predict objects relevant to
+environment-specific applications and can infer semantically
+related objects outside of the training data distilled from
+LLMs.
+Semantic-guided object-goal navigation is a prominent
+research area within embodied AI [3], where advancements
+are driven by the availability of realistic datasets [11, 61],
+simulators [49, 17], and competitive challenges [62]. Leading
+approaches train end-to-end reinforcement learning policies
+(RL) [37, 55] or combine RL with classical planning meth-
+ods [12, 41]. Recently, zero-shot approaches have gained
+popularity through the use of pre-trained language or vision-
+language models (VLMs), as gathering robotics navigation
+data is resource-intensive [36, 23]. While LLMs can be directly
+queried to make decisions [48, 60], their planning and rea-
+soning capabilities still raise uncertainties [53]. Recent state-
+of-the-art approaches use LLMs and VLMs with a frontier
+selection approach [14, 47, 64, 63]. Shah et al. employ LLMs
+as a guiding heuristic to bias exploration in the direction
+where the target object may be located [47]. Similarly, Chen
+et al. present frontier-based exploration with semantic utilities
+computed using language embeddings [14]. Yokoyama et al.
+query VLMs to generate a language-grounded value map by
+and choose the most promising frontier [63]. More related to
+our work, Zhou et al. reason over the semantic relationship
+between objects and rooms and formulate frontier selection
+with probabilistic soft logic [64]. Our work parallels these
+methods by incorporating common sense knowledge into
+the planning, but it is distinct in its approach by focusing
+on a room-based global planning policy, a slightly different
+problem setup that is particularly suited for urban inspection
+scenarios that have access to the spatial configuration of the
+environment.
+Statement of contribution: Our work makes three key
+contributions in the context of the current literature. Unlike
+state-of-the-art approaches that primarily rely on selecting the
+best semantic frontier for navigation [14, 47], our method
+introduces a probabilistic planning framework as an MDP,
+enabling a non-myopic strategy that plans actions over a longer
+horizon. This allows for consideration of future consequences
+and potential information gains, aiming to compute a globally
+optimal policy rather than just focusing on immediate short-
+term outcomes. Furthermore, we extend the use of semantic
+knowledge and the environment information mapped by the
+robot by introducing a new object-goal navigation problem
+setup, where the robot leverages the hierarchical structure of
+environments provided by floor plans. Our framework also
+aims to bridge the gap in applying semantic-based object-
+goal navigation in practical applications. To the best of our
+knowledge, our work is the first approach that leverages both
+prior spatial configurations from floor plans and relational
+semantic knowledge for probabilistic planning in real-world
+object-goal navigation. The practicality of this approach on
+inspection tasks is demonstrated on hardware, highlighting its
+relevance and applicability in real-world settings.
+III. OBJECT-GOAL NAVIGATION WITH RELATIONAL
+SEMANTIC KNOWLEDGE
+A. Problem Statement
+We first define the problem of object-goal navigation. Let
+xk ∈X, uk ∈U, and zk ∈Z denote the robot state, action,
+and observation at time step k, respectively. The process
+model xk+1 = f(xk, uk) encodes the system dynamics. The
+robot generates action uk according to a policy π. The robot
+observes and maps various objects in the environment as
+y = {y1, . . . , yNk} with yi ∈Y , where Nk represents the
+number of observed objects until time step k. Each object state
+yi := (yp
+i , yq
+i , yl
+i) captures the object’s position yp
+i , orientation
+yq
+i , and semantic class yl
+i ∈L of the object.
+In partially observable environments, the true state of y
+is unknown to the robot. If an object yi is visible from
+the current robot state xk, the robot can observe the object.
+The observation zk := (zp
+k, zq
+k, zl
+k, zs
+k) consists of the object’s
+measured position zp
+k and orientation zq
+k, detected class zl
+k,
+and detection confidence score zs
+k. The observation model
+zk = h(xk, yk) encodes the relationship between (xk, yk) and
+zk. The estimated state of the objects y and the robot state is
+represented as a belief bk := p(xk, y | Hk), where Hk denotes
+the history of past observations and actions. We use bk as the
+basis for decision uk = π(bk). The belief evolution model
+bk+1 = τ(bk, uk, zk+1) updates bk and can be computed
+recursively [51].
+Object-goal navigation: The robot’s objective is to search
+and navigate to a target object yG ∈Y for object inspection.
+The target object is described as the object semantic class yl.
+The robot successfully navigates to yG when the robot position
+xp
+k is close to the target object ∥xp
+k −yp
+G∥< ϵ and triggers
+a finish signal uf. The robot must efficiently search for the
+object by minimizing the distance traveled to the target object.
+Problem 1 (Object-Goal Navigation): Given a target object
+yG, initial robot state x0, find an optimal object search policy
+π∗:
+π∗= arg min
+π∈Π
+T −1
+X
+k=0
+∥xk+1 −xk∥
+(1)
+s.t. ∥xp
+T −yp
+G∥< ϵ, uT = uf,
+xk+1 = f(xk, π(bk)),
+zk ∼p(zk | xk, yk),
+bk+1 = τ(bk, π(bk), zk).
+B. Semantic Knowledge Representation
+We use two sources of prior semantic knowledge to guide
+the robot in locating the target object. The first source of
+
+
+--- PDF PAGE 5 ---
+Search and inspect a 
+“Fire Extinguisher”
+Embedding
+Encoder
+MLP
+Prior knowledge
+distribution
+Bayesian 
+network
+Posterior
+distribution
+GPT-4
+Offline training
+Inspection query
+Spatial configuration
+(Blueprint, 3D maps)
+Relational Semantic Network (RSN)
+Dynamic Scene Graph (DSG)
+MDP Solver
+Semantic-guided 
+Global Planner
+Distance Cost
+Transition Probabilities
+Action
+State
+Global search 
+controller
+Local Finite State
+Controller
+Robot 
+Controller
+State Estimation and 
+Semantic Observation
+Active semantic 
+search controller
+Object inspection 
+controller
+Blueprint 
+processing
+Building layer
+Room layer
+Location and 
+object layer
+Fig. 2: SEEK system architecture. Our method receives an inspection query and builds a Dynamic Scene Graph (DSG) from a
+given floor plan. The Relational Semantic Network (RSN) predicts the probability of finding the target object in every room.
+The semantic-guided global planner uses this prediction to compute an optimal global search policy. Finally, the local finite
+state controller executes the global policy and switches to an active semantic search controller when the robot sees the object.
+prior knowledge comes from the spatial configuration of the
+environment. This information can come from floor plans and
+Building Information Models (BIM) commonly available in
+industrial inspection tasks. The spatial configuration provides
+the names of regions or rooms in the environment that are
+semantically meaningful in locating the target object. The
+second source of prior knowledge is the semantic relation-
+ship between target objects and room names. The semantic
+relationship informs which rooms the target object is usually
+located in. We maintain spatial configuration in a Dynamic
+Scene Graph (DSG) and semantic knowledge relationship in
+a Relational Semantic Network (RSN).
+Dynamic Scene Graph (DSG) G = (V, E) is a hierarchical
+representation of the environment. The DSG nodes V can
+be partitioned into N layers with V = ∪N
+i=1Vi. Each node
+v ∈Vi at layer i can only share an edge with at most one
+parent node in the layer above Vi+1 and can only share edges
+with nodes in the same or adjacent layers Vi−1, Vi, Vi+1. The
+node v ∈V encodes the node position vp ∈R3, orientation
+vq ∈SO(3), and the semantic class vl ∈L. The edges on
+the same layers represent direct spatial connectivity between
+the nodes, and the edges between different layers represent
+how the nodes are spatially grouped together. In the urban
+environment, the hierarchy levels are named location/objects,
+rooms or regions, and buildings in ascending order. Prior to the
+robot deployment, the DSG nodes on the room-level V2 and
+above are initialized from the prior knowledge of the spatial
+configuration.
+Relational Semantic Network (RSN) F is a Bayesian
+network that estimates the probability of finding target objects
+in the environment P(yG) = F(yG, G). The network estimates
+the probability of finding yG in every room P(yG) ∈R|V2|.
+The RSN is initialized using relational semantic knowledge on
+the object occurrences in different semantic types of rooms.
+The probability P(yG) is updated as the robot discovers the
+target object in the environment across planning episodes
+P(yG)k+1 = P(yG | zk+1)k, where P(·)k represents object
+probability at time step k.
+C. Planning with Relational Semantic Knowledge
+We propose a probabilistic and hierarchical planning ap-
+proach for the object-goal navigation (Fig. 2). First, the global
+planner computes a policy πg for the robot to search for the
+target object across all rooms V2 using relational semantic
+knowledge encoded in an RSN. Then, the local planner
+generates a robot control policy π that moves the robot to
+a room vi = πg(xk) while searching for yG in a local area
+around the robot. This approach enables a more efficient global
+search by directing the robot to search more promising rooms
+informed by relational semantic knowledge.
+Global planner solves the problem of navigating through a
+set of rooms V2 with the objective of locating the target object
+yG. We formulate this problem as a Markov Decision Process
+(MDP). An MDP is defined by the tuple (X, U, P, C), which
+represents the state space, action space, transition probabilities,
+and cost function, respectively. The state X ∈X comprises
+the current room where the robot is within V2, and a goal
+state X G, where the robot finds yG. The action space U is
+the set of rooms V2 that the robot can go to Uvisit or search
+locally Usearch. The size of the action space is |U| = 2|V2|. The
+action space U consists of two types of actions: moving to a
+room Umove and searching within the current room Usearch. The
+size of the action space U is 2|V2|, comprising one action to
+move to every room and one search action within each room.
+The transition probabilities P consist transition probabilities
+between rooms P(Xk+1 = vj | Xk = vi, Uk) and transition
+probabilities to the goal state P(Xk+1 = X G | Xk = vi, Uk).
+The transition probabilities to the goal state are estimated by
+the RSN P(yG). The cost function C in our formulation is
+
+
+--- PDF PAGE 6 ---
+the expected traversal distance between rooms or the expected
+distance to search the room of the current robot location.
+Finally, to compute for an optimal policy for πg, we minimize
+the expected cost-to-go J(X) such that
+J(Xi) = min
+π∈Πg C(Xi, U) + J(Xj)
+(2)
+πg = arg min
+π∈Πg
+J(Xi),
+where Xi and Xj denote the current state and the next state,
+respectively.
+Local planner πl generates a robot control policy π based
+on the global policy πg and the current belief bk. It switches
+between three controllers to search for and navigate to the
+target object. The first controller ρnav generates a navigation
+policy to visit a new room or search the current room based on
+the action prescribed by πg. When the robot detects a possible
+sign of the target object using an object detector [42], the
+local planner switches to the active semantic search controller
+ρsearch. This controller is triggered when the robot belief bk of
+an object is within the belief set Bsearch. The controller actively
+gathers new observations to increase its confidence and drive
+bk to reduce the target object’s pose and semantic detection
+uncertainty. If the belief of target object bk has low uncertainty,
+bk ∈Binspect, the robot uses an inspection controller ρinspect
+to navigate the robot to the target object within a radius ϵ
+and trigger the finish signal uf. In summary, the local planner
+serves as a finite state controller to generate robot policy πk =
+πl(πg(xk), bk).
+IV. SEMANTIC-GUIDED OBJECT-GOAL NAVIGATION
+Having outlined our approach for solving object-goal nav-
+igation with relational semantic knowledge, we discuss how
+we build the DSG and RSN and compute the object-goal navi-
+gation policy. Our approach consists of an offline initialization
+of the DSG and RSN and an online object-goal planning.
+Before deploying the robot for the task, we generate the DSG
+from floor plans (subsection IV-A). We then train the RSN to
+predict object occurrences to guide the robot in searching for
+objects that can be found in the environment (subsection IV-B).
+During the deployment, when the robot receives a request to
+inspect a target object yG, the global planner computes the
+global policy that minimizes the expected travel distance to
+search for yG through the rooms or regions in the environment
+(subsection IV-C). Finally, the local finite state controller
+selects a control policy for the robot based on the estimated
+belief of the target object (subsection IV-D). As the robot
+observes the environment, it recomputes its global and local
+policy and saves the DSG and RSN for future deployments.
+Fig. 2 summarizes the architecture of SEEK.
+A. Dynamic Scene Graph (DSG) Generation
+We generate the DSG of the environment using the environ-
+ment’s floor plan. Floor plans provide geometric and semantic
+information about the room/region nodes V2. For the location
+nodes V1, we sample the nodes uniformly across all the open
+space based on the floor plan to ensure full room coverage.
+We compute the Euclidean distance between V1 and store the
+information on the edges.
+When the robot is being deployed in the environment, the
+robot updates the DSG. First, the robot self-localizes using its
+LIDAR-based map to the floor plan [43]. The robot navigates
+in the environment and updates the traversability risks [22]
+between the location nodes. The connectivity can change
+across deployments due to the evolving object configuration in
+the environment over time, which is not described in the floor
+plans. During the deployment and in our experiments, we do
+not consider changes in the connectivity between rooms and
+buildings. When the robot observes and localizes an object, a
+new object node is created on the first layer and connected to
+the nearest location node. The updated DSG is used for path
+planning and stored for future deployments.
+B. Relational Semantic Network (RSN)
+We present a compact semantic information representation
+for object-goal navigation. RSN is trained using common-
+sense knowledge to estimate the probability of the object’s
+presence in various room types. The RSN is specifically
+designed to extract semantic relationship knowledge from
+LLMs, as in industrial inspection scenarios, the robot typically
+lacks remote access to LLMs and has limited computational
+resources to host large models onboard. We present how we
+build, train, and update the RSN.
+The RSN consists of a sequence of three networks that re-
+ceive the target object semantic class yl
+G in text and output the
+probability of finding yG across rooms P(yG) = F(yG, G).
+The first network is a pre-trained text encoder that maps the
+target object class to a text embedding. A text embedding
+model or vision language embedding model that captures
+semantic similarity between objects can be used as the text
+encoder. We use a small BGE embedding model [59], a small-
+scale model with competitive performances in massive text
+embedding benchmark [38]. The text embedding is then passed
+through a multi-layer perceptron (MLP) that estimates the
+probability of finding the target object in every room type.
+The final network is a Bayesian network that estimates the
+probability of finding the target object P(yG) in every room
+V2 given the MLP estimates and past observations.
+The MLP has three hidden layers and outputs two types of
+information: the probability of finding an object on 27 different
+room types and the probability of finding an object without
+searching the room carefully Usearch. The room types consist of
+a common semantic class of rooms in indoor environments and
+are extracted from the Matterport3D dataset. The probability
+of finding an object without a local room search estimates how
+easy it is to find yG when entering a room for the first time.
+More prominent and highly visible objects, such as fridges and
+fire extinguishers, have a higher value compared to smaller
+objects that are possibly placed in cluttered spaces, such as
+coffee mugs or laptops.
+We train the MLP using 100 object names that are usually
+queried for object-goal navigation in home and urban build-
+ings. We train an MLP to enable RSN to predict semantic
+
+
+--- PDF PAGE 7 ---
+Bedroom
+Living 
+room
+Dining 
+room
+Family 
+room
+Bathroom
+Kitchen
+Bathroom
+Foyer
+TV 
+room
+Toilet
+0.3
+0.95
+0.9
+0.95
+0.4
+0.2
+0.2
+0.25
+0.25
+0.9
+Go to the nearest sink
+Fig. 3: A visualization of the global search policy. The RSN
+predicts the probability of finding a sink in every room. The
+policy computes the best action from each room to locate the
+nearest sink. The circular arrow represents the local search.
+relationships for semantically similar object names outside the
+training data. To generate the training data, we first query GPT-
+4 to get a list of the objects. Then, for the given object list,
+we again query GPT-4 to estimate the probability of finding
+the object in every room type and the probability of finding
+an object without a careful room search. We query the model
+for every five objects due to the current limits of the output
+token. Using the dataset created by GPT-4 and text embedding
+of the object name, we train the MLP. Using text embedding
+helps MLP to estimate the probability of objects outside of
+the training data because similar objects are located close to
+each other in the embedding space. We evaluate the prediction
+performance of the MLP outside of the training dataset with
+different text embedding models in Appendix C.
+The Bayesian network updates P(yG) when there are new
+environmental observations. Updating P(yG) moves the prob-
+ability closer to the true distribution of the object placements
+in the environment. While the MLP trained using internet
+data can help to initially estimate P(yG), updating P(yG)
+is crucial because the environment has variations in object
+placement. We use a naive Bayes model as we can assume
+conditional independence of the object observation on every
+room in the environment [33]. The root node of the model
+is the prior distribution of yG from the previous inference
+step. The evidence node of the model is a binary value of
+whether the robot sees the target object in every room after
+a local search. This conditional distribution is estimated from
+the MLP. We perform exact inference of P(yG) using the rule
+of conditional probability and marginalization.
+Extension to open vocabulary prediction: The RSN is
+designed to encode semantic relationships in a model that can
+be deployed on the robot with limited computational resources
+and no remote access to LLMs. The network is trained to
+predict P(yG) of objects that are expected to be queried
+for environment-specific applications and semantically similar
+objects from the training dataset. Given access to an LLM on
+the robot or remotely, the RSN can be adapted to an open
+vocabulary setting by replacing the text encoder and MLP
+network with a direct query to LLMs.
+C. Semantic-Guided Global Planner
+Given the DSG and the RSN, we have all the information
+to solve the semantic-guided global planning problem through
+the MDP formulation. The state space X and action space U
+are extracted from the set of room nodes V2 in the DSG. To
+specify the transition probabilities P, we first set the transition
+probabilities to reach the goal state P(Xk+1 = X G | Xk, Uk)
+by querying the RSN. The transition between rooms is de-
+terministic since the DSG G is a connected graph. Then we
+can set the transition probabilities to reach a new room after
+taking Umove action and staying in the same room after taking
+Usearch action as 1 −P(Xk+1 = X G | Xk, Uk). To specify the
+cost function C, we compute the shortest travel distance to
+visit rooms using A∗search [21] on the DSG and compute
+the total distance to visit location nodes in every room. Given
+that the room connectivity is assumed not to change during
+the run, the cost function C can be computed offline and
+stored as a look-up table for planning. The cost function can be
+recomputed during the run if we consider a robot deployment
+with changing room connectivity. The cost function can be
+recomputed between the global planning computation.
+We solve the MDP planning problem in Equation 2 in real-
+time on the robot. Given a relatively small state and action
+space of our problem (|S| < 100 and |U| < 200), we use
+value iteration to compute the optimal policy πG [33]. When
+querying a global action U from πg(xk), the robot chooses
+the action associated with the state of the closest room node
+from the robot pose. Fig. 3 illustrates an example of a global
+policy to navigate to a target object.
+We update πG in a receding horizon manner. After ex-
+ecuting a global action Ui, the robot will have an updated
+belief of the target object distribution given a new observation
+p(yG | zk+1). We update the transition probabilities P and
+solve for a new πG.
+D. Local Finite State Controller
+We use three different controllers that execute the global
+policy πg, search, and navigate to the object. We use the
+Semantic Belief Behavior Graph (SB2G) framework to im-
+plement and define the controller switching [25].
+Global search controller ρnav computes a robot policy
+according to the global policy πg(xk). If the global action
+is to move to a new room Umove, the controller computes
+the shortest path to the room on the graph and passes the
+path to a risk-aware MPC controller that computes a robot
+trajectory [22]. If the global action is to search the current
+room, the controller plans a coverage path that explores the
+obstacle-free area in the room [8] and passes the path to the
+MPC controller.
+Active semantic search controller ρsearch plans a path
+that maximizes the information gain of observing a potential
+target object. We follow the active semantic search algorithm
+presented in the SB2G [25].
+Object inspection controller ρinspect computes a policy to
+move the robot as close as possible to the detected target
+object. The controller chooses a target robot pose on an
+
+
+--- PDF PAGE 8 ---
+obstacle-free area closest to the target object. The target pose
+is then given to the MPC controller.
+V. EXPERIMENTAL RESULTS
+We evaluate the performance of our approach in repre-
+sentative simulation and on hardware. We first evaluate the
+performance of semantic-guided global planner against other
+methods in the Habitat simulator [45]. Then, we analyze the
+performance of SEEK in a representative office environment
+in the ROS Gazebo simulator. Finally, we deploy SEEK on a
+legged robot performing real-world inspection scenarios in an
+office building.
+A. Global Planner Evaluation
+We demonstrate the performance of our approach in the
+Habitat simulator using the Matterport3D dataset [11]. We are
+not training our RSN with any data from the dataset. The
+Matterport3D dataset provides a hierarchical scene configu-
+ration that we use to build the DSG. The robot is tasked to
+navigate to the closest object instance [3]. We sample five
+scenes and ten different objects from the Matterport3D dataset.
+The simulations were performed on a laptop with an Intel i9-
+11950H CPU.
+We evaluate SEEK against four approaches:
+1) Semantic Utility method selects a room that has
+the highest semantic utility. We adopt the idea of
+selecting frontier with semantic utility [14] to the
+room selection problem. The robot chooses an un-
+visited
+room
+with
+the
+highest
+utility
+Ui,sem
+=
+1/(distsem(yG, vi) · dist(xk, vi)). The semantic distance
+distsem(yG, vi) is the distance between the target object
+and the room name in the word embedding space. The
+intuition behind using semantic distance is that objects
+and room names that are more semantically related
+have closer distances in the embedding space, reflecting
+the likelihood that the object is commonly found in
+that room. We use BERT embedding, the best-reported
+model for semantic frontier method [14]. The geodetic
+distance dist(xk, vi) is the shortest path length from the
+current robot position to the centroid of the room.
+2) GPT-4 Planner provides the sequence of action for
+the robot based on the given context in the query. We
+provide the exact information as we give to our RSN
+and global planner in text, including the list of rooms,
+path lengths between rooms, robot state, action space,
+and inspection objective. We use the Chain-of-Thought
+prompting technique [57] to guide the robot to reason
+where to find the object. The prompt that we use is
+provided in Appendix A.
+3) Room Coverage selects the next room greedily based
+on the path distance between the current robot pose to
+unvisited rooms. This method serves as a baseline of an
+object search method without semantic guidance.
+4) Random policy chooses a sequence of rooms to be
+searched at random. The random baseline is used to
+evaluate the benefit of other approaches.
+TABLE I: Global planning results. We report the mean and
+standard deviation of the Success weighted by inverse path
+length (SPL). Results are separated into two categories: Fixed
+Objects and Movable Objects, to demonstrate the effectiveness
+of different methods on different types of objects.
+Methods
+SPL Mean (Std. Deviation)
+Fixed Objects
+Movable Objects
+SEEK (Ours)
+0.96 (0.12)
+0.84 (0.23)
+Semantic Utility
+0.74 (0.27)
+0.70 (0.27)
+GPT-4 Planner
+0.84 (0.26)
+0.81 (0.23)
+Room Coverage
+0.77 (0.25)
+0.65 (0.27)
+Random
+0.65 (0.35)
+0.68 (0.32)
+For every method, we run 50 simulations in the Matterport3D
+dataset. To assess the benefit of relational semantic knowledge,
+in this experiment, our method does not remember the target
+object location and any information from previous runs.
+We evaluate the performance of our approach with the SPL
+(Success weighted by Path Length) metric, a standard metric
+to measure object-goal navigation performance [3]. The SPL
+is defined as
+SPL =
+1
+Nrun
+Nrun
+X
+i=1
+Si
+l
+max(pi, l).
+(3)
+In this definition, Si ∈{0, 1} denotes whether the i-th run
+was successful (1) or not (0), li represents the length of the
+shortest possible path to the nearest instance of the target
+object, and pi indicates the length of the path actually taken
+by the agent during the i-th run. In our experiments, given
+the target object’s presence in the environment and unlimited
+simulation time, all methods are capable of locating the target
+object. This is because the action space of each method enables
+the robot to visit and search every room. Therefore, in these
+conditions, Si is always equal to 1.
+Table I presents the performance of various methods at
+locating fixed objects (e.g., bed, sink) and movable objects
+(e.g., clothes, towel). Our method outperforms other methods
+on both object categories. Our approach is significantly better
+at locating fixed objects, which can be attributed to their
+distinct association with specific room types. In contrast,
+searching for movable objects is relatively more challenging
+as they can be found in various rooms.
+We observed that the Semantic Utility method has lower
+efficiency than our method. The semantic utility cost on room
+selection places greater emphasis on geodetic distance rather
+than interclass distance. Adjusting the weight balance between
+these factors based on the size of the environment could
+potentially enhance performance, although such tuning may
+not always be desirable.
+GPT-4 Planner ranks second in simulation performance.
+It demonstrates competent reasoning in object search tasks.
+However, its limitations become apparent in probabilistic and
+spatial reasoning. GPT-4 Planner’s rule-based approach strug-
+gles with probabilistic reasoning, which is crucial in scenarios
+
+
+--- PDF PAGE 9 ---
+Semantic-guided global planner
+Active semantic search
+Object inspection
+SEEK
+SB2G
+Starting pose   . 
+Fire Ext.            
+5 m
+Geometric coverage
+Active semantic search
+Object inspection
+Reception
+Battery 
+room
+Kitchen
+Fig. 4: Robot paths comparison of object-goal navigation with
+SEEK and SB2G in the Gazebo simulator. Our global planner
+guides the robot to the kitchen, where a fire extinguisher is
+usually located.
+Fig. 5: The left plot compares how fast the robot searches and
+navigates to the target object from the same starting location
+using SEEK and SB2G. The shades on the line plot represent
+the standard deviation across three runs with the same starting
+locations. The right box plot reports the SPL metric across
+seven runs with different starting location.
+with uncertainties about the environment and object locations.
+For example, when the robot is tasked with finding clothes,
+the planner moves the robot to the nearest bathroom instead
+of prioritizing the bedroom and bathroom, which are slightly
+farther away but jointly have a higher probability of containing
+clothes. This indicates a lack of inherent understanding of
+spatial relationships in GPT-4 Planner’s reasoning.
+B. Simulation Study
+We evaluate SEEK on object-goal navigation tasks in a
+simulated environment of an office space. We use the ROS
+Gazebo simulator with the Spot model from Boston Dynamics.
+In this experiment, the robot is tasked to search and navigate to
+the nearest fire extinguisher on the first set of simulations and
+to the coffee mug on the second simulation. The environment
+consists of 21 rooms based on the office floor plan (Fig. 4). The
+placement of fire extinguishers and coffee mugs is based on the
+real placement in our office. We simulate the object detection
+and localization using a semantic observation model [2], with
+model parameters based on empirical data from our hardware
+experiments in the office. The RSN network is not trained in
+any of the object placement distributions. The entire software
+stack and simulations were performed on a laptop with an Intel
+i9 CPU.
+We first evaluate the performance of SEEK to find the
+nearest fire extinguisher across 7 runs with different starting
+locations. We compare our approach against the SB2G method
+Fig. 6: The improvement of the RSN prediction accuracy
+(left) and the SPL (right) as the robot observes different target
+objects across the runs. A lower Brier score indicates better
+prediction accuracy.
+that uses geometric coverage to explore the environment until
+it detects the target object. The SPL performance comparison
+and a sample of the robot path are presented in Fig. 5 and
+Fig. 4. Our approach reasons what type of rooms in the office
+that usually have a fire extinguisher. The semantic-guided
+global planner successfully directs the robot to the nearest
+room with a fire extinguisher. Compared to the SB2G method,
+SEEK significantly reduces the distance traveled by the robot
+to find the object. On multiple runs starting from the same
+location, the distance variation is much lower compared to
+SB2G, which uses geometric coverage that can stochastically
+produce different paths to maximize space coverage. On
+various starting locations, our method has a higher SPL than
+SB2G, validating the benefit of the semantic-guided global
+planner.
+We then demonstrate how SEEK’s planning policy improves
+over multiple runs to locate a coffee mug in the office. We
+perform 12 runs on three different starting locations. In Fig. 6,
+we present the SPL performance and the Brier score [5] of the
+predicted target object location by the RSN with the true object
+location in the environment. The object search performance
+improves over the runs as the robot observes different coffee
+mugs in the environment. The accuracy of the target object
+probability estimate is constantly increasing, highlighted by
+the decreasing Brier score over time. The RSN updates the
+target object probability using the observation on previous
+runs.
+We evaluate the performance of our approach when the
+target object is placed in unexpected locations. We present
+the results and discussion in Appendix B.
+C. Hardware Results
+We validate our approach by deploying SEEK on the Boston
+Dynamics Spot legged robot for an inspection task within an
+office building. The robot is equipped with a LIDAR and three
+cameras for navigation and semantic observation. The robot
+uses a LIDAR-based SLAM method for localization [43] and
+a YOLO-based model [42] for object detection. We build the
+DSG using the office floor plan and use the RSN without any
+fine-tuning to the office data. The object detection model runs
+on an NVIDIA Jetson AGX Xavier computer, and the rest of
+the stack runs on an Intel i7 computer on the robot. The robot
+
+
+--- PDF PAGE 10 ---
+Go to reception room
+Start
+Fire Ext. inspection
+Semantic-guided global planner
+Active semantic search
+Object inspection
+5 m
+Robot paths
+0.85
+0.85
+0.95
+0.8
+0.7
+0.8
+Starting pose     Fire Ext.  
+Global planning policy
+Go to a room
+Local room search
+Active semantic search
+Fig. 7: Experiment results on hardware. The left figure visualizes the global planning policy executed by the robot. We
+mark the rooms with a high probability of finding the target object based on the RSN prediction. The middle figure plots the
+path taken by the robot. The right figure shows a third-person view of the robot on different phases of the inspection.
+receives an object-goal inspection query through a remote user
+interface. In this experiment, the robot is tasked to locate and
+go to a fire extinguisher, a commonly inspected object, due to
+its critical role in safety and emergency response. There are
+three fire extinguishers located in the office, including in the
+kitchen area, battery charging room, and the office receptionist.
+Using SEEK, the robot efficiently searches and navigates to
+the nearest fire extinguisher (Fig. 7). The global policy directs
+the robot to search rooms/regions where fire extinguishers are
+usually located. In the experiment presented in
+Fig. 7, our
+approach is able to navigate to the closest fire extinguisher
+with SPL = 0.93. SEEK reduces the inspection time by
+directing the robot to search in rooms that have a higher
+probability of finding fire extinguishers. By distilling the
+semantic knowledge to the RSN, the robot does not need
+to access semantic knowledge directly from LLMs or large
+foundational models that require significant computational
+resources onboard or access to the internet. The RSN inference
+and the global planning can be performed in real-time, making
+our approach feasible for real-world object inspection.
+VI. CONCLUSION
+We have presented SEEK, a framework for object-goal
+navigation in real-world inspection tasks. SEEK uses prior spa-
+tial configuration of the environment and relational semantic
+knowledge to guide the robot to search target objects in the
+environment. Using relational semantic knowledge, we pre-
+sented a novel probabilistic planning algorithm for object-goal
+navigation. Through simulations and hardware experiments,
+we demonstrated the efficacy and practicality of our approach
+for real-world object inspection.
+For future work, we plan to use the knowledge of semantic
+relationships between objects to augment the RSN’s prediction
+capability. Images and detected objects in different parts of the
+environment can be encoded using vision-language models to
+provide richer contexts to the RSN. For industrial applications,
+the hierarchical information of objects contained in the BIM
+model can be used to train the semantic relationship [31].
+This extension could improve the local object search and
+support open-vocabulary object-goal navigation in real-world
+inspection tasks.
+ACKNOWLEDGMENTS
+We gratefully acknowledge Shayegan Omidshafiei for his
+invaluable discussions and insights, which greatly contributed
+to the refinement of this work.
+REFERENCES
+[1] Ali Agha, Kyohei Otsu, Benjamin Morrell, et al. NeBula:
+TEAM CoSTAR’s Robotic Autonomy Solution that Won
+Phase II of DARPA Subterranean Challenge.
+Field
+Robotics, 2:1432–1506, 2022.
+[2] Nikolay Atanasov, Menglong Zhu, Kostas Daniilidis, and
+George J. Pappas. Localization from semantic observa-
+tions via the matrix permanent. The International Journal
+of Robotics Research, 35(1-3):73–99, 2016.
+[3] Dhruv Batra, Aaron Gokaslan, Aniruddha Kembhavi,
+Oleksandr
+Maksymets,
+Roozbeh
+Mottaghi,
+Manolis
+Savva, Alexander Toshev, and Erik Wijmans. Objectnav
+revisited: On evaluation of embodied agents navigating
+to objects. arXiv preprint arXiv:2006.13171, 2020.
+[4] Andreas Bircher, Kostas Alexis, Michael Burri, Philipp
+Oettershagen, Sammy Omari, Tobias Mantel, and Roland
+Siegwart. Structural inspection path planning via iterative
+viewpoint resampling with application to aerial robotics.
+In IEEE International Conference on Robotics and Au-
+tomation (ICRA), 2015.
+[5] Gail Blattenberger and Frank Lad. Separating the brier
+score into calibration and refinement components: A
+graphical exposition. The American Statistician, 39(1):
+26–32, 1985.
+[6] Boston Dynamics. Autonomy Technical Summary - Spot
+3.3.2 documentation.
+https://dev.bostondynamics.com/
+docs/concepts/autonomy/graphnav tech summary, 2023.
+Accessed: 2024-02-02.
+[7] A. Bouman, M. Ginting, N. Alatur, M. Palieri, D. Fan,
+T. Touma, T. Pailevanian, S. Kim, K. Otsu, J. Burdick,
+and A. Agha-mohammadi. Autonomous Spot:long-range
+autonomous exploration of extreme environments with
+
+
+--- PDF PAGE 11 ---
+legged locomotion.
+In IEEE/RSJ International Con-
+ference on Intelligent Robots and Systems (IROS), Las
+Vegas, NV, 2020.
+[8] Amanda Bouman, Joshua Ott, Sung-Kyun Kim, Kenny
+Chen, Mykel J Kochenderfer, Brett Lopez, Ali-akbar
+Agha-mohammadi, and Joel Burdick.
+Adaptive cover-
+age path planning for efficient exploration of unknown
+environments. In IEEE/RSJ International Conference on
+Intelligent Robots and Systems (IROS), Kyoto, Japan,
+2022.
+[9] Tom B Brown, Benjamin Mann, Nick Ryder, Melanie
+Subbiah, Jared Kaplan, Prafulla Dhariwal, Arvind Nee-
+lakantan, Pranav Shyam, Girish Sastry, Amanda Askell,
+et al. Language models are few-shot learners. In Ad-
+vances in Neural Information Processing Systems, 2020.
+[10] Chao Cao, Hongbiao Zhu, Howie Choset, and Ji Zhang.
+Tare: A hierarchical framework for efficiently exploring
+complex 3d environments.
+In Robotics: Science and
+Systems, 2021.
+[11] Angel Chang, Angela Dai, Thomas Funkhouser, Maciej
+Halber, Matthias Niessner, Manolis Savva, Shuran Song,
+Andy Zeng, and Yinda Zhang. Matterport3d: Learning
+from rgb-d data in indoor environments. International
+Conference on 3D Vision (3DV), 2017.
+[12] Devendra Singh Chaplot, Dhiraj Prakashchand Gandhi,
+Abhinav Gupta, and Russ R Salakhutdinov.
+Object
+goal navigation using goal-oriented semantic exploration.
+Advances in Neural Information Processing Systems,
+2020.
+[13] Benjamin Charrow, Gregory Kahn, Sachin Patil, Sikang
+Liu, Ken Goldberg, Pieter Abbeel, Nathan Michael, and
+Vijay Kumar.
+Information-theoretic planning with tra-
+jectory optimization for dense 3d mapping. In Robotics:
+Science and Systems, 2015.
+[14] Junting Chen, Guohao Li, Suryansh Kumar, Bernard
+Ghanem, and Fisher Yu. How to not train your dragon:
+Training-free embodied object goal navigation with se-
+mantic frontiers. In Robotics: Science and Systems, 2023.
+[15] Xi Chen, Xiao Wang, Soravit Changpinyo, AJ Piergio-
+vanni, Padlewski, et al. Pali: A jointly-scaled multilingual
+language-image model. In International Conference on
+Learning Representations, 2022.
+[16] Tung Dang, Frank Mascarich, Shehryar Khattak, Huan
+Nguyen, Hai Nguyen, Satchel Hirsh, Russell Reinhart,
+Christos Papachristos, and Kostas Alexis. Autonomous
+search for underground mine rescue using aerial robots.
+In IEEE Aerospace Conference, 2020.
+[17] Matt Deitke, Winson Han, Alvaro Herrasti, Anirud-
+dha Kembhavi, Eric Kolve, Roozbeh Mottaghi, Jordi
+Salvador, Dustin Schwenk, Eli VanderBilt, Matthew
+Wallingford, et al.
+Robothor: An open simulation-to-
+real embodied ai platform. In IEEE Computer Society
+Conference on Computer Vision and Pattern Recognition
+(CVPR), 2020.
+[18] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and
+Kristina Toutanova.
+Bert: Pre-training of deep bidi-
+rectional transformers for language understanding.
+In
+Proceedings of NAACL-HLT, 2019.
+[19] M. Dharmadhikari and K. Alexis.
+Semantics-aware
+exploration and inspection path planning.
+In IEEE
+International Conference on Robotics and Automation
+(ICRA), London, United Kingdom, 2023.
+[20] Vishnu Sashank Dorbala, James F Mullen Jr, and Dinesh
+Manocha. Can an embodied agent find your “cat-shaped
+mug”? llm-based zero-shot object navigation.
+IEEE
+Robotics and Automation Letters, 2023.
+[21] Frantiˇsek Duchoˇn, Andrej Babinec, Martin Kajan, Peter
+Beˇno, Martin Florek, Tom´aˇs Fico, and Ladislav Juriˇsica.
+Path planning with modified a star algorithm for a mobile
+robot. Procedia Engineering, 96, 2014.
+[22] David D Fan, Kyohei Otsu, Yuki Kubo, Anushri Dixit,
+Joel Burdick, and Ali-Akbar Agha-Mohammadi. Step:
+Stochastic traversability evaluation and planning for risk-
+aware off-road navigation. Robotics: Science and Sys-
+tems, 2021.
+[23] Samir Yitzhak Gadre, Mitchell Wortsman, Gabriel Il-
+harco, Ludwig Schmidt, and Shuran Song.
+CoWs on
+Pasture: Baselines and Benchmarks for Language-Driven
+Zero-Shot Object Navigation. In IEEE Computer Society
+Conference on Computer Vision and Pattern Recognition
+(CVPR), 2023.
+[24] Christian Gehring, P´eter Fankhauser, Linus Isler, Remo
+Diethelm, Samuel Bachmann, Marcel Potz, Lars Gersten-
+berg, and Marco Hutter. Anymal in the field: Solving
+industrial inspection of an offshore hvdc platform with a
+quadrupedal robot. In Field and Service Robotics: Results
+of the 12th International Conference. Springer, 2021.
+[25] Muhammad Fadhil Ginting, David D. Fan, Sung-Kyun
+Kim, Mykel J. Kochenderfer, and Ali Agha.
+Seman-
+tic belief behavior graph: Enabling autonomous robot
+inspection in unknown environments.
+arXiv preprint
+arXiv:2401.17191, 2024.
+[26] Margarita
+Grinvald,
+Fadri
+Furrer,
+Tonci
+Novkovic,
+Jen Jen Chung, Cesar Cadena, Roland Siegwart, and
+Juan Nieto. Volumetric instance-aware semantic mapping
+and 3d object discovery. IEEE Robotics and Automation
+Letters, 4(3):3037–3044, 2019.
+[27] Kaiming He, Georgia Gkioxari, Piotr Doll´ar, and Ross
+Girshick.
+Mask R-CNN.
+In IEEE Computer Society
+Conference on Computer Vision and Pattern Recognition
+(CVPR), 2017.
+[28] Nicolas Hudson, Fletcher Talbot, Mark Cox, Jason
+Williams, Thomas Hines, Alex Pitt, Brett Wood, and
+et al. Heterogeneous ground and air platforms, homo-
+geneous sensing: Team CSIRO data61’s approach to the
+DARPA subterranean challenge.
+Field Robotics, 2(1):
+595–636, 2022.
+[29] Marco Hutter, Remo Diethelm, Samuel Bachmann, Peter
+Fankhauser, Gehring, et al. Towards a generic solution
+for inspection of industrial sites. In Field and Service
+Robotics, pages 575–589. Springer, 2018.
+[30] Krishna Murthy Jatavallabhula, Alihusein Kuwajerwala,
+
+
+--- PDF PAGE 12 ---
+Qiao Gu, Mohd Omama, Tao Chen, Shuang Li, Ganesh
+Iyer, Soroush Saryazdi, Nikhil Keetha, Ayush Tewari,
+et al. Conceptfusion: Open-set multimodal 3d mapping.
+Robotics: Science and Systems, 2023.
+[31] Navid Kayhani, Brenda McCabe, and Bharath Sankaran.
+Semantic-aware quality assessment of building elements
+using graph neural networks. Automation in Construc-
+tion, 155:105054, 2023.
+[32] Justin Kerr, Chung Min Kim, Ken Goldberg, Angjoo
+Kanazawa, and Matthew Tancik.
+Lerf: Language em-
+bedded radiance fields.
+In IEEE Computer Society
+Conference on Computer Vision and Pattern Recognition
+(CVPR), 2023.
+[33] Mykel J Kochenderfer, Tim A Wheeler, and Kyle H
+Wray. Algorithms for Decision Making. MIT Press, 2022.
+[34] Abhijit Kundu, Kyle Genova, Xiaoqi Yin, Alireza Fathi,
+Caroline Pantofaru, et al.
+Panoptic neural fields: A
+semantic object-aware neural scene representation.
+In
+IEEE Computer Society Conference on Computer Vision
+and Pattern Recognition (CVPR), 2022.
+[35] David Lattanzi and Gregory Miller. Review of robotic in-
+frastructure inspection systems. Journal of Infrastructure
+Systems, 23(3):04017004, 2017.
+[36] Arjun Majumdar, Gunjan Aggarwal, Bhavika Devnani,
+Judy Hoffman, and Dhruv Batra.
+ZSON: Zero-Shot
+Object-Goal Navigation using Multimodal Goal Em-
+beddings. Advances in Neural Information Processing
+Systems (NeurIPS), 2022.
+[37] Oleksandr
+Maksymets,
+Vincent
+Cartillier,
+Aaron
+Gokaslan, Erik Wijmans, Wojciech Galuba, Stefan Lee,
+and Dhruv Batra. Thda: Treasure hunt data augmentation
+for semantic navigation.
+In IEEE Computer Society
+Conference on Computer Vision and Pattern Recognition
+(CVPR), 2021.
+[38] Niklas Muennighoff, Nouamane Tazi, Loic Magne, and
+Nils Reimers. Mteb: Massive text embedding benchmark.
+In Conference of the European Chapter of the Associa-
+tion for Computational Linguistics, 2023.
+[39] Oriana Peltzer, Amanda Bouman, Sung-Kyun Kim,
+Ransalu Senanayake, Joshua Ott, Harrison Delecki,
+Mamoru Sobue, Mykel J Kochenderfer, Mac Schwager,
+Joel Burdick, and Ali Agha.
+Fig-op: Exploring large-
+scale unknown environments on a fixed time budget. In
+IEEE/RSJ International Conference on Intelligent Robots
+and Systems (IROS), 2022.
+[40] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya
+Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry,
+Amanda Askell, Pamela Mishkin, Jack Clark, et al.
+Learning transferable visual models from natural lan-
+guage supervision. In International Conference on Ma-
+chine Learning (ICML), 2021.
+[41] Santhosh Kumar Ramakrishnan, Devendra Singh Chap-
+lot, Ziad Al-Halah, Jitendra Malik, and Kristen Grauman.
+Poni: Potential functions for objectgoal navigation with
+interaction-free learning.
+In IEEE Computer Society
+Conference on Computer Vision and Pattern Recognition
+(CVPR), 2022.
+[42] Joseph Redmon, Santosh Divvala, Ross Girshick, and Ali
+Farhadi. You only look once: Unified, real-time object
+detection.
+In IEEE Computer Society Conference on
+Computer Vision and Pattern Recognition (CVPR), 2016.
+[43] Andrzej Reinke, Matteo Palieri, Benjamin Morrell, Yun
+Chang, Kamak Ebadi, Luca Carlone, and Ali-Akbar
+Agha-Mohammadi. Locus 2.0: Robust and computation-
+ally efficient lidar odometry for real-time 3d mapping.
+IEEE Robotics and Automation Letters, 7(4):9043–9050,
+2022.
+[44] Antoni Rosinol, Andrew Violette, Marcus Abate, Nathan
+Hughes, Yun Chang, Jingnan Shi, Arjun Gupta, and Luca
+Carlone. Kimera: From SLAM to spatial perception with
+3d dynamic scene graphs. The International Journal of
+Robotics Research, 40(12-14):1510–1546, 2021.
+[45] Manolis Savva, Abhishek Kadian, Oleksandr Maksymets,
+Yili Zhao, Erik Wijmans, Bhavana Jain, Julian Straub,
+Jia Liu, Vladlen Koltun, Jitendra Malik, et al. Habitat:
+A platform for embodied ai research. In IEEE Computer
+Society Conference on Computer Vision and Pattern
+Recognition (CVPR), 2019.
+[46] Nur Muhammad Mahi Shafiullah, Chris Paxton, Lerrel
+Pinto, Soumith Chintala, and Arthur Szlam. Clip-fields:
+Weakly supervised semantic fields for robotic memory.
+In ICRA Workshop on Pretraining for Robotics (PT4R),
+2023.
+[47] Dhruv Shah, Michael Robert Equi, Bła˙zej Osi´nski, Fei
+Xia, Brian Ichter, and Sergey Levine. Navigation with
+large language models: Semantic guesswork as a heuris-
+tic for planning.
+In Conference on Robot Learning
+(CoRL), 2023.
+[48] Ishika Singh, Valts Blukis, Arsalan Mousavian, Ankit
+Goyal, Danfei Xu, Jonathan Tremblay, Dieter Fox, Jesse
+Thomason, and Animesh Garg. Progprompt: Generating
+situated robot task plans using large language models.
+In IEEE International Conference on Robotics and Au-
+tomation (ICRA), 2023.
+[49] Andrew Szot, Alex Clegg, Eric Undersander, et al.
+Habitat 2.0: Training home assistants to rearrange their
+habitat. In Advances in Neural Information Processing
+Systems (NeurIPS), 2021.
+[50] Yi Tan, Silin Li, Hailong Liu, Penglu Chen, and Zhixiang
+Zhou. Automatic inspection data collection of building
+surface based on BIM and UAV. Automation in Con-
+struction, 131:103881, 2021.
+[51] S. Thrun, W. Burgard, and D. Fox.
+Probabilistic
+Robotics. MIT Press, 2005.
+[52] M. Tranzatto, T. Miki, M. Dharmadhikari, L. Bernreiter,
+M. Kulkarni, F. Mascarich, O. Andersson, S. Khattak,
+M. Hutter, R. Siegwart, and K. Alexis. Cerberus in the
+darpa subterranean challenge. Science Robotics, 2022.
+[53] Karthik Valmeekam, Alberto Olmo, Sarath Sreedharan,
+and Subbarao Kambhampati.
+Large language models
+still can’t plan (a benchmark for llms on planning and
+reasoning about change). In NeurIPS Foundation Models
+
+
+--- PDF PAGE 13 ---
+for Decision Making Workshop, 2022.
+[54] Rebekka Volk, Julian Stengel, and Frank Schultmann.
+Building information modeling (bim) for existing build-
+ings—literature review and future needs. Automation in
+construction, 2014.
+[55] Ayzaan Wahid, Austin Stone, Kevin Chen, Brian Ichter,
+and Alexander Toshev. Learning object-conditioned ex-
+ploration using distributed soft actor critic. In Conference
+on Robot Learning. PMLR, 2021.
+[56] John Wang and Edwin Olson.
+Apriltag 2: Efficient
+and robust fiducial detection. In IEEE/RSJ International
+Conference on Intelligent Robots and Systems (IROS),
+2016.
+[57] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten
+Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou,
+et al.
+Chain-of-thought prompting elicits reasoning in
+large language models. Advances in Neural Information
+Processing Systems, 35, 2022.
+[58] Jimmy Wu, Rika Antonova, Adam Kan, Marion Lep-
+ert, Andy Zeng, Shuran Song, Jeannette Bohg, Szymon
+Rusinkiewicz, and Thomas Funkhouser.
+Tidybot: per-
+sonalized robot assistance with large language models.
+Autonomous Robots, 47(8):1087–1102, 2023.
+[59] Shitao Xiao, Zheng Liu, Peitian Zhang, and Niklas
+Muennighof.
+C-pack: Packaged resources to ad-
+vance general chinese embedding.
+arXiv preprint
+arXiv:2309.07597, 2023.
+[60] Yaqi Xie, Chen Yu, Tongyao Zhu, Jinbin Bai, Ze Gong,
+and Harold Soh. Translating natural language to plan-
+ning goals with large-language models. arXiv preprint
+arXiv:2302.05128, 2023.
+[61] Karmesh Yadav, Ram Ramrakhya, Santhosh Kumar Ra-
+makrishnan, Theo Gervet, John Turner, Aaron Gokaslan,
+Noah Maestre, Angel Xuan Chang, Dhruv Batra, Manolis
+Savva, et al. Habitat-matterport 3d semantics dataset. In
+IEEE Computer Society Conference on Computer Vision
+and Pattern Recognition (CVPR), 2023.
+[62] Karmesh Yadav et al.
+Habitat challenge 2023.
+https:
+//aihabitat.org/challenge/2023/, 2023.
+[63] Naoki Yokoyama, Sehoon Ha, Dhruv Batra, Jiuguang
+Wang, and Bernadette Bucher.
+Vlfm: Vision-language
+frontier maps for zero-shot semantic navigation. In IEEE
+International Conference on Robotics and Automation
+(ICRA), 2024.
+[64] Kaiwen Zhou, Kaizhi Zheng, Connor Pryor, Yilin Shen,
+Hongxia Jin, Lise Getoor, and Xin Eric Wang.
+Esc:
+Exploration with soft commonsense constraints for zero-
+shot object navigation. In International Conference on
+Machine Learning (ICML), 2023.
+
+
+--- PDF PAGE 14 ---
+APPENDIX
+A. GPT-4 PLANNER PROMPT
+The prompt template used in the simulation experiment.
+Context
+We want to guide a robot to search and inspect a target
+object in a house. We have some prior information from
+the floor plan of the list of room names and the centroid
+position of the room. We also have a distance matrix of
+the robot path length to move between the rooms. We also
+have the history of action, what room the robot has visited
+or searched carefully, and the history of the observation,
+what the robot sees after searching carefully. The action
+that we can give to the robot is:
+1) Go to a room
+2) Search a room locally
+If the robot sees the target object, the robot can au-
+tonomously navigate to and inspect the target object.
+Can you guide the robot to search and navigate to the
+target object efficiently by giving a robot a policy?
+Input
+Following is the information that we have
+1) Target object:
+2) List of rooms: Region id:x, category:x, center:[x y
+z ]
+3) Distance matrix following the id of the room
+4) Current robot location:
+5) Past action:
+6) Past observation:
+Output
+Please explain your reason to guide the robot that way
+and finally provide the sequence action for the robot until
+it finds the target object
+B. PLANNING EVALUATION FOR TARGET OBJECTS
+LOCATED IN UNEXPECTED LOCATIONS
+We evaluate the performance of SEEK when the target ob-
+ject is located in unexpected locations. In this simulation, the
+robot is tasked to find a coffee mug in an office environment
+(Fig. 8). To make the object search more challenging, only
+one coffee is mug placed in the environment. We evaluate the
+runs on 18 different placements with three different starting
+locations. The placement of the coffee mug varies from the
+most expected location (e.g., kitchen) to the least expected
+location (e.g., PPE storage room). We also simulate the Room
+Coverage method as a benchmark for object search without
+semantic prior knowledge. The office map in Fig. 8 summa-
+rizes the predicted probability P(yG) of the object’s presence
+in every room.
+The left plot in Fig. 8 summarizes the SPL performance
+on different object placements and compares the performance
+against the Room Coverage. Finding the coffee mug in this
+environment is more challenging than searching static objects
+closely related to a specific room type, such as searching for
+a fire extinguisher presented in Fig. 5. When the object is
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+21
+20
+0.05 - 0.1
+0.3 - 0.5
+0.75 – 0.9
+𝑃(𝑦𝐺)
+Fig. 8: The left plot shows the decrease of the SPL per-
+formance as the target object, a coffee mug, is placed in
+unexpected rooms. The performance is compared with the
+Room Coverage method, and the shades represent the standard
+deviation. The right map represents the office map labeled with
+the room number and the predicted probability of finding a
+coffee mug in every room.
+Action sequence: 20 (S) → 21 → 3 → 12 → 19 → 19 (S) → 4 → 15 → 4 → 10 
+→ 9 → 8 → 1 → 6 → 5 → 6 → 2 → 3 → 11 → 20 → 16 → 17 → 4 → 14 → 13 
+Fig. 9: The action sequence summarizes the computed global
+plan on every planning step. The number represents the room
+number, shown in Fig. 8, that the robot moves to on every time
+step. The number with “(S)” represents searching the current
+room. The bar plot shows changes in the probability estimate
+of the target object as the robot moves through different rooms.
+The star on the bar plot marks the true object location.
+placed in a room with a predicted probability of less than 0.5,
+we observe a decrease in the SPL performance. This behavior
+is expected as our approach prioritizes searching rooms with
+higher probabilities. Compared to the Room Coverage, we
+observe that the average SPL of SEEK is less than the Room
+Coverage for object placement in a room with a probability
+less than 0.5. The SPL of the Room Coverage averages
+around 0.25 and has a larger variance than our approach.
+This result indicates that when the RSN does not have a good
+semantic prior of the object presence in an environment, due to
+the unexpected object placements or wrong prior knowledge,
+performing Room Coverage can be more efficient at first until
+the RSN improves the prediction with object observation in
+the environment.
+
+
+--- PDF PAGE 15 ---
+We visualize one example when the object is placed in
+the least expected location in the PPE storage room (Room
+number 13). Initially, our model predicts the probability of
+finding a coffee mug in the room is 0.05. Fig. 9 shows the
+sequence of the robot’s global action and changes in the
+probability estimate of finding the object. At the beginning
+of the run, the robot moves to nearby rooms with higher
+probability. After searching rooms where a coffee mug is
+usually located, it visits less common rooms and finds the
+coffee mug after 25 global planning steps. After finding the
+target object, the updated probability of finding it in the PPE
+storage is much higher than in other rooms.
+C. TEXT EMBEDDING COMPARISON FOR RELATIONAL
+SEMANTIC NETWORK (RSN)
+We compare the performance of the RSN using different
+embedding models. The text embedding of the object name
+is used as the input feature of the MLP that estimates the
+probability of finding the object. We evaluate the impact of
+using different embedding by evaluating the RSN prediction
+on a test dataset. Similar to generating the training dataset,
+we query GPT-4 for 40 additional object names outside the
+training dataset. We compare four different embedding models:
+a small and base version of the BGE text embedding [59], a
+text encoder of the CLIP vision-language model [40], and the
+base BERT model [18].
+Table II summarizes the RSN’s prediction performance
+and the model’s size. We observe a similar prediction error
+between bge-small embedding and CLIP text embedding.
+The bge-base and bert-base-uncased with a larger number
+of model parameters perform better than smaller models.
+Qualitatively, we observe that all the models we evaluate can
+differentiate the room types that are more related to the target
+object from the other rooms.
+TABLE II: Comparison of the prediction performance of the
+RSN using different text embedding. The prediction error is
+the mean squared error on the test dataset.
+Model Name
+Number of Parameters
+Prediction Error
+bge-small [59]
+33 M
+0.051
+CLIP (Text encoder) [40]
+65 M
+0.052
+bge-base [59]
+109 M
+0.045
+bert-base-uncased [18]
+110 M
+0.043

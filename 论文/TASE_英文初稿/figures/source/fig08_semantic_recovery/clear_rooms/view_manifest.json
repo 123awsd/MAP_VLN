@@ -1,0 +1,115 @@
+{
+  "scene": "00337-CFVBbU9Rsyb",
+  "source": "Original HM3D geometry and RGB textures, decoded with Magnum; CPU Blender Cycles rendering. No generated geometry or texture retouching.",
+  "poses": "Authored for a mechanism illustration; not recorded agent observations.",
+  "views": [
+    {
+      "name": "start",
+      "position_falcon": [
+        -3.529987223229263,
+        2.0403133483736315,
+        3.9
+      ],
+      "look_at_falcon": [
+        -2.98275306329775,
+        1.2469145528261514,
+        3.35
+      ],
+      "resolution": [
+        1600,
+        1000
+      ],
+      "hfov_degrees": 74
+    },
+    {
+      "name": "kitchen",
+      "position_falcon": [
+        -0.08265285816474588,
+        1.5480250218296892,
+        3.9
+      ],
+      "look_at_falcon": [
+        -1.067545370274292,
+        0.5630272233795885,
+        3.35
+      ],
+      "resolution": [
+        1600,
+        1000
+      ],
+      "hfov_degrees": 74
+    },
+    {
+      "name": "chair_first",
+      "position_falcon": [
+        0.30036455232023584,
+        1.862680752110295,
+        3.9
+      ],
+      "look_at_falcon": [
+        0.23203138716642613,
+        0.6314956522348041,
+        3.15
+      ],
+      "resolution": [
+        1600,
+        1000
+      ],
+      "hfov_degrees": 74
+    },
+    {
+      "name": "chair_retry",
+      "position_falcon": [
+        1.2579610872805373,
+        1.6575350256203247,
+        3.9
+      ],
+      "look_at_falcon": [
+        0.23203504294214028,
+        0.5630966831181503,
+        3.15
+      ],
+      "resolution": [
+        1600,
+        1000
+      ],
+      "hfov_degrees": 74
+    },
+    {
+      "name": "sofa",
+      "position_falcon": [
+        2.352333625819865,
+        1.8627904253817054,
+        3.9
+      ],
+      "look_at_falcon": [
+        1.9420385170642085,
+        0.015996324577756127,
+        3.35
+      ],
+      "resolution": [
+        1600,
+        1000
+      ],
+      "hfov_degrees": 74
+    },
+    {
+      "name": "lamp",
+      "position_falcon": [
+        -2.915004822258128,
+        13.421934711366337,
+        3.9
+      ],
+      "look_at_falcon": [
+        -3.0518904991085645,
+        15.063502658614613,
+        3.35
+      ],
+      "resolution": [
+        1600,
+        1000
+      ],
+      "hfov_degrees": 74
+    }
+  ]
+}

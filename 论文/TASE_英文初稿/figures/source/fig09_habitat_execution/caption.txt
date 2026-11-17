@@ -1,0 +1,1 @@
+Simulation visualizations. Each row shows a navigation episode, with the language instruction above representative first-person UAV keyframes along the trajectory.

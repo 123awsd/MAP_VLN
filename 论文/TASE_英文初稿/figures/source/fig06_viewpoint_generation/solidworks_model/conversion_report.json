@@ -1,0 +1,19 @@
+{
+  "vertices": 3888,
+  "triangles": 7800,
+  "dimensions_mm": [
+    234.4631199650848,
+    162.0920827837274,
+    113.43742763114894
+  ],
+  "open_edges": 0,
+  "closed": true,
+  "volume_mm3": 52803.193097338226,
+  "complete": false,
+  "source": "/home/uav/桌面/装配体1.SLDASM",
+  "cached_components_placed": 3,
+  "components_without_cached_mesh": 102,
+  "references": 163,
+  "converter": "https://github.com/XRTC5/sldprt-export",
+  "warning": "Partial cached geometry; missing referenced part files. Do not use as the complete aircraft."
+}

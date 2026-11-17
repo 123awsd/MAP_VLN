@@ -1,0 +1,89 @@
+from pathlib import Path
+from PIL import Image,ImageDraw,ImageFont,ImageOps
+import base64,html,io
+r=Path(__file__).resolve().parent;o=r/'logicfly_third_person_figure';o.mkdir(exist_ok=True)
+W,H=3200,1980;im=Image.new('RGB',(W,H),'white');d=ImageDraw.Draw(im)
+svg=[f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="{W}" height="{H}"><rect width="100%" height="100%" fill="white"/>']
+font='/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf'
+def text(x,y,s,size=26,color='#101010'):
+ bold=s.startswith('Subgoal') or s=='Semantic recovery' or s.startswith('One instruction')
+ face=font.replace('-Regular.ttf','-Bold.ttf') if bold else font
+ d.text((x,y),s,font=ImageFont.truetype(face,size),fill=color);svg.append(f'<text x="{x}" y="{y+size}" font-family="Liberation Serif,Times New Roman,serif" font-size="{size}" font-weight="{"bold" if bold else "normal"}" fill="{color}">{html.escape(s)}</text>')
+def pic(p,x,y,w,h,crop=False):
+ a=Image.open(p).convert('RGB')
+ if not crop:
+  import numpy as np
+  px=np.asarray(a).copy();mask=np.min(px,axis=2)<245
+  px[mask]=np.clip((px[mask].astype(float)-255)*1.45+255,0,255).astype('uint8')
+  a=Image.fromarray(px)
+  from PIL import ImageChops
+  box=ImageChops.difference(a,Image.new('RGB',a.size,'white')).getbbox()
+  if box:a=a.crop(box)
+ if crop:a=ImageOps.fit(a,(w,h),Image.Resampling.LANCZOS)
+ else:
+  a.thumbnail((w,h),Image.Resampling.LANCZOS);x+=(w-a.width)//2;y+=(h-a.height)//2
+ im.paste(a,(x,y));b=io.BytesIO();a.save(b,format='PNG');enc=base64.b64encode(b.getvalue()).decode();svg.append(f'<image x="{x}" y="{y}" width="{a.width}" height="{a.height}" xlink:href="data:image/png;base64,{enc}"/>')
+rows=[('01_laptop','FPV 00:23–00:49',['Check the laptop','on the lounge table.','If absent, find it.'],[24,35,37,44,46]),('02_toolbox','FPV 00:49–00:54',['Verify the toolbox','on the top shelf','in the storage room.'],[46,49,51,52,54]),('03_microwave','FPV 01:00–01:27',['Check whether the','corn in the tea-room','microwave has','finished heating.'],[54,60,74,82,84]),('04_cup','FPV 01:27–01:42',['Check for the cup','under the pool table','in the recreation room.'],[84,93,98,100,102])]
+# A larger platform inset and a conversational instruction block.
+pic(r/'hardware_assets/fig1_logicfly_crop.png',25,40,570,340,False)
+# Black dashed instruction frame with generous gaps and inner padding.
+x0,y0,x1,y1=815,7,3190,423
+# Draw continuous rounded perimeter dashes, including at the four corners.
+import math
+radius=24;dash,gap=34,28;stroke=7
+perimeter=[]
+def straight(a,b):
+ steps=max(1,int(math.dist(a,b)))
+ for t in range(steps):
+  u=t/steps;perimeter.append((a[0]+u*(b[0]-a[0]),a[1]+u*(b[1]-a[1])))
+def arc(cx,cy,a,b):
+ steps=max(1,int(radius*(b-a)))
+ for t in range(steps):
+  angle=a+(b-a)*t/steps;perimeter.append((cx+radius*math.cos(angle),cy+radius*math.sin(angle)))
+straight((x0+radius,y0),(x1-radius,y0));arc(x1-radius,y0+radius,-math.pi/2,0)
+straight((x1,y0+radius),(x1,y1-radius));arc(x1-radius,y1-radius,0,math.pi/2)
+straight((x1-radius,y1),(x0+radius,y1));arc(x0+radius,y1-radius,math.pi/2,math.pi)
+straight((x0,y1-radius),(x0,y0+radius));arc(x0+radius,y0+radius,math.pi,math.pi*1.5)
+for start in range(0,len(perimeter),dash+gap):d.line(perimeter[start:start+dash+1],fill='#000000',width=stroke,joint='curve')
+svg.append(f'<rect x="{x0}" y="{y0}" width="{x1-x0}" height="{y1-y0}" rx="{radius}" ry="{radius}" fill="none" stroke="#000000" stroke-width="{stroke}" stroke-dasharray="{dash} {gap}"/>')
+instruction="I'm heading out soon. Please take care of a few things before I leave. See whether my cup is under the pool table in the recreation room. See if the laptop is on the lounge table. If it's not there, please help me find it. Verify that the toolbox is on the top shelf in the storage room. Determine whether the coron in the tea room microwave has finished heating."
+pic(r/'hardware_assets/user_fig1.png',650,122,150,180,False)
+text(694,318,'User',26,'#333333')
+# Preserve the user's instruction verbatim; wrap only for typography.
+text(850,29,"I'm heading out soon. Please take care of a few things before I leave.",56,'#171717')
+items=[
+ 'See whether my cup is under the pool table in the recreation room.',
+ "See if the laptop is on the lounge table. If it's not there, please help me find it.",
+ 'Verify that the toolbox is on the top shelf in the storage room.',
+ 'Determine whether the coron in the tea room microwave has finished heating.'
+]
+available=3170-891
+bullet_size=next(size for size in range(70,38,-1) if max(d.textlength(v,font=ImageFont.truetype(font,size)) for v in items)<=available)
+for j,item in enumerate(items):
+ yy=117+j*73
+ d.ellipse((860,yy+26,872,yy+38),fill='#171717')
+ svg.append(f'<circle cx="866" cy="{yy+32}" r="6" fill="#171717"/>')
+ import re
+ xx=891
+ for token in re.split(r'(\bcup\b|\blaptop\b|\btoolbox\b|\bcoron\b)',item):
+  if not token:continue
+  is_object=token in {'cup','laptop','toolbox','coron'}
+  face=font.replace('-Regular.ttf','-Bold.ttf') if is_object else font
+  ff=ImageFont.truetype(face,bullet_size)
+  d.text((xx,yy),token,font=ff,fill='#171717')
+  svg.append(f'<text x="{xx}" y="{yy+bullet_size}" font-family="Liberation Serif,Times New Roman,serif" font-size="{bullet_size}" font-weight="{"bold" if is_object else "normal"}" fill="#171717">{html.escape(token)}</text>')
+  xx+=d.textlength(token,font=ff)
+stage_labels=[['Laptop','search & recovery'],['Toolbox','verification'],['Microwave','inspection'],['Cup','verification']]
+for i,(n,ran,lines,times) in enumerate(rows):
+ y=450+i*375
+ pic(r/'stage_corrected_views'/f'{n}_selected.png',10,y,570,305)
+ caption='Subgoal '+chr(65+i)+': '+stage_labels[i][0]
+ width=d.textlength(caption,font=ImageFont.truetype(font.replace('-Regular.ttf','-Bold.ttf'),32))
+ text(295-width/2,y+317,caption,32,'#101010')
+ third_times={'01_laptop':[19,31,37,47,53],'02_toolbox':[53,59,63,66,69],'03_microwave':[69,87,103,127,129],'04_cup':[129,139,149,159,163]}[n]
+ for k,t in enumerate(third_times):
+  x=610+k*515
+  pic(r/'third_person_assets'/f'rgb_{t:03d}.jpg',x,y,507,330,True)
+  if i==0 and k>=3:text(x+110,y+339,'Semantic recovery',25,'#00594e')
+text(25,1953,'Pink: recorded EKF camera path   |   Blue: observation frusta (uniform display size)   |   Green: start   |   Yellow: end   |   Mapping RGB-D + LiDAR-supported flight VGGT depth; EKF path; approximate alignment',20,'#333333')
+svg.append('</svg>');im.save(o/'main_figure.png',dpi=(300,300));im.save(o/'main_figure.pdf',resolution=300);(o/'main_figure.svg').write_text('\n'.join(svg));im.resize((1600,990),Image.Resampling.LANCZOS).save(o/'preview.jpg',quality=95)

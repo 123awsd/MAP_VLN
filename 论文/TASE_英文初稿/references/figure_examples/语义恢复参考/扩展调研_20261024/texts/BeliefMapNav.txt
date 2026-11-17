@@ -1,0 +1,1273 @@
+
+--- PDF PAGE 1 ---
+arXiv:2506.06487v1  [cs.RO]  27 May 2025
+BeliefMapNav: 3D Voxel-Based Belief Map for
+Zero-Shot Object Navigation
+Zibo Zhou
+Shanghai Jiao Tong University
+zb_zhou@sjtu.edu.cn
+Yue Hu
+University of Michigan
+huyu@umich.edu
+Lingkai Zhang
+Shanghai Jiao Tong University
+zhanglingkai@sjtu.edu.cn
+Zonglin Li
+Shanghai Jiao Tong University
+channeler_xfya@sjtu.edu.cn
+Siheng Chen
+Shanghai Jiao Tong University
+sihengc@sjtu.edu.cn
+Abstract
+Zero-shot object navigation (ZSON) allows robots to find target objects in unfamil-
+iar environments using natural language instructions, without relying on pre-built
+maps or task-specific training. Recent general-purpose models, such as large lan-
+guage models (LLMs) and vision-language models (VLMs), equip agents with
+semantic reasoning abilities to estimate target object locations in a zero-shot man-
+ner. However, these models often greedily select the next goal without maintaining
+a global understanding of the environment and are fundamentally limited in the
+spatial reasoning necessary for effective navigation. To overcome these limitations,
+we propose a novel 3D voxel-based belief map that estimates the target’s prior
+presence distribution within a voxelized 3D space. This approach enables agents
+to integrate semantic priors from LLMs and visual embeddings with hierarchical
+spatial structure, alongside real-time observations, to build a comprehensive 3D
+global posterior belief of the target’s location. Building on this 3D voxel map, we
+introduce BeliefMapNav, an efficient navigation system with two key advantages:
+i) grounding LLM semantic reasoning within the 3D hierarchical semantics voxel
+space for precise target position estimation, and ii) integrating sequential path
+planning to enable efficient global navigation decisions. Experiments on HM3D,
+MP3D, and HSSD benchmarks show that BeliefMapNav achieves state-of-the-art
+(SOTA) Success Rate (SR) and Success weighted by Path Length (SPL), with a
+notable 46.4% SPL improvement over the previous best SR method, validating its
+effectiveness and efficiency. The code is available on BeliefMapNav.
+1
+Introduction
+Zero-shot object navigation(ZSON) enables robots to locate targets in novel environments through
+natural language instructions (e.g., "find the red sofa"), eliminating reliance on pre-mapped scenes or
+object-specific training [1, 2, 3, 4, 5]. In domestic settings, ZSON supports assistive tasks such as
+retrieving user-specified objects [6]. In industrial inspection, ZSON enables autonomous localization
+of malfunctioning components (e.g., detecting a leaking pipe) within complex facilities. In warehouse
+operations, ZSON enhances robotic picking and inventory management by allowing flexible retrieval
+of objects without pre-built maps. These real-world applications highlight the necessity of robust
+zero-shot navigation for scalable, adaptable robot deployment across diverse domains.
+To enable ZSON, prior works have progressed along two main directions. The first constructs
+bird’s-eye view (BEV) value maps [7, 8, 9], by leveraging pixel-level semantic cues, these methods
+provide dense estimations of target locations in the BEV space. While dense BEV representations
+Preprint. Under review.
+
+
+--- PDF PAGE 2 ---
+Figure 1: The search process: BeliefMapNav plans frontier paths by minimizing the expected search
+distance based on the 3D voxel-based belief map, ensuring efficient and stable exploration.
+provide object position estimation at a fine-grained level, the actual numerical distinctions between
+positions remain ambiguous with limited discriminative semantics. This insufficient differentiation
+in positional values, combined with the lack of high-level semantic reasoning, ultimately leads to
+compromised accuracy in the target location prediction. More recently, a second approach has
+emerged that employs large language models (LLMs) or vision-language models (VLMs) to reason
+about the target locations [10, 11, 12, 13, 14]. However, both LLMs and VLMs face limitations
+in spatial understanding and reasoning [15], which significantly affect target location prediction
+accuracy. Additionally, VLMs are limited by their inability to effectively extract the most relevant
+and fine-grained semantic information from image observations, as well as by the lack of spatial
+information, resulting in imprecise target position predictions [10, 11, 12, 13, 14]. For LLMs, while
+leveraging spatial information, reliance on semantic content from environment language descriptions
+leads to significant loss of information and reduced prediction precision [16, 12]. Consequently,
+LLMs and VLMs both struggle with reliable and accurate target location inference. Furthermore,
+existing methods generally rely on greedy navigation strategies [12, 8], which cause frequent back-
+and-forth movements, significantly hindering search efficiency. Together, in existing works, the
+lack of semantic cues and spatial reasoning leads to inaccurate and imprecise target object position
+estimation. Meanwhile, the absence of efficiency optimization in the search behavior hinders robust
+searching for diverse, open-set targets in unbounded real-world 3D spaces.
+To enable more precise and accurate predictions of the target object’s location within 3D space, we
+propose a novel 3D voxel-based belief map that considers rich hierarchical spatial semantic cues and
+LLM-generated target-adaptive semantic cues to reason about prior belief of target presence in dense
+3D voxel space. This structured representation enables spatially fine-grained estimation across the
+3D voxel space, facilitating more precise and generalizable localization of target objects in complex,
+unbounded environments. Moreover, this fine-grained and accurate representation enables efficient
+guidance for high-degree-of-freedom mobile agents, facilitating precise, task-relevant, language-
+driven search within localized areas and enhancing the robustness of manipulation tasks.
+To further enhance search efficiency, we introduce BeliefMapNav, an efficient zero-shot object
+navigation system based on path sequence optimization over the belief map. The system is composed
+of three tightly integrated modules and builds upon the belief map framework to enable efficient,
+goal-directed exploration. 1)The 3D voxel-based belief mapping module encodes prior beliefs
+of object presence in 3D space by integrating hierarchical spatial semantics with commonsense
+knowledge from an LLM. 2)The frontier observation belief estimation module combines the belief
+map with a visibility map, which encodes real-time observation feedback likelihood, to produce
+posterior beliefs of the target object’s position. Then, the module estimates the posterior observation
+belief of detecting the target in each frontier’s field of view (FOV). 3) The observation belief-based
+planning module selects the next navigation goal by minimizing the expected distance cost based on
+the posterior observation beliefs to find the target. By explicitly modeling uncertainty and updating
+2
+
+
+--- PDF PAGE 3 ---
+spatial beliefs dynamically, BeliefMapNav enables more efficient, goal-directed exploration than
+methods using static priors or reactive policies.
+The contributions of our method are mainly summarized as follows: 1)We propose BeliefMapNav,
+an efficient zero-shot object navigation system that accurately predicts target location through
+fine-grained belief estimation in a 3D voxel-based belief map and real-time feedback, enabling
+belief-driven sequential planning for efficient navigation. 2) At the core of our system is a 3D voxel-
+based belief map that integrates hierarchical spatial-visual features with LLM-derived commonsense,
+enabling accurate and fine-grained prior estimation of the target’s location. Based on the prior
+estimation, we design a planner that optimizes navigation by minimizing the expected path distance
+cost for efficient navigation. 3)The proposed system achieves SOTA performance on the HM3D[17],
+MP3D[18] and HSSD [19] benchmarks, surpassing all the previous zero-shot methods by 5.86% in
+SR and 46.4% in SPL on HM3D, 27.8% in SR and 28.9% in SPL on HSSD, thereby demonstrating
+the overall effectiveness and efficiency of our approach.
+2
+Related Works
+Object Navigation Object navigation refers to the task of guiding a robot to search given target
+objects in an unknown environment. It can be divided into two categories: i) training-required
+methods, such as reinforcement learning (RL) and imitation learning, which require extensive training
+on task-specific data [20, 21, 22, 23, 24], and ii) zero-shot methods, which leverage pre-trained
+models, such as VLMs or LLMs, to perform navigation without additional training [14, 3, 9, 8, 12].
+Training-based methods typically require large amounts of data and have difficulty generalizing due
+to limited environmental diversity [17, 18], while zero-shot methods offer flexibility and adaptability
+to novel environments, but are constrained by the spatial reasoning limitations of LLMs and VLMs
+[15]. Our method follows a zero-shot approach. We leverage LLMs and rich hierarchical spatial
+semantics to provide accurate and fine-grained estimations of the target’s location, while employing
+probability-based optimization algorithms to ensure the efficiency of the search path.
+Semantic Mapping for Object Navigation. Semantic mapping is important in object navigation as
+it provides spatially structured representations that guide the robot in locating targets. Traditional
+methods, such as category-based approaches [14, 25, 16] and scene graph-based methods [26, 27?
+, 28, 29, 30], often rely on predefined categories or topological graphs, leading to semantic information
+loss and mapping errors due to detection failures [31, 32]. Value map-based methods [8, 7, 9],
+although aiming for non-vocabulary representations, existing methods struggle to align spatial and
+semantic scales, resulting in incomplete or misaligned spatial semantics under varying scene extents.
+As a result, the generated maps lack the precision needed to accurately localize target objects. In
+contrast, our method constructs a multi-level, spatially-aligned semantic map that supports accurate
+target object localization estimation.
+3
+Method
+In this section, we first define the object navigation task and then introduce the BeliefMapNav system.
+3.1
+Task definition
+We define the ZSON task, where an agent is required to locate a specified target object in an
+unknown environment without task-specific training, pre-built maps, or a fixed vocabulary. The target
+category c is specified in free-form text. At each timestep t, the agent receives RGB-D observations
+It = (Irgb
+t
+, Idepth
+t
+), where Irgb
+t
+∈RH×W ×3 and Idepth
+t
+∈RH×W , and its pose st = (xt, rt), with
+xt ∈R3 and rt ∈SO(3), from odometry. The action space A includes: MOVE FORWARD (0.25m),
+TURN LEFT/RIGHT (30°), LOOK UP/DOWN (30°), and STOP. The task is successful if the agent
+issues a STOP within 0.1m of the target object within 500 steps. At each timestep, the system takes
+as input the current RGB-D observation It, the agent’s pose st, and the text-specified target c, and
+outputs a navigation action at ∈A from the discrete action set.
+3
+
+
+--- PDF PAGE 4 ---
+Figure 2: BeliefMapNav pipeline: The agent initializes with a 360° rotation. During exploration,
+the 3D voxel-based belief mapping module fuses sensor input, the 3D hierarchical semantic map,
+and landmarks to create a belief map. The frontier observation belief estimation module computes
+frontier observation belief from the belief, frontiers, and visibility maps via FOV-based aggregation.
+The observation-based belief planning module selects the next goal based on this belief and outputs
+navigation actions. Upon detecting the target, the agent navigates to it.
+3.2
+System overview
+BeliefMapNav, a novel 3D voxel-based zero-shot open-vocabulary object navigation system, see the
+overview in Fig 2. BeliefMapNav has three key modules: 1) 3D voxel-based belief mapping module
+in Sec. 3.3, which encodes a prior belief of the target’s presence by combining hierarchical spatial
+semantics with LLM commonsense in a belief map; 2) frontier observation belief estimation module
+in Sec. 3.4, which fuses the prior belief map with real-time observation likelihood to estimate the
+posterior belief of detecting the target in each frontier’s FOV; 3) observation belief-based planning
+module in Sec. 3.5, which selects the next navigation point by optimizing expected distance cost to
+detect the object.
+3.3
+3D voxel-based belief mapping
+3D voxel-based belief mapping aims to represent the spatial prior belief of the target object’s presence
+in a 3D voxel grid. The key intuition is that maintaining a fine-grained representation enables more
+spatially detailed and accurate prediction of the target’s location. To achieve this, we construct a 3D
+voxel map where each voxel stores the belief of the target existing within its spatial region:
+B =
+
+(u, bu)
+ u ∈Z3	
+Where B denotes the belief map, u ∈Z3 represents the discrete spatial coordinate of a voxel in 3D
+space and bu ∈R represents the estimated prior belief that the target object exists within voxel u.
+Unlike previous methods [7, 8], the 3D voxel-based belief map leverages hierarchical language and
+spatial semantics to provide more precise and nuanced estimation of the target belief in each voxel of
+3D space. It involves three steps as shown in Fig 3: 1) constructing a 3D hierarchical semantic voxel
+map based on visual observations in Sec. 3.3.1; 2) using an LLM to infer hierarchical landmarks with
+corresponding relevance scores in Sec. 3.3.2; and 3) mapping the inferred landmarks and relevance
+scores into the hierarchical semantic voxel map to form the belief map in Sec. 3.3.3.
+3.3.1
+3D Hierarchical semantic mapping
+The 3D hierarchical semantic voxel map Mc represents the environment across three levels, Ls =
+{scene, region, object}, with progressively finer semantics. This structure enables reasoning across
+spatial scales, from coarse layouts to fine object details, improving the accuracy of target object
+position estimation. Formally: Mc =
+ u, {ˆvls
+u , ˆsls
+u }
+  u ∈Z3, ls ∈Ls
+	
+. Here, for each level
+ls ∈Ls, voxel u stores a image CLIP [33] feature vector ˆvls
+u ∈Rd and a feature confidence score
+4
+
+
+--- PDF PAGE 5 ---
+Figure 3: The pipeline begins by passing the target and prompt to the LLM to generate hierarchical
+landmarks with relevance scores. Meanwhile, RGB and depth images are cropped into multi-scale
+patches and processed via SAM and point cloud back-projection. Multi-scale CLIP image features
+are extracted, and the top features selected by hierarchical feature scorers update the hierarchical 3D
+semantic map. Finally, landmarks encoded by text CLIP and the semantic map are combined via the
+belief map construction to update the 3D voxel-based belief map.
+ˆsls
+u ∈R, which quantifies the reliability of the semantic feature at each level and guides the selection
+of the most informative features for belief map updating.
+The module operates in three stages: 1) Multi-scale feature extraction: Extract image CLIP features
+from multi-scale RGB images and spatial information from the depth images. 2) Hierarchical feature
+scoring: Assign confidence scores to features at different image scales, reflecting their relevance to
+specific semantic levels Ls. These scores enable adaptive scale selection for each semantic level. 3)
+Adaptive hierarchical feature selection: At each hierarchical level, features from the most confident
+scale are selected and back-projected to update the 3D voxel map Mc.
+Multi-scale feature extraction: To better capture both global context and local details, the observed
+RGB image Irgb ∈RH×W ×3 is divided into equal-sized patches at multiple scales. At scale k,
+the image is partitioned into 2(k−1) × 2(k−1) patches, with each patch denoted as P k
+h,w. We use
+CLIP [33] to extract visual features vk
+h,w for each patch and each patch P k
+h,w is processed by the
+Segment Anything Model (SAM) [34] to estimate the number of semantic instances nk
+h,w. In parallel,
+the corresponding depth image is divided in the same way. We back-project depth values patches into
+3D space to form a point cloud and compute two geometric properties: the volume V k
+h,w and points
+density ρk
+h,w. The detailed extraction process is in Appendix A.1.
+Hierarchical feature scoring: To select features for different spatial semantic levels, we design
+hierarchical feature scorers for Ls, which assign confidence scores to each image patch. A higher score
+indicates a better alignment of the feature with the corresponding semantic level. The hierarchical
+feature scorers are defined as: (1) Scene Scorer: This scorer favors patches covering larger spatial
+extents with more semantic instances, score defined as Sscene,k
+h,w
+= w1 · V k
+h,w + w2 · nk
+h,w. (2) Region
+Scorer: This scorer favors patches with more densely packed instances and concentrated point clouds,
+score defined as Sregion,k
+h,w
+= w3 ·
+
+nk
+h,w
+V k
+h,w
+
++ w4 · ρk
+h,w. (3) Object Scorer: This scorer favors patches
+with a high average point density per instance, score defined as Sobject,k
+h,w
+=
+ρk
+h,w
+nk
+h,w
+Adaptive hierarchical feature selection: Each image pixel position has k scale candidate features,
+and in each pixel position, we select the image CLIP features for hierarchical semantic levels from
+multi-scale patches that achieve the highest score under the corresponding semantic-level feature
+scorer. After scoring, pixels are back-projected into the 3D semantic map, where for each semantic
+level in every voxel, only the feature with the highest confidence score is retained in the map. The
+detailed selection method is provided in the Appendix A.2.
+5
+
+
+--- PDF PAGE 6 ---
+3.3.2
+Hierarchical landmarks generation
+Landmarks are semantic cues inferred by a language model from the target object description,
+indicating where the object is likely to appear. In our method, we focus on three levels of landmarks
+Lt = {room, region, object} to assist in locating the target object. To extract these landmarks, we
+prompt an LLM (GPT-4 [35]) with the target object description, asking it to generate two outputs: (1)
+a set of landmark strings R = [Rroom, Rregion, Robject], where Rlt = [rlt
+1 , rlt
+2 , . . . , rlt
+nlt] denotes the
+landmarks at level lt ∈Lt; and (2) the corresponding relevance scores α = [αroom, αregion, αobject],
+where αlt = [αlt
+1 , αlt
+2 , . . . , αltnlt]. Where nlt is the number of landmarks in level lt. Each score αlt
+i
+indicates the likelihood that the target object appears near the corresponding landmark rlt
+i . Details
+about the prompt design and generation process are provided in the Appendix A.3.
+3.3.3
+Belief map construction
+After obtaining hierarchical textual landmarks with associated relevance scores, we project both the
+landmarks and the target object name into the 3D hierarchical semantic voxel map to generate a 3D
+voxel-based belief map, which represents a prior belief over the target object’s presence in space.
+Each landmark rlt
+i ∈Rlt and the target object name rtarget are encoded using the CLIP text encoder,
+resulting in embeddings Elt
+i for landmarks and Etarget for the target object. For each of these textual
+inputs, we compute the maximum cosine similarity scores with stored spatial semantic features
+at corresponding levels: plt
+u,i = max
+ls
+cosine(Elt
+i , ˆvls
+u ) and pu,target = max
+ls
+cosine(Etarget, ˆvls
+u ). Each
+similarity score is weighted by its associated relevance score αlt
+i for landmarks and αtarget = 1 for the
+target object. The final belief score at voxel u is computed as: bu = P
+lt∈Lt
+Pnlt
+i=1 αlt
+i ·plt
+u,i +pu,target.
+The values bu in the 3D voxel-based belief map represent the prior belief of the target object’s
+presence in each voxel.
+3.4
+Frontier observation belief estimation
+The 3D voxel-based belief map serves as the prior, through which the frontier observation belief
+module dynamically integrates visibility map likelihoods to calculate the belief of detecting the target
+object within each frontier’s FOV.
+3.4.1
+Visibility map
+To capture the impact of real-time detection feedback on the target belief distribution, we introduce a
+visibility map. The visibility map inspired by [36], defined as Pv =
+
+(u, ˆpv
+u)
+ u ∈Z3, ˆpv
+u ∈[0, 1]
+	
+,
+ˆpv
+u is the likelihood of detecting the target at voxel u based on visual observations during the search.
+The key intuition is that if a voxel u has high detection confidence in the FOV but no detection, the
+belief that the target object exists in that region is very low (ˆpv
+u →0). By estimating the object
+absence likelihood, the visibility map can refine prior beliefs to prevent revisiting areas that have
+been well observed. This correction improves navigation efficiency. The detection confidence is
+calculated in a way that it decreases near image boundaries and at longer distances from the camera
+pose. Details of the construction of the visibility map are provided in the Appendix A.4.
+3.4.2
+FOV based belief aggregation
+After constructing the visibility map Pv and belief map B, we fuse them to obtain the posterior
+belief map Bpost =
+n
+(u,ˆbpost
+u )
+ u ∈Z3, ˆbpost
+u
+= ˆpv
+u · bu
+o
+. This fusion enables more dynamic and
+accurate estimation of the belief of detecting the target from each frontier’s FOV by combining
+spatial priors belief map with the observation feedback visibility map. It improves search efficiency
+and reduces exploration of well-observed regions. For each candidate frontier position xfi, we
+evaluate four viewing directions θ ∈{0◦, 90◦, 180◦, 270◦}. For each θ, we perform ray casting
+from xfi to identify voxels within the FOV, separating them into Oθ
+map(xfi) (voxels in the belief
+map) and Oθ
+unk(xfi) (voxels out of belief map). The observation belief for direction θ is computed
+as: P θ
+obs(xfi) = P
+u∈Oθmap(xfi) ˆbpost
+u
++ |Oθ
+unk(xfi)| · wunobserved. Where |Oθ
+unk(xfi)| is the number of
+voxels not in map and wunobserved is a constant weight. The final observation belief at xf is defined
+6
+
+
+--- PDF PAGE 7 ---
+as: Pobs(xfi) = maxθ P θ
+obs(xfi). Aggregating over the FOV allows us to account for obscure vision
+and the agent’s limited FOV, leading to a more accurate estimation of the likelihood of observing the
+target in each frontier’s FOV.
+3.5
+Observation belief-based planning module
+Using the estimated observation belief at each frontier based on the posterior belief map, we pri-
+oritize frontiers to minimize expected search distance for a more stable and efficient target search.
+Unlike previous greedy approaches that myopically prioritize immediate gain, our distance-based
+optimization ensures smoother early-stage movement under uncertain belief distributions and gradu-
+ally converges to the optimal path as the belief becomes more reliable, resulting in more efficient
+exploration. The optimal exploration strategy seeks a permutation of frontier visiting sequence
+π = [fπ1, fπ2, . . . , fπn] that minimizes the expected search cost, where fπi ∈{xf1, . . . , xfn}
+denotes the i-th frontier position. The objective is formulated as:
+π∗= argmin
+π∈Sn
+n
+X
+i=1
+ 
+i
+X
+k=1
+dA∗(fπk−1, fπk)
+!
+Pobs(fπi)
+where Sn denotes the permutation group over n frontier points, fπk represents the k-th visited
+frontier in permutation π (with the initial point fπ0 ≡x0 defined as the agent’s current position),
+dA∗(fπk−1, fπk) denotes the path distance between adjacent frontiers computed via the A* [37]
+algorithm, Pi
+k=1 dA∗(·) calculates the cumulative path cost to the i-th frontier, and Pobs(fπi) is the
+observation belief of frontier fπi.
+The proposed objective improves search efficiency by minimizing exploration cost with A*-optimized
+paths and prioritizing high-belief frontiers via observation-weighted costs. Combining geometric
+path costs and belief weights, it reduces noise impact on navigation stability. Integrating shortest-
+path guarantees with probabilistic reasoning, it enables dynamic, real-time replanning, adapting
+to evolving beliefs for flexible, efficient navigation. At the same time, the precise and detailed
+belief map provides a solid foundation for effective optimization. We solve this optimization via
+GPU-accelerated simulated annealing [38]. The detailed optimization process is in the Appendix A.5.
+Before each action, the agent selects the first frontier in the optimized sequence π∗as the next
+navigation target and replans at every step with the updated belief map. We adopt the local point
+navigation planner from VLFM [7] to generate actions toward the given goal. An open-vocabulary
+detector [39] and GPT-4o verify detected objects; if confirmed, the system localizes the target using
+the bounding box, SAM [34], and depth, then sets it as the final navigation goal.
+4
+Experimental Results
+In this section, we outline datasets and key implementation details, then compare BeliefMapNav’s
+performance against SOTA baselines on HM3D [17], MP3D [18], and HSSD [19]. Ablation studies
+assess each component’s contribution. Qualitative analysis visualizes maps indicating target presence
+probability. Search process visualizations highlighting our approach are in Appendix A.8. Baseline
+summaries and HM3D failure analyses appear in Appendix A.6 and A.7, respectively.
+4.1
+Benchmarks and Implementation details
+Dataset: We evaluate our method on three standard benchmarks: HM3D [17], MP3D [18] and
+HSSD [19]. HM3D, the official dataset of the Habitat 2022 ObjectNav Challenge, includes 2,000
+validation episodes across 20 environments and 6 object categories. MP3D, a large-scale indoor 3D
+scene dataset, is commonly used in Habitat-based ObjectNav evaluations. We conduct experiments
+on its validation set, consisting of 11 environments, 21 object categories, and 2,195 object-goal
+navigation episodes. HSSD, a synthetic dataset with scenes based on real house layouts, contains 40
+validation scenes, 1,248 navigation episodes, and 6 object categories.
+Evaluation Metrics: We use two standard metrics: Success Rate (SR) and Success weighted by Path
+Length (SPL). SR measures the proportion of episodes where the agent reaches the target within a
+preset distance. SPL evaluates path efficiency by considering both success and trajectory optimality:
+if successful, SPL = Optimal path length
+path length
+, otherwise SPL = 0. Higher values indicate better performance.
+7
+
+
+--- PDF PAGE 8 ---
+Implementation details: We limit navigation to 500 steps, defining success as stopping within 0.1m
+of the target. Each step moves the agent 0.25m forward or rotates it by 30°. The RGB-D camera,
+mounted 0.88m high, captures 640×480 images. The 3D voxel map has 45,000 voxels at 0.25m
+resolution. We set wunobserved = 0.01 (Sec. 3.4.2). CLIP-ViT-B-32 encodes visual/text features with
+image crop scale k = 3. GPT-4o generates three landmarks per level (nine total). Hierarchical scorer
+weights are w1 = 0.05, w2 = 0.1, w3 = 2, w4 = 0.01. The system runs on a single RTX 4090 (with
+13GB VRAM). Local planner parameters vary slightly by dataset, while the exploration module
+remains unchanged.
+4.2
+Comparison with SOTA methods
+Table 1: BeliefMapNav can outperform previous SOTAs on both HM3D and MP3D benchmark.
+Method
+Unsupervised
+Zero-shot
+HM3D
+MP3D
+HSSD
+SR↑
+SPL↑
+SR↑
+SPL↑
+SR↑
+SPL↑
+Habitat-Web [40]
+✗
+✗
+41.5
+16.0
+31.6
+8.5
+-
+-
+OVRL [41]
+✗
+✗
+-
+-
+28.6
+7.4
+-
+-
+ProcTHOR [? ]
+✗
+✗
+54.4
+31.8
+-
+-
+-
+-
+SGM [42]
+✗
+✗
+60.2
+30.8
+37.7
+14.7
+-
+-
+ZSON [23]
+✗
+✓
+25.5
+12.6
+15.3
+4.8
+-
+-
+PSL [43]
+✗
+✓
+42.4
+19.2
+18.9
+6.4
+-
+-
+PixNav [11]
+✗
+✓
+37.9
+20.5
+-
+-
+-
+-
+VLFM [7]
+✓
+✓
+52.5
+30.4
+36.4
+17.5
+-
+-
+ESC [3]
+✓
+✓
+39.2
+22.3
+28.7
+14.2
+38.1
+22.2
+Cows [13]
+✓
+✓
+-
+-
+9.2
+4.9
+L3MVN [14]
+✓
+✓
+50.4
+23.1
+34.9
+14.5
+41.2
+22.5
+ImagineNav [44]
+✓
+✓
+53.0
+23.8
+-
+-
+51.0
+24.9
+VoroNav [26]
+✓
+✓
+42.0
+26.0
+-
+-
+41.0
+23.2
+GAMap [8]
+✓
+✓
+53.1
+26.0
+-
+-
+-
+-
+OpenFMNav [45]
+✓
+✓
+52.5
+24.1
+37.2
+15.7
+-
+-
+InstructNav [9]
+✓
+✓
+58.0
+20.9
+-
+-
+-
+-
+BeliefMapNav
+✓
+✓
+61.4
+30.6
+37.3
+17.6
+65.2
+32.1
+In this section, we compare our proposed BeliefMapNav with SOTA object navigation approaches
+in different settings, including unsupervised, supervised, and zero-shot methods on the MP3D [18],
+HM3D [17], and HSSD [19] benchmarks. As shown in Table 1, our method outperforms all existing
+zero-shot baselines, achieving significant improvements across multiple benchmarks. Specifically, on
+HM3D, we observe a gain of +5.86% in SR and +0.66% in SPL. On MP3D, we achieve an increase
+of +0.27% in SR and +0.57% in SPL. Finally, on HSSD, our method delivers remarkable gains
+of +27.8% in SR and +28.9% in SPL. These results highlight the effectiveness of our approach in
+enhancing both SR and SPL across diverse datasets.
+On the HM3D dataset, our method improves SPL by 46.4% compared to the zero-shot method
+InstructNav [9], which achieves the highest SR. While InstructNav prioritizes SR with a dense search
+strategy, our approach maintains high success rates and boosts search efficiency by generating more
+accurate target position estimates and optimizing the search path with a distance cost-aware planner.
+On the MP3D benchmark, improvements are less pronounced due to two factors: first, the lower data
+quality of MP3D, which makes target recognition more challenging. Second, a lot of mesh “holes” in
+MP3D, which allow the agent to see through obstacles, causing it to mistakenly prioritize these holes
+as targets, leading to navigation failures when it gets stuck near non-traversable areas. However, on
+the HSSD dataset, performance significantly improves because the synthetic scenes avoid the issues
+present in MP3D and HM3D. Across all datasets, the performance limitations of the local planner
+in [7] lead to significant degradation, especially in narrow areas.
+4.3
+Ablative study
+To evaluate the effectiveness of each module in our system, we conduct an ablation study on 400
+randomly sampled episodes from the HM3D validation set, using a fixed random seed.
+8
+
+
+--- PDF PAGE 9 ---
+Table 2: Impact of the planner and visibility map.
+Method
+SR↑
+SPL↑
+BeliefMapNav w/o Planner
+56.0
+29.3
+BeliefMapNav w/o Visibility Map
+57.2
+28.0
+BeliefMapNav
+62.5
+31.6
+Table 3: Impact of vision-language encoders.
+Encoder
+SR↑
+SPL↑
+Blip [46]
+59.3
+31.0
+Blip2 [47]
+62.0
+31.1
+Clip [33]
+62.5
+31.6
+Figure 4: Visualization of the prior belief map, visibility map, and the posterior belief map, with an
+enlarged section highlighting the target object.
+Effectiveness of visibility map and belief-based planning: In Table 2, we compare the effectiveness
+of the Visibility Map and Belief-based planning against basic exploration. Without the Visibility
+Map, relying on spatial priors alone leads to an 8.48% ↓drop in SR and 11.4% ↓in SPL, as the agent
+revisits previously observed regions. Without the planner, navigation is based solely on the highest
+posterior belief, resulting in a 10.4% ↓drop in SR and 7.27% ↓in SPL due to frequent navigation
+goal switching and inefficient back-and-forth movement.
+Effectiveness of different level hierarchical 3D semantic: As shown in Table 5, we evaluate the
+impact of different levels of the Hierarchical 3D Semantic Map on performance, comparing four
+settings: no semantics (random walk), scene-level only, scene + region levels, and the full hierarchy
+with object-level semantics. Results indicate that incorporating more semantic levels generally
+improves SR. However, omitting object-level semantics enhances efficiency (32.0), as fine-grained
+searches with object-level cues increase success rates but often result in slower, localized exploration,
+leading to longer paths and slightly reduced efficiency.
+Table 4: Impact of the different level landmarks.
+Landmarks
+SR↑
+SPL↑
+w/o
+60.0
+30.9
+Room
+61.0
+31.1
+Room+Region
+61.5
+31.2
+Room + Region + Object
+62.5
+31.6
+Table 5: Impact of the different semantics.
+Semantics
+SR↑
+SPL↑
+Random Walking
+21.5
+10.8
+Scene
+59.0
+30.4
+Scene + Region
+61.5
+32.0
+Scene + Region + Object
+62.5
+31.6
+Effectiveness of different vision-Language encoders: as shown in Table 3, CLIP- and BLIP-2-based
+systems achieve comparable performance (SR: 62.5 vs. 62.0; SPL: 31.6 vs. 31.1), both outperforming
+BLIP. Prior work [48] similarly shows that BLIP-2 slightly surpasses CLIP in zero-shot text-to-image
+retrieval accuracy, while both are significantly better than BLIP. However, CLIP demonstrates stronger
+generalization to out-of-distribution data and supports efficient inference via independent encoders
+and pre-computed features. These properties make CLIP a more robust and practical encoder choice
+for retrieval-based navigation tasks.
+Effectiveness of hierarchical landmarks: As shown in Table 4, without landmarks, we retrieve
+directly using the object name in the hierarchical 3D semantic map. With incremental landmark
+introduction, we observe a gradual improvement in SR (60 to 62.5) and SPL (30.9 to 31.6). However,
+this improvement is less significant than the gain from incorporating spatial semantics at different
+hierarchical levels in Table 5, as object names already show inherent relevance to scene, region, and
+object semantics. In this context, hierarchical landmarks mainly reinforce these semantic associations.
+4.4
+Qualitative Analysis
+Fig.4 shows the 3D voxel-based belief map, visibility map, and posterior belief map, and the complete
+visualization is in Appendix Fig. 12. The posterior belief map assigns high belief to the target object’s
+(couch) location. While the visibility map indicates low likelihood, the prior belief map, guided by
+vision-and-language cues, strongly suggests the target’s presence, effectively guiding the agent’s
+search (Fig.1). Additional visualizations are provided in Appendix A.8.
+9
+
+
+--- PDF PAGE 10 ---
+5
+Conclusion
+We present BeliefMapNav, a zero-shot object navigation system that integrates hierarchical spatial
+semantics, commonsense reasoning from LLMs, and real-time feedback through a 3D voxel-based
+belief representation. Experiments on three benchmarks show that it outperforms previous methods.
+Ablation studies highlight the effectiveness of our belief map and belief-based planning for efficient
+exploration, emphasizing the system’s effectiveness and efficiency.
+Limitations. We validate the effectiveness of the 3D voxel-based belief map solely on object
+navigation tasks. This high-resolution 3D map can be further extended to enable robot interaction for
+mobile manipulation tasks, with future work focusing on real-world implementation.
+References
+[1] Devendra Singh Chaplot, Dhiraj Gandhi, Saurabh Gupta, Abhinav Gupta, and Ruslan Salakhut-
+dinov. Learning to explore using active neural slam. arXiv preprint arXiv:2004.05155, 2020.
+[2] Devendra Singh Chaplot, Dhiraj Prakashchand Gandhi, Abhinav Gupta, and Russ R Salakhut-
+dinov. Object goal navigation using goal-oriented semantic exploration. Advances in Neural
+Information Processing Systems, 33:4247–4258, 2020.
+[3] Kaiwen Zhou, Kaizhi Zheng, Connor Pryor, Yilin Shen, Hongxia Jin, Lise Getoor, and Xin Eric
+Wang. Esc: Exploration with soft commonsense constraints for zero-shot object navigation. In
+International Conference on Machine Learning, pages 42829–42842. PMLR, 2023.
+[4] Gengze Zhou, Yicong Hong, and Qi Wu. Navgpt: Explicit reasoning in vision-and-language
+navigation with large language models. In Proceedings of the AAAI Conference on Artificial
+Intelligence, volume 38, pages 7641–7649, 2024.
+[5] Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan
+Cao. React: Synergizing reasoning and acting in language models, 2023. URL https://arxiv.
+org/abs/2210.03629, 2023.
+[6] Peiqi Liu, Yaswanth Orru, Jay Vakil, Chris Paxton, Nur Muhammad Mahi Shafiullah, and Lerrel
+Pinto. Ok-robot: What really matters in integrating open-knowledge models for robotics. arXiv
+preprint arXiv:2401.12202, 2024.
+[7] Naoki Yokoyama, Sehoon Ha, Dhruv Batra, Jiuguang Wang, and Bernadette Bucher. Vlfm:
+Vision-language frontier maps for zero-shot semantic navigation. In 2024 IEEE International
+Conference on Robotics and Automation (ICRA), pages 42–48. IEEE, 2024.
+[8] Hao Huang, Yu Hao, Congcong Wen, Anthony Tzes, Yi Fang, et al. Gamap: Zero-shot
+object goal navigation with multi-scale geometric-affordance guidance. Advances in Neural
+Information Processing Systems, 37:39386–39408, 2024.
+[9] Yuxing Long, Wenzhe Cai, Hongcheng Wang, Guanqi Zhan, and Hao Dong. Instructnav:
+Zero-shot system for generic instruction navigation in unexplored environment. arXiv preprint
+arXiv:2406.04882, 2024.
+[10] Dylan Goetting, Himanshu Gaurav Singh, and Antonio Loquercio. End-to-end navigation
+with vision language models: Transforming spatial reasoning into question-answering. arXiv
+preprint arXiv:2411.05755, 2024.
+[11] Wenzhe Cai, Siyuan Huang, Guangran Cheng, Yuxing Long, Peng Gao, Changyin Sun, and
+Hao Dong. Bridging zero-shot object navigation and foundation models through pixel-guided
+navigation skill. In 2024 IEEE International Conference on Robotics and Automation (ICRA),
+pages 5228–5234. IEEE, 2024.
+[12] Hang Yin, Xiuwei Xu, Zhenyu Wu, Jie Zhou, and Jiwen Lu.
+Sg-nav: Online 3d scene
+graph prompting for llm-based zero-shot object navigation. Advances in Neural Information
+Processing Systems, 37:5285–5307, 2024.
+10
+
+
+--- PDF PAGE 11 ---
+[13] Samir Yitzhak Gadre, Mitchell Wortsman, Gabriel Ilharco, Ludwig Schmidt, and Shuran Song.
+Cows on pasture: Baselines and benchmarks for language-driven zero-shot object navigation. In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, pages
+23171–23181, 2023.
+[14] Bangguo Yu, Hamidreza Kasaei, and Ming Cao. L3mvn: Leveraging large language models for
+visual target navigation. In 2023 IEEE/RSJ International Conference on Intelligent Robots and
+Systems (IROS), pages 3554–3560. IEEE, 2023.
+[15] Jihan Yang, Shusheng Yang, Anjali W Gupta, Rilyn Han, Li Fei-Fei, and Saining Xie. Thinking
+in space: How multimodal large language models see, remember, and recall spaces. arXiv
+preprint arXiv:2412.14171, 2024.
+[16] Junting Chen, Guohao Li, Suryansh Kumar, Bernard Ghanem, and Fisher Yu. How to not train
+your dragon: Training-free embodied object goal navigation with semantic frontiers. arXiv
+preprint arXiv:2305.16925, 2023.
+[17] Santhosh K Ramakrishnan, Aaron Gokaslan, Erik Wijmans, Oleksandr Maksymets, Alex Clegg,
+John Turner, Eric Undersander, Wojciech Galuba, Andrew Westbury, Angel X Chang, et al.
+Habitat-matterport 3d dataset (hm3d): 1000 large-scale 3d environments for embodied ai. arXiv
+preprint arXiv:2109.08238, 2021.
+[18] Angel Chang, Angela Dai, Thomas Funkhouser, Maciej Halber, Matthias Niessner, Manolis
+Savva, Shuran Song, Andy Zeng, and Yinda Zhang. Matterport3d: Learning from rgb-d data in
+indoor environments. arXiv preprint arXiv:1709.06158, 2017.
+[19] Mukul Khanna, Yongsen Mao, Hanxiao Jiang, Sanjay Haresh, Brennan Shacklett, Dhruv Batra,
+Alexander Clegg, Eric Undersander, Angel X Chang, and Manolis Savva. Habitat synthetic
+scenes dataset (hssd-200): An analysis of 3d scene scale and realism tradeoffs for objectgoal
+navigation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, pages 16384–16393, 2024.
+[20] Erik Wijmans, Abhishek Kadian, Ari Morcos, Stefan Lee, Irfan Essa, Devi Parikh, Manolis
+Savva, and Dhruv Batra. Dd-ppo: Learning near-perfect pointgoal navigators from 2.5 billion
+frames. arXiv preprint arXiv:1911.00357, 2019.
+[21] Arsalan Mousavian, Alexander Toshev, Marek Fišer, Jana Košecká, Ayzaan Wahid, and James
+Davidson. Visual representations for semantic target driven navigation. In 2019 International
+Conference on Robotics and Automation (ICRA), pages 8846–8852. IEEE, 2019.
+[22] Wei Yang, Xiaolong Wang, Ali Farhadi, Abhinav Gupta, and Roozbeh Mottaghi. Visual
+semantic navigation using scene priors. arXiv preprint arXiv:1810.06543, 2018.
+[23] Arjun Majumdar, Gunjan Aggarwal, Bhavika Devnani, Judy Hoffman, and Dhruv Batra. Zson:
+Zero-shot object-goal navigation using multimodal goal embeddings. Advances in Neural
+Information Processing Systems, 35:32340–32352, 2022.
+[24] Oleksandr Maksymets, Vincent Cartillier, Aaron Gokaslan, Erik Wijmans, Wojciech Galuba,
+Stefan Lee, and Dhruv Batra. Thda: Treasure hunt data augmentation for semantic navigation.
+In Proceedings of the IEEE/CVF International Conference on Computer Vision, pages 15374–
+15383, 2021.
+[25] Qianfan Zhao, Lu Zhang, Bin He, Hong Qiao, and Zhiyong Liu. Zero-shot object goal visual
+navigation. In 2023 IEEE International Conference on Robotics and Automation (ICRA), pages
+2025–2031. IEEE, 2023.
+[26] Pengying Wu, Yao Mu, Bingxian Wu, Yi Hou, Ji Ma, Shanghang Zhang, and Chang Liu.
+Voronav: Voronoi-based zero-shot object navigation with large language model. arXiv preprint
+arXiv:2401.02695, 2024.
+[27] Kunal Pratap Singh, Jordi Salvador, Luca Weihs, and Aniruddha Kembhavi. Scene graph
+contrastive learning for embodied navigation. In Proceedings of the IEEE/CVF International
+Conference on Computer Vision, pages 10884–10894, 2023.
+11
+
+
+--- PDF PAGE 12 ---
+[28] Rui Liu, Xiaohan Wang, Wenguan Wang, and Yi Yang. Bird’s-eye-view scene graph for vision-
+language navigation. In Proceedings of the IEEE/CVF International Conference on Computer
+Vision, pages 10968–10980, 2023.
+[29] Zachary Ravichandran, Lisa Peng, Nathan Hughes, J Daniel Griffith, and Luca Carlone. Hi-
+erarchical representations and explicit memory: Learning effective navigation policies on 3d
+scene graphs using graph neural networks. In 2022 International Conference on Robotics and
+Automation (ICRA), pages 9272–9279. IEEE, 2022.
+[30] Hayato Suzuki, Kota Shimomura, Tsubasa Hirakawa, Takayoshi Yamashita, Hironobu Fujiyoshi,
+Shota Okubo, Nanri Takuya, and Wang Siyuan. Human-like guidance by generating navigation
+using spatial-temporal scene graph. In 2024 IEEE Intelligent Vehicles Symposium (IV), pages
+1988–1995. IEEE, 2024.
+[31] Chenguang Huang, Oier Mees, Andy Zeng, and Wolfram Burgard. Visual language maps for
+robot navigation. In 2023 IEEE International Conference on Robotics and Automation (ICRA),
+pages 10608–10615. IEEE, 2023.
+[32] Hao Huang, Shuaihang Yuan, CongCong Wen, Yu Hao, and Yi Fang. Noisy few-shot 3d point
+cloud scene segmentation. In 2024 IEEE International Conference on Robotics and Automation
+(ICRA), pages 11070–11077. IEEE, 2024.
+[33] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal,
+Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learning transferable visual
+models from natural language supervision. In International conference on machine learning,
+pages 8748–8763. PmLR, 2021.
+[34] Nikhila Ravi, Valentin Gabeur, Yuan-Ting Hu, Ronghang Hu, Chaitanya Ryali, Tengyu Ma,
+Haitham Khedr, Roman Rädle, Chloe Rolland, Laura Gustafson, et al. Sam 2: Segment anything
+in images and videos. arXiv preprint arXiv:2408.00714, 2024.
+[35] Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Florencia Leoni
+Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et al. Gpt-4
+technical report. arXiv preprint arXiv:2303.08774, 2023.
+[36] Muhammad Fadhil Ginting, Sung-Kyun Kim, David D Fan, Matteo Palieri, Mykel J Kochender-
+fer, and Ali-akbar Agha-Mohammadi. Seek: Semantic reasoning for object goal navigation in
+real world inspection tasks. arXiv preprint arXiv:2405.09822, 2024.
+[37] Peter E Hart, Nils J Nilsson, and Bertram Raphael. A formal basis for the heuristic determination
+of minimum cost paths. IEEE transactions on Systems Science and Cybernetics, 4(2):100–107,
+1968.
+[38] Dimitris Bertsimas and John Tsitsiklis. Simulated annealing. Statistical science, 8(1):10–15,
+1993.
+[39] Shilong Liu, Zhaoyang Zeng, Tianhe Ren, Feng Li, Hao Zhang, Jie Yang, Qing Jiang, Chunyuan
+Li, Jianwei Yang, Hang Su, et al. Grounding dino: Marrying dino with grounded pre-training for
+open-set object detection. In European Conference on Computer Vision, pages 38–55. Springer,
+2024.
+[40] Ram Ramrakhya, Eric Undersander, Dhruv Batra, and Abhishek Das. Habitat-web: Learning
+embodied object-search strategies from human demonstrations at scale. In Proceedings of the
+IEEE/CVF conference on computer vision and pattern recognition, pages 5173–5183, 2022.
+[41] Karmesh Yadav, Ram Ramrakhya, Arjun Majumdar, Vincent-Pierre Berges, Sachit Kuhar,
+Dhruv Batra, Alexei Baevski, and Oleksandr Maksymets. Offline visual representation learning
+for embodied navigation. In Workshop on Reincarnating Reinforcement Learning at ICLR 2023,
+2023.
+[42] Sixian Zhang, Xinyao Yu, Xinhang Song, Xiaohan Wang, and Shuqiang Jiang. Imagine before
+go: Self-supervised generative map for object goal navigation. In Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition, pages 16414–16425, 2024.
+12
+
+
+--- PDF PAGE 13 ---
+[43] Xinyu Sun, Lizhao Liu, Hongyan Zhi, Ronghe Qiu, and Junwei Liang. Prioritized semantic
+learning for zero-shot instance navigation. In European Conference on Computer Vision, pages
+161–178. Springer, 2024.
+[44] Xinxin Zhao, Wenzhe Cai, Likun Tang, and Teng Wang.
+Imaginenav:
+Prompting
+vision-language models as embodied navigator through scene imagination. arXiv preprint
+arXiv:2410.09874, 2024.
+[45] Yuxuan Kuang, Hai Lin, and Meng Jiang. Openfmnav: Towards open-set zero-shot object
+navigation via vision-language foundation models. arXiv preprint arXiv:2402.10670, 2024.
+[46] Junnan Li, Dongxu Li, Caiming Xiong, and Steven Hoi.
+Blip: Bootstrapping language-
+image pre-training for unified vision-language understanding and generation. In International
+conference on machine learning, pages 12888–12900. PMLR, 2022.
+[47] Junnan Li, Dongxu Li, Silvio Savarese, and Steven Hoi. Blip-2: Bootstrapping language-image
+pre-training with frozen image encoders and large language models. In International conference
+on machine learning, pages 19730–19742. PMLR, 2023.
+[48] Pavan Kalyan Tankala, Piyush Pasi, Sahil Dharod, Azeem Motiwala, Preethi Jyothi, Aditi
+Chaudhary, and Krishna Srinivasan. Wikido: A new benchmark evaluating cross-modal retrieval
+for vision-language models. Advances in Neural Information Processing Systems, 37:140812–
+140827, 2024.
+[49] ROYUD Nishino and Shohei Hido Crissman Loomis. Cupy: A numpy-compatible library for
+nvidia gpu calculations. 31st confernce on neural information processing systems, 151(7), 2017.
+13
+
+
+--- PDF PAGE 14 ---
+A
+Appendix
+A.1
+Multi-scale feature extraction
+To better capture both global context and local details, the observed images are divided into equal-
+sized patches at different scales. Specifically, given an RGB observation image Irgb of height H
+and width W, at image scale k, the image is divided into 2(k−1) × 2(k−1) equally-sized patches,
+resulting in a total of 4(k−1) patches. Each patch at level k has image size:
+H
+2(k−1) ×
+W
+2(k−1) , and we
+denote the set of patches at level k as: Irgb
+k
+= {P k
+h,w | 1 ≤h ≤2(k−1), 1 ≤w ≤2(k−1)}, where
+P k
+h,w represents the patch located at the h-th row and w-th column of the partitioned image at scale k.
+We employ the CLIP model[33] to compute visual features for each patch. Specifically, for a given
+patch P k
+h,w, the corresponding visual feature is vk
+h,w. This process yields k candidate features for
+each pixel, and then Each patch P k
+h,w ∈Irgb
+k
+is independently processed using the Segment Anything
+Model (SAM)[34] to estimate the number of semantic instances it contains nk
+h,w, where nk
+h,w denotes
+the number of instances detected within the patch P k
+h,w at scale k.
+In parallel, the depth image is divided into patches using the same scheme as the RGB image. For each
+depth patch Dk
+h,w that corresponds to the position of RGB patch P k
+h,w. We back-project the depth
+values into 3D space to generate a point cloud: Ck
+h,w. We then compute two geometric properties of
+each point cloud: the volume V k
+h,w of the point cloud, density ρk
+h,w , defined as the number of points
+per unit volume:ρk
+h,w =
+|Ck
+h,w|
+V k
+h,w , where |Ck
+h,w| denotes the total number of 3D points in the patch.
+A.2
+Adaptive hierarchical feature selection
+For each image pixel p at hierarchical spatial level ls, we select the CLIP feature from all
+candidate patches across scales that achieves the highest score under the corresponding scorer:
+vls
+p = vk∗
+h∗,w∗, sls
+p = Sls,k∗
+h∗,w∗, and (k∗, h∗, w∗) = arg maxk,h,w:p∈P k
+h,w Sls,k
+h,w. Where,vls
+p denotes the
+image CLIP feature of pixel p at level ls, sls,k
+h,w denotes the score assigned to patch P k
+h,w at level ls,
+and the constraint p ∈P k
+h,w ensures that only p in patches are considered. After scoring, each pixel is
+back-projected into 3D and mapped to a voxel. For each semantic level, we keep only the feature
+with the highest confidence score in each voxel.
+After scoring, each image pixel p is back-projected into 3D space global position xp using the depth
+image and mapped to the corresponding voxel in the spatial map:
+xp = BackProject(p, Idepth
+t
+(p), st) ∈R3,
+up =
+jxp
+r
+k
+∈Z3
+where r denotes the voxel resolution, and ⌊·⌋indicates the element-wise floor operation used to
+discretize the 3D coordinate into voxel space. For each semantic level, if the voxel does not contain
+an existing feature, we directly store the current feature and its associated confidence score. If a
+feature already exists, we compare the new score with the stored score and retain the feature with the
+higher confidence. The voxel map is then updated according to the following rule:
+ˆvls
+up =
+(
+vls
+p ,
+if up /∈Mc or sls
+p > ˆsls
+up
+ˆvls
+up,
+otherwise
+,
+ˆsls
+up =
+(
+sls
+p ,
+if up /∈Mc or sls
+p > ˆsls
+up
+ˆsls
+up,
+otherwise
+A.3
+Prompting
+In the hierarchical landmarks generation, the complete prompt is as follows:
+14
+
+
+--- PDF PAGE 15 ---
+System: You are a helpful robot to find an object in an unknown environment.
+User: Now that we need to find a/an {target}, please provide information about how it might
+be found in a private house. This information will be embedded with CLIP and must be
+useful for the robot to recognize the object.
+• Provide which room it is likely to be found in.
+• Provide where it is likely to be located within specific rooms. Please add the room
+type in front of the location.
+• Provide what other items it is likely to be near.
+• What is the probability of finding the {target} respectively around these landmarks?
+The sum of the probabilities of each level is equal to one.
+At the same time, the output must meet the following requirements:
+1. Output three related strings for each level. Each string should contain only one piece
+of information and avoid using "or" constructions.
+2. Each piece of information should consist of only the most relevant phrases, not
+complete sentences. Keep the phrases simple and common; avoid uncertain words
+like "maybe".
+3. Output two two-dimensional lists. For the landmarks string: The first dimension
+represents the information level, and the second dimension contains the three related
+strings for each level. For the Probability: The first dimension represents the
+information level, and the second dimension contains the three related probabilities
+for each level.
+4. Output only the string and Probability, do not include any additional text.
+In the generation of parameters dmin and dmax in the visibility map, the complete prompt is as follows:
+System: You are a helpful robot to find an object in an unknown environment.
+User: When we use YOLOv7 and GroundingDINO to detect a/an {target} in a simulated mesh
+private house environment, the quality is poor. What is the best distance from the camera
+pose to the {target} to detect the {target}? The input images are 640 × 480 resolution.
+1. Please output the distance in meters.
+2. Please only output the distance range as a list: [distance_min, distance_max],
+without any other text.
+A.4
+Visibility map
+As shown in Fig 5, detection confidence depends on the pixel locations of the voxels in the image
+and the distance to the camera. Pixels near the image center and at moderate distances to the camera
+yield higher confidence, while peripheral or extreme-distance regions tend to have lower confidence
+due to reduced detectability. For each pixel p in the RGBD image, we compute three components:
+the horizontal angle-based confidence Chorizontal, the vertical angle-based confidence Cvertical, and the
+distance-based confidence Cd. The detection confidence of pixel position p is defined as:
+Chorizontal = cos2
+ θp
+θhfov
+· π
+
+,
+Cvertical = cos2
+ ϕp
+ϕvfov
+· π
+
+,
+Cd =
+1,
+if dmin ≤dp ≤dmax
+exp
+ −α · min
+ (dp −dmin)2, (dp −dmax)2
+,
+otherwise
+Cp = Cd · Chorizontal · Cvertical
+Here, θp and ϕp denote the horizontal and vertical angles of pixel p, and θhfov, ϕvfov are the horizontal
+and vertical FOV angles in radians. Cd is computed from the pixel depth dp based on the optimal
+15
+
+
+--- PDF PAGE 16 ---
+(a) Input depth image
+(b) Confidence value in FOV
+Figure 5: (a) is the input depth image. (b) shows the confidence computed from the depth image.
+Bluer regions indicate higher confidence, meaning the likelihood of an object being present is low
+if not detected there. Redder regions indicate lower confidence, implying that even if no object is
+detected in those areas, the probability of object presence remains relatively high.
+range [dmin, dmax] given by LLM A.3. The final confidence score Cp means the confidence to detect
+the object at pixel position p.
+Each pixel p is back-projected into 3D space to obtain the corresponding voxel up ∈Z3. The
+visibility map is then updated as:
+ˆpv
+up =
+(
+1 −Cp,
+if up /∈Pv or 1 −Cp < ˆpv
+up
+ˆpv
+up,
+otherwise
+A.5
+Path optimization
+The optimization objective of the path planning problem is to find a frontier visiting order π =
+[fπ1, fπ2, . . . , fπn] that minimizes the expected search distance:
+π∗= argmin
+π∈Sn
+n
+X
+i=1
+ 
+i
+X
+k=1
+dA∗(fπk−1, fπk)
+!
+Pobs(fπi)
+Therefore the cost function W(π) to evaluate the quality of a path π can be defined as:
+W(π) =
+n
+X
+i=1
+ 
+i
+X
+k=1
+dA∗(fπk−1, fπk)
+!
+Pobs(fπi)
+The simulated annealing algorithm is a probabilistic optimization algorithm that can be used to find
+an approximate solution to the path planning problem. The algorithm is inspired by the annealing
+process in metallurgy, where a material is heated and then cooled to remove defects and improve its
+properties. The algorithm works by iteratively exploring the solution space and accepting or rejecting
+new solutions based on their cost and a temperature parameter. Our implementation is based on the
+following steps:
+1. Initialization: Set the initial and terminal temperature T0 and Tf, the cooling rate α, and
+the number of samples to simulate N. When the current temperature T is greater than the
+terminal temperature Tf, the algorithm will continue to run.
+2. Iterative Process: While the termination criterion is not met, for each sample, the algorithm
+will perform the following steps:
+(a) Generating Neighbor Solution: Generate a neighbor solution π′ from the current
+solution π by applying three kinds of operations: swap, shift, or reverse.
+(1) swap: swap two points in the path. (2) shift: move a segment of the path to a
+different position. (3) reverse: reverse a segment of the path.
+16
+
+
+--- PDF PAGE 17 ---
+The repetition times of the operations are controlled by the temperature T, which
+decreases with time. Due to different operations having different degrees of impact on
+π, the probability of selecting each operation is different. And because the first point in
+the path is the starting point, it does not participate in this transformation.
+(b) Evaluation and Acceptance: Evaluate the cost of the new path W(π′) and apply
+the Metropolis Criterion: Compare it with the cost of the current path W(π). If
+W(π′) < W(π), accept the new path. Otherwise, accept it with a probability of
+exp
+
+W (π)−W (π′)
+T
+
+.
+(c) Cooling: Update the temperature T by multiplying it with the cooling rate α.
+3. Termination: The algorithm ends when the temperature T is less than the terminal tempera-
+ture Tf. The final output is the sample with the lowest cost.
+The algorithm is implemented in Python and uses the CuPy [49] library to accelerate the process. All
+the parameters are tuned to achieve a balance between the quality of the solution and the time taken to
+find it, for the path planning problem. On a laptop with Intel Core i5-12500H CPU, 16GB RAM, and
+NVIDIA GeForce RTX 2050 Laptop GPU, for a task of 10 frontiers, the algorithm takes about 0.2
+seconds to solve the problem. A visualized example problem and the solution are shown in Figure 7.
+Figure 6: Error analysis of the algorithm for parameter tuning. All the results are based on 10
+frontiers, over 50 different scenes, and each scene for 100 times. We take the solution obtained when
+the algorithm converges as the optimal solution. A solution is considered as an error if the cost is
+greater than 110% of which of the optimal solution. Between the performance of the algorithm and
+the time taken to find the solution, we take a balanced approach.
+Figure 7: Result demo of the algorithm. The chart on the left shows the relationship between the cost
+and the temperature under a run. The chart on the right shows the path generated by the algorithm.
+The number on the lines indicates the order of visiting the frontiers. The arrow at each frontier is the
+orientation. The color of the background represents the distribution of the occurrence probability.
+The observation probability of a frontier is the sum of the weights of all points within a sector in front
+of the frontier, representing points within the FOV of the robot.
+17
+
+
+--- PDF PAGE 18 ---
+Figure 8: The proportion of different causes of failure in the HM3D dataset.
+A.6
+Baselines
+We evaluate our approach in comparison with a range (ZSGN) of baselines, including several
+SOTA methods. ZSON [23] incorporates object category cues to enable object-aware navigation.
+CoW [13] leverages CLIP features to extract semantic object information and directs exploration
+toward nearby frontiers. ESC [3] combines a semantic scene representation with commonsense
+reasoning to guide object search. L3MVN [14] utilizes large language models to infer exploration
+goals from a semantic map constructed by a pretrained detector. VLFM [7] adopts BLIP-2 [47]
+for vision-language alignment, using target object descriptions to prioritize exploration frontiers.
+VoroNav [26] introduces a navigation method based on Voronoi partitioning. InstructNav [9] supports
+agent navigation by converting the output instructions from the VLM into various value maps.
+However, this method directly relies on the VLM to reason in spatial contexts, which can lead to
+hallucinations and reduced navigation efficiency. GAMap [8] guides navigation by leveraging object
+parts and affordance attributes through an image-based, multi-scale scoring approach that effectively
+captures both geometric components and functional affordances.
+A.7
+Error Analysis of HM3D
+As shown in Fig 8, the causes of failure cases can be primarily attributed to two factors. First, the
+current performance limitations of the open vocabulary detector, particularly due to false positives
+(FP) and false negatives (FN), account for a significant proportion, with these detection errors
+contributing to 48.32% of the failure cases. These errors result in the system either missing or
+incorrectly identifying the target object, which ultimately leads to failure in object navigation.
+The second major factor stems from the existence of target objects located on a different floor than the
+agent’s starting point in the HM3D dataset, which accounts for 36.78% of the failure cases. Although
+our 3D voxel map naturally supports modeling of spaces with varying heights, the limitations in stair
+recognition and local planner performance prevent successful traversal between floors, resulting in
+the inability to reach the target object on another floor.
+Finally, only 12.82% of the failure cases are due to the target object being on the same floor but not
+found, which demonstrates the effectiveness and efficiency of our exploration module. The “other”
+category primarily involves cases where the target object was detected but the local planner was
+unable to navigate towards it, or where the number of steps exceeded the predefined limit.
+A.8
+Visualization
+As shown in Fig. 9, 10, and 11, we provide qualitative visualizations to highlight the behavior and
+strengths of BeliefMapNav. Fig. 12 shows the complete 3D voxel- based belief map, visibility map,
+and posterior belief map.
+18
+
+
+--- PDF PAGE 19 ---
+Figure 9: Visualization of the search process. The color of each point in the image represents the
+belief of object presence: redder points indicate higher belief, while bluer points indicate lower belief.
+Figure 10: Visualization of the search process. The color of each point in the image represents the
+belief of object presence: redder points indicate higher belief, while bluer points indicate lower belief.
+19
+
+
+--- PDF PAGE 20 ---
+Figure 11: Visualization of the search process. The color of each point in the image represents the
+belief of object presence: redder points indicate higher belief, while bluer points indicate lower belief.
+Figure 12: Visualization of the prior belief map, visibility map, and the posterior belief map, with an
+enlarged section highlighting the target object.
+20

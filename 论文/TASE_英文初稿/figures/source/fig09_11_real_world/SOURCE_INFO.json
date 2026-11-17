@@ -1,0 +1,27 @@
+{
+  "figures": [
+    {
+      "number": 9,
+      "environment": "Confined Indoor Home Environment",
+      "source_page": 1,
+      "final": "figures/final/real_world_home_cropped.pdf",
+      "crop_box_pt": [37.948, 195.28, 457.664, 530.438]
+    },
+    {
+      "number": 10,
+      "environment": "Office Area 1",
+      "source_page": 2,
+      "final": "figures/final/real_world_office1_cropped.pdf",
+      "crop_box_pt": [37.948, 193.36, 457.286, 530.834]
+    },
+    {
+      "number": 11,
+      "environment": "Office Area 2",
+      "source_page": 3,
+      "final": "figures/final/real_world_office2_cropped.pdf",
+      "crop_box_pt": [37.948, 195.88, 457.04, 531.194]
+    }
+  ],
+  "source_pdf": "多个真机实验new.pdf",
+  "source_note": "User-provided three-page PDF; each page was cropped to its non-white content with a 5 pt margin while preserving PDF vectors."
+}

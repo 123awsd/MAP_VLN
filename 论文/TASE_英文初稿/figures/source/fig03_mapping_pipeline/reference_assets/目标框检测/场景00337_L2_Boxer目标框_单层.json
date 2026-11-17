@@ -1,0 +1,18 @@
+{
+  "format": "pre_map_vln.l2_boxer_standalone.v1",
+  "floor": 2,
+  "source_box_csv": "/home/uav/map_VLN/PRE_MAP_VLN/outputs/room_pipeline/00337_dormant_recovery_20260829_boxfloorfix/L2_boxes.csv",
+  "source_scene_graph": "/home/uav/map_VLN/PRE_MAP_VLN/outputs/room_pipeline/00337_transition_aware_qwen_v1/L2_scene_graph_qwen.json",
+  "source_wall_grid": "/home/uav/map_VLN/PRE_MAP_VLN/outputs/wall_extraction/00337_dormant_recovery_ceiling_clearance_L1-L3/L2_wall_grid.npy",
+  "source_wall_meta": "/home/uav/map_VLN/PRE_MAP_VLN/outputs/wall_extraction/00337_dormant_recovery_ceiling_clearance_L1-L3/L2_wall_grid.json",
+  "box_count": 66,
+  "azimuth": -58.0,
+  "elevation": 26.0,
+  "projection": "orthographic",
+  "height_scale": 0.62,
+  "outline_mode": "closed-outer-dashed",
+  "dash_cells": [7, 5],
+  "resolution_px": [2208, 1600],
+  "script": "/home/uav/map_VLN/PRE_MAP_VLN/scripts/render_l2_room_box_standalone.py",
+  "png": "/home/uav/map_VLN/素材处理后/第一阶段/目标框检测/场景00337_L2_Boxer目标框_单层.png"
+}

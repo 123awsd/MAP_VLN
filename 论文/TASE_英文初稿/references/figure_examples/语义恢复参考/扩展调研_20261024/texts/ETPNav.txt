@@ -1,0 +1,2679 @@
+
+--- PDF PAGE 1 ---
+JOURNAL OF LATEX CLASS FILES, VOL. *, NO. *, * *
+1
+ETPNav: Evolving Topological Planning for
+Vision-Language Navigation in
+Continuous Environments
+Dong An, Hanqing Wang, Wenguan Wang, Zun Wang, Yan Huang, Keji He, Liang Wang
+Abstract—Vision-language navigation is a task that requires an agent to follow instructions to navigate in environments. It becomes
+increasingly crucial in the field of embodied AI, with potential applications in autonomous navigation, search and rescue, and
+human-robot interaction. In this paper, we propose to address a more practical yet challenging counterpart setting - vision-language
+navigation in continuous environments (VLN-CE). To develop a robust VLN-CE agent, we propose a new navigation framework,
+ETPNav, which focuses on two critical skills: 1) the capability to abstract environments and generate long-range navigation plans, and
+2) the ability of obstacle-avoiding control in continuous environments. ETPNav performs online topological mapping of environments by
+self-organizing predicted waypoints along a traversed path, without prior environmental experience. It privileges the agent to break
+down the navigation procedure into high-level planning and low-level control. Concurrently, ETPNav utilizes a transformer-based
+cross-modal planner to generate navigation plans based on topological maps and instructions. The plan is then performed through an
+obstacle-avoiding controller that leverages a trial-and-error heuristic to prevent navigation from getting stuck in obstacles. Experimental
+results demonstrate the effectiveness of the proposed method. ETPNav yields more than 10% and 20% improvements over prior
+state-of-the-art on R2R-CE and RxR-CE datasets, respectively. Our code is available at https://github.com/MarSaKi/ETPNav.
+Index Terms—Vision-Language Navigation, Topological Map, Obstacle Avoidance
+✦
+1
+INTRODUCTION
+G
+Iven a natural language instruction, the task of vision-
+language navigation (VLN) [1] requires an agent to
+interpret and follow the instruction to reach the target
+location. This task has been well-studied over the past few
+years [2], [3], [4], [5], however, the majority of works focus
+on the discrete VLN setting. This setting simplifies naviga-
+tion as traversing on a predefined graph of an environment,
+which significantly narrows down the possible locations
+of the agent and target. Recognizing this cannot reflect
+the challenges of a deployed system encountered in a real
+environment, Krantz et al. [6] introduce VLN in continuous
+environments (VLN-CE), which discards the strong graph
+assumption, instead, requires the agent to navigate on a 3D
+mesh freely with low-level actions.
+So far, VLN-CE has been shown far more difficult than
+VLN, with a few published works revealing episode success
+rates less than half of those reported in VLN. Early efforts
+for VLN-CE are end-to-end trained systems to directly
+predict low-level actions (or waypoints) from language and
+observations [6], [7], [8]. This scheme can be challenged by
+•
+D. An, Y. Huang, K. He and L. Wang are with the Center for Re-
+search on Intelligent Perception and Computing (CRIPAC), National
+Laboratory of Pattern Recognition (NLPR); School of Future Technology
+and School of Artificial Intelligence, University of Chinese Academy of
+Sciences, China. Email: dong.an@cripac.ia.ac.cn, yhuang@nlpr.ia.ac.cn,
+keji.he@cripac.ia.ac.cn, wangliang@nlpr.ia.ac.cn.
+•
+H. Wang is with the Beijing Institute of Technology, China. Email:
+hanqingwang@bit.edu.cn.
+•
+W. Wang is with the Zhejiang University, China. Email: wenguan-
+wang.ai@gmail.com.
+•
+Z.
+Wang
+is
+with
+the
+Australian
+National
+University.
+Email:
+zun.wang@anu.edu.au.
+•
+Wenguan Wang and Yan Huang are the corresponding authors.
+joint learning of navigation and language grounding in a
+long-horizon task, thus leading to a lower performance com-
+pared to VLN. Recently, there has been an emerging trend
+towards modular waypoint-based approaches [9], [10], [11]
+that divide the complex task into waypoint generation,
+subgoal planning, and navigation control. Concretely, in
+each decision loop, the agent uses a pre-trained network
+to predict several nearby candidate waypoints, and then
+performs cross-modal grounding to select a subgoal from
+the waypoints. After that, a controller drives the agent to
+reach the selected subgoal with low-level actions. Overall,
+this modular pipeline simplifies policy learning and closes
+the performance gap between VLN-CE and VLN.
+Despite the progress, we find these waypoint-based
+methods still have drawbacks in three aspects. First, the
+predicted waypoints are still local and constrained to a
+nearby area of the agent, which are insufficient to capture
+the global environment layouts and may hinder the agent’s
+long-range planning capacity. For example, to backtrack
+to a previous remote location for past decision correction,
+the agent has to run multiple plan-control flows which
+can introduce unstable accumulation bias. Second, the key
+design choices for waypoint prediction have not been well-
+studied. One representative predictor [9] takes RGBD im-
+ages as inputs, but whether or not the semantic-level RGB
+inputs are valid remains unknown, since it is only tasked
+with inferring spatial accessibility. Third, different types of
+controllers (heuristic [8], [9], map-based [10], [12], learning-
+based [13], [14]) are proposed for waypoint-reaching, but
+their robustness to obstacles remains unknown. As a result,
+an obstacle-intolerant controller can cause the agent to get
+stuck in obstacles, leading to navigation failure.
+arXiv:2304.03047v3  [cs.CV]  22 Jan 2024
+
+
+--- PDF PAGE 2 ---
+JOURNAL OF LATEX CLASS FILES, VOL. *, NO. *, * *
+2
+To address the above problems, we propose a hierar-
+chical navigation framework powered by topological (topo)
+maps, and a low-level controller. Topo maps, partially in-
+spired by cognitive science [15], typically depict environ-
+ments as low-dimensional graph representations with nodes
+for places and edges for reachability. They can efficiently
+capture environment layouts and long-range navigation
+dependency, thereby easing the agent to make long-range
+goal plans, such as planning a shortest path within the
+map to reach a remote location. But what makes our topo
+maps novel is that they are constructed via online self-
+organization of predicted waypoints, which are concise
+and meet the assumption of partial observability in a real
+environment. Notably, this scheme is greatly distinct from
+previous VLN literature regarding topo mapping, which re-
+quires either predefined graphs [3], [16], [17] or environment
+pre-exploration [18].
+To better capture the environment layouts, we systemat-
+ically examine our topo map’s key design choices, such as
+waypoint prediction, node density, and node representation.
+In particular, we find that a depth-only waypoint predic-
+tor aids generalization in novel environments, while RGB
+information may undermine spatial accessibility inferring.
+Moreover, we explicitly consider the obstacle-avoidance
+problem in VLN-CE. We find this problem is especially
+crucial in a more challenging and practical scenario - slid-
+ing along obstacles is forbidden, where commonly used
+controllers [8], [12], [13] can cause navigation to get stuck
+in obstacles frequently, resulting in a severe performance
+drop. Accordingly, we propose a new controller via a trial-
+and-error heuristic to explicitly help the agent escape from
+deadlocks, nearly eliminating the performance loss caused
+by sliding-forbidden.
+Altogether, we propose a full navigation system for
+VLN-CE. For each episode, our agent updates a topo map
+through online self-organization of waypoints predicted so
+far. The map decomposes the navigation problem into plan-
+ning and control. Within each decision loop, the agent uses
+a cross-modal transformer [19], [20] to compute a global
+navigation plan from the instruction and the topo map.
+Then, this plan is executed by a robust obstacle-avoiding
+controller with low-level actions.
+Extensive experiments demonstrate the effectiveness of
+the proposed method, and our system achieves state-of-
+the-art on two VLN-CE benchmarks (e.g., in test unseen
+splits, 55 SR and 48 SPL on R2R-CE dataset, 51.21 SR and
+41.30 SDTW on RxR-CE dataset). Based on the algorithm
+described in this paper, we won the CVPR 2022 RxR-Habitat
+Challenge [11], [21]. In summary, the contributions of this
+work are four-fold:
+• We propose a new topological map-based method for
+robust navigation planning in VLN-CE. It can efficiently
+abstract the continuous environments and facilitates the
+agent’s long-range goal planning.
+• We investigate the essential design choices for building
+topological maps through comprehensive experiments,
+demonstrating that a concise depth-only design is optimal
+for waypoint prediction.
+• We study a practically important but rarely investigated
+problem in VLN-CE - obstacle avoidance, and propose an
+effective trial-and-error controller to address the problem.
+• The proposed system won the CVPR 2022 RxR-Habitat
+Challenge and doubled the SDTW of the second-best
+model. It can serve as a strong baseline for further research
+on this challenging task.1
+The rest of this paper is organized as follows. In § 2,
+we give a brief review of the related work. § 3 describes
+the task setup of vision-language navigation in continuous
+environments and then introduces our proposed method.
+Experimental results are provided in § 4. Lastly, we conclude
+this work in § 5.
+2
+RELATED WORK
+2.1
+Vision-Language Navigation
+Learning navigation with language guidance has drawn
+significant research interest in recent years. R2R [1] and
+RxR [22] datasets introduce low-level human language
+instructions and photo-realistic environments for indoor
+navigation, while Touchdown [23] further extends this
+task in an outdoor navigation context. Following these
+works, dialogue-based navigation such as CVDN [24] and
+HANNA [25], and navigation for remote object-finding such
+as REVERIE [26] and SOON [27] have been proposed for
+further research.
+Early VLN methods use sequence-to-sequence LSTMs
+to predict low-level actions [1] or high-level actions from
+panoramas [28]. Various attention mechanisms [29], [30],
+[31], [32] are proposed to improve the learning of visual-
+textual correspondence. Reinforcement learning is also ex-
+plored to improve policy learning [2], [33], [34], [35]. Dif-
+ferent strategies are also investigated to form a more robust
+navigation policy, such as environment pre-exploration [2],
+active perception [36], [37], and planning with graph mem-
+ory [3], [16]. To enhance an agent’s generalization ability to
+novel environments, various data augmentation strategies
+are studied to mimic new environments [34], [38], [39], [40],
+[41] or synthesis new instructions [28], [42], [43], [44], [45],
+[46]. Recently, transformer-based models have shown supe-
+rior performance thanks to their powerful ability to learn
+generic multi-modal representations [47], [48], [49]. This
+scheme is further extended by recurrent agent state [4], [50],
+[51], episodic memory [5], [52], [53], graph memory [17],
+[54], [55], [56], [57] and prompt learning [58], [59] that
+significantly improves sequential action prediction.
+Despite the progress, these agents are developed under
+the discrete VLN setting, which simplifies navigation as
+traversing on a predefined graph of an environment. In
+effect, this setup greatly narrows down the possible lo-
+cations of the agent and target, while ignoring the low-
+level control problem that arises in a real-world navigation
+system. As a result, directly transferring these agents into
+the real world [60] or continuous environments [6] can cause
+a severe performance drop.
+2.2
+VLN in Continuous Environments
+Recognizing the navigation graph assumption cannot reflect
+the challenges a deployed system would experience in a real
+environment, Krantz et al. [6] introduce VLN in continuous
+environments (VLN-CE) - requiring the agent to navigate
+1. Our code is available at https://github.com/MarSaKi/ETPNav.
+
+
+--- PDF PAGE 3 ---
+JOURNAL OF LATEX CLASS FILES, VOL. *, NO. *, * *
+3
+Graph (𝐺𝐺𝑡𝑡−1)
+Observations (𝑂𝑂𝑡𝑡)
+Topological 
+Mapping
+Cross-Modal
+Planning
+Control
+Graph (𝐺𝐺𝑡𝑡)
+Go straight and slightly right 
+toward the glass table and white 
+chairs. Pass the table and head 
+straight, pass the couches and go 
+into the room straight ahead..
+Instruction (W)
+Planned Path
+Low-level Actions
+Fig. 1: Overview of the proposed model, ETPNav. It consists of three modules, a topological mapping module that gradually
+updates the topological map as it receives new observations, a cross-modal planning module that computes a navigational
+plan based on the instruction and map, and a control module that executes the plan with low-level actions.
+on a 3D mesh freely with low-level actions (e.g., FORWARD
+0.25m, ROTATE 15°). To benchmark VLN-CE agents, dis-
+crete paths in R2R [1] and RxR [22] are transferred to con-
+tinuous environments through the Habitat Simulator [61].
+Initial methods for VLN-CE are end-to-end trained sys-
+tems to directly predict low-level actions from language
+and observations [6], [7], [62], but demonstrate a huge
+performance gap to VLN. Because jointly learning language-
+grounding and low-level control in a fully end-to-end man-
+ner can be difficult and expensive, typically requiring mil-
+lions of frames of experience [13]. Thus, Krantz et al. [8]
+propose to decouple the navigation process as subgoal
+planning and low-level control, where the model predicts a
+language-conditioned waypoint as subgoal at each step, and
+then reaches the subgoal with a rotate-then-forward control
+flow. This idea is further extended with semantic maps
+for better perception of environments [14], [63], finding
+increased performance but still far below VLN. One poten-
+tial reason is that the prediction of language-conditioned
+waypoints requires the model to learn spatial accessibility
+inferring and cross-modal reasoning simultaneously, which
+is difficult and may need massive training [8].
+Recently, there has been an emerging trend towards
+modular waypoint-based approaches [9], [10], [11], [64].
+Instead of directly predicting a language-conditioned way-
+point, these methods further decouple the subgoal predic-
+tion as candidate waypoint generation and subgoal selec-
+tion. Concretely, within each decision loop, the agent first
+uses a pre-trained network to predict several nearby can-
+didate waypoints, and then performs cross-modal ground-
+ing over the waypoints to select a subgoal. Similarly, the
+subgoal-reaching is conducted by a follow-up controller.
+Overall, this modular scheme simplifies policy learning and
+further closes the gap between VLN-CE and VLN. But
+the drawback is the local waypoint representations which
+are insufficient to capture global environment layouts and
+navigation dependency, leading to the agent’s non-ideal
+long-range planning capability. Meanwhile, the widely used
+controllers are unaware of obstacles, and we find they
+can cause navigation to get stuck in obstacles frequently
+in a practical sliding-forbidden scenario. To address these
+limitations, we not only propose an online constructed topo
+map for long-range planning, but also devise an obstacle-
+avoiding controller.
+2.3
+Maps for Navigation
+Works on robot navigation have a long tradition of using
+spatial or topological space representations to aid environ-
+mental perception. Researchers have investigated explicit
+metric spatial representations [65] and their construction
+using various sensors [66], [67], as well as agent localization
+with such representations [68], [69]. Modern literature has
+begun to integrate spatial representations with semantics,
+yielding promising results in tasks such as active per-
+ception [70], [71], object-goal navigation [72], [73], vision-
+language navigation [14], [17], [74] and audio-visual naviga-
+tion [75]. However, these metric maps typically suffer from
+scalability issues, rendering them unsuitable for long-range
+navigation tasks such as VLN-CE. For instance, though a
+large metric map has been shown effective in VLN-CE,
+it may result in excessive computation costs [14]. To that
+end, non-metric topological representations have also been
+considered in classical literature [76], [77], and researchers
+have investigated the use of semantic topo maps for high-
+level navigation tasks [78], [79], [80]. Topo maps, based on
+low-dimensional graph representations, efficiently capture
+environment layouts and are beneficial for exploration or
+long-range planning.
+In VLN, several works have employed topo maps and
+demonstrated superior performance [3], [16], [17], [54]. Be-
+cause the long-range map can facilitate the agent to learn
+self-correction policy, which is crucial when the agent loses
+track of an instruction. However, these maps are derived
+from predefined graphs by marking observed nodes, which
+are unavailable in continuous or real-world environments.
+Chen et al. [18] explored topo maps in VLN-CE, but their
+proposed map is built offline through environment pre-
+exploration and assumes the agent has access to global
+topology priors, which limits its use in more realistic sce-
+narios. Inspired by their novel ideas, we propose a more
+practical solution for topo mapping in VLN-CE. Without the
+need for predefined graphs or environment pre-exploration,
+our map is built online through the self-organization of pre-
+defined waypoints at each step. It is scalable as navigation
+progresses and meets the assumption of partial observabil-
+ity in a real environment.
+3
+METHOD
+Task Setup. We address instruction-following navigation in
+indoor environments, where an agent is required to follow
+a specific path described by a natural language instruction
+
+
+--- PDF PAGE 4 ---
+JOURNAL OF LATEX CLASS FILES, VOL. *, NO. *, * *
+4
+Waypoint 
+Prediction 
+Graph Update
+Graph (𝐺𝐺𝑡𝑡−1)
+Graph (𝐺𝐺𝑡𝑡)
+Observations (𝑂𝑂𝑡𝑡)
+Visited Node
+Current Node
+Waypoint
+Ghost Node
+Waypoint
+Localization
+(FL)
+Localized
+Localized
+Not
+Localized 
+Fig. 2: Illustration of the topological mapping module. It takes the previous graph (Gt−1) and the agent observation (Ot) as
+input. The waypoint prediction submodule first predicts several nearby waypoints. The graph update submodule organizes
+these waypoints and incorporates them to update the graph using a waypoint localization function (FL).
+to reach the target location. In particular, we focus on a
+practical setup - vision-language navigation in continuous
+environments (VLN-CE) [6], where the agent navigates on
+a 3D mesh of an environment with low-level actions. The
+action space consists of a set of parameterized discrete
+actions (e.g., FORWARD (0.25m), ROTATE LEFT/RIGHT
+(15°), and STOP). VLN-CE uses the Habitat Simulator [61]
+to render environmental observations based on the Matter-
+port3D scene dataset [81]. Following the panoramic VLN-
+CE setting [8], [9], [10], at each location, the agent receives
+panoramic RGB observations O = {Irgb, Id} consisting of
+12 RGB images and 12 depth images, which are captured
+from different views at 12 equally-spaced horizontal head-
+ing angles, i.e., (0°, 30°, ..., 330°). The agent also receives an
+instruction for each episode. We denote the embeddings of
+the instruction with L words by W = {wi}L
+i=1.
+Overview of Our Approach. We propose a hierarchical nav-
+igation model, named ‘ETPNav’, which leverages high-level
+topological map-based planning and low-level controller for
+the VLN-CE task. As illustrated in Fig. 1, ETPNav comprises
+three modules: topological mapping, cross-modal planning
+and control. The mapping module maintains a topo map
+for each episode. Within each decision loop, the mapping
+module first updates the topo map by incorporate current
+observations. Subsequently, the planning module conducts
+cross-modal reasoning over the map and instruction to craft
+a high-level topological path plan. The plan is then executed
+by the control module, which drives the agent through a
+sequence of low-level actions. To be noted, in the following
+technique descriptions, we use ‘step t’ to denote the decision
+loop step, rather than the low-level action step.
+Similar to recent work [10], [14], [63], we presume that
+the agent can access the ground-truth pose provided by
+the simulator to facilitate mapping and control. Note that
+this work does not address the challenge of estimating pose
+based on noisy sensor readings. However, we suggest that
+visual odometry techniques [82] may be adaptable to our
+model in this context. This paper proceeds by introducing
+topological mapping in § 3.1, followed by cross-modal plan-
+ning in § 3.2, and the presentation of our control policy in
+§ 3.3. Finally, we provide detailed expositions of training
+and inference of our model in § 3.4.
+3.1
+Topological Mapping
+To facilitate long-range planning, our agent constructs a
+topo map on the fly. This map shares a similar structure
+with [78], which abstracts the visited or observed locations
+along the traversed path as a graph representation, denoted
+as Gt = ⟨Nt, Et⟩at step t. Each node (ni ∈Nt) contains vi-
+sual information observed at its location as well as position
+information. Two nodes are connected by an edge (ei,j ∈Et)
+if their represented locations are directly reachable from
+each other. Each edge also stores the relative Euclidean
+distance between two nodes. We divide these nodes into
+visited nodes
+, the current node
+, and ghost nodes
+,
+where ‘ghost’ denotes that nodes have been observed but
+left unexplored.
+Different from prior work [3], [16], [17], [18], our method
+assumes no prior knowledge of the environmental structure
+and we propose to construct the topo map via online self-
+organization of predicted waypoints. As depicted in Fig. 2,
+at each step t, the agent first predicts several nearby way-
+points
+, representing possibly accessible locations near the
+agent. A current node
+is also initialized at the agent’s
+current location and connects to the last visited node (if
+it exists). The predicted waypoints and current node are
+represented by feature embeddings of the current observa-
+tions Ot. These waypoints will be organized to update the
+previous topo map Gt−1 and obtain the current map Gt.
+Image Processing. Given the current step’s RGBD obser-
+vations Ot = {Irgb
+t
+, Id
+t }, two different pre-trained visual
+encoders are used to extract RGB feature vectors V rgb
+t
+=
+{vrgb
+i }12
+i=1 and depth feature vectors V d
+t = {vd
+i }12
+i=1, respec-
+tively. To distinguish the features captured from different
+views of the panorama, we also apply orientation features
+V ori
+t
+= {(cos θi, sin θi)}12
+i=1, where θi represents heading
+angle. The parameters of the two visual encoders are fixed.
+More details of pre-processing are introduced in § 4.1.3.
+Waypoint Prediction. We employ a transformer-based way-
+point predictor [9] to generate the nearby waypoints. The
+predictor takes the depth feature vectors V d
+t and orientation
+feature vectors V ori
+t
+to predict the relative poses of these
+waypoints. Concretely, feature vectors in V d
+t
+and V ori
+t
+are
+first fused using a linear layer. The resulting vectors are fed
+into a two-layer transformer to conduct inter-view interac-
+tion and obtain contextual depth embeddings. These em-
+beddings are then fed into a multi-layer perceptron to obtain
+a heatmap representing probabilities of nearby waypoints in
+space. K waypoints △P w = {△pw
+i }K
+i=1 are sampled from
+the heatmap using a non-maximum-suppression (NMS),
+where △pw
+i
+denotes the relative pose to the agent. The
+predictor is pre-trained on the MP3D graph dataset [9], and
+
+
+--- PDF PAGE 5 ---
+JOURNAL OF LATEX CLASS FILES, VOL. *, NO. *, * *
+5
+its parameters are fixed.
+To be noted, our predictor only takes depth images as
+inputs, instead of RGBD images used in [9]. Such depth-
+only design is motivated by the fact that waypoints only
+represent spatial accessibility, while semantic-level RGB
+information may be not helpful or even detrimental. We
+provide an ablation analysis of this design in § 4.3.1.
+Visual Representations for Waypoints and the Current
+Node. We conduct feature mapping of the current obser-
+vations Ot to represent the predicted waypoints and the
+current node. Specifically, RGB features V rgb
+t
+, depth fea-
+tures V d
+t
+and orientation features V ori
+t
+are fused using a
+linear layer, and then fed into a panorama encoder. The
+panorama encoder uses a multi-layer transformer to per-
+form inter-view interaction and outputs contextual visual
+embeddings bVt = {ˆvi}12
+i=1. The current node
+has access
+to the panoramic observations and thus is represented as
+an average of bVt. The waypoints
+are partially observed
+and are represented by embeddings of views from which
+they can be observed. For example, if the relative heading
+angle of a waypoint to the agent is within 0° ∼30°, the
+waypoint is represented by the first view embedding ˆv1. The
+waypoint representations will be incorporated to update the
+representations of ghost nodes
+.
+Graph Update. We update the topo map with the predicted
+waypoints based on their spatial relations with existing
+nodes in the graph. This process utilizes a Waypoint Lo-
+calization (FL) function to localize waypoints in the graph.
+FL takes the position of a waypoint as input and computes
+its Euclidean distances with all nodes in the graph. If the
+minimum distance is less than a threshold γ, FL returns the
+corresponding node as the localized node. For each way-
+point, we try to localize it in the graph using the Waypoint
+Localization function (FL). To update the graph, we divide
+the localization results into three cases:
+1) If a visited node
+is localized, delete the input waypoint
+and add an edge between the current node and the
+localized visited node.
+2) If a ghost node
+is localized, accumulate the position
+and visual representation of the input waypoint to the lo-
+calized ghost node. The new position and representation
+of the localized ghost node are updated as the average of
+its accumulated waypoint positions and representations.
+3) If no node is localized, we take the input waypoint as a
+new ghost node.
+3.2
+Cross-Modal Planning
+Fig. 3 illustrates the cross-modal planning module. It con-
+sists of a text encoder and a cross-modal graph encoder.
+The instruction of the current episode is encoded by the
+text encoder. Then, the cross-modal graph encoder conducts
+reasoning over the topo map and encoded instruction to
+predict a long-term goal node. The output is a planned
+topological path to the goal.
+3.2.1
+Text Encoder
+Each word embedding wi is added a positional embed-
+ding [83] corresponding to the position of the word in
+the sentence and a type embedding for text [84]. We de-
+note the word embeddings with positional information as
+Graph (𝐺𝐺𝑡𝑡)
+… slightly right toward 
+the glass table and white 
+chairs. Pass the table and 
+head straight …
+Instruction (W)
+Text 
+Encoder
+Node 
+Encoding
+Cross-Modal 
+Graph Transformer
+Long-term 
+Goal Prediction
+Planned Path
+Cross-Modal Graph Encoder
+𝑬𝑬
+Fig. 3: The planning module consists of a text encoder for
+instruction encoding, and a graph encoder to conduct cross-
+modal reasoning over the map to generate a path plan.
+c
+W = { ˆwi}L
+i=1. Those embeddings are then fed into a multi-
+layer transformer to obtain contextual word representations.
+3.2.2
+Cross-Modal Graph Encoder
+The module takes the topo map Gt and encoded instruction
+c
+W to predict a long-term goal node in the topo map.
+Node Encoding. The visual feature in node ni is added
+with a pose encoding and a navigation step encoding. The
+pose encoding embeds the global relative pose information
+of a node w.r.t. the agent’s current location, including its
+orientation and Euclidean distance relative to the current
+node. The navigation step encoding embeds the latest vis-
+ited time step for visited nodes and 0 for ghost nodes. This
+allows visited nodes to be encoded with different histories
+to capture navigation dependencies and facilitate alignment
+with the instruction. The encoding of ni is denoted as ni. To
+represent a STOP action, we add a ‘stop’ node in the graph
+and connect it with all other nodes.
+Cross-Modal Graph Transformer. The encoded node and
+word embeddings are fed into a multi-layer transformer
+to conduct cross-modal interaction. The transformer archi-
+tecture is similar to LXMERT [84], with each layer com-
+prising one bi-directional cross-attention sub-layer, two self-
+attention sub-layers, and two feed-forward sub-layers. For
+node encoding, the standard self-attention layer [19] only
+considers visual similarity among nodes, which may over-
+look nearby nodes which are more relevant than distant
+nodes. To this end, we devise a graph-aware self-attention
+(GASA) that further takes into account the graph topology
+when computing inter-node attention for node encoding:
+GASA(X) = softmax(XWq(XWk)⊤
+√
+d
++ EWe))XWv (1)
+where X represents the stack of all node encodings, E is
+the spatial matrix constructed by all-pair shortest distances
+obtained from the graph edges Et, Wq, Wk, We, Wv are
+learnable matrices. The produced visual-textual associated
+representation of nodes is formulated as [˜n1, . . . , ˜n|Nt|] =
+GASA([n1, . . . , n|Nt|]).
+Long-term Goal Prediction. We predict a navigation goal
+score for each node in the topo map Gt as follows:
+si = FFN(˜ni)
+(2)
+where FFN denotes a feed-forward network and ˜ni is the
+multimodal representation of node ni. Note that s0 corre-
+
+
+--- PDF PAGE 6 ---
+JOURNAL OF LATEX CLASS FILES, VOL. *, NO. *, * *
+6
+sponds to the ‘stop’ node and it represents the score of the
+STOP action. To avoid unnecessary repeated visits to visited
+nodes, we mask the score for visited nodes and the current
+node. As such, a long-term goal is picked from ghost nodes
+or the ‘stop’ node.
+Finally, the agent selects a long-term goal according
+to the predicted goal scores (e.g., pick the node with the
+maximum score). If the selected goal is the ‘stop’ node,
+navigation of the current episode terminates. If the selected
+goal is a ghost node, the agent computes a shortest path to
+the goal by performing Dikjstra’s algorithm on the graph.
+The resulting path plan consists of a sequence of subgoal
+nodes, denoted as Pt = {pm}M
+m=1 where pm represents node
+position.
+3.3
+Control
+The control module is responsible for converting the topo-
+logical plan Pt into a series of low-level actions that guide
+the agent to the goal. Inputs for the control module include
+a sequence of subgoal nodes spanning Pt, and the agent’s
+pose at each each time step. The output action space of
+navigation control is a set of parameterized low-level ac-
+tions defined by the VLN-CE task, e.g., FORWARD (0.25m),
+ROTATE LEFT/RIGHT (15°), and STOP.
+The control module produces actions that move the
+agent from one node to another. Similar to [8], [9], we
+employ a rotate-then-forward controller, named RF. Specif-
+ically, to reach a subgoal node pm, RF first accesses the
+agent’s current pose and computes its relative orientation
+and distance (△θ, △ρ) from pm. Then, (△θ, △ρ) are quan-
+tized and translated to a series of ROTATE (15°) actions,
+followed by a FORWARD (0.25m) action sequence. RF ex-
+ecutes these translated actions sequentially. After that, the
+current subgoal is consumed and the subsequent node in
+plan Pt becomes the new subgoal. The cycle repeats until
+no more nodes remain in Pt.
+Handling Unreachable Goal. It is possible that the pre-
+dicted long-term goal (a ghost node) is unreachable, due
+to its position being estimated by predicted waypoints that
+might not be on the navigation mesh. In such cases, there is
+a risk of the agent repeatedly selecting the same unreachable
+goal node in alternating planning stages, inevitably leading
+to no progress in navigation control. To alleviate this issue,
+we employ a simple strategy - delete the selected ghost
+node from the graph map Gt before trying to reach it
+using navigation control. This approach not only avoids
+the repeated selection of unfeasible ghost nodes but also
+reduces the pool of candidates available for long-term goal
+prediction, thereby easing policy learning.
+Obstacle Avoidance. The VLN-CE task simulates a practical
+navigation scenario where collision with obstacles is taken
+into account. Obstacle avoidance is essential, especially
+when sliding along obstacles is forbidden, such as on the
+RxR-CE dataset [22]. In such cases, the agent is unable
+to move forward if its chassis comes into contact with an
+obstacle. This can result in navigation deadlocks, and in
+extreme cases, navigation failure due to early episode ter-
+mination. To address this issue, we devise a trial-and-error
+heuristic called ‘Tryout’ to prevent navigation deadlocks.
+‘Tryout’ comes into play when the RF controller executes the
+FORWARD flow, and it shares a similar spirit with the ‘brute
+force untrap mode’ [85]. Concretely, it detects deadlocks by
+checking if the agent’s position changes after executing a
+FORWARD action. If a deadlock is identified, the Tryout
+compels the agent to rotate with a set of predefined headings
+△Θtry and attempt to move on with a single FORWARD
+action. If the agent moves away from its previous position,
+it indicates that the agent has exited the dead-end. Then,
+the agent returns to its original heading and continues
+with the remaining FORWARD control flow. However, if
+the agent’s position remains unchanged, it proceeds to try
+other headings in △Θtry. In practice, △Θtry consists of
+7 equally-space horizontal heading angles, ranging from
+90°counterclockwise (−90°) to 90°clockwise (90°).
+3.4
+Training and Inference
+Pre-training. We pre-train the planning module with proxy
+tasks to improve its generalization ability, following the
+common practice in transformer-based VLN models [4], [5],
+[49]. In this stage, the input topo maps are constructed
+offline and derived from the predefined graphs used in
+Matterport3D simulator [1]. Specifically, given an expert tra-
+jectory, we first extract its corresponding sub-graph from the
+predefined graph, and then mark the current node, visited
+nodes, and ghost nodes along the trajectory. Further, we
+align rendered RGBD images in the Habitat Simulator [61]
+onto the predefined graph for feature mapping in the map
+construction process. We adopt Masked Language Model-
+ing (MLM) [83] and Single Action Prediction (SAP) [47]
+proxy tasks for pre-training. In the MLM task, the input
+instructions are randomly masked and the planning module
+is optimized by recovering the masked words after map-
+instruction interaction as described in § 3.2. As for the SAP
+task, we randomly chunk an input expert trajectory and
+build its corresponding topo map. The objective of this task
+is to predict the next teacher action, i.e., the subsequent
+action node of the chunked trajectory.
+Fine-tuning. We then fine-tune our model on downstream
+VLN-CE tasks to adapt navigation on 3D meshes in the
+Habitat Simulator [61]. To avoid overfitting to expert ex-
+perience, we use ‘student-forcing’ [6] to train the model,
+where the predicted long-term goal of each step is sampled
+through the probability distribution of the predicted scores
+(Eq. 2). In each decision loop, the agent updates the topo
+map as described in § 3.1, and then conducts cross-modal
+map-instruction reasoning to predict a long-term goal as ex-
+plained in § 3.2. The planned path is executed by a controller
+as presented in § 3.3. Similar to DAgger [86], we employ
+an interactive demonstrator ∗to determine the teacher
+action node of each step. The demonstrator ∗accesses the
+ground-truth 3D mesh and outputs one ghost node as the
+teacher supervision. ∗takes different strategies on different
+datasets. On the R2R-CE dataset, the teacher action node a∗
+t
+is the ghost node that has the shortest geodesic distance to
+the final target. On the RxR-CE dataset that does not has
+shortest-path prior, ∗takes a path-fidelity strategy similar
+to [7]. Concretely, the annotated reference path is discretized
+as a sequence of subgoals. ∗keeps track of visited subgoals
+and a∗
+t is the ghost node that has the shortest geodesic
+
+
+--- PDF PAGE 7 ---
+JOURNAL OF LATEX CLASS FILES, VOL. *, NO. *, * *
+7
+TABLE 1: Data statistics and agent embodiment of R2R-CE and RxR-CE datasets.
+Dataset
+Language
+Length
+Train
+Val-Seen
+Val-Unseen
+Test-Unseen
+Embodiment
+Path
+Sentence
+#house
+#instr
+#house
+#instr
+#house
+#instr
+#house
+#instr
+Chassis
+Sliding
+R2R-CE
+en
+9.89m
+32 words
+61
+10,819
+53
+778
+11
+1,839
+18
+3,408
+0.10m
+Allowed
+RxR-CE
+en, hi, te
+15.23m
+120 words
+59
+60,300
+57
+6,746
+11
+11,006
+17
+9,557
+0.18m
+Forbidden
+distance to the next unvisited subgoal. Overall, the policy
+learning objective is formulated as:
+L =
+T
+X
+t=1
+−log p(a∗
+t |W, Gt)
+(3)
+Inference. During the testing phase, the agent consistently
+runs the mapping-planning-control cycle, which is anal-
+ogous to the fine-tuning stage. The primary distinction
+between the two stages pertains to the long-term goal sam-
+pling strategy employed at each planning step. In this case,
+the agent greedily selects the ghost node with the maximum
+predicted scores (Eq. 2). In the event that the agent triggers a
+STOP action or surpasses the maximum number of goal pre-
+dictions, the ongoing episode’s navigation will terminate. In
+line with [9], the maximum number of predictions is set as
+15 for the R2R-CE dataset and 25 for the RxR-CE dataset.
+4
+EXPERIMENT
+4.1
+Experimental Setup
+4.1.1
+Datasets
+We conduct experiments on R2R-CE and RxR-CE datasets,
+which are created by converting discrete paths of R2R [1]
+and
+RxR
+[22]
+datasets
+into
+continuous
+environments
+through the Habitat Simulator [61]. While both datasets pro-
+vide step-by-step language guidance, they differ in various
+aspects such as path length, guidance granularity, and agent
+embodiment as summarized in Tab. 1.
+The R2R-CE dataset comprises a total of 5,611 shortest-
+path trajectories, encompassing train, validation, and test
+splits. Each trajectory corresponds to approximately 3 En-
+glish instructions. The average path length is 9.89m and
+each instruction consists of an average of 32 words. We
+report performance on several validation splits. Val-Seen
+contains episodes with novel paths and instructions but
+from scenes observed in training. Val-Unseen contains novel
+paths, instructions, and scenes. Agents in R2R-CE have a
+chassis radius of 0.10m and can slide along obstacles while
+navigating.
+RxR-CE is larger and more challenging compared to
+R2R-CE. While having similar scene splits as R2R-CE, RxR-
+CE presents substantively more instructions, spanning mul-
+tilingual descriptions in English, Hindi, and Telugu, requir-
+ing an average of 120 words per instruction. Additionally,
+annotated paths in RxR-CE are much longer than those in
+R2R-CE (15.23m v.s. 9.89m). To be noted, agents in RxR-CE
+are forbidden to slide along obstacles, and the larger chassis
+radius (0.18m) makes it prone to collide with obstacles.
+This also makes RxR-CE more challenging because navi-
+gation can easily get stuck when encountering obstacles,
+underscoring the vital role of obstacle avoidance in this
+challenging task.
+4.1.2
+Evaluation Metrics
+Following previous works [1], [87], [88], we adopt the
+following navigation metrics. Trajectory Length (TL): aver-
+age path length in meters; Navigation Error (NE): average
+geometric distance in meters between the final and target
+location; Success Rate (SR): the ratio of paths with NE less
+than 3 meters; Oracle SR (OSR): SR given oracle stop policy;
+SR penalized by Path Length (SPL); Normalize Dynamic
+Time Wrapping (NDTW): the fidelity between the predicted
+and annotated paths and NDTW penalized by SR (SDTW).
+R2R-CE uses SR and SPL as its primary metrics, whereas
+RxR-CE is more concerned with path fidelity and uses
+NDTW and SDTW as its primary metrics.
+4.1.3
+Implementation Details
+Model Configuration. For visual encoding, we use ViT-
+B/32 [89] pre-trained in CLIP [90] to encode RGB images
+as [11], and ResNet-50 [91] pre-trained in point-goal navi-
+gation [13] to encode depth images following [6]. The same
+as [5], [9], [84], we set the layers’ number of the panorama
+encoder, the text encoder, and the cross-modal graph en-
+coder as 2, 9, 4, respectively. Other hyperparameters are the
+same as LXMERT [84] (e.g., the hidden layer size is 768).
+In the pre-training stage, we initialize the model with pre-
+trained LXMERT on the R2R-CE dataset and pre-trained
+RoBerta [92] for the multilingual RxR-CE dataset.
+Training Details. Our experiments were performed using
+the PyTorch framework [93] and executed on two NVIDIA
+RTX 3090 GPUs. Our model includes two trainable modules:
+the panorama encoder used in the topological mapping
+module, and the cross-modal planning module. We pre-
+train our model for 100,000 iterations (∼20 hours), with
+a batch size of 64 and a learning rate of 5e-5, utilizing
+the AdamW optimizer [94]. In this stage, topological maps
+are built offline and derived from the predefined graph of
+discrete VLN [1]. We leverage the discrete paths in the R2R
+and RxR datasets for pre-training purposes and augment
+the data using synthetic instructions from Prevalent [47] and
+RxR-Markey [43]. After pre-training, we choose the model
+weights, producing the best zero-shot navigation perfor-
+mance (e.g., SPL on R2R-CE, SDTW on RxR-CE) to initialize
+the fine-tuning stage. During fine-tuning, the agent interacts
+with the environments online through the Habitat Simula-
+tor [61] and is supervised by the teacher node generated by
+the demonstrator ∗. We leverage scheduled sampling [95]
+to train the model, shifting from teacher-forcing to student-
+forcing with a decay frequency of per 3000 iterations and
+decay ratio of 0.75. The fine-tuning iterations amount to
+15,000 (∼30 hours) with a batch size of 16 and a learning
+rate of 1e-5. The best iterations are determined by best
+performance on validation unseen splits.
+
+
+--- PDF PAGE 8 ---
+JOURNAL OF LATEX CLASS FILES, VOL. *, NO. *, * *
+8
+TABLE 2: Comparison with state-of-the-art methods on R2R-CE dataset.
+Methods
+Val Seen
+Val Unseen
+Test Unseen
+TL
+NE↓
+OSR↑
+SR↑
+SPL↑
+TL
+NE↓
+OSR↑
+SR↑
+SPL↑
+TL
+NE↓
+OSR↑
+SR↑
+SPL↑
+Seq2Seq [6]
+9.26
+7.12
+46
+37
+35
+8.64
+7.37
+40
+32
+30
+8.85
+7.91
+36
+28
+25
+SASRA [62]
+8.89
+7.71
+-
+36
+34
+7.89
+8.32
+-
+24
+22
+-
+-
+-
+-
+-
+CMTP [18]
+-
+7.10
+56
+36
+31
+-
+7.90
+38
+26
+23
+-
+-
+-
+-
+-
+LAW [7]
+-
+-
+-
+40
+37
+-
+-
+-
+35
+31
+-
+-
+-
+-
+-
+HPN [8]
+8.54
+5.48
+53
+46
+43
+7.62
+6.31
+40
+36
+34
+8.02
+6.65
+37
+32
+30
+CM2 [14]
+12.05
+6.10
+51
+43
+35
+11.54
+7.02
+42
+34
+28
+13.90
+7.70
+39
+31
+24
+WS-MGMAP [63]
+10.12
+5.65
+52
+47
+43
+10.00
+6.28
+48
+39
+34
+12.30
+7.11
+45
+35
+28
+CWP-CMA [9]
+11.47
+5.20
+61
+51
+45
+10.90
+6.20
+52
+41
+36
+11.85
+6.30
+49
+38
+33
+CWP-RecBERT [9]
+12.50
+5.02
+59
+50
+44
+12.23
+5.74
+53
+44
+39
+13.51
+5.89
+51
+42
+36
+Sim2Sim [10]
+11.18
+4.67
+61
+52
+44
+10.69
+6.07
+52
+43
+36
+11.43
+6.17
+52
+44
+37
+Reborn (ours) [11]
+10.29
+4.34
+67
+59
+56
+10.06
+5.40
+57
+50
+46
+11.47
+5.55
+57
+49
+45
+ETPNav (ours)
+11.78
+3.95
+72
+66
+59
+11.99
+4.71
+65
+57
+49
+12.87
+5.12
+63
+55
+48
+TABLE 3: Comparison against other VLN planners.
+Planners
+R2R-CE Val-Unseen
+TL
+NE↓
+OSR↑
+SR↑
+SPL↑
+RecBERT [9]
+12.46
+5.66
+54.13
+45.14
+39.87
+HAMT [5]
+10.23
+5.41
+57.09
+49.97
+45.72
+DUET [17]
+13.08
+5.16
+62.21
+53.71
+46.43
+ETPNav (Ours)
+11.99
+4.71
+64.71
+57.21
+49.15
+4.2
+Comparison with State-of-the-art Methods
+4.2.1
+R2R-CE
+In Tab. 2, we compared our ETPNav with current state-of-
+the-art methods on the R2R-CE dataset. The results demon-
+strate that our model outperforms the existing models on
+all splits in terms of NE, OSR, SR, and SPL. Particularly,
+on the val unseen split, ETPNav surpasses the second-best
+model CWP-RecBERT [9] by 13 SR and 10 SPL. Moreover,
+our model also generalizes well on the test unseen split, as it
+outperforms Sim2Sim [10] by 11 SR and 11 SPL. Reborn [11]
+serves as the initial version for the 2022 RxR-Habitat Chal-
+lenge. It uses a local planning space, which consists of
+nearby waypoints, and utilizes an unstructured memory
+bank to capture navigation dependency. The performance
+gap between Reborn and ETPNav is substantial, with ETP-
+Nav outperforming Reborn on the test unseen split by 6 SR
+and 3 SPL. This highlights the efficacy of global planning
+with topo maps, enabling the agent to encode structured
+environmental priors and allowing for long-term planning,
+leading to a more robust policy. We also compare ETPNav
+against several advanced VLN planners in Tab. 3. Specifi-
+cally, RecBERT [9], HAMT [5] and DUET [17] are transferred
+into VLN-CE where we align their controllers and model
+configurations with ETPNav’s (e.g., the CLIP-ViT-B/32 [90]
+visual encoder, depth-only waypoint and topological map).
+ETPNav consistently surpasses these alternatives by a clear
+margin (e.g., 3.5 SR and 2.72 SPL higher than DUET). This
+further demonstrates the efficacy of ETPNav’s planning
+capability.
+4.2.2
+RxR-CE
+Tab. 4 compares our ETPNav model with the current state-
+of-the-art methods on the RxR-CE dataset. Our model out-
+performs the existing best model, CWP-RecBERT [9] on all
+evaluation metrics on the three splits. For instance, on the
+val unseen split, ETPNav surpasses CWP-RecBERT by 27.71
+SR, 22.24 SPL, and 15.19 NDTW. ETPNav also generalizes
+well on the test unseen split, where it outperforms CWP-
+RecBERT by 26.36 SR, 20.25 SPL, 16.81 NDTW, and 22.25
+SDTW. For a fair comparison, we also report our results
+without Marky-mT5 [43] data augmentation, where ETP-
+Nav still beats CWP-RecBERT by a significant margin, for
+instance, ↑25.99 SR and ↑14.78 NDTW on the val unseen
+split. Please note that Reborn [11] is our winning entry
+for the 2022 RxR-Habitat Challenge, which employs a local
+planning space composed of nearby waypoints. While Re-
+born achieves slightly better NDTW (e.g., 55.43 v.s. 54.11) on
+the test unseen splits, it has significant worse SDTW (e.g.,
+38.43 v.s. 41.30). We attribute this to the global planning
+space of ETPNav, which promotes backtracking and may
+impact path fidelity. However, this global planning space
+enables the agent to make long-term plans, resulting in
+better SR and SDTW.
+4.3
+Ablation Study
+In this section, we provide detailed ablation experiments to
+evaluate specific components of ETPNav, including critical
+design choices of the topological mapping module (§ 4.3.1)
+and the cross-modal planning module (§ 4.3.2). Addition-
+ally, we compare the proposed controller with other alter-
+natives (§ 4.3.3). Finally, we visualize the trajectories pre-
+dicted by our model and compare them with other variants
+(§ 4.3.4).
+4.3.1
+Key Design Choices of Topological Mapping
+Waypoint Prediction. Tab. 5 presents a comparison between
+three different waypoint predictors on the R2R-CE dataset.
+In Row 1, RGB and depth features are utilized as inputs,
+where both feature types are linearly transformed to the
+same dimension, fused, and then fed into the transformer
+layer to predict waypoints. This approach is also the default
+choice in [9]. Row 2 only takes RGB features as inputs, while
+Row 3 shows our approach that uses only depth features
+for waypoint prediction. We apply waypoint metrics [9]
+and navigation results to assess the quality of predicted
+waypoints. These waypoint metrics are as follows: |△|
+
+
+--- PDF PAGE 9 ---
+JOURNAL OF LATEX CLASS FILES, VOL. *, NO. *, * *
+9
+TABLE 4: Comparison with state-of-the-art methods on RxR-CE dataset.
+Methods
+Val Seen
+Val Unseen
+Test Unseen
+NE↓
+SR↑
+SPL↑
+NDTW↑
+SDTW↑
+NE↓
+SR↑
+SPL↑
+NDTW↑
+SDTW↑
+NE↓
+SR↑
+SPL↑
+NDTW↑
+SDTW↑
+Seq2Seq [6]
+-
+-
+-
+-
+-
+-
+-
+-
+-
+-
+12.10
+13.93
+11.96
+30.86
+11.01
+CWP-CMA [9]
+-
+-
+-
+-
+-
+8.76
+26.59
+22.16
+47.05
+-
+10.40
+24.08
+19.07
+37.39
+18.65
+CWP-RecBERT [9]
+-
+-
+-
+-
+-
+8.98
+27.08
+22.65
+46.71
+-
+10.40
+24.85
+19.61
+37.30
+19.05
+Reborn†(ours) [11]
+5.73
+51.14
+44.78
+65.72
+43.84
+5.82
+47.56
+41.65
+63.02
+41.16
+-
+-
+-
+-
+-
+Reborn (ours) [11]
+5.69
+52.43
+45.46
+66.27
+44.47
+5.98
+48.60
+42.05
+63.35
+41.82
+7.10
+45.82
+38.82
+55.43
+38.42
+ETPNav†(ours)
+5.55
+57.26
+47.67
+64.15
+47.57
+5.80
+53.07
+44.16
+61.49
+43.92
+-
+-
+-
+-
+-
+ETPNav (ours)
+5.03
+61.46
+50.83
+66.41
+51.28
+5.64
+54.79
+44.89
+61.90
+45.33
+6.99
+51.21
+39.86
+54.11
+41.30
+†Results without Marky-mT5 synthetic instructions [43].
+TABLE 5: Comparison of different waypoint predictors.
+#
+inputs
+Waypoint Prediction
+R2R-CE Val-Seen
+R2R-CE Val-Unseen
+|△|
+%Open↑
+dC ↓
+dH ↓
+TL
+NE↓
+OSR↑
+SR↑
+SPL↑
+TL
+NE↓
+OSR↑
+SR↑
+SPL↑
+1
+RGBD
+1.40
+82.87
+1.05
+2.01
+11.22
+3.87
+70.56
+63.88
+57.11
+11.77
+4.73
+63.24
+56.44
+48.53
+2
+RGB
+1.38
+65.34
+1.08
+2.03
+13.38
+4.38
+63.49
+56.29
+46.42
+12.81
+4.99
+57.91
+51.66
+42.21
+3
+Depth
+1.39
+84.05
+1.04
+2.01
+11.78
+3.95
+71.85
+66.19
+59.37
+11.99
+4.71
+64.71
+57.21
+49.15
+measures the difference in the number of target waypoints
+and predicted waypoints. %Open measures the ratio of way-
+points that is in open space (not hindered by any obstacle).
+dC and dH are the Chamfer distance and the Hausdorff
+distance, respectively, commonly used metrics to measure
+the distance between point clouds.
+As shown in Tab. 5, Row 1 achieves a decent perfor-
+mance in both waypoints and navigation metrics on the
+val unseen split, with 82.87 %Open, 1.05 DC, and 56.44 SR.
+Conversely, Row 2 only utilizes RGB to predict waypoints,
+resulting in the worst performance of all with 65.34 %Open
+and 1.08 DC. Without depth information, the %Open metric
+drops severely, indicating that many waypoints are ob-
+structed by obstacles or not on the navigation mesh. Con-
+sequently, the navigation performance also declines consid-
+erably, for example, compared to Row 1, SR drops by 4.78
+on the val unseen split. It is noteworthy that the depth-only
+predictor (Row 3) yields the best performance, achieving
+84.05 %Open and 1.04 DC. Additionally, the navigation
+performance is also superior, with 57.21 SR and 49.15 SPL
+on the val unseen split, compared to 56.44 SR and 48.53 SPL
+respectively. These findings suggest that RGB information
+is ineffective and even detrimental to waypoint prediction.
+One possible explanation is that low-level semantics in RGB
+features can make the predictor overfit to seen environ-
+ments, while such semantics are unnecessary for inferring
+spatial accessibility.
+Different Options for Map Construction. Tab. 6 com-
+pares different options for map construction on the R2R-
+CE dataset, including the localization threshold γ and the
+waypoint accumulation in § 3.1, as well as the ghost node
+deleting in § 3.3.
+As the localization threshold γ increases, the number of
+nodes Nnode shows a downward trend. This is because a
+higher γ encourages the agent to localize predicted way-
+points onto existing nodes of the graph, thereby reducing
+the creation of new nodes. Meanwhile, the overall naviga-
+tion performance is sensitive to the number of nodes Nnode.
+For example, on the val unseen split, there is approximately
+12 SR drop comparing (Row 10 ∼Row 12) to (Row 1 ∼
+Row 3). The reason is that a higher γ results in too few
+nodes to depict the environment well, limiting the agent’s
+TABLE 6: Comparison of different options for map construc-
+tion. γ is the threshold of the waypoint localization function
+FL. ‘Acc.’ denotes accumulating multiple waypoints to rep-
+resent one ghost node. ‘Del.’ denotes deleting the selected
+ghost node in each planning step. Nnode denotes the average
+number of nodes per episode.
+#
+γ (m)
+Acc.
+Del.
+R2R-CE Val-Unseen
+Nnode
+TL
+NE↓
+OSR↑
+SR↑
+SPL↑
+1
+0.25
+✓
+✓
+32.18
+11.68
+4.70
+63.34
+56.71
+48.71
+2
+✓
+34.13
+11.33
+4.81
+62.26
+55.19
+48.30
+3
+✓
+30.80
+13.46
+5.08
+62.15
+53.34
+45.64
+4
+0.50
+✓
+✓
+23.76
+11.99
+4.71
+64.71
+57.21
+49.15
+5
+✓
+31.02
+12.61
+4.68
+63.13
+55.89
+47.92
+6
+✓
+21.01
+13.38
+5.03
+59.70
+52.41
+45.02
+7
+0.75
+✓
+✓
+18.23
+13.97
+4.94
+64.11
+54.75
+45.42
+8
+✓
+25.45
+14.48
+4.81
+61.06
+53.61
+45.86
+9
+✓
+15.57
+15.04
+5.07
+58.78
+51.16
+42.38
+10
+1.00
+✓
+✓
+14.43
+18.60
+6.13
+52.31
+42.30
+33.60
+11
+✓
+20.29
+21.02
+5.68
+53.12
+41.59
+32.17
+12
+✓
+10.98
+18.52
+5.50
+49.32
+42.36
+33.09
+accurate perception and efficient planning. However, a large
+Nnode also affects the navigation performance, e.g., on the val
+unseen split, 56.71 SR of Row 1 v.s. 57.21 SR of Row 4. One
+potential reason is that a larger number of candidate nodes
+increases the learning difficulty of the planning module.
+Moreover, both the ‘Acc.’ and ‘Del.’ are beneficial. For
+instance, comparing Row 4 and Row 5, without ‘Acc.’, SR
+and SPL on the val unseen split decrease by 1.32 and 1.23
+respectively. ‘Acc.’ allows the agent to integrate multi-step
+waypoint observations to represent ghost nodes, promoting
+the planning module to predict an accurate long-term goal.
+Similarly, comparing Row 4 and Row 6, without ‘Del.’, the
+performance decreases significantly, with SR and SPL on
+the val unseen split dropping by 4.80 and 4.13 respectively.
+Without ‘Del.’, unreachable ghost nodes can be selected end-
+lessly by the agent, resulting in no progress in navigation.
+In subsequent experiments, Row 4 is taken as the default
+setup.
+4.3.2
+Key Design Choices of Cross-Modal Planning
+Comparison of Different Planning Space. Tab. 7 compares
+
+
+--- PDF PAGE 10 ---
+JOURNAL OF LATEX CLASS FILES, VOL. *, NO. *, * *
+10
+TABLE 7: Comparison of different plannig spaces (Local v.s.
+Global). GASA represents graph-aware self-attention.
+#
+Planning
+Space
+GASA
+R2R-CE Val-Unseen
+TL
+NE↓
+OSR↑
+SR↑
+SPL↑
+1
+Local
+11.37
+4.92
+61.28
+53.15
+46.83
+2
+✓
+12.12
+4.94
+62.18
+53.92
+46.43
+3
+Global
+12.04
+4.83
+63.48
+55.97
+48.08
+4
+✓
+11.99
+4.71
+64.71
+57.21
+49.15
+TABLE 8: The effect of pre-training tasks.
+#
+Proxy Tasks
+R2R-CE Val-Unseen
+TL
+NE↓
+OSR↑
+SR↑
+SPL↑
+1
+No init
+14.35
+6.81
+49.21
+37.41
+30.28
+2
+MLM
+16.69
+5.44
+58.51
+48.23
+37.73
+3
+SAP
+13.05
+5.04
+59.98
+52.37
+42.77
+4
+MLM + SAP
+11.99
+4.71
+64.71
+57.21
+49.15
+different planning spaces on the R2R-CE dataset as well
+as the effect of GASA in Eq. 1. The local planning space
+only considers adjacent ghost nodes of the agent as can-
+didate goals, while the global planning space consists of
+all observed ghost nodes along the traversed path. Global
+planning results in better navigation performance, e.g., on
+the val unseen split, Row 4 achieves a 57.21 SR compared
+to Raw 2 at 53.92 SR. This demonstrates the superiority of
+global planning, as it allows efficient backtracking to a pre-
+vious location, providing self-correction policy. In contrast,
+local planning requires multiple plan-control flows to reach
+a remote location, introducing unstable accumulation bias,
+making it challenging to achieve such intelligent behavior.
+GASA is also shown to be effective as it increases SR by
+about 1 point compared (Row 2, Row 4) to (Row 1, Row
+3) where it is not used. GASA introduces topology for
+node encoding, facilitating the agent’s ability to capture
+environmental structural priors. We also note that the gain
+of GASA to global planning is more significant than that
+to local planning, comparing ↑1.24 SR in global planning
+and ↑0.77 SR in local planning. We suspect this because
+conducting global planning requires an understanding of
+the house structure, while local planning is restricted to
+nearby areas, thereby reducing the need for structure priors.
+The Effect of Pre-training. Tab. 8 presents the benefits of
+various pre-training tasks on the downstream R2R-CE task.
+Row 1 shows results from the model trained from scratch,
+which shows the worst performance (e.g., on the val unseen
+split, 37.41 SR and 30.28 SPL). Row 2 displays the outcomes
+of pre-training with the MLM task, indicating a significant
+gain from the generic pre-training task (e.g., ↑10.82 SR
+and ↑7.45 SPL on the val unseen split). Because the MLM
+task enables the model to learn transferable visiolinguistic
+representations, enhancing the agent’s generalization ability.
+Row 3 shows the efficacy of the SAP task. Compared to row
+1, the navigation performance increases significantly with
+↑14.96 SR and ↑12.49 SPL. Because SAP can promote the
+model to learn navigation-oriented representations, which
+is crucial for navigation policy learning. In row 4, the agent
+achieves the best performance when combining MLM and
+SAP tasks, demonstrating the two proxy tasks are comple-
+TABLE 9: Comparison of different visual inputs in pre-
+training.
+#
+RGB
+Depth
+R2R-CE Val-Unseen
+TL
+NE↓
+OSR↑
+SR↑
+SPL↑
+1
+MP3D
+13.54
+5.04
+62.04
+53.24
+44.09
+2
+MP3D
+✓
+13.13
+4.98
+64.49
+55.74
+47.48
+3
+Habitat
+12.90
+4.98
+62.59
+55.92
+46.97
+4
+Habitat
+✓
+11.99
+4.71
+64.71
+57.21
+49.15
+mentary. Thus, we assemble MLM and SAP as our default
+pre-training tasks.
+Tab. 9 presents the effect of using different visual inputs
+for pre-training on the downstream R2R-CE task. Row 1 and
+Row 2 pre-train the model with RGB images captured in
+Matterport3D Simulator [1]. which is a common practice in
+existing pre-training-based VLN-CE models [9], [10], [11]. In
+contrast, Row 3 and Row 4 use RGB images reconstructed in
+Habitat Simulator [61]. Notably, Row 3 outperforms Row 1
+by 2.68 SR and 2.88 SPL on the val unseen split, highlighting
+a performance gap between MP3D and Habitat simulators
+due to their visual domain gap. Although the model can
+be fine-tuned using habitat images, the performance loss
+caused by the domain gap in the pre-training stage cannot
+be eliminated. Additionally, adding depth information for
+pre-training (e.g., Row 4) shows better performance than
+Row 3, with an improvement of 1.29 SR and 2.18 SPL on
+the val unseen split. Therefore, Row 4 is used as our default
+pre-training setup.
+4.3.3
+Comparison of Different Controllers
+Tab. 10 compares the performance of various navigation
+controllers on the R2R-CE and RxR-CE datasets. The Tele-
+portation controller serves as the performance upper bound.
+It transports the agent to the goal predicted by the planning
+module. Since the goal (a ghost node) might not be on the
+navigation mesh, in practice, we first transport the agent
+to an adjacent node of the goal, then drive it towards the
+goal using the proposed controller. Other alternative con-
+trollers include PointGoal, Fast Marching Method and RF.
+PointGoal [13] employs a pre-trained LSTM to predict low-
+level actions to reach the goal localization. We follow [14] to
+adapt PointGoal to the VLN-CE task. Fast Marching Method
+(FMM) [12] is a classical obstacle-aware controller which
+constructs a local occupancy map on the fly for path plan-
+ning. This map is aggregated by the geometric projection
+of depth observations. We follow [10] to configure FMM
+on the VLN-CE task. We further consider an FMM variant
+(i.e., FMM w/ CMap) to handle invisible obstacles due to
+simulation error, where obstacle collisions are recorded as
+a collision map (CMap) similar to [85]. The CMap is then
+combined with the local occupancy map for path planning.
+RF is the proposed controller described in § 3.3 and Tryout
+is active when sliding along obstacles is forbidden (i.e., RxR-
+CE dataset).
+Row 1 establishes the upper bound, reaching 57.97 SR
+and 49.76 SPL on the R2R-CE dataset and 64.43 NDTW and
+46.04 SDTW on the RxR-CE dataset. In Row 2, PointGoal
+shows satisfactory performance, but there is a clear gap
+to Row 1 with a decrease of 5.71 SPL on the R2R-CE
+dataset and 2.25 SDTW on the RxR-CE dataset. Row 3 and
+
+
+--- PDF PAGE 11 ---
+JOURNAL OF LATEX CLASS FILES, VOL. *, NO. *, * *
+11
+TABLE 10: Comparison of different controllers.
+#
+Controllers
+R2R-CE Val-Unseen
+RxR-CE Val-Unseen
+TL
+NE↓
+OSR↑
+SR↑
+SPL↑
+NE↓
+SR↑
+SPL↑
+NDTW↑
+SDTW↑
+1
+Teleportation
+11.31
+4.64
+65.14
+57.97
+49.76
+5.80
+54.98
+45.23
+64.33
+46.04
+2
+PointGoal [13]
+13.35
+4.87
+63.40
+54.86
+44.05
+5.89
+52.77
+43.50
+61.03
+43.79
+3
+FMM [12]
+12.62
+5.19
+61.45
+52.64
+44.34
+8.83
+25.95
+23.02
+47.29
+21.73
+4
+FMM w/ CMap
+12.93
+5.12
+62.43
+53.62
+44.96
+6.02
+50.06
+40.07
+58.75
+41.09
+5
+RF w/o Tryout
+11.99
+4.71
+64.71
+57.21
+49.15
+9.22
+22.61
+20.06
+44.30
+18.64
+6
+RF w/ Tryout
+-
+-
+-
+-
+-
+5.64
+54.79
+44.89
+61.90
+45.33
+TABLE 11: Quantitative results of the oracle planner with different controllers.
+#
+Controllers
+R2R-CE Val-Unseen
+RxR-CE Val-Unseen
+TL
+AT
+RT
+SG-NE↓
+CT↓
+SR↑
+SPL↑
+TL
+AT
+RT
+SG-NE↓
+CT↓
+SR↑
+NDTW↑
+1
+PointGoal [13]
+10.58
+146.81
+33.99
+0.17
+6.62
+94.77
+91.14
+16.58
+223.16
+69.12
+0.31
+45.23
+83.37
+79.32
+2
+FMM [12]
+10.13
+188.79
+52.12
+0.16
+6.37
+94.34
+87.68
+7.99 *
+385.23
+46.23
+0.50
+231.62
+41.40
+59.55
+3
+FMM w/ CMap
+10.20
+188.44
+52.64
+0.15
+4.59
+94.45
+87.68
+16.75
+281.50
+69.34
+0.33
+40.36
+77.57
+77.09
+4
+RF w/o Tryout
+9.56
+60.63
+21.18
+0.15
+1.78
+97.61
+93.27
+7.49 *
+148.59
+49.79
+0.83
+70.04
+35.92
+54.61
+5
+RF w/ Tryout
+-
+-
+-
+-
+-
+-
+-
+15.46
+148.58
+64.80
+0.28
+17.22
+88.85
+82.34
+* Much lower TL due to frequent collisions and deadlocks.
+0.10
+0.12
+0.14
+0.16
+0.18
+0.20
+Chassis Radius (m)
+53
+54
+55
+56
+57
+Success Rate (%)
+RF w/o Tryout (R2R)
+RF w/ Tryout (RxR)
+PointGoal (R2R)
+PointGoal (RxR)
+Fig. 4: The effect of the agent’s chassis radius on SR.
+Row 4 show FMM could achieve decent performance on
+the R2R-CE dataset, whereas the collision map (Row 4)
+yields marginally superior outcomes. Moreover, the colli-
+sion map shows to be critical on the sliding-forbidden RxR-
+CE dataset, where the performance drops severely without
+it (e.g., Row 3’s 21.73 SDTW v.s. Row 4’s 41.09). Because the
+occupancy map alone is not enough for obstacle-avoiding,
+the agent in Row 3 gets stuck frequently. More analyses
+will be presented in the next paragraph. Row 5 shows
+that our RF controller manages to narrow the gap on the
+R2R-CE dataset, reaching 49.15 SPL compared to Row 1’s
+49.76 SPL. However, RF results in significant performance
+drops on the RxR-CE dataset with a 27.4 SDTW decrease
+compared to Row 1. Because it is unaware of collision and
+causes frequent deadlocks in obstacles under the challeng-
+ing sliding-forbidden setup, resulting in navigation failure.
+The proposed Tryout satisfactorily handles this problem,
+nearly eliminating the performance loss caused by sliding-
+forbidden with 45.33 SDTW on Row 6 compared to 46.04
+SDTW on Row 1. Tryout even surpasses the learning-based
+PointGoal controller with 45.33 SDTW on Row 6 compared
+to 43.79 SDTW on Row 2.
+In Tab. 11, we evaluate different controllers with an
+oracle planner, which always selects the teacher action node
+at each planning step. Four extra metrics are considered,
+namely Actions Taken (AT), Rotations Taken (RT), Subgoal
+Navigation Error (SG-NE), and Collision Times (CT). AT
+and RT are the average numbers of actions and rotations
+(ROTATE LEFT/RIGHT) taken per episode. SG-NE is the
+average distance between the teacher action node and the
+agent’s position after control execution. CT denotes the aver-
+age times of obstacle collisions per episode. We summarize
+our findings below. First, compared to other controllers,
+RF variants (Row 4 and Row 5) take fewer actions and
+have shorter paths, which can contribute to their higher
+navigation efficiency (SPL) and path fidelity (NDTW). This
+is because the rotate-then-forward control flow forces the
+agent to walk in a straight line, while others may take un-
+necessary rotations to keep the agent away from obstacles.
+Second, though RF controllers simply walk in a straight
+line, they do not lead to significantly more collisions. We
+attribute this to the dataset [9] used to train our way-
+point predictor, which makes the waypoints typically lie in
+straight-line accessible open spaces. This can also explain
+why Tryout can avoid deadlocks with a few attempts (Row
+4 v.s. Row 5). Third, learning-based PointGoal can avoid
+obstacles implicitly (Row 1), while classical FMM failed to
+avoid obstacles and resulting in the highest CT (Row 2’s
+231.62 CT on the RxR-CE dataset). This indicates obstacle-
+avoiding relying on the occupancy map alone is difficult and
+a similar phenomenon is also observed in [85]. This is due
+to the imperfect occupancy map caused by obstacles out of
+view, inaccurate depth observations, and artifacts in scans of
+indoor spaces [6]. Row 3 mitigates this issue with collision
+information, and our Tryout also has a similar spirit.
+Also, we are interested in how the agent’s chassis radius
+may impact navigational performance. Fig. 4 shows the
+episodic success rate of ETPNav on the R2R- CE and RxR-
+CE datasets whether employing PointGoal or RF controllers.
+For all datasets, the success rate of the two controllers
+decreases as the chassis radius increases since a bigger
+chassis might lead the agent to collide with obstacles more
+frequently, increasing the risk of navigation failure. The
+proposed RF controller, however, is resilient to this prob-
+
+
+--- PDF PAGE 12 ---
+JOURNAL OF LATEX CLASS FILES, VOL. *, NO. *, * *
+12
+1
+3
+4
+8
+10
+12
+1
+5
+6
+7
+8
+15
+Global  Planning
+Local  Planning
+Instruction: Walk down the hall passed the art of an eye exam. continue down the hall towards the room at the end with a desk and floor lamp 
+beside it. Walk into the bedroom through the door nearest to the desk that has a twin bed and board game standing upright on the shelf.
+Visited Node
+Ghost Node
+Final Target
+Selected Goal
+Traversed Path
+Fig. 5: Comparison of the same episode’s trajectories predicted by different model variants. (Top) The trajectory predicted
+by ETPNav using local planning. (Bottom) The trajectory predicted by ETPNav using global planning.
+RF  w/ Tryout
+RF  w/o Tryout
+Instruction: You’re facing towards the wall, turn to your left, move forward and then turn to your left, slightly move to your right and go straight 
+and stop beside the stairs.
+Collision
+Collision
+Deadlock
+Deadlock
+Tryout
+Tryout
+2
+4
+5
+6
+7
+14
+1
+2
+3
+4
+5
+6
+Visited Node
+Ghost Node
+Final Target
+Selected Goal
+Traversed Path
+Fig. 6: Comparison of the same episode’s trajectories predicted by different model variants. (Top) The trajectory predicted
+by ETPNav without Tryout control. (Bottom) The trajectory predicted by ETPNav with Tryout control.
+lem and consistently outperforms the PointGoal controller,
+particularly on the RxR-CE dataset, where it beats PointGoal
+by about 3 SR through all chassis radiuses. The main reason
+is that it uses Tryout to explicitly prevent the agent from
+getting stuck in obstacles, which aids the adaptation of nav-
+igation policy to various chassis sizes. This further verifies
+the robustness of the proposed obstacle-avoiding controller.
+4.3.4
+Qualitative Results
+Fig. 5 and Fig. 6 visualize trajectories predicted by our
+model compared to the variant using local planning (on the
+R2R-CE dataset) and the variant without Tryout control (on
+the RxR-CE dataset), respectively.
+As shown in Fig. 5, the local planning space is insuffi-
+cient to capture the global environment layouts and hinders
+the agent’s long-term planning capacity. For example, at
+step 7, the agent seems to realize that it is navigating in
+the wrong direction and intends to backtrack. However,
+after completing a sing-step backtracking at step 8, it again
+decides to go back to the wrong place it was at step 7. This
+behavior of oscillating between two locations persists until
+
+
+--- PDF PAGE 13 ---
+JOURNAL OF LATEX CLASS FILES, VOL. *, NO. *, * *
+13
+navigation failure at step 15. On the other hand, the global
+planning space enables the agent to capture global envi-
+ronment layouts and successfully correct previous wrong
+decisions. At step 4, the agent also starts by navigating in
+the wrong direction, just like the local planning variants. But
+the predicted long-term goal effectively guides it back on the
+right track at step 8, concluding with successful navigation.
+As shown in Fig. 6, the practical sliding-forbidden steps
+can cause the agent to get stuck in obstacles and lead to
+navigation failure. For instance, in the absence of Tryout, the
+agent is unable to proceed forward once its chassis collides
+with the wall (at steps 6 and 7). This situation persists until
+the end of navigation (at step 14), where the agent does
+not succeed in escaping the deadlock, ultimately leading
+to navigation failure. Conversely, the integration of Tryout
+control in our model effectively addresses this issue. At step
+4, Tryout is triggered upon colliding with the wall, causing
+the agent to twist and stagger away from the obstacle. This
+helps to navigate around the obstacle, with the navigation
+accomplished at step 6 successfully.
+5
+CONCLUSION
+In summary, this paper introduces ETPNav, a novel navi-
+gation system that leverages topological maps for VLN-CE.
+We first propose an online mapping method via waypoint
+self-organization to enable robust long-range planning of
+an agent. This scheme doesn’t require any prior environ-
+mental experience and satisfies the demand of navigation
+in realistic scenarios. Then, we systematically examine our
+topo map’s key design choices and empirically show that
+a concise depth-only design can be optimal for waypoint
+prediction. Furthermore, we address an often-neglected is-
+sue in VLN-CE - obstacle avoidance, with a simple and
+effective trial-and-error controller. Extensive experiments
+demonstrate the effectiveness of the proposed method,
+yielding more than 10% and 20% absolute improvements
+over prior state-of-the-art on R2R-CE and RxR-CE bench-
+marks, respectively. We hope this work can serve as a strong
+baseline for further research on this challenging task.
+Future Work. ETPNav employs pose-reading sensors to
+facilitate topological mapping. However, in real-world ap-
+plications, the presence of sensor actuation noise may in-
+troduce complexities into the mapping process. We take the
+noise analysis and robustness study in such scenarios as the
+future work plan.
+REFERENCES
+[1]
+P. Anderson, Q. Wu, D. Teney, J. Bruce, M. Johnson, N. S¨underhauf,
+I. Reid, S. Gould, and A. Van Den Hengel, “Vision-and-language
+navigation: Interpreting visually-grounded navigation instruc-
+tions in real environments,” in Proceedings of the IEEE/CVF Con-
+ference on Computer Vision and Pattern Recognition, 2018, pp. 3674–
+3683.
+[2]
+X. Wang, Q. Huang, A. Celikyilmaz, J. Gao, D. Shen, Y.-F. Wang,
+W. Y. Wang, and L. Zhang, “Reinforced cross-modal matching
+and self-supervised imitation learning for vision-language naviga-
+tion,” in Proceedings of the IEEE/CVF Conference on Computer Vision
+and Pattern Recognition, 2019, pp. 6629–6638.
+[3]
+H. Wang, W. Wang, W. Liang, C. Xiong, and J. Shen, “Structured
+scene memory for vision-language navigation,” in Proceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+2021, pp. 8455–8464.
+[4]
+Y. Hong, Q. Wu, Y. Qi, C. Rodriguez-Opazo, and S. Gould, “Vln
+bert: A recurrent vision-and-language bert for navigation,” in
+Proceedings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, 2021, pp. 1643–1653.
+[5]
+S. Chen, P.-L. Guhur, C. Schmid, and I. Laptev, “History aware
+multimodal transformer for vision-and-language navigation,” Ad-
+vances in Neural Information Processing Systems, vol. 34, pp. 5834–
+5847, 2021.
+[6]
+J. Krantz, E. Wijmans, A. Majumdar, D. Batra, and S. Lee, “Beyond
+the nav-graph: Vision-and-language navigation in continuous en-
+vironments,” in Proceedings of the European Conference on Computer
+Vision.
+Springer, 2020, pp. 104–120.
+[7]
+S. Raychaudhuri, S. Wani, S. Patel, U. Jain, and A. Chang,
+“Language-aligned waypoint (law) supervision for vision-and-
+language navigation in continuous environments,” in Proceedings
+of the Conference on Empirical Methods in Natural Language Process-
+ing, 2021, pp. 4018–4028.
+[8]
+J. Krantz, A. Gokaslan, D. Batra, S. Lee, and O. Maksymets,
+“Waypoint models for instruction-guided navigation in contin-
+uous environments,” in Proceedings of the IEEE/CVF International
+Conference on Computer Vision, 2021, pp. 15 162–15 171.
+[9]
+Y. Hong, Z. Wang, Q. Wu, and S. Gould, “Bridging the gap
+between learning in discrete and continuous environments for
+vision-and-language navigation,” in Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition, 2022, pp.
+15 439–15 449.
+[10] J. Krantz and S. Lee, “Sim-2-sim transfer for vision-and-language
+navigation in continuous environments,” in Proceedings of the
+European Conference on Computer Vision.
+Springer, 2022, pp. 588–
+603.
+[11] D. An, Z. Wang, Y. Li, Y. Wang, Y. Hong, Y. Huang, L. Wang, and
+J. Shao, “1st place solutions for rxr-habitat vision-and-language
+navigation competition,” arXiv preprint arXiv:2206.11610, 2022.
+[12] J. A. Sethian, “A fast marching level set method for monotonically
+advancing fronts.” proceedings of the National Academy of Sciences,
+vol. 93, no. 4, pp. 1591–1595, 1996.
+[13] E. Wijmans, A. Kadian, A. Morcos, S. Lee, I. Essa, D. Parikh,
+M. Savva, and D. Batra, “Dd-ppo: Learning near-perfect pointgoal
+navigators from 2.5 billion frames,” in International Conference on
+Learning Representations, 2019.
+[14] G. Georgakis, K. Schmeckpeper, K. Wanchoo, S. Dan, E. Milt-
+sakaki, D. Roth, and K. Daniilidis, “Cross-modal map learning for
+vision and language navigation,” in Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition, 2022, pp.
+15 460–15 470.
+[15] S. B. Udin and J. W. Fawcett, “Formation of topographic maps,”
+Annual review of neuroscience, vol. 11, no. 1, pp. 289–327, 1988.
+[16] Z. Deng, K. Narasimhan, and O. Russakovsky, “Evolving graphi-
+cal planner: Contextual global planning for vision-and-language
+navigation,” Advances in Neural Information Processing Systems,
+vol. 33, pp. 20 660–20 672, 2020.
+[17] S. Chen, P.-L. Guhur, M. Tapaswi, C. Schmid, and I. Laptev, “Think
+global, act local: Dual-scale graph transformer for vision-and-
+language navigation,” in Proceedings of the IEEE/CVF Conference
+on Computer Vision and Pattern Recognition, 2022, pp. 16 537–16 547.
+[18] K. Chen, J. K. Chen, J. Chuang, M. V´azquez, and S. Savarese,
+“Topological planning with transformers for vision-and-language
+navigation,” in Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition, 2021, pp. 11 276–11 286.
+[19] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N.
+Gomez, Ł. Kaiser, and I. Polosukhin, “Attention is all you need,”
+Advances in neural information processing systems, vol. 30, pp. 5998–
+6008, 2017.
+[20] P. Xu, X. Zhu, and D. A. Clifton, “Multimodal learning with
+transformers: A survey,” IEEE Transactions on Pattern Analysis and
+Machine Intelligence, vol. 45, no. 10, pp. 12 113–12 132, 2023.
+[21] M. Deitke, D. Batra, Y. Bisk, T. Campari, A. X. Chang, D. S.
+Chaplot, C. Chen, C. P. D’Arpino, K. Ehsani, A. Farhadi et al.,
+“Retrospectives on the embodied ai workshop,” arXiv preprint
+arXiv:2210.06849, 2022.
+[22] A. Ku, P. Anderson, R. Patel, E. Ie, and J. Baldridge, “Room-
+across-room: Multilingual vision-and-language navigation with
+dense spatiotemporal grounding,” in Proceedings of the Conference
+on Empirical Methods in Natural Language Processing, 2020, pp. 4392–
+4412.
+[23] H. Chen, A. Suhr, D. Misra, N. Snavely, and Y. Artzi, “Touchdown:
+Natural language navigation and spatial reasoning in visual street
+
+
+--- PDF PAGE 14 ---
+JOURNAL OF LATEX CLASS FILES, VOL. *, NO. *, * *
+14
+environments,” in Proceedings of the IEEE/CVF Conference on Com-
+puter Vision and Pattern Recognition, 2019, pp. 12 538–12 547.
+[24] J. Thomason, M. Murray, M. Cakmak, and L. Zettlemoyer, “Vision-
+and-dialog navigation,” in Conference on Robot Learning.
+PMLR,
+2020, pp. 394–406.
+[25] K. Nguyen and H. Daum´e III, “Help, anna! visual navigation
+with natural multimodal assistance via retrospective curiosity-
+encouraging imitation learning,” in Proceedings of the Conference
+on Empirical Methods in Natural Language Processing, 2019, pp. 684–
+695.
+[26] Y. Qi, Q. Wu, P. Anderson, X. Wang, W. Y. Wang, C. Shen, and
+A. v. d. Hengel, “Reverie: Remote embodied visual referring
+expression in real indoor environments,” in Proceedings of the
+IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+2020, pp. 9982–9991.
+[27] F. Zhu, X. Liang, Y. Zhu, Q. Yu, X. Chang, and X. Liang, “Soon: Sce-
+nario oriented object navigation with graph-based exploration,”
+in Proceedings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, 2021, pp. 12 689–12 699.
+[28] D. Fried, R. Hu, V. Cirik, A. Rohrbach, J. Andreas, L.-P. Morency,
+T. Berg-Kirkpatrick, K. Saenko, D. Klein, and T. Darrell, “Speaker-
+follower models for vision-and-language navigation,” Advances in
+Neural Information Processing Systems, vol. 31, pp. 3318–3329, 2018.
+[29] C.-Y. Ma, J. Lu, Z. Wu, G. AlRegib, Z. Kira, R. Socher, and
+C. Xiong, “Self-monitoring navigation agent via auxiliary progress
+estimation,” in International Conference on Learning Representations,
+2019.
+[30] Y. Qi, Z. Pan, S. Zhang, A. v. d. Hengel, and Q. Wu, “Object-and-
+action aware model for visual language navigation,” in Proceedings
+of the European Conference on Computer Vision.
+Springer, 2020, pp.
+303–317.
+[31] Y. Hong, C. Rodriguez, Y. Qi, Q. Wu, and S. Gould, “Language and
+visual entity relationship graph for agent navigation,” Advances in
+Neural Information Processing Systems, vol. 33, pp. 7685–7696, 2020.
+[32] D. An, Y. Qi, Y. Huang, Q. Wu, L. Wang, and T. Tan, “Neighbor-
+view enhanced model for vision and language navigation,” in
+Proceedings of the ACM International Conference on Multimedia, 2021,
+pp. 5101–5109.
+[33] X. Wang, W. Xiong, H. Wang, and W. Y. Wang, “Look before
+you leap: Bridging model-free and model-based reinforcement
+learning for planned-ahead vision-and-language navigation,” in
+Proceedings of the European Conference on Computer Vision, 2018, pp.
+37–53.
+[34] H. Tan, L. Yu, and M. Bansal, “Learning to navigate unseen
+environments: Back translation with environmental dropout,” in
+Proceedings of the Conference of the North American Chapter of the
+Association for Computational Linguistics, 2019, pp. 2610–2621.
+[35] H. Wang, Q. Wu, and C. Shen, “Soft expert reward learning for
+vision-and-language navigation,” in Proceedings of the European
+Conference on Computer Vision.
+Springer, 2020, pp. 126–141.
+[36] H. Wang, W. Wang, T. Shu, W. Liang, and J. Shen, “Active visual
+information gathering for vision-language navigation,” in Proceed-
+ings of the European Conference on Computer Vision.
+Springer, 2020,
+pp. 307–322.
+[37] H. Wang, W. Wang, W. Liang, S. C. Hoi, J. Shen, and L. V. Gool,
+“Active perception for visual-language navigation,” International
+Journal of Computer Vision, vol. 131, no. 3, pp. 607–625, 2023.
+[38] C. Liu, F. Zhu, X. Chang, X. Liang, Z. Ge, and Y.-D. Shen, “Vision-
+language navigation with random environmental mixup,” in Pro-
+ceedings of the IEEE/CVF International Conference on Computer Vision,
+2021, pp. 1644–1654.
+[39] J. Li, H. Tan, and M. Bansal, “Envedit: Environment editing for
+vision-and-language navigation,” in Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition, 2022, pp.
+15 407–15 417.
+[40] A. Parvaneh, E. Abbasnejad, D. Teney, J. Q. Shi, and A. van den
+Hengel, “Counterfactual vision-and-language navigation: Unrav-
+elling the unseen,” Advances in Neural Information Processing Sys-
+tems, vol. 33, pp. 5296–5307, 2020.
+[41] A. Kamath, P. Anderson, S. Wang, J. Y. Koh, A. Ku, A. Waters,
+Y. Yang, J. Baldridge, and Z. Parekh, “A new path: Scaling vision-
+and-language navigation with synthetic instructions and imitation
+learning,” pp. 10 813–10 823, 2023.
+[42] H. Wang, W. Liang, J. Shen, L. Van Gool, and W. Wang, “Coun-
+terfactual cycle-consistent learning for instruction following and
+generation in vision-language navigation,” in Proceedings of the
+IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+2022, pp. 15 471–15 481.
+[43] S. Wang, C. Montgomery, J. Orbay, V. Birodkar, A. Faust, I. Gur,
+N. Jaques, A. Waters, J. Baldridge, and P. Anderson, “Less is more:
+Generating grounded navigation instructions from landmarks,”
+in Proceedings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, 2022, pp. 15 428–15 438.
+[44] M. Zhao, P. Anderson, V. Jain, S. Wang, A. Ku, J. Baldridge,
+and E. Ie, “On the evaluation of vision-and-language navigation
+instructions,” in Proceedings of the Conference of the European Chapter
+of the Association for Computational Linguistics, 2021, pp. 1302–1316.
+[45] X. Wang, W. Wang, J. Shao, and Y. Yang, “Lana: A language-
+capable navigator for instruction dreaming and generation,” in
+Proceedings of the IEEE/CVF Conference on Computer Vision and
+Pattern Recognition, 2023, pp. 19 048–19 058.
+[46] X. Wang, W. Wang, and J. Shao, “Learning to follow and generate
+instructions for language-capable navigation,” IEEE Transactions
+on Pattern Analysis and Machine Intelligence, pp. 1–17, 2023.
+[47] W. Hao, C. Li, X. Li, L. Carin, and J. Gao, “Towards learn-
+ing a generic agent for vision-and-language navigation via pre-
+training,” in Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition, 2020, pp. 13 137–13 146.
+[48] P.-L. Guhur, M. Tapaswi, S. Chen, I. Laptev, and C. Schmid, “Air-
+bert: In-domain pretraining for vision-and-language navigation,”
+in Proceedings of the IEEE/CVF International Conference on Computer
+Vision, 2021, pp. 1634–1643.
+[49] A. Majumdar, A. Shrivastava, S. Lee, P. Anderson, D. Parikh, and
+D. Batra, “Improving vision-and-language navigation with image-
+text pairs from the web,” in Proceedings of the European Conference
+on Computer Vision.
+Springer, 2020, pp. 259–274.
+[50] Y. Qi, Z. Pan, Y. Hong, M.-H. Yang, A. van den Hengel, and Q. Wu,
+“The road to know-where: An object-and-room informed sequen-
+tial bert for indoor vision-language navigation,” in Proceedings of
+the IEEE/CVF International Conference on Computer Vision, 2021, pp.
+1655–1664.
+[51] A. Moudgil, A. Majumdar, H. Agrawal, S. Lee, and D. Batra, “Soat:
+A scene-and object-aware transformer for vision-and-language
+navigation,” Advances in Neural Information Processing Systems,
+vol. 34, pp. 7357–7367, 2021.
+[52] Y. Qiao, Y. Qi, Y. Hong, Z. Yu, P. Wang, and Q. Wu, “Hop+:
+History-enhanced and order-aware pre-training for vision-and-
+language navigation,” IEEE Transactions on Pattern Analysis and
+Machine Intelligence, vol. 45, no. 7, pp. 8524–8537, 2023.
+[53] C. Lin, Y. Jiang, J. Cai, L. Qu, G. Haffari, and Z. Yuan, “Multimodal
+transformer with variable-length memory for vision-and-language
+navigation,” in Proceedings of the European Conference on Computer
+Vision.
+Springer, 2022, pp. 380–397.
+[54] Y. Zhao, J. Chen, C. Gao, W. Wang, L. Yang, H. Ren, H. Xia, and
+S. Liu, “Target-driven structured transformer planner for vision-
+language navigation,” in Proceedings of the ACM International Con-
+ference on Multimedia, 2022, pp. 4194–4203.
+[55] M. Hwang, J. Jeong, M. Kim, Y. Oh, and S. Oh, “Meta-explore: Ex-
+ploratory hierarchical vision-and-language navigation using scene
+object spectrum grounding,” pp. 6683–6693, 2023.
+[56] R. Liu, X. Wang, W. Wang, and Y. Yang, “Bird’s-eye-view
+scene graph for vision-language navigation,” in Proceedings of the
+IEEE/CVF International Conference on Computer Vision, 2023, pp.
+10 968–10 980.
+[57] D. An, Y. Qi, Y. Li, Y. Huang, L. Wang, T. Tan, and J. Shao, “Bevbert:
+Multimodal map pre-training for language-guided navigation,” in
+Proceedings of the IEEE/CVF International Conference on Computer
+Vision, 2023, pp. 2737–2748.
+[58] B. Lin, Y. Zhu, Z. Chen, X. Liang, J. Liu, and X. Liang,
+“Adapt: Vision-language navigation with modality-aligned action
+prompts,” in Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition, 2022, pp. 15 396–15 406.
+[59] X. Liang, F. Zhu, L. Lingling, H. Xu, and X. Liang, “Visual-
+language navigation pretraining via prompt-based environmental
+self-exploration,” in Proceedings of the Annual Meeting of the Associ-
+ation for Computational Linguistics, 2022, pp. 4837–4851.
+[60] P. Anderson, A. Shrivastava, J. Truong, A. Majumdar, D. Parikh,
+D. Batra, and S. Lee, “Sim-to-real transfer for vision-and-language
+navigation,” in Conference on Robot Learning.
+PMLR, 2021, pp.
+671–681.
+[61] M. Savva, A. Kadian, O. Maksymets, Y. Zhao, E. Wijmans, B. Jain,
+J. Straub, J. Liu, V. Koltun, J. Malik et al., “Habitat: A platform for
+
+
+--- PDF PAGE 15 ---
+JOURNAL OF LATEX CLASS FILES, VOL. *, NO. *, * *
+15
+embodied ai research,” in Proceedings of the IEEE/CVF International
+Conference on Computer Vision, 2019, pp. 9339–9347.
+[62] M. Z. Irshad, N. C. Mithun, Z. Seymour, H.-P. Chiu, S. Samarasek-
+era, and R. Kumar, “Sasra: Semantically-aware spatio-temporal
+reasoning agent for vision-and-language navigation in continuous
+environments,” International Conference on Pattern Recognition, pp.
+4065–4071, 2022.
+[63] P. Chen, D. Ji, K. Lin, R. Zeng, T. H. Li, M. Tan, and C. Gan,
+“Weakly-supervised multi-granularity map learning for vision-
+and-language navigation,” in Advances in Neural Information Pro-
+cessing Systems, 2022, pp. 38 149–38 161.
+[64] H. Wang, W. Liang, L. V. Gool, and W. Wang, “Dreamwalker:
+Mental planning for continuous vision-language navigation,” in
+Proceedings of the IEEE/CVF International Conference on Computer
+Vision, 2023, pp. 10 873–10 883.
+[65] A. Elfes, “Using occupancy grids for mobile robot perception and
+navigation,” Computer, vol. 22, no. 6, pp. 46–57, 1989.
+[66] R. Mur-Artal, J. M. M. Montiel, and J. D. Tardos, “Orb-slam: a
+versatile and accurate monocular slam system,” IEEE Transactions
+on Robotics, vol. 31, no. 5, pp. 1147–1163, 2015.
+[67] R. A. Newcombe, S. J. Lovegrove, and A. J. Davison, “Dtam: Dense
+tracking and mapping in real-time,” in Proceedings of the IEEE/CVF
+International Conference on Computer Vision.
+IEEE, 2011, pp. 2320–
+2327.
+[68] F. Dellaert, D. Fox, W. Burgard, and S. Thrun, “Monte carlo local-
+ization for mobile robots,” in international Conference on Robotics
+and Automation, vol. 2.
+IEEE, 1999, pp. 1322–1328.
+[69] J. F. Henriques and A. Vedaldi, “Mapnet: An allocentric spatial
+memory for mapping environments,” in proceedings of the IEEE
+Conference on Computer Vision and Pattern Recognition, 2018, pp.
+8476–8484.
+[70] D. S. Chaplot, M. Dalal, S. Gupta, J. Malik, and R. R. Salakhutdi-
+nov, “Seal: Self-supervised embodied active learning using explo-
+ration and 3d consistency,” Advances in Neural Information Process-
+ing Systems, vol. 34, pp. 13 086–13 098, 2021.
+[71] D. S. Chaplot, D. Gandhi, S. Gupta, A. Gupta, and R. Salakhut-
+dinov, “Learning to explore using active neural slam,” in Interna-
+tional Conference on Learning Representations, 2019.
+[72] D. S. Chaplot, D. P. Gandhi, A. Gupta, and R. R. Salakhutdi-
+nov, “Object goal navigation using goal-oriented semantic explo-
+ration,” Advances in Neural Information Processing Systems, vol. 33,
+pp. 4247–4258, 2020.
+[73] T. Gervet, S. Chintala, D. Batra, J. Malik, and D. S. Chaplot,
+“Navigating to objects in the real world,” Science Robotics, vol. 8,
+no. 79, p. eadf6991, 2023.
+[74] S. Y. Min, D. S. Chaplot, P. K. Ravikumar, Y. Bisk, and R. Salakhut-
+dinov, “Film: Following instructions in language with modular
+methods,” in International Conference on Learning Representations,
+2021.
+[75] J. Chen, W. Wang, S. Liu, H. Li, and Y. Yang, “Omnidirectional
+information gathering for knowledge transfer-based audio-visual
+navigation,” in Proceedings of the IEEE/CVF International Conference
+on Computer Vision, 2023, pp. 10 993–11 003.
+[76] H. Choset and K. Nagatani, “Topological simultaneous local-
+ization and mapping (slam): toward exact localization without
+explicit localization,” IEEE Transactions on robotics and automation,
+vol. 17, no. 2, pp. 125–137, 2001.
+[77] B. Kuipers and Y.-T. Byun, “A robot exploration and mapping
+strategy based on a semantic hierarchy of spatial representations,”
+Robotics and autonomous systems, vol. 8, no. 1-2, pp. 47–63, 1991.
+[78] D. S. Chaplot, R. Salakhutdinov, A. Gupta, and S. Gupta, “Neu-
+ral topological slam for visual navigation,” in Proceedings of the
+IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+2020, pp. 12 875–12 884.
+[79] O. Kwon, N. Kim, Y. Choi, H. Yoo, J. Park, and S. Oh, “Visual graph
+memory with unsupervised representation for visual navigation,”
+in Proceedings of the IEEE/CVF International Conference on Computer
+Vision, 2021, pp. 15 890–15 899.
+[80] M. Hahn, D. S. Chaplot, S. Tulsiani, M. Mukadam, J. M. Rehg, and
+A. Gupta, “No rl, no simulation: Learning to navigate without
+navigating,” Advances in Neural Information Processing Systems,
+vol. 34, pp. 26 661–26 673, 2021.
+[81] A. Chang, A. Dai, T. Funkhouser, M. Halber, M. Niebner, M. Savva,
+S. Song, A. Zeng, and Y. Zhang, “Matterport3d: Learning from rgb-
+d data in indoor environments,” in International Conference on 3D
+Vision.
+IEEE, 2017, pp. 667–676.
+[82] X. Zhao, H. Agrawal, D. Batra, and A. G. Schwing, “The sur-
+prising effectiveness of visual odometry techniques for embodied
+pointgoal navigation,” in Proceedings of the IEEE/CVF International
+Conference on Computer Vision, 2021, pp. 16 127–16 136.
+[83] J. D. M.-W. C. Kenton and L. K. Toutanova, “Bert: Pre-training
+of deep bidirectional transformers for language understanding,”
+in Proceedings of the Conference of the North American Chapter of the
+Association for Computational Linguistics, 2019, pp. 4171–4186.
+[84] H. Tan and M. Bansal, “Lxmert: Learning cross-modality encoder
+representations from transformers,” in Proceedings of the Conference
+on Empirical Methods in Natural Language Processing, 2019, pp. 5100–
+5111.
+[85] H. Luo, A. Yue, Z.-W. Hong, and P. Agrawal, “Stubborn: A strong
+baseline for indoor object navigation,” in IEEE/RSJ International
+Conference on Intelligent Robots and Systems.
+IEEE, 2022, pp. 3287–
+3293.
+[86] S. Ross, G. Gordon, and D. Bagnell, “A reduction of imitation
+learning and structured prediction to no-regret online learning,”
+in Proceedings of the fourteenth international conference on artificial
+intelligence and statistics.
+JMLR Workshop and Conference Pro-
+ceedings, 2011, pp. 627–635.
+[87] P. Anderson, A. Chang, D. S. Chaplot, A. Dosovitskiy, S. Gupta,
+V. Koltun, J. Kosecka, J. Malik, R. Mottaghi, M. Savva et al.,
+“On evaluation of embodied navigation agents,” arXiv preprint
+arXiv:1807.06757, 2018.
+[88] G. Ilharco, V. Jain, A. Ku, E. Ie, and J. Baldridge, “General evalu-
+ation for instruction conditioned navigation using dynamic time
+warping,” arXiv preprint arXiv:1907.05446, 2019.
+[89] A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn, X. Zhai,
+T. Unterthiner, M. Dehghani, M. Minderer, G. Heigold, S. Gelly
+et al., “An image is worth 16x16 words: Transformers for image
+recognition at scale,” in International Conference on Learning Repre-
+sentations, 2020.
+[90] A. Radford, J. W. Kim, C. Hallacy, A. Ramesh, G. Goh, S. Agar-
+wal, G. Sastry, A. Askell, P. Mishkin, J. Clark et al., “Learning
+transferable visual models from natural language supervision,”
+in International Conference on Machine Learning.
+PMLR, 2021, pp.
+8748–8763.
+[91] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for
+image recognition,” in Proceedings of the IEEE/CVF Conference on
+Computer Vision and Pattern Recognition, 2016, pp. 770–778.
+[92] Y. Liu, M. Ott, N. Goyal, J. Du, M. Joshi, D. Chen, O. Levy,
+M. Lewis, L. Zettlemoyer, and V. Stoyanov, “Roberta: A ro-
+bustly optimized bert pretraining approach,” arXiv preprint
+arXiv:1907.11692, 2019.
+[93] A. Paszke, S. Gross, F. Massa, A. Lerer, J. Bradbury, G. Chanan,
+T. Killeen, Z. Lin, N. Gimelshein, L. Antiga et al., “Pytorch: An im-
+perative style, high-performance deep learning library,” Advances
+in Neural Information Processing Systems, vol. 32, pp. 8024–8035,
+2019.
+[94] I. Loshchilov and F. Hutter, “Decoupled weight decay regulariza-
+tion,” in International Conference on Learning Representations, 2019.
+[95] S. Bengio, O. Vinyals, N. Jaitly, and N. Shazeer, “Scheduled sam-
+pling for sequence prediction with recurrent neural networks,”
+Advances in Neural Information Processing Systems, vol. 28, pp. 1171–
+1179, 2015.

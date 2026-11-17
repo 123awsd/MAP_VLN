@@ -1,0 +1,1 @@
+Built-in image_gen, background-extraction. Extract the attached drone onto a genuinely transparent background. Preserve photographed hardware, textures and perspective; remove checkerboard and crop empty margins. No added hardware, background, shadow or text. AI-assisted cutout for figure placement preview; verify against original before publication.

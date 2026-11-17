@@ -1,0 +1,157 @@
+{
+  "source_variant": "wall_structural_rooms: offline measured checkpoint",
+  "downstream_consumer": "scripts/classify_coverage700_rooms_multiview.py:make_inputs",
+  "not_default_online_segmentation_claim": true,
+  "uses_ground_truth": false,
+  "uses_manual_boundary_correction": false,
+  "paper_updated_by_renderer": false,
+  "source_files": {
+    "PRE_MAP_VLN/scripts/run_wall_structural_rooms.py": "6510c8260d464e48e60c6abe0adb48e79156f3588e110e2d35578f9ca7f6d42d",
+    "PRE_MAP_VLN/scripts/segment_rooms_wall_guided.py": "ba0d0681547f12fb935a494af63bd0f65b0edbbc96dea4d16f672a694777b849",
+    "PRE_MAP_VLN/scripts/run_wall_structural_trial.py": "55701fd65a76cc44368bd04edb39f0bae21e969d7df0ae21b2921cb723a1544c",
+    "PRE_MAP_VLN/scripts/classify_coverage700_rooms_multiview.py": "6ff25c9012e38661220c4c10452330d2e3c15f5628e47ce7e5345cef35cdba00"
+  },
+  "checks": [
+    {
+      "floor": 1,
+      "saved_seeds_exact_match": true,
+      "saved_labels_exact_match": true,
+      "reprojected_walls_exact_match": true,
+      "observation_gate_exact_match": true,
+      "wall_overlap_cells": 0,
+      "fallback_seed_cells": 0,
+      "merges_in_this_example": [],
+      "hidden_fragments_in_this_example": [],
+      "unassigned_supported_cells": 940,
+      "room_regions": 7,
+      "input_files": {
+        "PRE_MAP_VLN/outputs/coverage700_wall_room_preview/wall_structural_rooms/L1_constrained.npz": "0563f253e33a3587de7abbc4db460ff7736178378f137537a2301b0bee2e0444",
+        "PRE_MAP_VLN/outputs/coverage700_wall_room_preview/wall_structural_evidence/L1_walls.npz": "658ec0b08e2d7b270d789f858a51c3ae294ad1357f7f194d3180cf88a11e6660",
+        "PRE_MAP_VLN/outputs/coverage700_wall_room_preview/wall_guided/measured/L1_rooms.npz": "c12c7d02215c1c516222291c883178a695fe366dbe559e6ec7a07ff5e3a36c51"
+      }
+    },
+    {
+      "floor": 2,
+      "saved_seeds_exact_match": true,
+      "saved_labels_exact_match": true,
+      "reprojected_walls_exact_match": true,
+      "observation_gate_exact_match": true,
+      "wall_overlap_cells": 0,
+      "fallback_seed_cells": 0,
+      "merges_in_this_example": [],
+      "hidden_fragments_in_this_example": [],
+      "unassigned_supported_cells": 3101,
+      "room_regions": 13,
+      "input_files": {
+        "PRE_MAP_VLN/outputs/coverage700_wall_room_preview/wall_structural_rooms/L2_constrained.npz": "b252cc58157b188e3ac35ed4f4cfba13f5cc7d44aa7219cf5858594a7d5f1b49",
+        "PRE_MAP_VLN/outputs/coverage700_wall_room_preview/wall_structural_evidence/L2_walls.npz": "ec9bb6b1e799aabcfa0278ba032c60250939ede4316b7dd750dbb2bce5a0b7e9",
+        "PRE_MAP_VLN/outputs/coverage700_wall_room_preview/wall_guided/measured/L2_rooms.npz": "90815131ad3092c9ef959f236eb69fa063c86f8e6e3675a569f58d9d562658fa"
+      }
+    },
+    {
+      "floor": 3,
+      "saved_seeds_exact_match": true,
+      "saved_labels_exact_match": true,
+      "reprojected_walls_exact_match": true,
+      "observation_gate_exact_match": true,
+      "wall_overlap_cells": 0,
+      "fallback_seed_cells": 0,
+      "merges_in_this_example": [],
+      "hidden_fragments_in_this_example": [],
+      "unassigned_supported_cells": 511,
+      "room_regions": 10,
+      "input_files": {
+        "PRE_MAP_VLN/outputs/coverage700_wall_room_preview/wall_structural_rooms/L3_constrained.npz": "614ada0b923f0c9109cfe71021bd3f20db16ac15eb2643e7fb4574fce7088f75",
+        "PRE_MAP_VLN/outputs/coverage700_wall_room_preview/wall_structural_evidence/L3_walls.npz": "f0b8097e298f742844d3d3f8072e3d0eb81b37d11fee2716decbfd2c8435345d",
+        "PRE_MAP_VLN/outputs/coverage700_wall_room_preview/wall_guided/measured/L3_rooms.npz": "ee8d15bedbd9cdf979e270d07743df1e00f7f188d52b953a2f651dd11e305056"
+      }
+    }
+  ],
+  "figure": {
+    "floor": 2,
+    "size_mm": [
+      88.0,
+      76.0
+    ],
+    "layout": "two-row single-column figure: a\u2013c above, d\u2013e below; equal map scale",
+    "display_x_reflected": true,
+    "display_cell_bounds_after_reflection": [
+      28,
+      346,
+      27,
+      386
+    ],
+    "map_content_cropped": false,
+    "all_nonempty_cells_in_display_bounds": true,
+    "visible_nonempty_cells": 69291,
+    "palette": {
+      "regions": [
+        "#76B9DC",
+        "#F0C66C",
+        "#85CDB0",
+        "#ADA5D6",
+        "#EEAD8F",
+        "#80CBCE"
+      ],
+      "supported_domain": "#C9E4F3",
+      "excluded": "#CC4B16",
+      "unassigned": "#BEC7CE",
+      "walls": "#5E7280"
+    },
+    "point_cloud": {
+      "input_file": "PRE_MAP_VLN/outputs/coverage_lifecycle_700_r1_20261016/original_style_video/geometry.npz",
+      "sha256": "075975359fe5316d408aaebd692a9b0375781a49a85ea4848b7d30590dfb9819",
+      "point_count": 577638,
+      "drawn_point_count": 577638,
+      "projection": "XY, X reflected",
+      "height_filter_applied": false,
+      "points_subsampled": false,
+      "all_points_in_display_bounds": true,
+      "appearance": "normal-dependent color and opacity; horizontal surfaces are pale",
+      "rasterized_dpi": 600
+    },
+    "label_colors": {
+      "9": "#76B9DC",
+      "12": "#F0C66C",
+      "2": "#85CDB0",
+      "8": "#ADA5D6",
+      "5": "#EEAD8F",
+      "13": "#80CBCE",
+      "1": "#76B9DC",
+      "11": "#85CDB0",
+      "3": "#F0C66C",
+      "4": "#ADA5D6",
+      "6": "#EEAD8F",
+      "10": "#80CBCE",
+      "7": "#F0C66C"
+    },
+    "seed_to_room": {
+      "1": 1,
+      "2": 2,
+      "3": 3,
+      "4": 4,
+      "5": 5,
+      "6": 6,
+      "7": 7,
+      "8": 8,
+      "9": 9,
+      "10": 11,
+      "11": 10,
+      "12": 12,
+      "13": 13
+    },
+    "visual_reference": "https://arxiv.org/pdf/2203.03519 (Fig. 1; presentation only, not the algorithm)"
+  },
+  "interpretation": [
+    "Panel a shows every point in the cached measured floor cloud used by wall extraction; no height or spatial filtering is applied for display.",
+    "Panel b shows the extracted wall barriers and inherited candidate domain; upstream geometry reconstruction and wall extraction internals are not expanded.",
+    "Supported space is the prior candidate domain intersected with horizontal surface OR multi-height FREE OR trajectory OR multi-frame ray support.",
+    "Distance is computed to every boundary of supported space, not only to wall cells.",
+    "Seed regions are connected distance-threshold cores passing the source area gate; no fallback point is added.",
+    "Watershed is the source four-connected masked minimax flood. Merge rules are executed; zero merges occur in the illustrated floor.",
+    "Display-fragment filtering and overlap-based ID association are also replayed; no fragments are hidden on this floor.",
+    "Region colors are display identities, not semantic classes or room ground truth.",
+    "Excluded means unsupported by the gate, not proven outside or occupied.",
+    "Gray supported cells without assigned seeds remain unassigned; the map is not a collision-free navigation map."
+  ]
+}

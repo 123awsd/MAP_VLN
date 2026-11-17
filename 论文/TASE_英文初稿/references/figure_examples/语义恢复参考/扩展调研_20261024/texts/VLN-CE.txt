@@ -1,0 +1,1297 @@
+
+--- PDF PAGE 1 ---
+Beyond the Nav-Graph: Vision-and-Language
+Navigation in Continuous Environments
+Jacob Krantz1, Erik Wijmans2,3, Arjun Majumdar2,
+Dhruv Batra2,3, and Stefan Lee1
+1 Oregon State University
+2 Georgia Institute of Technology
+3 Facebook AI Research
+jacobkrantz.github.io/vlnce
+Abstract. We develop a language-guided navigation task set in a con-
+tinuous 3D environment where agents must execute low-level actions to
+follow natural language navigation directions. By being situated in contin-
+uous environments, this setting lifts a number of assumptions implicit in
+prior work that represents environments as a sparse graph of panoramas
+with edges corresponding to navigability. Speciﬁcally, our setting drops
+the presumptions of known environment topologies, short-range oracle
+navigation, and perfect agent localization. To contextualize this new task,
+we develop models that mirror many of the advances made in prior set-
+tings as well as single-modality baselines. While some of these techniques
+transfer, we ﬁnd signiﬁcantly lower absolute performance in the contin-
+uous setting – suggesting that performance in prior ‘navigation-graph’
+settings may be inﬂated by the strong implicit assumptions.
+Keywords: Vision-and-Language Navigation, Embodied Agents
+1
+Introduction
+Springing forth from the pages of science ﬁction and capturing the daydreams
+of weary chore-doers everywhere, the promise and potential of general-purpose
+robotic assistants that follow natural language instructions has been long un-
+derstood. Taking a small step towards this goal, recent work has begun devel-
+oping artiﬁcial agents that follow natural language navigation instructions in
+perceptually-rich, simulated environments [4,6]. An example instruction might
+be “Go down the hall and turn left at the wooden desk. Continue until you reach
+the kitchen and then stop by the kettle.” and agents are evaluated by their ability
+to follow the described path in (potentially novel) simulated environments.
+Many of these tasks have been developed from datasets of panoramic images
+captured in real scenes – e.g. Google StreetView images in Touchdown [6] or
+Matterport3D panoramas captured in homes in Vision-and-Language Navigation
+(VLN) [4]. This paradigm enables eﬃcient data collection and high visual ﬁdelity
+compared to 3D scanning or creating synthetic environments; however, scenes
+are only observed from a sparse set of points relative to the full 3D environment
+(∼117 viewpoints per environment in VLN). As a consequence, environments in
+these tasks are deﬁned in terms of a navigation graph (or nav-graph for short)
+arXiv:2004.02857v2  [cs.CV]  1 May 2020
+
+
+--- PDF PAGE 2 ---
+2
+J. Krantz et al.
+(a) Vision-and-Language Navigation (VLN)
+(b) VLN in Continuous Environments (VLN-CE)
+Fig. 1. The VLN setting (a) operates on a ﬁxed topology of panoramic images (shown
+in blue) – assuming perfect navigation between nodes (often meters apart) and precise
+localization. Our VLN-CE setting (b) lifts these assumptions by instantiating the task
+in continuous environments with low-level actions – providing a more realistic testbed
+for robot instruction following.
+– a static topological representation of 3D space. As shown in Fig. 1(a), nodes
+in the nav-graph correspond to 360° panoramic images taken at ﬁxed locations
+and edges between nodes indicate navigability. This nav-graph based formulation
+introduces a number of assumptions that make it a poor proxy for what a robotic
+agent would encounter while navigating the real world.
+Focusing our discussion on Vision-and-Language Navigation (VLN), the
+existence and common usage of the nav-graph imply the following assumptions:
+– Known topology. Rather than continuous environments in which agents can
+move freely, agents operate on a ﬁxed topology of traversable nodes (shown
+in blue in Fig. 1(a)). Aside from being a poor match to robot control, this
+also provides prior information about environment layout to agents – even
+in “unseen” test settings. For example, it is common practice to deﬁne agent
+actions by selecting directions in the current panorama and ‘snapping’ to the
+nearest adjacent nav-graph node in that direction. How an actual agent might
+acquire and update such a topology in new environments is an open question.
+– Oracle navigation. Movement between adjacent nodes in the nav-graph
+is deterministic, implying the existence of an oracle navigator capable of
+accurately traversing multiple meters in the presence of obstacles – abstracting
+away the problem of visual navigation. Further, this movement between nodes
+is perceptually akin to teleportation – the current panorama is simply replaced
+by the panorama at the new location meters away. This is in contrast to the
+continuous stream of observations a real agent would encounter while moving.
+– Perfect localization. Agents are given their precise location and heading at
+all times. Most works use this data to encode precise geometry between nodes
+in the nav-graph as part of the decision making process, e.g. moving 30°W and
+1.12m forward from the previous node. Others use precise agent localization to
+construct spatial maps of the environment on which to reason about paths [3].
+However, precise localization indoors is still a challenging problem.
+Taken together, these assumptions make current settings poor reﬂections of the
+real world both in terms of control (ignoring actuation, navigation, and localiza-
+tion error) and visual stimuli (lacking the poor framing and long observation-
+sequences agents will encounter). In essence, the problem is reduced to that of
+
+
+--- PDF PAGE 3 ---
+Vision-and-Language Navigation in Continuous Environments
+3
+visually-guided graph search. As such, closing the loop by transferring these
+trained agents to physical robotic platforms has not been examined.
+These assumptions are often justiﬁed by invoking existing technologies as
+potential oracles. For example, simultaneous localization and mapping (SLAM) or
+odometry systems can oﬀer strong localization in appropriate conditions [16,21].
+Likewise, algorithms for path planning and control can navigate short distances
+in the presence of obstacles [11,25,31]. Further, it is reasonable to suggest that
+issuing commands at the level of relative waypoints (in analogy to nav-graph
+nodes) is the proper interface between language-guided AI navigators and lower-
+level agent control. However, these techniques are each independently far from
+perfect and such an agent would need to learn the limitations of these lower-
+level control systems – facing consequences when proposed waypoints cannot be
+reached eﬀectively. Integrative studies such as these that combine and evaluate
+techniques for control and mapping with learned AI agents are not possible in
+current nav-graph based problem settings. In this work, we develop a continuous
+setting that enables these types of studies and take a ﬁrst step towards integrating
+VLN agents with control via low-level actions.
+Vision-and-Language Navigation in Continuous Environments. In this
+work, we focus in on the Vision-and-Language Navigation (VLN) [4] task and
+lift these implicit assumptions by instantiating it in continuous 3D environments
+rendered in a high-throughput simulator [19]. Consequently, we call this task
+Vision-and-Language Navigation in Continuous Environments (VLN-CE). Agents
+in our task are free to navigate to any unobstructed point through a set of
+low-level actions (e.g. move forward 0.25m, turn-left 15 degrees) rather than
+teleporting between ﬁxed nodes. This setting introduces many challenges ignored
+in prior work. Agents in VLN-CE face signiﬁcantly longer time horizons; the
+average number of actions along a path in VLN-CE is ∼55 compared to the 4-6
+node hops in VLN (as illustrated in Fig. 1). Moreover, the views the agent receives
+along the way are not well-posed by careful human operators as in the panoramas,
+but rather a consequence of the agent’s actions. Agents must also learn to avoid
+getting stuck on obstacles, something that is structurally impossible in VLN’s
+navigability deﬁned nav-graph. Further, agents are not provided their location or
+heading while navigating.
+We develop agent architectures for this task and explore how popular mecha-
+nisms for VLN transfer to the VLN-CE setting. Speciﬁcally, we develop a simple
+sequence-to-sequence baseline architecture as well as a cross-modal attention-
+based model. We perform a number of input-modality ablations to assess the
+biases and baselines in this new setting (including models without perception or
+instructions as suggested in [27]). Unlike in VLN where depth is rarely used, our
+analysis reveals depth to be an integral signal for learning embodied navigation
+– echoing similar ﬁndings in point-goal navigation tasks [19,31]. We also apply
+existing training augmentations [17,24,26] popular in VLN to our setting, ﬁnding
+mixed results. Overall, our best performing agent successfully navigates to the
+goal in approximately a third of episodes in unseen environments – taking an
+average of 88 actions in this long-horizon task.
+
+
+--- PDF PAGE 4 ---
+4
+J. Krantz et al.
+Table 1. Comparison of language-guided visual navigation tasks. Ours is the only to
+provide unconstrained navigation in real environments for crowdsourced instructions.
+Task
+Instructions
+Environment
+Navigation
+LANI [20]
+Crowdsourced
+Synthetic
+Unconstrained
+StreetNav [13]
+Templated
+Real
+Nav-Graph Based
+Touchdown [6]
+Crowdsourced
+Real
+Nav-Graph Based
+VLN [4]
+Crowdsourced
+Real
+Nav-Graph Based
+VLN-CE (ours)
+Crowdsourced
+Real
+Unconstrained
+To further examine the relationship between the nav-graph-based VLN task
+and VLN-CE, we also transfer paths from agents trained in continuous environ-
+ments back to the nav-graph to provide a direct comparison. We ﬁnd signiﬁcant
+gaps in performance between these settings indicative of the strong prior provided
+by the nav-graph. This suggests prior results in VLN may be overly optimistic in
+terms of progress towards instruction-following robots functioning in the wild.
+Contributions. To summarize our contributions, we:
+– Lift the VLN task to continuous 3D environments – removing many un-
+realistic assumptions imposed by the nav-graph-based representation. The
+VLN-CE codebase and our baseline models are available at https://github.
+com/jacobkrantz/VLN-CE.
+– Develop model architectures for the VLN-CE task and evaluate a suite of
+single-input ablations to assess the biases and baselines of the setting.
+– Investigate how a number of popular techniques in VLN transfer to this more
+challenging long-horizon setting – identifying signiﬁcant gaps in performance.
+2
+Related Work
+Language-guided Visual Navigation Tasks. Language-guided visual naviga-
+tion tasks require agents to follow navigation directions in simulated environments.
+There have been a number of recent tasks proposed in this space [4,6,13,20]. Chen
+et al. [6] introduce the Touchdown task which studies outdoor language-guided
+navigation in Google Street View panoramas. Hermann et al. [13] investigates
+the same setting; however, the instructions are automatically generated from
+Google Map directions rather than being crowdsourced from human annotators.
+Both adopt a nav-graph setting due to the source data being panoramic images
+– constraining agent navigation to ﬁxed points. Misra et al. [20] introduce a
+simulated environment with unconstrained navigation and a dataset of crowd-
+sourced instructions; however, the environments are unrealistic, synthetic scenes.
+Most related to our work is the Vision-and-Language Navigation (VLN) task
+of Anderson et al. [4]. VLN provides nav-graph trajectories and crowdsourced
+instructions in Matterport3D [5] environments as the Room-to-Room (R2R)
+dataset. We build VLN-CE directly on these annotations – converting R2R
+panorama-based trajectories to ﬁne-grained paths in continuous Matterport3D
+environments (Fig. 1(a) to Fig. 1(b)). As outlined in the introduction, this shift
+to continuous environments with unconstrained agent navigation lifts a number
+of unrealistic assumptions.
+
+
+--- PDF PAGE 5 ---
+Vision-and-Language Navigation in Continuous Environments
+5
+The variation in these tasks is primarily in the source of navigation instructions
+(crowdsourced from human annotators vs. generated via template), environment
+realism (hand-designed synthetic worlds vs. captures from real locations), and
+constraints on agent navigation (nav-graph based navigation vs. unconstrained
+agent motion). Tab. 1 provides a comparison between tasks along these axes. Our
+proposed VLN-CE task provides the ﬁrst setting with crowdsourced instructions
+in realistic environments with unconstrained agent navigation.
+Approaches to Vision-and-Language Navigation. VLN has seen consider-
+able progress from a wide variety of techniques. Multimodal attention mechanisms
+have become popular to provide better grounding between instructions and the
+visual scene observation [29]. Orthogonal to new modeling architectures, improve-
+ments have also come from new training approaches and data augmentation
+methods. One prevalent technique is to utilize inverse “speaker” models to re-
+rank candidate trajectories or augment the available training data by generating
+instructions for novel trajectories [9]. Tan et al. [26] further improve upon this
+idea by masking a subset of visual features during the speaker’s instruction
+generation process, thereby improving the diversity of the generated instructions.
+Ma et al. [17] show that an additional training signal can be gained by explicitly
+estimating progress toward the goal (referred to as self-monitoring). We adapt
+these methods to VLN-CE and examine their impact – ﬁnding mixed results.
+Multimodal attention remains a useful structure; however, speaker-based data
+augmentation and self-monitoring losses provide mixed results.
+Other Language-based Embodied AI. A number of other embodied tasks
+have considered language-conditioned navigation. For instance, referring to spe-
+ciﬁc rooms or objects that agents must then navigate to [7, 10, 30]. However,
+these settings use language to specify end-goals or query agent knowledge rather
+than to provide navigational directions. For example, specifying “lamp” or “What
+color is the lamp in the living room?” rather than “Go down the hall and into the
+bedroom on the right. Stop by the lamp to the left of the bed.” This loose coupling
+of intermediate agent action with the language instruction diﬀerentiates these
+tasks from language-guided navigation settings.
+3
+VLN in Continuous Environments (VLN-CE)
+We consider a continuous setting for the vision-and-language navigation task which
+we refer to as Vision-and-Language Navigation in Continuous Environments (VLN-
+CE). Given a natural language navigation instruction, an agent must navigate
+from a start position to the described goal in a continuous 3D environment by
+executing a sequence of low-level actions based on egocentric perception alone. In
+overview, we develop this setting by transferring nav-graph-based Room-to-Room
+(R2R) [4] trajectories to reconstructed continuous Matterport3D environments
+in the Habitat simulator [19]. We discuss the task speciﬁcation and the details of
+this transfer process in this section.
+Continuous Matterport3D Environments in Habitat. We set our prob-
+lem in the Matterport3D (MP3D) [5] dataset, a collection of 90 environments
+captured through over 10,800 high-deﬁnition RGB-D panoramas. In addition
+
+
+--- PDF PAGE 6 ---
+6
+J. Krantz et al.
+to the panoramic images, MP3D also provides corresponding mesh-based 3D
+environment reconstructions. To enable agent interaction with these meshes, we
+develop the VLN-CE task on top of the Habitat Simulator [19], a high-throughput
+simulator that supports basic movement and collision checking for 3D environ-
+ments including MP3D. In contrast to the simulator used in VLN [4], Habitat
+allows agents to navigate freely in the continuous environments.
+Observations and Actions. We select observation and action spaces to emulate
+a ground-based, zero-turning radius robot with a single, forward-mounted RGBD
+camera, similar to a LoCoBot [1]. Agents perceive the world through egocentric
+RGBD images from the simulator with a resolution of 256×256 and a horizontal
+ﬁeld-of-view of 90 degrees. Note that this is similar to the egocentric RGB
+perception in the original VLN task [4] but diﬀers from the panoramic observation
+space adopted by nearly all follow-up work [9,17,26,29].
+While the simulator is quite ﬂexible in terms of agent actions, we consider
+four simple, low-level actions for agents in VLN-CE – move forward 0.25m,
+turn-left or turn-right 15 degrees, or stop to declare that the goal position
+has been reached. These actions can easily be implemented on robotic agents with
+standard motion controllers. In contrast, actions to move between panoramas
+in [4] traverse 2.25m on average and can include avoiding obstacles.
+3.1
+Transferring Nav-Graph Trajectories
+Rather than collecting a new dataset of trajectories and instructions, we instead
+transfer those from the nav-graph-based Room-to-Room dataset to our continuous
+setting. Doing so enables us to compare existing nav-graph-based techniques with
+our methods that operate in continuous environments on the same instructions.
+Matterport3D Simulator and the Room-to-Room Dataset. The original
+VLN task is based on panoramas from Matterport3D (MP3D) [5]. To enable agent
+interaction with these panoramas, Anderson et al. [4] developed the Matterport3D
+Simulator. Environments in this simulator are deﬁned as nav-graphs E = {V, E}.
+Each node v ∈V corresponds to a panoramic image I captured by a Matterport
+camera at location x, y, z – i.e. v = {I, x, y, z}. Edges in the graph correspond to
+navigability between nodes. Navigability was deﬁned by ray-tracing between node
+locations at varying heights to check for obstacles in the reconstructed MP3D
+scene and then manually inspected. Edges were manually added or removed
+based on judgement whether an agent could navigate between nodes – including
+by avoiding minor obstacles4. Agents act by teleporting between adjacent nodes
+in this graph. Based on this simulator, Anderson et al. [4] collect the Room-
+to-Room (R2R) dataset containing 7189 trajectories each with three human-
+generated instructions on average. These trajectories consist of a sequence of
+nodes τ = [v1, . . . , vT ] with length T averaging between 4 and 6 nodes.
+Converting Room-to-Room Trajectories to Habitat. Given a mapping
+between the coordinate frames of Matterport3D Simulator and MP3D in Habitat,
+it is seemingly simple to transfer the Room-to-Room trajectories – after all, each
+4 Details included from correspondence with the author of [4]
+
+
+--- PDF PAGE 7 ---
+Vision-and-Language Navigation in Continuous Environments
+7
+Fig. 2. We transfer nav-graph trajectories over panoramas (blue dots) from the Room-to-
+Room (R2R) dataset to locations in reconstructed Matterport3D (MP3D) environments.
+Some map to ‘holes’ in environment meshes where reconstruction failed or on furniture
+(commonly tables) where an agent could not navigate. For these, we ﬁnd the nearest
+navigable point within 0.5m.
+node has a corresponding xyz location. However, node locations often do not
+correspond to reachable locations for a ground-based agent – existing at variable
+height depending on tripod conﬁguration or placed on top of ﬂat furniture like
+tables. Further, the reconstructions and panoramas may diﬀer if objects or doors
+are moved between camera captures. Fig. 2 shows an overview of this process
+and common errors when directly transferring node locations.
+For each node, v = {I, x, y, z}, we would like to identify the nearest, navigable
+point on the reconstructed mesh – i.e. the closest point that can be occupied by
+a ground-based agent represented by a 1.5m tall cylinder of diameter of 0.2m.
+Directly projecting to the nearest mesh location fails for 73% of nodes where
+failure is deﬁned as projecting to distant (>0.5m) or non-navigable points. Many
+of these points project to ceilings or the tops of nearby objects rather than the
+ﬂoor due to the height of the camera. Instead, we cast a ray up to 2m directly
+downward from the node location. At small, ﬁxed intervals along this ray, we
+project to the nearest mesh point. If multiple navigable points are identiﬁed, we
+take the one with minimal horizontal displacement from the original location. If
+no navigable point is found with less than a 0.5m displacement, we consider this
+MP3D node unmappable to the 3D mesh and thus invalid. We reviewed all invalid
+nodes manually and made corrections if possible, e.g. shifting nodes to the side of
+furniture. After these steps, 98.3% of nodes are successfully transferred. We refer
+to these transferred nodes as waypoint locations in the MP3D environments. As
+shown in Fig. 3(a), points requiring adjustment (3% of points) are transferred
+with small horizontal displacement, averaging 0.19m from the panorama location.
+Given a trajectory of converted waypoints τ = [w1, . . . , wT ], we would like to
+verify that an agent can actually navigate between each location. We employ an
+A*-based heuristic search algorithm to compute an approximate shortest path to
+a goal location. We run this shortest path algorithm between each waypoint in a
+trajectory to the next (e.g. wi to wi+1). A trajectory is considered navigable if
+for each pairwise navigation, an agent following the computed shortest path can
+navigate to within 0.5m of the next waypoint (wi+1). In total, we ﬁnd 77% of
+the R2R trajectories navigable in the continuous environment.
+Non-Navigable Trajectories. Among the 23% of trajectories that were not
+navigable, we observed two primary failure modes. First and most simply, 22%
+of these included one of the 1.7% of invalid nodes that could not be projected
+to MP3D 3D meshes and were rejected by default. The remaining trajectories
+
+
+--- PDF PAGE 8 ---
+8
+J. Krantz et al.
+(a) Node Location Displacement
+(b) Discontinuities
+(c) Trajectory Length in Actions
+Fig. 3. We successfully transfer 77% of the R2R trajectories. (a) Most panorama nodes
+transfer directly, but 3% require horizontal adjustment – with an average displacement
+of 0.19m. (b) Despite this, some trajectories are not navigable because of diﬀerences
+between the panoramas and reconstructed environments, e.g. holes in the reconstructed
+mesh (top) or objects like chairs being manipulated between panorama captures (bot-
+tom). (c) Our setting requires signiﬁcantly more agent decisions per trajectory with an
+average action length of 55.88 compared to 5 in R2R.
+were not navigable because they spanned disjoint regions of the reconstruction
+– meaning that there was no valid path from some waypoint wi to wi+1. As
+shown in Fig. 3(b), this may be holes or other mesh errors dividing the space.
+Alternatively, objects like chairs may be moved in between panorama captures
+– possibly resulting in a reconstruction that places the object mesh on top of
+individual panorama locations. As noted above, nodes in the R2R nav-graph
+were manually connected if there appeared to be a path between them, even
+if most other panoramas (and thus the reconstruction) showed objects (e.g. a
+closed door) blocking their path.
+3.2
+VLN-CE Dataset
+In total, the VLN-CE dataset consists of 4475 trajectories converted from R2R
+train and validation splits. For each trajectory, we provide the multiple natural
+language instructions from R2R and a pre-computed shortest path following the
+waypoints via low-level actions. As shown in Fig. 3(c), the low-level action space
+of VLN-CE makes our trajectories signiﬁcantly longer horizon tasks – with an
+average of 55.88 steps compared to the 4-6 in R2R.
+4
+Instruction-guided Navigation Models in VLN-CE
+We develop two models for VLN-CE. A simple sequence-to-sequence baseline
+and a more powerful cross-modal attentional model. While there are many
+diﬀerences in the details, these models are conceptually similar to early [4] and
+more recent [29] work in the nav-graph based VLN task. Exploring these gives
+insight into the diﬃculty of this setting in isolation and by comparison relative
+to VLN. Further, these models allow us to test whether improvements from early
+to later architectures carry over to a more realistic setting. Both of our models
+make use of the same observation and instruction encodings described below.
+Instruction Representation. We convert tokenized instructions to correspond-
+ing GLoVE [23] embeddings which are processed by recurrent encoders for each
+model. We denote these encoded tokens as w1, . . . , wT for a length T instruction.
+
+
+--- PDF PAGE 9 ---
+Vision-and-Language Navigation in Continuous Environments
+9
+Time
+GRU
+ℎ"#$
+(&)
+𝑎"
+ℎ"
+(&)
+ResNet50
+(PointNav)
+ResNet50
+(ImageNet)
+Head upstairs and walk past the
+piano
+th rough
+an
+arc hway
+directly
+in
+fron t.
+Turn
+righ t
+when
+t he
+hallw ay
+ends
+a t
+pictures a nd table. Wait by t he
+moose antlers on the wall.
+Instruction
+Depth
+RGB
+LSTM
+Mean
+Pool
+Flatten
+(a) Sequence-to-Sequence Baseline
+𝑎"#$
+ℎ"#$
+('""()
+𝑎"
+ℎ"
+('""()
+ResNet50
+(PointNav)
+ResNet50
+(ImageNet)
+Bi-LSTM
+Depth
+Instruction
+Depth
+RGB
+Instruction
+Attention
+GRU
+𝑎"#$
+Visual Attention
+RGB
+Visual Attention
+ResNet50
+(PointNav)
+ResNet50
+(ImageNet)
+ℎ"#$
+(')
+ℎ"
+(')
+Mean
+Pool
+GRU
+Flatten
+(b) Cross-Modal Attention Model
+Fig. 4. We develop a simple baseline agent (a) as well as an attentional agent (b)
+comparable to that in [29]. Both receive RGB and depth frames represented by pretrained
+networks for image classiﬁcation [8] and point-goal navigation [31], respectively.
+Observation Encoding. We separately encode the RGB and depth observations.
+For RGB, we apply a ResNet50 [12] pretrained on ImageNet [8] to collect semantic
+visual features. We denote the ﬁnal spatial features of this model as V = {vi}
+where i indexes over spatial locations. Likewise for depth, we use a modiﬁed
+ResNet50 that was trained to perform point-goal navigation (i.e. to navigate to
+a location given in relative coordinates) [31] and denote these as D = {di}.
+4.1
+Sequence-to-Sequence Baseline
+We consider a simple sequence-to-sequence baseline model shown in Fig. 4(a).
+This model consists of a recurrent policy that takes a representation of the visual
+observation (depth and RGB) and instructions at each time step, then predicts
+an action a. Concretely, we can write the agent for time step t as
+¯vt = mean-pool (Vt) ,
+¯dt = [d1, . . . , dwh] ,
+s = LSTM (w1, . . . , wT )
+(1)
+h(a)
+t
+= GRU
+¯vt, ¯dt, s
+
+, h(a)
+t−1
+
+(2)
+at = argmax
+a
+softmax
+
+Wah(a)
+t
++ ba
+
+(3)
+where [·] denotes concatenation and s is the ﬁnal hidden state of an LSTM
+instruction encoder. This simple model enables straight-forward input-modality
+ablations and establishes a straight-forward baseline for the VLN-CE setting.
+4.2
+Cross-Modal Attention Model
+While the previous baseline is a sensible start, it lacks powerful modeling tech-
+niques common to vision-and-language tasks including cross-modal attention and
+spatial visual reasoning which are intuitively quite important for language-guided
+visual navigation. Many instructions include relative references (e.g. “to the left of
+the table”) that would be diﬃcult to ground from mean-pooled features. Moreover,
+already-completed parts of the instruction are likely irrelevant to the next decision
+– pointing towards the potential of attention over instructions.
+We consider a more expressive model shown in Fig. 4(b) that incorporates
+these mechanisms. This model consists of two recurrent networks – one tracking
+
+
+--- PDF PAGE 10 ---
+10
+J. Krantz et al.
+visual observations as before and the other making decisions based on attended
+instruction and visual features. We can write this ﬁrst recurrent network as:
+h(attn)
+t
+= GRU
+¯vt, ¯dt, at−1
+
+, h(attn)
+t−1
+
+(4)
+where at−1 ∈R1×32 and is a learned linear embedding of the previous action.
+We encode instructions with a bi-directional LSTM and reserve all intermediate
+hidden states:
+S = {s1, . . . , sT} = BiLSTM (w1, . . . , wT )
+(5)
+We then compute an attended instruction feature ˆst over these representations
+which is then used to attend to visual (ˆvt) and depth (ˆdt) features. Concretely,
+ˆst = Attn
+
+S, h(attn)
+t
+
+,
+ˆvt = Attn (Vt,ˆst) ,
+ˆdt = Attn (Dt,ˆst)
+(6)
+where Attn is a scaled dot-product attention [28]. For a query q ∈R1×dq,
+ˆx = Attn({xi}, q) is computed as ˆx= P
+i αixi for αi=softmaxi((WKxi)T q /
+p
+dq).
+The second recurrent network then takes a concatenation of these features as
+input (including an action encoding and the ﬁrst recurrent network’s hidden
+state) and predicts an action.
+h(a)
+t
+= GRU
+h
+ˆst, ˆvt, ˆdt, at−1, h(attn)
+t
+i
+, h(a)
+t−1
+
+(7)
+at = argmax
+a
+softmax
+
+Wah(a)
+t
++ ba
+
+(8)
+4.3
+Auxiliary Losses and Training Regimes
+Aside from modeling details, much of the remaining progress in VLN has come
+from adjusting the training regime – adding auxiliary losses / rewards [17,29],
+mitigating exposure bias during training [4, 29], or reducing data sparsity by
+incorporating synthetically generated data augmentation [9,26]. We explore some
+of these directions for VLN-CE, but note that this is not an exhaustive accounting
+of impactful techniques. Particularly, we suspect that methods addressing expo-
+sure bias and data sparsity in VLN will help in the VLN-CE setting where these
+problems may be ampliﬁed by lengthy action sequences. We report ablations
+with and without these techniques in Sec. 5.
+Imitation Learning. A natural starting point for training is simply to maximize
+the likelihood of the ground truth trajectories. To do so, we perform teacher-
+forcing training with inﬂection weighting. As described in [30], inﬂection weighting
+places emphasis on time-steps where actions change (i.e. at−1 ̸= at), adjusting
+loss weight proportionally to the rarity of such events. This was found to be
+helpful for problems like navigation with long sequences of repeated actions (e.g.
+going forward down a hall). We observe a similar eﬀect in early experiments and
+apply inﬂection weighting in all our experiments.
+Coping with Exposure Bias. Imitation learning in auto-regressive settings
+suﬀers from a disconnect between training and test – agents are not exposed
+
+
+--- PDF PAGE 11 ---
+Vision-and-Language Navigation in Continuous Environments
+11
+to the consequences of their actions during training. Prior work has shown sig-
+niﬁcant gains by addressing this issue for VLN through scheduled sampling [4]
+or reinforcement learning ﬁne-tuning [26, 29]. In this work, we apply Dataset
+Aggregation (DAgger) [24] towards the same end. While DAgger and scheduled
+sampling share many similarities, DAgger trains on the aggregated set of trajec-
+tories from all iterations 1 to n. Thus, the resulting policy after iteration n is
+optimized over all past experiences and not just those collected from iteration n.
+Synthetic Data Augmentation. Another popular strategy is to learn an
+inverse ‘speaker’ model that produces instructions given a trajectory. These
+models can be used to re-rank paths or to generate new trajectory-instruction
+pairs from any trajectory. Both [26] and [9] take this data augmentation approach
+and many follow-up works have used these trajectories for gains in performance.
+We take the ∼150k synthetic trajectories generated this way from [26] – converting
+them to our continuous environments.
+Progress Monitor. An important aspect of a successful navigation is accurately
+identifying where to stop. Prior work [17] has found improvements from explicitly
+supervising the agent with a progress-toward-goal signal. Speciﬁcally, agents are
+trained to predict the fraction through the trajectory they are at each time step.
+We apply this progress estimation during training with a mean squared error loss
+term akin to [17].
+5
+Experiments
+Setting and Metrics. We train and evaluate our models in VLN-CE. As is
+common practice, we perform early stopping based on val-unseen performance. We
+report standard metrics for visual navigation tasks deﬁned in [2,4,18] – trajectory
+length in meters (TL), navigation error in meters from goal at termination (NE),
+oracle success rate (OS), success rate (SR), success weighted by inverse path length
+(SPL), and normalized dynamic-time warping (nDTW). For our discussion, we will
+examine success rate and SPL as the primary metrics for performance and use
+NDTW to describe how paths diﬀer in shape from ground truth trajectories. For
+full details on these metrics, see [2,4,18].
+Implementation Details. We utilize the Adam optimizer [15] with a learning
+rate of 2.5 × 10−4 and a batch size of 5 full trajectories. We set the inﬂection
+weighting coeﬃcient [30] to 3.2 (inverse frequency of inﬂections in our ground-
+truth paths). We train on all ground-truth paths until convergence on val-unseen
+(at most 30 epochs). For DAgger [24], we collect the nth set by taking the oracle
+action with probability β=0.75n and the current policy action otherwise. We
+collect 5, 000 trajectories at each stage and then perform 4 epochs of imitation
+learning (with inﬂection weighting) over all collected trajectories. Once again, we
+train to convergence on val-unseen (6 to 10 dataset collections, depending on the
+model). We implement our agents in PyTorch [22] and on top of Habitat [19].
+5.1
+Establishing Baseline Performance for VLN-CE
+No-Learning Baselines. To establish context for our results, we consider
+random and hand-crafted agents shown in Tab. 2 (top two rows). The random
+
+
+--- PDF PAGE 12 ---
+12
+J. Krantz et al.
+Table 2. No-learning baselines and input modality ablations for our baseline sequence-
+to-sequence model. Given the long trajectories involved, we ﬁnd both random agents
+and single-modality ablations to perform quite poorly in VLN-CE.
+Val-Seen
+Val-Unseen
+Model
+Vision
+Instr.
+History
+TL ↓
+NE ↓
+nDTW ↑
+OS ↑
+SR ↑
+SPL ↑
+TL ↓
+NE ↓
+nDTW ↑
+OS ↑
+SR ↑
+SPL ↑
+Random
+-
+-
+-
+3.54 10.20
+0.28
+0.04 0.02 0.02
+3.74
+9.51
+0.30
+0.04 0.03 0.02
+Hand-Crafted
+-
+-
+-
+3.83
+9.56
+0.33
+0.05 0.04 0.04
+3.71 10.34
+0.30
+0.04 0.03 0.02
+Seq2Seq
+RGBD
+✓
+✓
+8.40
+8.54
+0.45
+0.35 0.25 0.24
+7.67
+8.94
+0.43
+0.25 0.20 0.18
+– No Image
+D
+✓
+✓
+7.77
+8.55
+0.46
+0.31 0.24 0.23
+7.87
+9.09
+0.41
+0.23 0.17 0.15
+– No Depth
+RGB
+✓
+✓
+4.93 10.76
+0.29
+0.10 0.03 0.03
+5.54
+9.89
+0.31
+0.11 0.04 0.04
+– No Vision
+-
+✓
+✓
+4.26 11.07
+0.26
+0.03 0.00 0.00
+4.68 10.06
+0.30
+0.07 0.00 0.00
+– No Instruction
+RGBD
+-
+✓
+7.86
+9.09
+0.42
+0.26 0.18 0.17
+7.27
+9.03
+0.42
+0.22 0.17 0.16
+agent selects actions according to the train set action distribution (68% forward,
+15% turn-left, 15% turn-right, and 2% stop). The hand-crafted agent picks a
+random heading and takes 37 forward actions (average trajectory length) before
+calling stop. Despite having no learned components nor processing any input, both
+these agents achieve approximately 3% success rates in val-unseen. In contrast, a
+similar hand-crafted random-heading-and-forward model in VLN yields a 16.3%
+success rate [4]. Though not directly comparable, this gap illustrates the strong
+structural prior provided by the nav-graph in VLN.
+Seq2Seq and Single-Modality Ablations. Tab. 2 also shows performance
+for the baseline Seq2Seq model along with input ablations. All models are trained
+with imitation learning without data augmentation or any auxiliary losses. Our
+baseline Seq2Seq model signiﬁcantly outperforms the random and hand-crafted
+baselines, successfully reaching the goal in 20% of val-unseen episodes.
+As illustrated in [27], models examining only single modalities can be very
+strong baselines in embodied tasks. We train models without access to the instruc-
+tion (No Instruction) and with ablated visual input (No Vision/Depth/Image).
+All of these ablations under-perform the Seq2Seq baseline. We ﬁnd that depth
+is a very strong signal for learning, with models lacking it (No Depth and No
+Vision) failing to outperform chance (≤1% success rates). We believe that depth
+enable agents to quickly begin traversing environments eﬀectively (e.g. without
+collisions) and without this it is very diﬃcult to bootstrap to instruction following.
+With a success rate of 17%, the No Instruction model performs similarly to a
+hand-crafted agent in VLN, suggesting shared trajectory regularities between
+VLN and VLN-CE. While these regularities can be manually exploited in VLN
+via the nav-graph, they are implicit in VLN-CE as evidenced by the signiﬁcantly
+lower performance of our random and hand crafted agents which collide with and
+get stuck on obstacles. The No Image model also achieves 17% success, similarly
+failing to reason about instructions. This hints at the importance of grounding
+visual referents (through RGB) for navigation.
+5.2
+Model Performance in VLN-CE
+Tab. 3 shows a comparison of our models (Seq2Seq and Cross-Modal) under three
+training augmentations (Progress Monitor, DAgger, Data Augmentation).
+
+
+--- PDF PAGE 13 ---
+Vision-and-Language Navigation in Continuous Environments
+13
+Table 3. Performance in VLN-CE. We ﬁnd that popular techniques in VLN have
+mixed beneﬁt in VLN-CE; however, our best performing model combining all examined
+techniques succeeds nearly 1/3rd of the time in new environments. * denotes ﬁne-tuning.
+PM
+[17]
+DA
+[24]
+Aug.
+[26]
+Val-Seen
+Val-Unseen
+#
+Model
+TL ↓
+NE ↓
+nDTW ↑
+OS ↑
+SR ↑
+SPL ↑
+TL ↓
+NE ↓
+nDTW ↑
+OS ↑
+SR ↑
+SPL ↑
+1
+Seq2Seq
+Baseline
+-
+-
+-
+8.40
+8.54
+0.45
+0.35
+0.25
+0.24
+7.67
+8.94
+0.43
+0.25
+0.20
+0.18
+2
+✓
+-
+-
+8.34
+8.48
+0.47
+0.32
+0.22
+0.21
+8.93
+9.28
+0.40
+0.28
+0.17
+0.15
+3
+-
+✓
+-
+9.32
+7.09
+0.53
+0.44
+0.34
+0.32
+8.46
+7.92
+0.48
+0.35
+0.26
+0.23
+4
+-
+-
+✓
+8.23
+7.76
+0.51
+0.34
+0.26
+0.25
+7.22
+8.70
+0.44
+0.26
+0.19
+0.17
+5
+✓
+✓*
+✓
+9.37
+7.02
+0.54
+0.46
+0.33
+0.31
+9.32
+7.77
+0.47
+0.37
+0.25
+0.22
+6
+Cross-Modal
+Attention
+-
+-
+-
+8.26
+7.81
+0.49
+0.38
+0.27
+0.25
+7.71
+8.14
+0.47
+0.31
+0.23
+0.22
+7
+✓
+-
+-
+8.51
+8.17
+0.47
+0.35
+0.28
+0.26
+7.87
+8.72
+0.44
+0.28
+0.21
+0.19
+8
+-
+✓
+-
+8.90
+7.40
+0.52
+0.42
+0.33
+0.31
+8.12
+8.00
+0.48
+0.33
+0.27
+0.25
+9
+-
+-
+✓
+8.50
+8.05
+0.49
+0.36
+0.26
+0.24
+7.58
+8.65
+0.45
+0.28
+0.21
+0.19
+10
+✓
+✓*
+✓
+9.26
+7.12
+0.54
+0.46
+0.37 0.35
+8.64 7.37 0.51 0.40 0.32 0.30
+11
+✓
+-
+✓
+8.49
+8.29
+0.47
+0.36
+0.27
+0.25
+7.68
+8.42
+0.46
+0.30
+0.24
+0.22
+12
+-
+✓*
+✓
+9.32 6.76 0.55 0.47 0.37 0.33
+8.27
+7.76
+0.50
+0.37
+0.29
+0.26
+Cross-Modal Attention vs. Seq2Seq. We ﬁnd the cross-modal attention
+model outperforms the Seq2Seq baseline under all settings for new environments.
+For example, in teacher-forcing training (row 1 vs. 6), the cross-modal attention
+model improves from 0.18 to 0.22 SPL on val-unseen, an improvement of 0.04
+SPL (22% relative). Likewise, when applying all three augmentations (row 5
+vs. 10), the cross-modal model improves from 0.22 to 0.30 SPL, an improvement
+of 0.08 SPL (36% relative).
+Training Augmentation. We ﬁnd DAgger-based training impactful for both
+the Seq2Seq (row 1 vs. 3) and Cross-Modal (row 6 vs. 8) models – improving
+by 0.03-0.05 SPL in val-unseen. Contrary to ﬁndings in prior work, we observe
+negative eﬀects from progress monitor auxiliary loss or data augmentation for both
+models (rows 2/4 and 7/9) – dropping 0.01-0.03 SPL from standard training (rows
+1/6). Despite this, we ﬁnd combining all three techniques to lead to signiﬁcant
+performance gains for the cross-modal attention model (row 10). Speciﬁcally, we
+pretrain with imitation learning, data augmentation, and the progress monitoring
+loss, then ﬁnetune using DAgger (with β=0.75n+1) on the original data. This
+Cross-Modal Attention PM+DA*+Aug model achieves an SPL of 0.35 on val-seen
+and 0.30 on val-unseen – succeeding on 32% of episodes in new environments.
+We explore this trend further for the Cross-Modal model. We examine the
+validation performance of PM+Aug (row 11) and ﬁnd it to outperform Aug or PM
+alone (by 0.02-0.03 SPL). Next, we examine progress monitor loss on val-unseen
+for both PM and PM+Aug. We ﬁnd that without data augmentation, the progress
+monitor over-ﬁts considerably more (validation loss of 0.67 vs. 0.47) – indicating
+that the progress monitor can be eﬀective in our continuous setting but tends to
+over-ﬁt on the non-augmented training data, negatively aﬀecting generalization.
+Finally, we examine the performance of DA*+Aug (row 12) and ﬁnd that this
+outperforms DA (by 0.01-0.02 SPL), but is unable to match pre-training with
+the progress monitor and augmented data (row 10).
+
+
+--- PDF PAGE 14 ---
+14
+J. Krantz et al.
+Fig. 5. Qualitative examples of our Cross Modal Attention model taken in unseen vali-
+dation environments. In the ﬁrst example our agent successfully follows the instruction
+– note it takes 62 actions in VLN-CE, whereas the VLN traversal requires just 3 hops.
+Qualitative Examples. We examine two qualitative examples of our Cross-
+Modal Attention (PM+DA*+Aug.) model in unseen environments (Fig. 5).
+The top example shows the agent successfully following the instruction and
+demonstrates the increased diﬃcultly of VLN-CE (62 actions vs. 3 hops in VLN).
+Phrases like “turn left, and enter the hallway” present an additional challenge
+in VLN-CE as the agent must turn-left an unknown number of times until it
+sees the hallway. The second example shows a failure of the agent – it navigates
+towards the wrong windows and fails to ﬁrst “pass the kitchen” – stopping instead
+at the nearest couch. We also observe failures when the agent never sees the
+object(s) referred to by the instruction in the scene – with a limited egocentric
+ﬁeld-of-view, the agent must actively choose to observe the surrounding scene.
+5.3
+Examining the Impact of the Nav-Graph in VLN
+To draw a direct comparison between the VLN and VLN-CE settings, we convert
+trajectories taken by our Cross-Modal Attention (PM+DA*+Aug.) model in
+continuous environments to nav-graph trajectories (details in the supplement)
+and then evaluate these paths on the VLN leaderboard.5 We emphasize that the
+point of this comparison is not to outperform existing approaches for VLN, but
+rather to highlight how important the nav-graph is to the performance of existing
+VLN systems by contrasting them with our model. Unlike the approaches shown,
+our model does not beneﬁt from the nav-graph during training or inference.
+As shown in Tab. 4, we ﬁnd signiﬁcant gaps between our model and prior work
+in the VLN setting. Despite having similar cross-modal attention architectures,
+RCM [29] achieves an SPL of 0.38 in test environments while our model yields
+5 Note that the VLN test set is not publicly available except through this leaderboard.
+
+
+--- PDF PAGE 15 ---
+Vision-and-Language Navigation in Continuous Environments
+15
+Table 4. Comparison on the VLN validation and test sets with existing models. Note
+there is a signiﬁcant gap between techniques that leverage the oracle nav-graph at train
+and inference (top set) and our best method in continuous environments.
+Val-Seen (VLN)
+Val-Unseen (VLN)
+Test (VLN)
+Model
+TL ↓
+NE ↓
+OS ↑
+SR ↑
+SPL ↑
+TL ↓
+NE ↓
+OS ↑
+SR ↑
+SPL ↑
+TL ↓
+NE ↓
+OS ↑
+SR ↑
+SPL ↑
+VLN Task
+VLN-Seq2Seq [4]
+11.33 6.01 0.52 0.38
+-
+8.39
+7.81 0.28 0.21
+-
+8.13
+7.85
+0.27
+0.20 0.18
+Self-Monitoring [17]
+-
+3.18 0.77 0.68 0.58
+-
+5.41 0.68 0.47 0.34
+18.04 5.67
+0.59
+0.48 0.35
+RCM [29]
+10.65 3.53 0.75 0.66
+-
+11.46 6.09 0.50 0.42
+-
+11.97 6.12 0.495 0.43 0.38
+Back-Translation [26]
+10.1
+4.71
+-
+0.55 0.53
+9.37
+5.49
+-
+0.46 0.43
+11.7
+-
+-
+0.51 0.47
+Cross-Modal (PM+DA*+Aug.)
+6.92
+7.77 0.30 0.25 0.23
+7.42
+8.17 0.28 0.22 0.20
+9.47
+8.55
+0.32
+0.24 0.21
+0.21. Further, state-of-the-art on the test set is near 0.47 SPL, over 2x what we
+report. However, it is unclear if these gains could be realized on a real system
+given the strong assumptions set by the nav-graph. In contrast, our approach does
+not rely on external information and recent work has shown promising sim2real
+transferability for navigation agents trained in continuous simulations [14].
+Caveats. Making direct comparisons between drastically diﬀerent settings is
+challenging, we note some caveats. Approximately 20% of VLN trajectories are
+non-navigable in the continuous environments (and thus excluded in VLN-CE).
+By default, our models cannot succeed on these. Further, continuous VLN-CE
+paths can translate poorly to nav-graph trajectories when traversing areas of the
+environment not well-covered by the sparse panoramas. Comparing VLN-CE val
+results in Tab. 3 with the same in Tab. 4 shows these eﬀects account for a drop
+of approximately 10 SPL. Even compensating for this possible underestimation,
+nav-graph-based approaches still outperform our continuous models signiﬁcantly.
+6
+Discussion
+In this work, we explore the problem of following navigation instructions in
+continuous environments with low-level actions – lifting many of the unrealistic
+assumptions in prior nav-graph-based settings. In models presented here, we took
+an approach where observations were mapped directly to low-level control in an
+end-to-end manner; however, exploring modular approaches is exciting future
+work. For instance, having the learned agent pass directives to a motion controller.
+Crucially, setting our VLN-CE task in continuous environments (rather than a
+nav-graph) provides the community with a testbed where these sort of integrative
+experiments studying the interface of high- and low-level control are possible.
+Acknowledgements
+We thank Anand Koshy for his implementation of the dynamic time warping
+metric. The GT eﬀort was supported in part by NSF, AFRL, DARPA, ONR YIPs,
+ARO PECASE, Amazon. The OSU eﬀort was supported in part by DARPA. The
+views and conclusions contained herein are those of the authors and should not
+be interpreted as necessarily representing the oﬃcial policies or endorsements,
+either expressed or implied, of the U.S. Government, or any sponsor.
+
+
+--- PDF PAGE 16 ---
+16
+J. Krantz et al.
+References
+1. Locobot: An open source low cost robot (2019), https://locobot-website.netlify.
+com/ 6
+2. Anderson, P., Chang, A., Chaplot, D.S., Dosovitskiy, A., Gupta, S., Koltun, V.,
+Kosecka, J., Malik, J., Mottaghi, R., Savva, M., et al.: On evaluation of embodied
+navigation agents. arXiv preprint arXiv:1807.06757 (2018) 11
+3. Anderson, P., Shrivastava, A., Parikh, D., Batra, D., Lee, S.: Chasing ghosts:
+Instruction following as bayesian state tracking. NeurIPS (2019) 2
+4. Anderson, P., Wu, Q., Teney, D., Bruce, J., Johnson, M., Sünderhauf, N., Reid,
+I., Gould, S., van den Hengel, A.: Vision-and-language navigation: Interpreting
+visually-grounded navigation instructions in real environments. In: CVPR (2018) 1,
+3, 4, 5, 6, 8, 10, 11, 12, 15
+5. Chang, A., Dai, A., Funkhouser, T., Halber, M., Niessner, M., Savva, M., Song,
+S., Zeng, A., Zhang, Y.: Matterport3D: Learning from RGB-D data in indoor
+environments. In: 3DV (2017), MatterPort3D dataset license available at: http:
+//kaldir.vc.in.tum.de/matterport/MP_TOS.pdf 4, 5, 6
+6. Chen, H., Suhr, A., Misra, D., Snavely, N., Artzi, Y.: Touchdown: Natural language
+navigation and spatial reasoning in visual street environments. In: CVPR (2019) 1,
+4
+7. Das, A., Datta, S., Gkioxari, G., Lee, S., Parikh, D., Batra, D.: Embodied Question
+Answering. In: CVPR (2018) 5
+8. Deng, J., Dong, W., Socher, R., Li, L.J., Li, K., Fei-Fei, L.: ImageNet: A Large-Scale
+Hierarchical Image Database. In: CVPR (2009) 9
+9. Fried, D., Hu, R., Cirik, V., Rohrbach, A., Andreas, J., Morency, L.P., Berg-
+Kirkpatrick, T., Saenko, K., Klein, D., Darrell, T.: Speaker-follower models for
+vision-and-language navigation. In: NeurIPS (2018) 5, 6, 10, 11
+10. Gordon, D., Kembhavi, A., Rastegari, M., Redmon, J., Fox, D., Farhadi, A.: IQA:
+Visual question answering in interactive environments. In: CVPR (2018) 5
+11. Gupta, S., Davidson, J., Levine, S., Sukthankar, R., Malik, J.: Cognitive mapping
+and planning for visual navigation. In: CVPR (2017) 3
+12. He, K., Zhang, X., Ren, S., Sun, J.: Deep Residual Learning for Image Recognition.
+In: CVPR (2016) 9
+13. Hermann, K.M., Malinowski, M., Mirowski, P., Banki-Horvath, A., Anderson, K.,
+Hadsell, R.: Learning to follow directions in street view. AAAI (2020) 4
+14. Kadian, A., Truong, J., Gokaslan, A., Clegg, A., Wijmans, E., Lee, S., Savva, M.,
+Chernova, S., Batra, D.: Are we making real progress in simulated environments?
+measuring the sim2real gap in embodied visual navigation. In: arXiv (2019) 15
+15. Kingma, D., Ba, J.: Adam: A Method for Stochastic Optimization. In: ICLR (2015)
+11
+16. Kohlbrecher, S., Meyer, J., von Stryk, O., Klingauf, U.: A ﬂexible and scalable slam
+system with full 3d motion estimation. In: SSRR. IEEE (November 2011) 3
+17. Ma, C.Y., Lu, J., Wu, Z., AlRegib, G., Kira, Z., Socher, R., Xiong, C.: Self-
+monitoring navigation agent via auxiliary progress estimation. ICLR (2019) 3, 5, 6,
+10, 11, 13, 15
+18. Magalhaes, G., Jain, V., Ku, A., Ie, E., Baldridge, J.: Eﬀective and general evaluation
+for instruction conditioned navigation using dynamic time warping. arXiv preprint
+arXiv:1907.05446 (2019) 11
+19. Manolis Savva*, Abhishek Kadian*, Oleksandr Maksymets*, Zhao, Y., Wijmans, E.,
+Jain, B., Straub, J., Liu, J., Koltun, V., Malik, J., Parikh, D., Batra, D.: Habitat:
+A Platform for Embodied AI Research. ICCV (2019) 3, 5, 6, 11
+
+
+--- PDF PAGE 17 ---
+Vision-and-Language Navigation in Continuous Environments
+17
+20. Misra, D., Bennett, A., Blukis, V., Niklasson, E., Shatkhin, M., Artzi, Y.: Mapping
+instructions to actions in 3d environments with visual goal prediction. In: EMNLP
+(2018) 4
+21. Mur-Artal, R., Montiel, J.M.M., Tardos, J.D.: Orb-slam: a versatile and accurate
+monocular slam system. IEEE Transactions on Robotics 31(5), 1147–1163 (2015) 3
+22. Paszke, A., Gross, S., Massa, F., Lerer, A., Bradbury, J., Chanan, G., Killeen,
+T., Lin, Z., Gimelshein, N., Antiga, L., et al.: Pytorch: An imperative style, high-
+performance deep learning library. In: NeurIPS (2019) 11
+23. Pennington, J., Socher, R., Manning, C.D.: GloVe: Global Vectors for Word Repre-
+sentation. In: EMNLP (2014) 8
+24. Ross, S., Gordon, G., Bagnell, D.: A reduction of imitation learning and structured
+prediction to no-regret online learning. In: AISTATS (2011) 3, 11, 13
+25. Stentz, A.: Optimal and eﬃcient path planning for partially known environments.
+In: Intelligent Unmanned Ground Vehicles, pp. 203–220. Springer (1997) 3
+26. Tan, H., Yu, L., Bansal, M.: Learning to navigate unseen environments: Back
+translation with environmental dropout. In: NAACL HLT (2019) 3, 5, 6, 10, 11,
+13, 15
+27. Thomason, J., Gordon, D., Bisk, Y.: Shifting the baseline: Single modality perfor-
+mance on visual navigation & qa. In: NAACL HLT (2019) 3, 12
+28. Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A.N., Kaiser,
+Ł., Polosukhin, I.: Attention is all you need. In: NeurIPS (2017) 10
+29. Wang, X., Huang, Q., Celikyilmaz, A., Gao, J., Shen, D., Wang, Y.F., Wang, W.Y.,
+Zhang, L.: Reinforced cross-modal matching and self-supervised imitation learning
+for vision-language navigation. In: CVPR (2019) 5, 6, 8, 9, 10, 11, 14, 15
+30. Wijmans, E., Datta, S., Maksymets, O., Das, A., Gkioxari, G., Lee, S., Essa, I.,
+Parikh, D., Batra, D.: Embodied question answering in photorealistic environments
+with point cloud perception. In: CVPR (2019) 5, 10, 11
+31. Wijmans, E., Kadian, A., Morcos, A., Lee, S., Essa, I., Parikh, D., Savva, M., Batra,
+D.: DD-PPO: Learning near-perfect pointgoal navigators from 2.5 billion frames.
+In: ICLR (2020) 3, 9
+
+
+--- PDF PAGE 18 ---
+18
+J. Krantz et al.
+Supplementary
+Fig. 6. Example conversions between VLN-CE paths (circles on orange line) and VLN
+nav-graph based trajectories (triangles on blue line). For both, darker markers are
+earlier in the trajectories. Other nav-graph nodes / edges are also shown. Note that the
+nav-graph is often a poor proxy for the 3D space with our agent paths in continuous
+space requiring zig-zag patterns in the nav-graph.
+6.1
+Converting VLN-CE Paths to Nav-Graph-based VLN
+As discussed in Sec. 5.3, we convert paths from our agents in continuous environ-
+ments to nav-graph trajectories for comparison with VLN. To do so, we apply a
+simple algorithm. Consider a trajectory in VLN-CE consisting of a sequence of
+positions p0, p1, p2, . . . , pT . Note that the initial position p0 aligns with the start
+node vs for this trajectory from the VLN nav-graph. The goal then is to ﬁnd a
+path through the nav-graph from this node that follows the continuous path.
+Starting from vs, we iteratively snap to the nearest adjacent node by min-
+imizing distance from the current position. More concretely, at the beginning
+of the sequence we set the current node c to be vs and consider a ‘navigable
+set’ N(c) consisting of all adjacent nodes to c as well as c. We then compute
+the distance between every node in N(c) and the continuous environment path
+position p1. Whichever node from the active set is nearest to p1 becomes the
+new current node. This is repeated for p2, p3, . . . , pT with the current node (and
+thus navigable set) shifting to whichever node is nearest and within 1-step of the
+current node.
+Fig. 6 shows some of the resulting trajectories (triangles on thick blue line) as
+well as the underlying continuous path (dots on orange line). These images also
+show the nav-graph with thin multi-colored lines for edges and blue triangles
+for panoramic nodes. Notably, the nav-graph comes up short in representing the
+continuous paths. Often our agents will navigate through spaces not captured
+by nav-graph nodes; resulting in nav-graph trajectories that have high error or
+must oscillate to follow the continuous path.

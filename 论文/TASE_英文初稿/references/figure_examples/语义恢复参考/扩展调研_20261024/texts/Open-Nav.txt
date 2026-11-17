@@ -1,0 +1,956 @@
+
+--- PDF PAGE 1 ---
+Open-Nav: Exploring Zero-Shot Vision-and-Language Navigation in
+Continuous Environment with Open-Source LLMs
+Yanyuan Qiao1, Wenqi Lyu1, Hui Wang1, Zixu Wang2, Zerui Li1, Yuan Zhang1, Mingkui Tan2, Qi Wu1∗
+Abstract— Vision-and-Language Navigation (VLN) tasks re-
+quire an agent to follow textual instructions to navigate through
+3D environments. Traditional approaches use supervised learn-
+ing methods, relying heavily on domain-specific datasets to train
+VLN models. Recent methods try to utilize closed-source large
+language models (LLMs) like GPT-4 to solve VLN tasks in zero-
+shot manners, but face challenges related to expensive token
+costs and potential data breaches in real-world applications.
+In this work, we introduce Open-Nav, a novel study that
+explores open-source LLMs for zero-shot VLN in the continuous
+environment. Open-Nav employs a spatial-temporal chain-of-
+thought (CoT) reasoning approach to break down tasks into
+instruction comprehension, progress estimation, and decision-
+making. It enhances scene perceptions with fine-grained object
+and spatial knowledge to improve LLM’s reasoning in navi-
+gation. Our extensive experiments in both simulated and real-
+world environments demonstrate that Open-Nav achieves com-
+petitive performance compared to using closed-source LLMs.
+The project webpage is https://sites.google.com/view/opennav
+I. INTRODUCTION
+The Vision-and-Language Navigation (VLN) task [1] has
+garnered significant attention in recent years. In this task,
+an agent follows textual instructions to navigate within a
+3D indoor environment, particularly in unseen rooms. Early
+research idealized the task setting by focusing on discrete
+configurations, where navigation is simplified to traversing
+a predefined graph of the environment. These predefined
+graphs introduced inherent assumptions about navigation
+positions and perfect movement between nodes, limiting the
+task’s applicability to real-world scenarios. To address these
+limitations and more closely mimic real-world navigation
+conditions, the VLN in continuous environments (VLN-
+CE) [2], [3] setting was introduced. Unlike its predecessor,
+VLN-CE does not rely on predefined graphs, allowing more
+flexibility and realism in navigating dynamic environments.
+Initial VLN methods predominantly employed LSTM-
+based architectures, exploring various research directions
+such as auxiliary tasks [4], [5], reinforcement learning strate-
+gies [6], and data augmentation [7], [8], etc. . However, with
+the advent of Transformer-based models, the focus shifted
+towards leveraging transformers for enhanced representation
+learning [9] and the integration of historical information [10].
+More recent efforts have involved fine-tuning large models
+like NaviLLM [11] and Navid [12] for VLN tasks.
+1 The authors are with the Australian Institute for Machine Learning at
+the University of Adelaide, Adelaide, Australia .
+2 Zixu Wang and Mingkui Tan are with the School of Software Engi-
+neering, South China University of Technology, Guangzhou, China.
+*Corresponding author: Qi Wu (qi.wu01@adelaide.edu.au)
+API  Costs
+Potential Privacy Leak
+Ollama
+Open-Source LLMs
+GPT-4
+Free
+Safe
+Fig. 1.
+Comparison between GPT-based Navigator and open-source LLM-
+based Navigator. The GPT-based Navigator requires continuous queries to
+the GPT model via API for navigation, incurring high costs and necessitating
+the transmission of environmental data to servers, which raises privacy
+concerns. In contrast, the open-source LLM-based Navigator utilizes locally
+deployed LLMs, which are not only free but also safeguard user privacy by
+eliminating the need to transmit sensitive data.
+These learning-based VLN methods rely heavily on large-
+scale, domain-specific datasets annotated with expert instruc-
+tions. Consequently, they are limited by their dependence
+on extensive training data and face challenges such as the
+simulation-to-reality gap, where agents trained in simulated
+environments struggle to generalize to real-world settings.
+Inspired by the development of large language mod-
+els (LLMs), recent works have explored zero-shot agents
+powered by large language models (LLMs), which serve
+as the “brains” of embodied agents. Notably, SayCan[13]
+demonstrated how LLMs could extract and apply knowledge
+to complete physics-based tasks, including simple navigation
+and object manipulation. For VLN tasks, several approaches
+have been explored using LLMs as navigators in a zero-
+shot, training-free manner. NavGPT[14] was one of the first
+to use GPT-4 as a zero-shot navigator, converting visual ob-
+servations of candidate viewpoints into textual descriptions,
+which were then processed by the LLM to decide the next
+action. Similarly, DiscussNav [15] introduced specialized
+roles where ChatGPT handled instruction analysis, Instruct-
+BLIP [16] provided visual perception, and GPT-4 performed
+completion estimation and decision testing. This collabo-
+rative framework allowed for a modular and explainable
+decision-making process. An additional advantage of LLM-
+based approaches lies in their transparency. Traditional VLN
+models often function as black boxes, making it difficult
+to understand the agent’s reasoning behind specific action
+predictions. In contrast, LLMs can articulate their decision-
+making process, providing greater insight into their thought
+process while making navigation decisions.
+While these approaches have shown the feasibility of
+arXiv:2409.18794v2  [cs.RO]  11 Feb 2025
+
+
+--- PDF PAGE 2 ---
+using LLMs as navigators, they also present significant
+challenges, especially in real-world scenarios. First, methods
+like NavGPT and DiscussNav rely heavily on API calls to
+advanced models such as GPT-4, which results in substantial
+operational costs. Additionally, in real-world scenarios like
+home robotics or industry robotics, users may be sensitive to
+transmitting data about their indoor environments to external
+servers due to privacy concerns, as this involves sharing
+private information with remote models.
+Furthermore, these above LLM-based VLN methods are
+primarily implemented in discrete environments, where fewer
+factors must be considered. For example, visual perception
+is often simplified by converting RGB images into textual
+descriptions. However, in continuous environments, the navi-
+gator must consider additional factors, such as the distance to
+a target, potential obstacles, and collision risks. These factors
+are crucial for navigation in complex, real-world scenarios.
+To address these challenges, we introduce Open-Nav, an
+empirical study that explores open-source LLMs for zero-
+shot Vision-and-Language Navigation in Continuous Envi-
+ronments. First, rather than relying on costly API-based
+models like GPT-4, we deploy open-source LLMs locally.
+Using the Ollama framework, we evaluated four recent state-
+of-the-art open-source LLMs: Llama3.1-70B, Qwen2-72B,
+Gemma2-27B and Phi3-14B as navigators. Figure 1 illus-
+trates the comparison of closed-source GPT-based navigators
+and locally-deployed open-source LLM-based navigators.
+To enable more effective reasoning, we adopted a spatial-
+temporal chain-of-thought (CoT) [17] approach, which al-
+lows the LLMs to break down complex navigation tasks
+into multiple reasoning stages: instruction comprehension,
+progress estimation, and decision-making. This multi-stage
+framework ensures that the LLM makes more accurate action
+predictions. Second, to facilitate the transition of existing
+LLM-based agent methods to continuous environments, we
+retained the traditional waypoint predictor used in VLN-
+CE tasks to identify navigable points in space, which is
+more efficient than directly predicting low-level actions [2],
+[18]. Third, to narrow the gap between closed-source LLMs
+and open-source models, we enhanced the agent’s visual
+perception by improving the quality of environment descrip-
+tions with spatial and fine-grained object knowledge. We
+incorporated both RGB and depth data from the current
+visual observations, allowing the LLM to gain a better
+sense of spatial relationships. For spatial perception, we em-
+ploy a spatial understanding Vision-Language-Model (VLM)
+SpatialBot [19], which describes objects within the scene
+and provides spatial information, such as distances between
+objects and the agent from both depth and RGB observations.
+For detailed object recognition, we utilized the fine-grained
+object recognition model RAM [20] to detect and identify
+specific objects. We perform comprehensive experiments
+to assess the effectiveness of our Open-Nav method in
+both simulated and real-world environments, validating its
+performance across diverse settings.
+In this work, our main contributions are:
+• We propose Open-Nav, a novel study that explores open-
+source LLMs for zero-shot VLN-CE, reducing costs and
+addressing privacy concerns by eliminating the need for
+closed-source LLMs like GPT-4.
+• We adopt a spatial-temporal chain-of-thought approach
+for effective reasoning, which incorporates both RGB
+and depth data to enhance visual perception and spatial
+reasoning for LLM navigator.
+• We perform extensive experiments in simulated and
+real-world environments, demonstrating that Open-Nav
+achieves competitive performance compared to using
+closed-source LLMs.
+II. RELATED WORK
+A. Vision-and-Language Navigation
+The Vision-and-Language Navigation (VLN) task requires
+an agent to follow verbal instructions and visual cues to reach
+a target location [21]. Early approaches predominantly used
+a discrete VLN setup with the MP3D simulator [22], where
+agents navigated through predefined graphs, focusing on
+high-level decisions while ignoring fine-grained movements.
+More recently, the focus has shifted to continuous environ-
+ments [3] using the Habitat simulator, where agents perform
+basic actions like moving forward or rotating, providing a
+more realistic navigation experience.
+Early approaches were based on an encoder-decoder
+framework [1], which employed sequence-to-sequence ar-
+chitectures built on LSTM and attention mechanisms. Sub-
+sequent research aimed to improve VLN performance from
+various directions, including enhanced representation learn-
+ing [23], [24], [25], reinforcement learning [6], and data
+augmentation [7], [8], [26], [27]. There was also a notable
+focus on integrating external knowledge sources to improve
+generalization [28]. With the rise of Transformer archi-
+tectures [18], many works introduced pre-training methods
+specifically tailored for VLN tasks [9], [29], [30], [31],
+[32]. In addition, DUET [33] and ETPNav [34] constructed
+topological maps to capture global navigation information,
+while BEVBert [35] generated top-down semantic maps, and
+GridMM [36] introduced a dynamically growing top-down
+egocentric grid memory map. In addition to architectural
+advancements, some recent works have fine-tuned large
+models for VLN tasks. For example, NaviLLM [11] modified
+the Vicuna model to enable diverse embodied tasks, while
+Navid [12] collected 550k navigation samples and fine-tuned
+Vicuna to create a vision-language model (VLM) specifically
+for VLN tasks. Different from these works, we try to explore
+training-free VLN in continuous environments in a zero-shot
+manner with open-source LLMs as navigators.
+B. Large Language Models for Navigation
+Benefiting from the rise of large language models, recent
+studies have explored the application of LLM in VLN
+tasks. Some studies use LLM as a planner, such as LLM-
+Planner [37] generates detailed plans consisting of sub-
+goals that are dynamically updated by incorporating detected
+objects and following predefined programming rules. Simi-
+larly, methods such as MiC [38] and A2Nav [39] focus on
+
+
+--- PDF PAGE 3 ---
+decomposing navigation tasks into detailed text instructions.
+MiCs provides step-by-step plans from static and dynamic
+perspectives, while A2Nav uses GPT-3 to parse instructions
+into actionable sub-tasks. These methods mainly use LLM
+as a knowledge generator, while action decisions are still
+within the purview of navigators trained through supervised
+learning. There are also some works that directly use LLM
+as a navigator, usually visual observations are converted into
+text descriptions and input into LLM together with instruc-
+tions, and then LLM performs action prediction. NavGPT
+was the first to demonstrate the feasibility of zero-shot
+navigation, and NavGPT [14] uses GPT-4 to autonomously
+generate actions. DiscussNav [15] extends this approach by
+deploying multiple domain-specific LLM experts to automate
+and reduce human involvement in navigation tasks. MC-
+GPT [40] employs memory topology graphs and human
+navigation examples to diversify strategies, while Instruct-
+Nav [41] decomposes navigation into subtasks with multi-
+source value graphs for efficient execution. Most of the
+previous work is based on GPT4, but calling GPT4 requires
+repeated API access and is expensive, and sending indoor
+scene information to the cloud will involve user privacy
+issues. In this paper, we built a VLN pipeline, the main
+purpose of which is to use the open-source LLM as a
+navigator, we also made some designs to enhance spatial
+perception. Specifically, for the scene understanding, we
+integrated the spatial position relationship and the distance
+between the object and the agent.
+III. PROBLEM FORMULATION
+Vision-and-Language Navigation in Continuous Environ-
+ments (VLN-CE) is a task that requires an autonomous agent
+to navigate a 3D mesh using verbal instructions to follow a
+specified path and reach a designated target location. The
+agent performs low-level actions, such as moving direction
+and distance. At each position, the agent obtains panoramic
+RGB visuals O = {rgb,rd}, comprised of 12 RGB and 12
+depth snapshots taken at regular intervals across a 360°
+arc (0°, 30°, ..., 330°). Additionally, the agent is provided
+with verbal directives for each trial, with the linguistic em-
+beddings of these instructions represented as W = {wi}L
+i=1,
+where L denotes the number of words in each instruction.
+IV. FRAMEWORK DESIGN
+The proposed framework is shown in the Figure 2. The
+Waypoint Prediction module identifies potential navigation
+points from panoramic RGB and depth images. Then, the
+Scene Perception module processes these potential naviga-
+tion points to identify objects and extract object positions and
+spatial relationships in the scene. This spatial information
+is integrated into textual format observations. At last, for
+the given instruction and textualized observations, LLM
+Navigator will complete the task in three stages: instruction
+comprehension, progress estimation, and decision-making.
+Finally, the navigator selects the specific location to go to
+and then performs the action.
+A. Waypoint Prediction
+We employ a transformer-based model for predicting way-
+points by integrating RGB and depth image features using
+two specialized ResNet50 [42]networks: one for RGB and
+another for depth data. At each evaluated location, feature
+vectors for RGB and depth images are extracted and fused:
+vrgbd
+i
+= Wm(fResNet-RGB(Irgb
+i
+) ∥fResNet-Depth(Id
+i ))
+(1)
+These fused vectors vrgbd
+i
+are processed by a two-layer
+transformer network to model spatial relationships between
+views. The network’s self-attention is restricted to adjacent
+views to enhance spatial reasoning:
+˜vrgbd
+i
+= Transformer({vrgbd
+i−1 ,vrgbd
+i
+,vrgbd
+i+1 })
+(2)
+The output from the transformer is used to generate
+a heatmap of potential waypoints, which is then refined
+through non-maximum suppression (NMS) to focus on the
+most probable locations:
+Hrefined = NMS(MLP(˜vrgbd
+i
+))
+(3)
+From this refined heatmap, K nearby waypoints ∆W =
+{∆wi}K
+i=1 are selected, where each waypoint ∆wi is defined
+by a pair of values: the angle in radians and the distance
+in meters from the agent, providing precise directional and
+spatial information necessary for navigation.
+B. Scene Perception
+Traditional approaches in scene understanding for VLN
+tasks often rely on captioning models such as BLIP [43]
+and InstructBLIP [16] to generate descriptions from RGB
+images. These descriptions generally include room types,
+furniture, and other common objects but lack detailed spatial
+relationships and distances between objects.
+To address these limitations, we employ the spatial un-
+derstanding VLM SpatialBot [19] and fine-grained object
+recognition model RAM [20] in a zero-shot manner to
+provide detailed spatial information about candidate way-
+points. SpatialBot processes RGB and depth images to create
+enriched scene descriptions that include spatial information.
+The process involves combining RGB and depth images into
+a unified tensor after adjusting their aspect ratios if necessary.
+The processed images are then fed into SpatialBot along with
+a textual prompt that guides the generation of descriptions
+emphasizing spatial relationships and distances:
+Dspatial = SpatialBot([Irgb,Id])
+(4)
+Simultaneously, we utilize the RAM model for fine-
+grained object detection and recognition using RGB images.
+RAM identifies and classifies objects within the scene,
+providing their spatial coordinates and labels. Let O =
+{o1,o2,...,on} denote the set of objects detected in the
+scene. The detection process involves analyzing the RGB
+image to locate objects and determine their positions in a
+three-dimensional space:
+oi = RAM(Irgb)
+for
+i = 1,2,...,n
+(5)
+
+
+--- PDF PAGE 4 ---
+Waypoint 
+Prediction
+Scene Perception
+LLM Navigator
+Candidate Direction 1:
+Scene Objects:
+chair | computer | computer desk | computer monitor |
+table …
+Spatial Scene Description:
+I can see a room contains a desk, a chair, a computer
+tower, a bucket, and two suitcases.
+The objects are positioned as follows:
+- The desk is in the foreground, closest to the camera.
+- The chair is to the left of the desk.
+- The computer tower is on the desk, slightly behind the
+chair…
+The distances from the camera are as follows:
+- The desk is approximately 0.25 meter away.
+- The chair is approximately 0.5 meters away.
+- The computer tower is approximately 0.65 meters 
+away…
+Candidate Direction 2:
+…
+RAM
+SpatialBot
+Open-Source LLM
+Instruction Comprehension:
+Decomposed Actions: 1. Walk past the kitchen; 2. Go behind the couch;
+3. Take a right into the fitness room; 4. Stop next to the treadmill
+Extracted Landmarks: kitchen, couch, fitness room, treadmill
+Progress Estimation:
+Summarised Trajectory: Step 1 Observation: Direction Left, range(left
+90 to left 120) The room is large and empty with …
+Executed Actions Thought: Based on the navigation history and current
+observation, the following actions have likely been executed:
+None
+Decision Making:
+Thoughts: The first action in the instruction is to walk through the
+kitchen. However, none of the current environment descriptions mention
+the kitchen. Therefore, I need to find the kitchen first. Looking at the
+scene description, Direction 1 is a study room with computer, Direction 2
+depicts a living room with a dining area, while direction 3 shows a living
+room with a TV. Since the kitchen is usually located near the dining area,
+I would consider moving in Direction 2. Therefore, I decide to move in
+Direction 2.
+Prediction: Direction 2
+Action
+Candidate
+Waypoint
+Textual
+Observation
+Instruction
+RGB
+Depth
+Instruction: Walk past the kitchen and go behind the couch and take a right into the fitness room. Stop next to the treadmill.
+Textual History 
+Trajectory
+Fig. 2.
+Overview of Open-Nav. The Waypoint Prediction module uses panoramic RGB and depth images to pinpoint potential navigation waypoints,
+which are then analyzed by the Scene Perception module. This module processes these images to determine object locations and spatial relationships and
+recognize scene elements. This data is then converted into a text format. The LLM Navigator performs tasks in three stages: understanding instructions,
+estimating progress, and making decisions. Finally, the navigator determines the precise location to navigate to and performs the corresponding actions.
+C. Spatial-Temporal Chain-of-Thought for LLM Navigator
+Given the instruction I, textualized spatial observations
+Otext = (Dspatial,{oi}) and textualized history trajectory Ttext
+summarized by the LLM navigator, we elaborately design a
+comprehensive spatial-temporal chain-of-thought from three
+viewpoints to enhance the LLM’s ability in navigation:
+instruction comprehension, navigation progress estimation,
+and action decision-making.
+1) Instruction Comprehension: To enable effective nav-
+igation, the LLM is tasked with breaking down the given
+navigation instructions into two key components: decom-
+posed actions and extracted landmarks. Decomposed actions
+refer to the steps that the agent must execute during nav-
+igation (e.g., “turn left”, “move forward”), while extracted
+landmarks refer to objects or locations in the environment
+that guide the agent (e.g., “the door”, “stairs”). We designed
+specific prompts for each instruction:
+“You are an action decomposition expert. Your
+task is to detect all actions/landmarks in the
+given navigation instruction. Ensure the integrity
+of each action/landmark. Your answer must con-
+sist ONLY of a series of labeled action phrases
+without beginning sentences. Can you decompose
+actions/landmarks in the instruction? Actions:”
+2) Progress Estimation: To effectively monitor and eval-
+uate the agent’s navigation progress, we utilize a compre-
+hensive review of the navigation history, which incorporates
+summaries of past visual observations alongside the agent’s
+reasoning processes. The progress estimation is conducted
+through a meticulously structured analysis comprising the
+following steps:
+• Landmark and Action Verification: Identify which de-
+composed landmarks or actions have been encountered
+or executed based on navigation history.
+• Directional Analysis: Assess changes in directions at
+each navigational step to ensure that the agent adheres
+to the prescribed route.
+• Action Completion Estimation: Compare each action
+stipulated in the instructions against the agent’s move-
+ment and decision-making history to determine their
+completion status.
+• Sequential Evaluation: Enforce a sequential checking
+mechanism where the completion of subsequent actions
+is contingent on the completion of predecessors.
+This analytical framework enables the LLM to effectively
+track the agent’s progress by determining what portions of
+the navigation task have been completed and what remains.
+Such an approach not only facilitates the evaluation of navi-
+gation success but also provides crucial feedback on whether
+the agent is accurately following the given instructions.
+3) Decision Making: Before the LLM makes an action
+decision, we integrate the key information as the spatial-
+temporal chain-of-thought to enhance the LLM’s decision-
+making process. This information includes the available
+candidate viewpoints that the agent can choose from at
+the current step, the specific instruction being followed and
+
+
+--- PDF PAGE 5 ---
+its decomposed actions and landmarks, a summary of the
+agent’s past actions and decisions to provide historical con-
+text, an estimate of which actions have been completed so far,
+and observations from the agent’s current position, including
+a visual description of each candidate waypoint including
+spatial knowledge. At last, the LLM evaluates the spatial
+and navigation environment, generates the decision thought,
+and selects the most appropriate candidate viewpoint.
+V. EXPERIMENTS
+A. Experiment Setup
+Simulated Environments. We evaluate our approach using
+the R2R-CE dataset within simulated environments. R2R-CE
+is based on the Matterport3D [22] scenes, and it converts the
+discrete paths of the original R2R dataset into continuous
+environments using the Habitat Simulator. Following the
+setting in previous LLM-related works [12], we randomly
+sample a subset of about 100 episodes. In the simulated
+evaluation, the model was run on a single RTX 3090 GPU.
+Real-world Environments. To further evaluate our ap-
+proach in real-world settings, we designed comprehensive
+experiments based on the following methods [12]. These
+experiments cover a range of indoor environments with
+different spatial complexity. We selected three different in-
+door scenes: office, laboratory, and game room.
+For each
+layout, we annotated 20 instructions, including both simple
+and complex instructions. This combination allows us to
+evaluate the agent’s ability to handle basic and advanced
+navigation scenarios in real-world environments. In the real-
+world evaluation, the VLN model was run on a laptop
+equipped with a GeForce RTX 3080 GPU.
+Fig. 3.
+The arrangement of the real-world environment.
+Implementation Details For simulated experiments, we
+utilize the waypoint predictor pretrained in [18]. For real-
+world experiments, we used a Dual-Arm Composite Robot
+equipped with a Realsense D435 camera. The RGB image
+dimensions are 244×244×3 and the depth dimensions are
+256×256. For LLM navigator, we use Ollama to deploy
+4 open-source LLMs: Llama3.1-70B-instruct, Qwen2-72B-
+instruct, Gemma2-27B-instruct and Phi3-14B-instruct. To
+run these LLMs on a single RTX A6000 GPU with 48GB
+memory, we use the 4bit-quantized models of Llama3.1-70B-
+instruct and Qwen2-72B-instruct, 8bit-quantized model of
+Phi3-14B-instruct, and FP16 model of Phi3-14B-instruct.
+Evaluation Metrics We evaluate the agent’s navigation
+performance using standard VLN metrics, including success
+rate (SR), oracle success rate (OSR), normalized Dynamic
+Time Warping (nDTW), success weighted by path length
+(SPL), trajectory length (TL), and navigation error (NE).
+An episode is deemed successful if the agent stops within 3
+TABLE I
+COMPARISON ON SIMULATED ENVIRONMENT R2R-CE DATASET
+Method
+TL
+NE↓
+nDTW↑
+OSR↑
+SR↑
+SPL↑
+Supervised Learning
+CMA[18]
+11.08
+6.92
+50.77
+45
+37
+32.17
+RecBERT[18]
+11.06
+5.8
+54.81
+57
+48
+43.22
+BEVBert[35]
+13.63
+5.13
+61.40
+64
+60
+53.41
+ETPNav[34]
+11.08
+5.15
+61.15
+58
+52
+52.18
+No Training
+Random
+8.15
+8.63
+34.08
+12
+2
+1.50
+LXMERT[18]
+15.79
+10.48
+18.73
+22
+2
+1.87
+DiscussNav-GPT4[15]
+6.27
+7.77
+42.87
+15
+11
+10.51
+Open-Nav-Llama3.1(Ours)
+8.07
+7.25
+44.99
+23
+16
+12.90
+Open-Nav-GPT4(Ours)
+7.68
+6.70
+45.79
+23
+19
+16.10
+TABLE II
+COMPARISON ON REAL-WORLD ENVIRONMENTS
+Method
+Office
+Lab
+Game Room
+All
+NE↓
+SR↑
+NE↓
+SR↑
+NE↓
+SR↑
+NE↓
+SR↑
+CMA[18]
+2.50
+30
+2.77
+20
+2.65
+20
+2.64
+23
+RecBERT[18]
+2.97
+20
+2.77
+35
+2.47
+25
+2.74
+27
+BEVBert[35]
+2.64
+25
+3.11
+15
+2.92
+20
+2.89
+20
+Open-Nav-Llama3.1(Ours)
+2.44
+35
+2.36
+35
+2.38
+35
+2.39
+35
+meters of the goal in the VLN-CE environment, and within 2
+meters in real-world environments. These thresholds ensure
+a fair comparison across different settings, balancing both
+navigational precision and room size.
+B. Comparison on Simulated Environment
+Table I compares the performance of our proposed Open-
+Nav method against mainstream VLN methods. To ensure
+a fair comparison, all methods were evaluated using the
+same waypoint predictor, allowing us to isolate and focus
+on the performance of the navigator itself. The first four
+methods listed in the table utilize supervised learning training
+methods, especially RecBERT [18], BEBbert [35] and ETP-
+Nav [34], which benefit from pre-training and fine-tuning on
+in-domain datasets. In the no-training category, we compared
+Open-Nav with several baselines: a navigator that randomly
+selects waypoint (Random), LXMERT [18] trained without
+task-specific data, and other LLM-based methods such as
+DiscussNav [15] that uses GPT-4 as a navigator. We can
+see that Open-Nav achieves superior results and outperforms
+DiscussNav in key metrics such as SR (5↑) and SPL (2.39↑).
+In addition, we also evaluated our method using GPT-4 as a
+navigator, which indeed improves the performance such as
+SR and SPL, while our method using open-source LLM still
+achieves competitive performance.
+C. Comparison on Real-world Environments
+To further evaluate the generalizability of methods in
+more challenging situations, we experiment with real-world
+environments. As shown in Table II, we selected mainstream
+supervised training methods CMA [18], RecBERT [18], and
+BEVBert [35] to compare. Although these methods achieved
+good results in simulated environments, when these models
+were evaluated directly in real-world environments, these
+models were equivalent to no training setting. At this time,
+our Open-Nav achieved better performance, reaching SOTA
+in multiple scenarios. We speculate that this is because our
+
+
+--- PDF PAGE 6 ---
+Instruction: Go straight to the green rubbish bin and then stop. 
+Thought: I have completed the first action of going straight, and now I need to stop at the green rubbish bin.
+Since I am already close to the green bin (approximately 1 meter away) in Direction 0, I can simply stay in
+the same direction to complete the instruction. There is no need to turn or move to a different viewpoint.
+Thought: Continue to go straight, and stop at the green rubbish bin.
+Thought: I have completed going straight and stopped at the green rubbish bin as instructed. Since I am
+already at the destination, there is no need to move further. The current environment shows that I am facing
+the green rubbish bin directly (Direction 0), so it's best to stay in this position.
+Step 1
+Step 2
+Step 3
+Fig. 4.
+Visualization of our method Open-Nav in a real environment. The right side of the picture shows LLM’s thoughts during navigation.
+Fig. 5.
+Performance of open-source LLMs on action decomposition.
+Open-Nav has better generalization ability, since traditional
+supervised training models may not be able to recognize
+objects in real scenes because they are different from the
+objects seen in the training data. We also provide some visual
+results of our method in Figure 4 in real-world environments,
+the right side shows the thoughts from LLM Navigator
+during the navigation process. It shows that Open-Nav well
+understands the task and the reasoning process is reasonable.
+D. Ablation Study
+1) Different LLM on Instruction Comprehension:
+We
+also evaluated the ability of different open-source LLMs in
+instruction understanding, with a particular focus on their
+ability to detect and decompose the actions and landmarks
+mentioned in the instructions. We first preprocessed the data
+using GPT-4 to label the required actions and landmarks in
+each instruction. Subsequently, these data were manually cal-
+ibrated to obtain ground truth. To evaluate the performance of
+these LLMs in understanding instructions, we used four text-
+based metrics: SPICE [44], BLEU [45], METEOR [46], and
+ROUGE [47]. The evaluation results are shown in Figure 5
+and Figure 6. It can be seen that among the four LLMs,
+Llama3.1-70B performs best in landmark extraction, while
+Qwen2-72B has the highest score in action decomposition.
+2) Different LLM on Navigation: In addition to instruction
+understanding, we are more concerned about the decision-
+making ability of different LLMs when acting as navigators.
+Therefore, we also evaluated the navigation performance of
+these four LLMs. As shown in Table III, although the per-
+formance of Llama3.1-70B and Qwen2-72B is comparable
+in the instruction understanding part, Llama3.1-70B is better
+Fig. 6.
+Performance of open-source LLMs on landmark extraction.
+TABLE III
+PERFORMANCE OF DIFFERENT OPEN-SOURCE LLMS ON NAVIGATION
+Method
+TL
+NE↓
+nDTW↑
+OSR↑
+SR↑
+SPL↑
+Llama3.1-70B
+8.07
+7.25
+44.99
+23
+16
+12.90
+Qwen2-72B
+7.21
+8.14
+43.14
+23
+14
+12.11
+Gemma-27B
+8.41
+6.76
+40.57
+16
+12
+10.65
+Phi3-14B
+8.47
+8.53
+33.64
+8
+5
+3.81
+in actual navigation, with a higher success rate.
+VI. CONCLUSION AND FUTURE WORK
+In this paper, we present Open-Nav, a novel study that
+explores zero-shot VLN-CE tasks using open-source Large
+Language Models (LLMs). Unlike previous approaches that
+rely on expensive API-based models such as GPT-4, Open-
+Nav resorts to deploying open-source LLMs locally, ad-
+dressing potential privacy issues and reducing operational
+costs. Open-Nav adopts a spatial-temporal CoT approach
+from three viewpoints: instruction understanding, progress
+estimation, and decision making. To enhance scene percep-
+tion, Open-Nav integrates RGB and depth data, leverages
+a spatial understanding model for spatial reasoning, and
+a fine-grained object recognition model for detailed object
+recognition. We conduct extensive experiments in both simu-
+lated and real-world environments, demonstrating that Open-
+Nav achieves competitive performance compared to GPT4-
+based approaches while maintaining low cost and privacy
+preservation. In the future, we plan to investigate methods to
+optimize the computational efficiency of open-source LLMs
+for navigation in real-world environments.
+
+
+--- PDF PAGE 7 ---
+REFERENCES
+[1] P. Anderson, Q. Wu, D. Teney, J. Bruce, M. Johnson, N. S¨underhauf,
+I. D. Reid, S. Gould, and A. van den Hengel, “Vision-and-language
+navigation: Interpreting visually-grounded navigation instructions in
+real environments,” in IEEE Conf. Comput. Vis. Pattern Recog., 2018,
+pp. 3674–3683.
+[2] J. Krantz, A. Gokaslan, D. Batra, S. Lee, and O. Maksymets,
+“Waypoint models for instruction-guided navigation in continuous
+environments,” Int. Conf. Comput. Vis., pp. 15 142–15 151, 2021.
+[3] J. Krantz, E. Wijmans, A. Majumdar, D. Batra, and S. Lee, “Beyond
+the nav-graph: Vision-and-language navigation in continuous environ-
+ments,” in Eur. Conf. Comput. Vis., A. Vedaldi, H. Bischof, T. Brox,
+and J. Frahm, Eds., 2020, pp. 104–120.
+[4] C. Ma, Z. Wu, G. AlRegib, C. Xiong, and Z. Kira, “The regretful
+agent: Heuristic-aided navigation through progress estimation,” in
+IEEE Conf. Comput. Vis. Pattern Recog., 2019, pp. 6732–6740.
+[5] F. Zhu, Y. Zhu, X. Chang, and X. Liang, “Vision-language navigation
+with self-supervised auxiliary reasoning tasks,” in IEEE Conf. Comput.
+Vis. Pattern Recog., 2020, pp. 10 009–10 019.
+[6] X. Wang, Q. Huang, A. C¸ elikyilmaz, J. Gao, D. Shen, Y. Wang,
+W. Y. Wang, and L. Zhang, “Reinforced cross-modal matching and
+self-supervised imitation learning for vision-language navigation,” in
+IEEE Conf. Comput. Vis. Pattern Recog., 2019, pp. 6629–6638.
+[7] J. Li, H. Tan, and M. Bansal, “Envedit: Environment editing for vision-
+and-language navigation,” in IEEE Conf. Comput. Vis. Pattern Recog.,
+2022, pp. 15 386–15 396.
+[8] Z. Wang, J. Li, Y. Hong, Y. Wang, Q. Wu, M. Bansal, S. Gould,
+H. Tan, and Y. Qiao, “Scaling data generation in vision-and-language
+navigation,” in Int. Conf. Comput. Vis., 2023, pp. 12 009–12 020.
+[9] P. Guhur, M. Tapaswi, S. Chen, I. Laptev, and C. Schmid, “Airbert: In-
+domain pretraining for vision-and-language navigation,” in Int. Conf.
+Comput. Vis., 2021, pp. 1634–1643.
+[10] S. Chen, P. Guhur, C. Schmid, and I. Laptev, “History aware multi-
+modal transformer for vision-and-language navigation,” in Adv. Neural
+Inform. Process. Syst., 2021, pp. 5834–5847.
+[11] D. Zheng, S. Huang, L. Zhao, Y. Zhong, and L. Wang, “Towards
+learning a generalist model for embodied navigation,” in IEEE Conf.
+Comput. Vis. Pattern Recog., 2024, pp. 13 624–13 634.
+[12] J. Zhang, K. Wang, R. Xu, G. Zhou, Y. Hong, X. Fang, Q. Wu,
+Z. Zhang, and W. He, “Navid: Video-based vlm plans the next step for
+vision-and-language navigation,” ArXiv, vol. abs/2402.15852, 2024.
+[13] M. Ahn, A. Brohan, N. Brown, Y. Chebotar, O. Cortes, B. David,
+C. Finn, C. Fu, K. Gopalakrishnan, K. Hausman, A. Herzog, D. Ho,
+J. Hsu, J. Ibarz, B. Ichter, A. Irpan, E. Jang, R. J. Ruano, K. Jeffrey,
+S. Jesmonth, N. Joshi, R. Julian, D. Kalashnikov, Y. Kuang, K.-H.
+Lee, S. Levine, Y. Lu, L. Luu, C. Parada, P. Pastor, J. Quiambao,
+K. Rao, J. Rettinghouse, D. Reyes, P. Sermanet, N. Sievers, C. Tan,
+A. Toshev, V. Vanhoucke, F. Xia, T. Xiao, P. Xu, S. Xu, M. Yan, and
+A. Zeng, “Do as i can and not as i say: Grounding language in robotic
+affordances,” in arXiv preprint arXiv:2204.01691, 2022.
+[14] G. Zhou, Y. Hong, and Q. Wu, “Navgpt: Explicit reasoning in vision-
+and-language navigation with large language models,” in AAAI, 2023.
+[15] Y. Long, X. Li, W. Cai, and H. Dong, “Discuss before moving: Visual
+language navigation via multi-expert discussions,” IEEE International
+Conference on Robotics and Automation, pp. 17 380–17 387, 2023.
+[16] W. Dai, J. Li, D. Li, A. M. H. Tiong, J. Zhao, W. Wang, B. A.
+Li, P. Fung, and S. C. H. Hoi, “Instructblip: Towards general-
+purpose vision-language models with instruction tuning,” ArXiv, vol.
+abs/2305.06500, 2023.
+[17] J. Wei, X. Wang, D. Schuurmans, M. Bosma, B. Ichter, F. Xia,
+E. H. Chi, Q. V. Le, and D. Zhou, “Chain-of-thought prompting
+elicits reasoning in large language models,” in Advances in Neural
+Information Processing Systems, 2022.
+[18] Y. Hong, Z. Wang, Q. Wu, and S. Gould, “Bridging the gap between
+learning in discrete and continuous environments for vision-and-
+language navigation,” in IEEE Conf. Comput. Vis. Pattern Recog.,
+2022, pp. 15 418–15 428.
+[19] W. Cai, Y. Ponomarenko, J. Yuan, X. Li, W. Yang, H. Dong, and
+B. Zhao, “Spatialbot: Precise spatial understanding with vision lan-
+guage models,” ArXiv, vol. abs/2406.13642, 2024.
+[20] Y. Zhang, X. Huang, J. Ma, Z. Li, Z. Luo, Y. Xie, Y. Qin, T. Luo,
+Y. Li, S. Liu, Y. Guo, and L. Zhang, “Recognize anything: A strong
+image tagging model,” ArXiv, vol. abs/2306.03514, 2023.
+[21] V. S. Dorbala, G. A. Sigurdsson, R. Piramuthu, J. Thomason, and G. S.
+Sukhatme, “Clip-nav: Using clip for zero-shot vision-and-language
+navigation,” ArXiv, vol. abs/2211.16649, 2022.
+[22] A. X. Chang, A. Dai, T. A. Funkhouser, M. Halber, M. Nießner,
+M. Savva, S. Song, A. Zeng, and Y. Zhang, “Matterport3d: Learning
+from RGB-D data in indoor environments,” in International Confer-
+ence on 3D Vision, 2017, pp. 667–676.
+[23] Y. Qi, Z. Pan, S. Zhang, A. van den Hengel, and Q. Wu, “Object-
+and-action aware model for visual language navigation,” in Eur. Conf.
+Comput. Vis., 2020, pp. 303–317.
+[24] D. An, Y. Qi, Y. Huang, Q. Wu, L. Wang, and T. Tan, “Neighbor-view
+enhanced model for vision and language navigation,” in Proceedings
+of the ACM International Conference on Multimedia, 2021.
+[25] Y. Hong, C. R. Opazo, Y. Qi, Q. Wu, and S. Gould, “Language and
+visual entity relationship graph for agent navigation,” in Adv. Neural
+Inform. Process. Syst., 2020.
+[26] D. Fried, R. Hu, V. Cirik, A. Rohrbach, J. Andreas, L. Morency,
+T. Berg-Kirkpatrick, K. Saenko, D. Klein, and T. Darrell, “Speaker-
+follower models for vision-and-language navigation,” in Adv. Neural
+Inform. Process. Syst., 2018, pp. 3318–3329.
+[27] H. Tan, L. Yu, and M. Bansal, “Learning to navigate unseen environ-
+ments: Back translation with environmental dropout,” in NAACL-HLT,
+2019, pp. 2610–2621.
+[28] X. Li, Z. Wang, J. Yang, Y. Wang, and S. Jiang, “Kerm: Knowledge
+enhanced reasoning for vision-and-language navigation,” in IEEE
+Conf. Comput. Vis. Pattern Recog., 2023, pp. 2583–2592.
+[29] W. Hao, C. Li, X. Li, L. Carin, and J. Gao, “Towards learning a
+generic agent for vision-and-language navigation via pre-training,” in
+IEEE Conf. Comput. Vis. Pattern Recog., 2020, pp. 13 134–13 143.
+[30] H. Huang, V. Jain, H. Mehta, A. Ku, G. Magalh˜aes, J. Baldridge,
+and E. Ie, “Transferable representation learning in vision-and-language
+navigation,” in Int. Conf. Comput. Vis., 2019, pp. 7403–7412.
+[31] A. Majumdar, A. Shrivastava, S. Lee, P. Anderson, D. Parikh, and
+D. Batra, “Improving vision-and-language navigation with image-text
+pairs from the web,” in Eur. Conf. Comput. Vis., 2020, pp. 259–274.
+[32] Y. Qiao, Y. Qi, Y. Hong, Z. Yu, P. Wang, and Q. Wu, “Hop+: History-
+enhanced and order-aware pre-training for vision-and-language navi-
+gation,” IEEE Trans. Pattern Anal. Mach. Intell., 2023.
+[33] S. Chen, P.-L. Guhur, M. Tapaswi, C. Schmid, and I. Laptev, “Think
+global, act local: Dual-scale graph transformer for vision-and-language
+navigation,” in IEEE Conf. Comput. Vis. Pattern Recog., 2022.
+[34] D. An, H. Wang, W. Wang, Z. Wang, Y. Huang, K. He, and
+L. Wang, “Etpnav: Evolving topological planning for vision-language
+navigation in continuous environments,” IEEE Transactions on
+pattern analysis and machine intelligence, vol. PP, 2023. [Online].
+Available: https://api.semanticscholar.org/CorpusID:257985276
+[35] D. An, Y. Qi, Y. Li, Y. Huang, L. Wang, T. Tan, and J. Shao, “Bevbert:
+Multimodal map pre-training for language-guided navigation,” in Int.
+Conf. Comput. Vis., 2023, pp. 2737–2748.
+[36] Z. Wang, X. Li, J. Yang, Y. Liu, and S. Jiang, “Gridmm: Grid memory
+map for vision-and-language navigation,” in Int. Conf. Comput. Vis.,
+2023, pp. 15 625–15 636.
+[37] C. H. Song, J. Wu, C. Washington, B. M. Sadler, W.-L. Chao, and
+Y. Su, “Llm-planner: Few-shot grounded planning for embodied agents
+with large language models,” arXiv preprint arXiv:2212.04088, 2022.
+[38] Y. Qiao, Y. Qi, Z. Yu, J. Liu, and Q. Wu, “March in chat: Interactive
+prompting for remote embodied referring expression,” in Int. Conf.
+Comput. Vis., 2023, pp. 15 758–15 767.
+[39] P. Chen, X. Sun, H. Zhi, R. Zeng, T. H. Li, G. Liu, M. Tan,
+and C. Gan, “A2nav: Action-aware zero-shot robot navigation by
+exploiting vision-and-language ability of foundation models,” CoRR,
+vol. abs/2308.07997, 2023.
+[40] Z. Zhan, L. Yu, S. Yu, and G. Tan, “Mc-gpt: Empowering vision-and-
+language navigation with memory map and reasoning chains,” arXiv
+preprint arXiv:2405.10620, 2024.
+[41] Y. Long, W. Cai, H. Wang, G. Zhan, and H. Dong, “Instructnav:
+Zero-shot system for generic instruction navigation in unexplored
+environment,” ArXiv, 2024.
+[42] K. He, X. Zhang, S. Ren, and J. Sun, “Deep residual learning for
+image recognition,” in IEEE Conf. Comput. Vis. Pattern Recog. IEEE
+Computer Society, 2016, pp. 770–778.
+[43] J. Li, D. Li, C. Xiong, and S. C. H. Hoi, “Blip: Bootstrapping
+language-image pre-training for unified vision-language understanding
+and generation,” in Int. Conf. Mach. Learn., 2022.
+
+
+--- PDF PAGE 8 ---
+[44] P. Anderson, B. Fernando, M. Johnson, and S. Gould, “SPICE: seman-
+tic propositional image caption evaluation,” in Eur. Conf. Comput. Vis.,
+2016, pp. 382–398.
+[45] K. Papineni, S. Roukos, T. Ward, and W.-J. Zhu, “Bleu: a method for
+automatic evaluation of machine translation,” in Annual Meeting of
+the Association for Computational Linguistics, 2002.
+[46] S. Banerjee and A. Lavie, “Meteor: An automatic metric for mt
+evaluation with improved correlation with human judgments,” in
+IEEvaluation@ACL, 2005.
+[47] C.-Y. Lin, “Rouge: A package for automatic evaluation of summaries,”
+in Annual Meeting of the Association for Computational Linguistics,
+2004.

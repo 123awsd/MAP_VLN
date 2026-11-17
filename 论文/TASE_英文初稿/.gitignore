@@ -1,0 +1,12 @@
+manuscript/build/
+manuscript/LogicFly_TASE_source.zip
+__pycache__/
+*.pyc
+*.blend1
+.DS_Store
+*.synctex.gz
+*.aux
+*.log
+*.fls
+*.fdb_latexmk
+*.xdv

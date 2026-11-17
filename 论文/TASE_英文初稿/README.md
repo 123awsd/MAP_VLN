@@ -1,43 +1,78 @@
-# LogicFly：T-ASE 英文工作稿
+# LogicFly paper
 
-本目录是当前面向 **IEEE Transactions on Automation Science and Engineering (T-ASE)** 的英文稿，迁移日期为 2026-10-22。
+论文的独立工作目录。后续正文、图件和图注修改以这里为准。
 
-## 打开与编译
-
-- `root.tex`：主源文件。
-- `root.pdf`：编译完成的 PDF。
-- `references.bib`：从 ICRA 英文稿原样复制的参考文献。
-- `figures/`：本稿使用的全部六张图片，内容与原始素材一致，使用英文文件名以方便上传。
-- `IEEEtran.cls`、`IEEEtran.bst`：官方模板包中的原版文件，未修改。
-- `LogicFly_TASE_source.zip`：独立编译用的源文件包，包含上述源文件、图片及编译说明，不包含中间文件。
-
-```bash
-cd /home/byq/Main_vln/MAP_VLN/论文/TASE_英文初稿
-make
+```text
+LogicFly-paper/
+├── manuscript/          正文、参考文献、IEEE 模板与编译输出
+├── figures/
+│   ├── final/           正文实际引用的 9 张图
+│   └── source/          按图号整理的绘图脚本、可编辑文件和工作稿
+├── references/          参考论文、参考配图及索引
+├── Makefile
+└── README.md
 ```
 
-需要 XeLaTeX、BibTeX、latexmk 和 TeX Gyre 字体。`make` 会自动运行所需的文献及交叉引用编译步骤，将结果复制到 `root.pdf`；中间文件保存在 `build/`。也可以运行 `latexmk -xelatex -outdir=build root.tex`，此时 PDF 位于 `build/root.pdf`。上传到 Overleaf 时选择 `root.tex` 和 XeLaTeX 引擎。
+## 编译与阅读
 
-## 迁移内容
+在本目录执行：
 
-源稿为 `../ICRA2027_英文初稿/root.tex`，不是 `paper/latex/main_en.tex` 中较早的 PRE-MAP-VLN 草稿。ICRA 版本保留原样。
+```bash
+make pdf
+```
 
-- 采用官方 IEEEtran 的 `letterpaper,10pt,journal` 双栏期刊模式，移除 ieeeconf 的页边距覆盖、会议标题格式和首页插图专用命令。
-- 保留论文标题、摘要、方法、实验结果、六张图、两张表和参考文献内容。摘要为 189 词。
-- 在摘要后新增 169 词的 Note to Practitioners，说明应用场景、部署条件和现有验证的局限；随后新增 Index Terms。
-- 使用匿名作者栏，启用期刊页眉和页码，不填写出版卷期、录用日期、DOI 或版权编号。
-- 首页真机图改为标准双栏浮动图；仿真图改为标准浮动位置；消融表字体调整为 8 pt。
-- 图片和样式文件均在本目录内，不依赖其他目录的软链接。
+正文为 [manuscript/root.tex](manuscript/root.tex)，编译结果为 [manuscript/root.pdf](manuscript/root.pdf)。
+需要 XeLaTeX、BibTeX、latexmk 和 TeX Gyre 字体。当前机器已具备这些依赖。
+中间文件集中在 `manuscript/build/`；正文通过相对路径读取 `figures/final/`，独立编译无需原系统代码、数据集或绘图环境。
 
-## 官方依据
+```bash
+make check     # 检查正文引用的图件和项目结构
+make bundle    # 生成可独立编译的投稿源码包
+```
 
-- [T-ASE 作者指南](https://www.ieee-ras.org/publications/t-ase/information-for-authors/)：IEEE 双栏稿；Regular Paper 摘要不超过 200 词；摘要后添加 100–300 词的 Note to Practitioners 和关键词。
-- [投稿检查表](https://www.ieee-ras.org/publications/t-ase/information-for-authors/author-checklist-for-papers-submitted-to-ieee-t-ase/)：双匿名评审；强调自动化问题、效率与可靠性及与既有方法的比较。
-- [Note to Practitioners 指南](https://www.ieee-ras.org/publications/t-ase/information-for-authors/t-ase-note-to-practitioners/)：面向工程实践，区别于摘要，交代实际应用与局限。
-- 官方模板压缩包与下载地址、校验值见 `../TASE_template/`。
+源码包输出为 `manuscript/LogicFly_TASE_source.zip`，包含相同的 `manuscript/`、`figures/final/` 层级和根目录 Makefile。解压后运行 `make pdf` 即可。
 
-## 当前状态
+## 图件索引
 
-这是完成模板迁移的工作稿，尚未投稿。当前 PDF 为 9 页，含参考文献。新增的 Note to Practitioners 需要作者审阅；面向 T-ASE 的自动化贡献表述、近期文献覆盖、实验支撑、图中文字可读性及全部投稿材料仍应在定稿时审查。没有新增实验结果或改写既有实验结论。
+| 图号 | 内容 | 定稿文件，位于 figures/final/ | 源文件，位于 figures/source/ |
+| --- | --- | --- | --- |
+| 1 | 真机执行主图 | `真机实验1_cropped.pdf` | `fig01_real_world/` |
+| 2 | 系统总览 | `workflow_10_28_qwen_hd.pdf` | `fig02_system_overview/` |
+| 3 | 第一阶段建图流程 | `探索建图(1).pdf` | `fig03_mapping_pipeline/` |
+| 4 | 房间分割 | `房间分割.png` | `fig04_room_partitioning/` |
+| 5 | 条件任务图 | `conditional_task_graph.pdf` | `fig05_task_graph/` |
+| 6 | 候选视角生成 | `视角选择.png` | `fig06_viewpoint_generation/` |
+| 7 | 联合规划与轨迹生成 | `联合规划_1.png` | `fig07_joint_planning/` |
+| 8 | Habitat 执行示例 | `habitat_long_instruction_en.png` | `fig09_habitat_execution/` |
+| 9 | 多场景真机实验：室内住宅、办公室 1 和办公室 2 | `多个真机实验(2).pdf` | `fig09_11_real_world/` |
 
-原稿的实现及实验溯源材料仍保留在 `../ICRA2027_英文初稿/evidence_notes.md` 和 `audit_results.py`；这些历史材料不作为本次迁移中重新验证实验结论的证据。作者身份信息应按双匿名要求在初投稿文件及补充材料中处理，正式作者资料在投稿系统的相应字段中填写。
+`final/` 是正文引用图件的唯一入口。源目录里的草稿、预览和新变体不会自动替换定稿。
+Fig. 4 最新的单行四幅工作稿位于 `fig04_room_partitioning/single_row/`；第二层倾斜分区及 SAM 3.1 目标框叠加图位于 `fig04_room_partitioning/oblique_l2/`。
+
+每幅图的 `SOURCE_INFO.json` 记录原始来源；[figure_manifest.json](figures/source/figure_manifest.json) 记录定稿文件、图号和迁移时的校验值。
+
+## 绘图和实验数据
+
+绘图源文件包含 SVG、Blender 场景、版面脚本及相关图片。SVG/Blender 可直接编辑；部分脚本重算候选、分割或轨迹时仍需原项目的算法、环境及实验数据。源脚本保留其原来的数据路径约定，迁移本身没有重写这些算法或声称所有绘图都已脱离原始数据。
+
+代码项目仍在 `/home/uav/map_VLN/PRE_MAP_VLN`。大模型权重、原始视频、点云及运行缓存继续由代码项目和原素材目录管理。
+[migration_inventory.json](figures/source/migration_inventory.json) 记录文件原路径、新路径和留在上游的输入，便于追溯。
+
+## 写作约定
+
+- 目标识别和 MINCO 真机实现的论文描述以 `origin/real-fly` 为事实来源；详见 [IMPLEMENTATION_SOURCE.md](IMPLEMENTATION_SOURCE.md)。
+- 正面、准确地描述方法、贡献和结果，避免无必要的制作备注与重复免责声明。
+- 方法和系统实现章节写完整算法：目标识别为 SAM 3.1--Boxer，轨迹优化为 A* 几何引导、安全走廊约束和 MINCO 连续优化。真机当前接线程度和实验边界只在 Physical UAV Experiments 中仔细说明。
+- 对比和消融结果按当前稿保留，补充时使用已核实的实验数据。
+- 图件修改先在对应 `source/figXX_.../` 内完成，确认后再更新 `final/` 和正文图注。
+
+## 迁移记录
+
+2026-10-28 从 `PRE_MAP_VLN/论文/TASE_英文初稿/` 整理至此。正文内容和 9 张引用图件均保留当前版本，仅调整 LaTeX 图件路径。
+旧目录与原绘图目录暂时保留为历史来源，后续论文维护使用本目录。
+
+## 版本管理
+
+本目录同步至 `123awsd/MAP_VLN` 仓库的 `BYQ` 分支，路径为 `论文/TASE_英文初稿/`。
+系统代码由 `real-fly` 等代码分支维护。论文和代码分支按文件或明确的提交同步，不进行整分支合并。
+后续论文提交和上传均在本目录进行。

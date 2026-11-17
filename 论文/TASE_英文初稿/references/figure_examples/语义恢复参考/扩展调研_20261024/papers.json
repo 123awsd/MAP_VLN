@@ -1,0 +1,139 @@
+[
+  {
+    "id": "ETPNav",
+    "url": "https://arxiv.org/pdf/2304.03047",
+    "arxiv": "2304.03047"
+  },
+  {
+    "id": "BEVBert",
+    "url": "https://arxiv.org/pdf/2212.04385",
+    "arxiv": "2212.04385"
+  },
+  {
+    "id": "CA-Nav",
+    "url": "https://arxiv.org/pdf/2412.10137",
+    "arxiv": "2412.10137"
+  },
+  {
+    "id": "InstructNav",
+    "url": "https://arxiv.org/pdf/2406.04882",
+    "arxiv": "2406.04882"
+  },
+  {
+    "id": "Open-Nav",
+    "url": "https://arxiv.org/pdf/2409.18794",
+    "arxiv": "2409.18794"
+  },
+  {
+    "id": "MapNav",
+    "url": "https://arxiv.org/pdf/2502.13451",
+    "arxiv": "2502.13451"
+  },
+  {
+    "id": "VLN-CE",
+    "url": "https://arxiv.org/pdf/2004.02857",
+    "arxiv": "2004.02857"
+  },
+  {
+    "id": "DUET",
+    "url": "https://arxiv.org/pdf/2202.11742",
+    "arxiv": "2202.11742"
+  },
+  {
+    "id": "RegretfulAgent",
+    "url": "https://arxiv.org/pdf/1903.01602",
+    "arxiv": "1903.01602"
+  },
+  {
+    "id": "FAST",
+    "url": "https://arxiv.org/pdf/1903.02547",
+    "arxiv": "1903.02547"
+  },
+  {
+    "id": "Meta-Explore",
+    "url": "https://arxiv.org/pdf/2303.04077",
+    "arxiv": "2303.04077"
+  },
+  {
+    "id": "ESC",
+    "url": "https://arxiv.org/pdf/2301.13166",
+    "arxiv": "2301.13166"
+  },
+  {
+    "id": "L3MVN",
+    "url": "https://arxiv.org/pdf/2304.05501",
+    "arxiv": "2304.05501"
+  },
+  {
+    "id": "ConceptGraphs",
+    "url": "https://arxiv.org/pdf/2309.16650",
+    "arxiv": "2309.16650"
+  },
+  {
+    "id": "HOV-SG",
+    "url": "https://arxiv.org/pdf/2403.17846",
+    "arxiv": "2403.17846"
+  },
+  {
+    "id": "VLMaps",
+    "url": "https://arxiv.org/pdf/2210.05714",
+    "arxiv": "2210.05714"
+  },
+  {
+    "id": "SEEK",
+    "url": "https://arxiv.org/pdf/2405.09822",
+    "arxiv": "2405.09822"
+  },
+  {
+    "id": "CARe",
+    "url": "https://arxiv.org/pdf/2409.04837",
+    "arxiv": "2409.04837"
+  },
+  {
+    "id": "VLFM",
+    "url": "https://arxiv.org/pdf/2312.03275v1",
+    "reused": true
+  },
+  {
+    "id": "BeliefMapNav",
+    "url": "https://arxiv.org/pdf/2506.06487v1",
+    "reused": true
+  },
+  {
+    "id": "SG-Nav",
+    "url": "https://arxiv.org/pdf/2410.08189v1",
+    "reused": true
+  },
+  {
+    "id": "DovSG",
+    "url": "https://arxiv.org/pdf/2410.11989v6",
+    "reused": true
+  },
+  {
+    "id": "SayPlan",
+    "url": "https://proceedings.mlr.press/v229/rana23a/rana23a.pdf",
+    "reused": true
+  },
+  {
+    "id": "InnerMonologue",
+    "url": "https://proceedings.mlr.press/v205/huang23c/huang23c.pdf",
+    "reused": true
+  },
+  {
+    "id": "OpenFMNav",
+    "url": "https://arxiv.org/pdf/2402.10670",
+    "reused": true
+  },
+  {
+    "id": "UniGoal",
+    "url": "https://arxiv.org/pdf/2503.10630"
+  },
+  {
+    "id": "BSC-Nav",
+    "url": "https://www.nature.com/articles/s41467-026-74358-5.pdf"
+  },
+  {
+    "id": "AECNav",
+    "url": "https://arxiv.org/pdf/2608.10817"
+  }
+]

@@ -1,0 +1,54 @@
+Panels: []
+Preferences:
+  PromptSaveOnExit: false
+Visualization Manager:
+  Class: ''
+  Displays:
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /paper_joint/static
+      Name: Rooms, anchors, candidates and MINCO
+      Queue Size: 10
+      Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /paper_joint/vehicle
+      Name: Trajectory playback
+      Queue Size: 1
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 247; 249; 252
+    Default Light: true
+    Fixed Frame: map
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+  Value: true
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 14.5
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.06
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Focal Point:
+        X: 6
+        Y: 4.5
+        Z: 0.25
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.01
+      Pitch: 1.10
+      Target Frame: <Fixed Frame>
+      Yaw: 4.712389
+    Saved: ~
+Window Geometry:
+  Height: 1000
+  Width: 1500

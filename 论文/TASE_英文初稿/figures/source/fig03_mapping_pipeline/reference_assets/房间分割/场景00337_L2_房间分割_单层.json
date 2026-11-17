@@ -1,0 +1,14 @@
+{
+  "format": "pre_map_vln.l2_room_segmentation_standalone.v1",
+  "floor": 2,
+  "source_scene_graph": "/home/uav/map_VLN/PRE_MAP_VLN/outputs/room_pipeline/00337_transition_aware_qwen_v1/L2_scene_graph_qwen.json",
+  "source_wall_grid": "/home/uav/map_VLN/PRE_MAP_VLN/outputs/wall_extraction/00337_dormant_recovery_ceiling_clearance_L1-L3/L2_wall_grid.npy",
+  "source_wall_meta": "/home/uav/map_VLN/PRE_MAP_VLN/outputs/wall_extraction/00337_dormant_recovery_ceiling_clearance_L1-L3/L2_wall_grid.json",
+  "room_count": 12,
+  "azimuth": -58.0,
+  "elevation": 26.0,
+  "projection": "orthographic",
+  "resolution_px": [2208, 1600],
+  "script": "/home/uav/map_VLN/PRE_MAP_VLN/scripts/render_l2_room_box_standalone.py",
+  "png": "/home/uav/map_VLN/素材处理后/第一阶段/房间分割/场景00337_L2_房间分割_单层.png"
+}

@@ -1,0 +1,8 @@
+{
+  "number": 5,
+  "final": "figures/final/conditional_task_graph.pdf",
+  "source": "figures/source/fig05_task_graph",
+  "original_source": "画图/任务图/CPTG_TaskGraph_Full_Reproducible",
+  "final_sha256": "d2cc71438a2707d4d3395c301ee1e50f03037f517be3d736e90eaa3cbbe6e2f2",
+  "regeneration_dependencies": "See original source README/scripts and migration_inventory.json. Experimental code and datasets remain in PRE_MAP_VLN."
+}
