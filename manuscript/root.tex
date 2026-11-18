@@ -225,10 +225,10 @@ Q_i(\mathbf{q})=
 Candidates violating occupancy, flight-height, spatial-relation, or required-visibility constraints are discarded. The remaining poses are scored using the coverage in~\eqref{eq:geometric-coverage}:
 \begin{equation}
 \begin{aligned}
-C_i^{\mathrm{view}}(\mathbf{q})={}&
+&C_i^{\mathrm{view}}(\mathbf{q})=
 \beta_d\frac{|d-d_i^{\mathrm{pref}}|}{\ell_0}
 +\beta_Q\bigl[1-Q_i(\mathbf{q})\bigr]\\
-&+\beta_z\frac{|z-\bar z_i|}{\ell_0}
+&\qquad{}+\beta_z\frac{|z-\bar z_i|}{\ell_0}
 +\beta_r\frac{d_i^{\mathrm{ref}}(\mathbf{q})}{\ell_0}
 +\beta_b\frac{d_i^{\mathrm{between}}(\mathbf{q})}{\ell_0}.
 \end{aligned}
@@ -253,18 +253,18 @@ Figure~\ref{fig:viewpoint-generation} illustrates the sampling and feasibility-f
 
 For candidate poses $\mathbf{q}_a$ and $\mathbf{q}_b$, a 3D A$^*$ query returns a collision-free polyline $P_t(\mathbf{q}_a,\mathbf{q}_b)=\{\mathbf{p}_1,\ldots,\mathbf{p}_N\}$ when the transition is reachable. Let $\Delta\psi_{ab}=\operatorname{wrap}(\psi_b-\psi_a)$. The path length and motion-time proxy are defined, respectively, as
 \begin{subequations}\label{eq:motion-cost}
-\begin{align}
-L_t(\mathbf{q}_a,\mathbf{q}_b)
-&=\sum_{u=1}^{N-1}\lVert\mathbf{p}_{u+1}-\mathbf{p}_u\rVert_2,
+\begin{flalign}
+&L_t(\mathbf{q}_a,\mathbf{q}_b)
+=\sum_{u=1}^{N-1}\lVert\mathbf{p}_{u+1}-\mathbf{p}_u\rVert_2, &&
 \label{eq:path-length}\\
-\widehat T_t(\mathbf{q}_a,\mathbf{q}_b)
-&=\max\left\{
-\frac{L_t(\mathbf{q}_a,\mathbf{q}_b)}{v_{\mathrm{nom}}},
-\frac{|z_b-z_a|}{v_z},
-\frac{|\Delta\psi_{ab}|}{\omega_\psi}
-\right\}.
+&\widehat T_t(\mathbf{q}_a,\mathbf{q}_b)
+=\max\left\{
+\tfrac{L_t(\mathbf{q}_a,\mathbf{q}_b)}{v_{\mathrm{nom}}},
+\tfrac{|z_b-z_a|}{v_z},
+\tfrac{|\Delta\psi_{ab}|}{\omega_\psi}
+\right\}. &&
 \label{eq:motion-time}
-\end{align}
+\end{flalign}
 \end{subequations}
 Here, $v_{\mathrm{nom}}>0$ is a nominal speed along the three-dimensional polyline in~\eqref{eq:motion-time}, while $v_z>0$ and $\omega_\psi>0$ set nominal climb and yaw rates. The wrap operator returns an angle in $[-\pi,\pi)$. The maximum models concurrent translation and yaw as a ranking heuristic, not the duration of the optimized trajectory. Cross-floor detours and intermediate ascents or descents contribute to $L_t$; the second term accounts only for net altitude change. Acceleration, intermediate vertical-rate constraints, and observation dwell are handled during execution rather than predicted by this proxy. Unreachable transitions have $L_t=\widehat T_t=+\infty$.
 
@@ -293,10 +293,12 @@ Candidate poses are grouped by physical location and prioritized using current-p
 
 Given $m=|\mathcal W_t|>0$, let $\Pi(\mathcal W_t)$ be all permutations of the window and $\mathcal K_{i,t}=\{k:\mathbf q_i^k\in\widetilde{\mathcal Q}_{i,t}\}$. JTVP jointly selects $\pi\in\Pi(\mathcal W_t)$, visiting each task exactly once, and one observation pose $\mathbf{q}_r=\mathbf{q}_{\pi_r}^{k_r}$ for each selected task, with $\mathbf{q}_0=\mathbf{q}_t^{\mathrm{robot}}$. Let $\iota(\mathbf{q})$ denote the task associated with candidate $\mathbf{q}$. We define the dimensionless transition score as
 \begin{equation}
-c_t(\mathbf{q}_a,\mathbf{q}_b)=
+\begin{aligned}
+&c_t(\mathbf{q}_a,\mathbf{q}_b)=
 \eta_L\frac{L_t(\mathbf{q}_a,\mathbf{q}_b)}{\ell_0}
-+\eta_T\frac{\widehat T_t(\mathbf{q}_a,\mathbf{q}_b)}{\tau_0}
-+\eta_V C_{\iota(\mathbf{q}_b)}^{\mathrm{view}}(\mathbf{q}_b),
++\eta_T\frac{\widehat T_t(\mathbf{q}_a,\mathbf{q}_b)}{\tau_0}\\
+&\qquad{}+\eta_V C_{\iota(\mathbf{q}_b)}^{\mathrm{view}}(\mathbf{q}_b),
+\end{aligned}
 \label{eq:transition-score}
 \end{equation}
 where $\tau_0$ is a reference time. Using~\eqref{eq:transition-score}, JTVP solves
@@ -313,16 +315,16 @@ where $\tau_0$ is a reference time. Using~\eqref{eq:transition-score}, JTVP solv
 \end{equation}
 The joint planning problem in~\eqref{eq:jtvp} is solved using subset dynamic programming. Let $D(S,i,k)$ be the minimum cost of visiting exactly $S\subseteq\mathcal W_t$ and ending at $\mathbf q_i^k$, where $i\in S$ and $k\in\mathcal K_{i,t}$. Invalid or unreachable states have value $+\infty$, as do unreachable transition scores. For nonempty $S$ and $j\in\mathcal W_t\setminus S$, the initialization, recurrence, and terminal cost are
 \begin{subequations}\label{eq:subset-dp}
-\begin{align}
-D(\{i\},i,k)&=c_t(\mathbf{q}_0,\mathbf{q}_i^k),
+\begin{flalign}
+&D(\{i\},i,k)=c_t(\mathbf{q}_0,\mathbf{q}_i^k), &&
 \label{eq:dp-init}\\
-D(S\cup\{j\},j,\ell)&=
-\min_{\substack{i\in S\\ k\in\mathcal K_{i,t}}}\!\bigl[D(S,i,k)+c_t(\mathbf{q}_i^k,\mathbf{q}_j^\ell)\bigr],
+&D(S\cup\{j\},j,\ell)=
+\min_{\substack{i\in S\\ k\in\mathcal K_{i,t}}}\!\bigl[D(S,i,k)+c_t(\mathbf{q}_i^k,\mathbf{q}_j^\ell)\bigr], &&
 \label{eq:dp-recurrence}\\
-J_t^\star&=\min_{\substack{i\in\mathcal W_t,\,k\in\mathcal K_{i,t}}}
-D(\mathcal W_t,i,k).
+&J_t^\star=\min_{\substack{i\in\mathcal W_t\\k\in\mathcal K_{i,t}}}
+D(\mathcal W_t,i,k). &&
 \label{eq:dp-terminal}
-\end{align}
+\end{flalign}
 \end{subequations}
 The recurrence is evaluated for $\ell\in\mathcal K_{j,t}$; a minimum over an empty set is $+\infty$. An empty window yields an empty plan with zero cost: execution finishes only if all required outcomes are resolved, otherwise it reports unresolved tasks. Empty candidate sets or an infinite terminal cost trigger expansion from representative views to the full available pool. If no feasible plan is found, planning terminates with failure rather than marking the task verified. For a finite terminal cost, backtracking through~\eqref{eq:subset-dp} returns the optimal order and poses for the selected window and candidate sets. Only the first visit is executed before replanning from the updated robot pose, task state, candidate set, and semantic evidence. This receding-horizon policy preserves the efficiency of multi-task lookahead without committing later visits to assumptions that subsequent observations may invalidate. With $K=\max_{i\in\mathcal W_t}|\mathcal K_{i,t}|$ and cached transition costs, the subset DP uses $O(2^m m^2K^2)$ time and $O(2^m mK)$ memory. Since $m\leq H$, the exponential dependence is limited to the local window. Task screening, candidate generation, and A$^*$ queries still depend on the available tasks and map size; retaining views per location does not impose a global constant $K$ when additional locations are admitted. The 15-subtask timing in Section~V-B measures the complete planner under this policy.
 
@@ -346,7 +348,7 @@ MINCO determines the coefficients from internal interpolation points $\mathbf U=
 \min_{\mathbf U,\,\mathbf T>\mathbf 0}\quad
 &\sum_{r=1}^{R}\int_0^{T_r}\|\mathbf p_r^{(4)}(\tau)\|_2^2\,d\tau
 +\rho\sum_{r=1}^{R}T_r\\
-&+J_{\mathrm{corr}}(\mathbf p,\mathbf T)
+&\quad{}+J_{\mathrm{corr}}(\mathbf p,\mathbf T)
 +J_{\mathrm{dyn}}(\mathbf p,\mathbf T),
 \end{aligned}
 \label{eq:minco-safe-corridor}
