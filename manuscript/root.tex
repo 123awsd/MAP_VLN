@@ -5,7 +5,7 @@
 \setmainfont{TeX Gyre Termes}
 \setsansfont{TeX Gyre Heros}
 \setmonofont{TeX Gyre Cursor}
-\usepackage{amsmath,amssymb,bm,graphicx,booktabs,tabularx,array,url,cite,flafter,stfloats}
+\usepackage{amsmath,amssymb,bm,graphicx,booktabs,tabularx,array,url,cite,flafter,stfloats,placeins}
 \graphicspath{{../figures/final/}}
 \interdisplaylinepenalty=2500
 \newenvironment{practitioners}{\renewcommand{\abstractname}{Note to Practitioners}\begin{abstract}}{\end{abstract}}
@@ -50,7 +50,7 @@ The main contributions of this paper are summarized as follows:
 \begin{itemize}
 \setlength{\itemsep}{0pt}
 \setlength{\parsep}{0pt}
-\item We present \textbf{LogicFly}, a language-guided aerial navigation framework that reuses an autonomously constructed hierarchical semantic--geometric representation to execute long-range instructions containing multiple subtasks and complex logical dependencies.
+\item We present \textbf{LogicFly}, a robust and efficient language-guided aerial navigation framework that reuses an autonomously constructed hierarchical semantic--geometric representation to execute long-range instructions containing multiple subtasks and complex logical dependencies.
 \item We propose a \textbf{Conditional Partial-Order Task Graph (CPTG)} that explicitly represents mandatory precedence, freely schedulable tasks, observation-triggered branches, and distinct navigation and verification targets.
 \item We develop \textbf{Joint Task--Viewpoint Planning (JTVP)} to jointly optimize task order and three-dimensional observation viewpoints, improving travel efficiency while acquiring task-specific visual evidence.
 \item We introduce an \textbf{observation-driven autonomous recovery mechanism} that combines local viewpoint retries, language-model-guided search over alternative semantic regions, and negative-evidence updates to resume target search after unsuccessful observations.
@@ -86,18 +86,14 @@ Inner Monologue~\cite{huang2023innermonologue} incorporates success detection an
 \label{fig:overview}
 \end{figure*}
 
+\par\noindent
+\begin{minipage}{\columnwidth}
 \section{System Overview}
 \label{sec:system-overview}
 
-Figure~\ref{fig:overview} illustrates the pipeline of LogicFly, which consists of map construction, instruction grounding, joint planning, and closed-loop execution.
-
-\textbf{Map construction.} The UAV first explores the environment and builds a reusable semantic--geometric map containing navigable space, rooms, and objects.
-
-\textbf{Instruction grounding.} Given a natural-language instruction and the map, a large language model constructs a CPTG that specifies the subtasks, their dependencies, and observation-dependent branches.
-
-\textbf{Joint planning.} JTVP selects the order and observation poses of currently executable tasks. The selected route is converted into a trajectory for UAV execution.
-
-\textbf{Execution and recovery.} The UAV executes the first planned visit and verifies the task using onboard observations. Verification outcomes update the task graph. When permitted by the task policy, unsuccessful observations trigger local reinspection or search in alternative semantic regions. The updated task and search states feed back into planning until the instruction is completed or a stopping condition is reached.
+The proposed LogicFly framework is illustrated in Fig.~\ref{fig:overview}. The system comprises four modules: autonomous exploration and mapping, conditional task graph construction, joint task--viewpoint planning, and execution with observation-driven recovery. The exploration and mapping module constructs a reusable hierarchical semantic--geometric map containing navigable space, semantic regions, and object instances (Section~IV-A). Given a natural-language instruction and this map, the CPTG module performs language parsing and semantic grounding to identify subtasks, establish mandatory precedence relations and conditional branches, and determine the currently executable task set (Section~IV-B). The JTVP module receives these executable tasks and the current UAV state. It generates candidate three-dimensional observation poses, evaluates their observation quality and travel costs, and jointly selects task order and observation viewpoints within a bounded receding horizon (Sections~IV-C and~IV-D). The selected route is then refined into a smooth trajectory under safe-corridor constraints (Section~IV-E). The execution module follows the trajectory to the first planned observation pose and verifies the requested task outcome using onboard observations. Successful verification advances task execution, while unsuccessful observations are handled according to the task policy through local viewpoint reinspection, semantic-region search, or a resolved negative outcome (Section~IV-F). The resulting evidence updates the task and semantic search states, activates or skips conditional tasks, and returns the updated executable task set to JTVP for replanning until the instruction is completed or a stopping condition is reached.
+\end{minipage}
+\par
 
 \section{METHODOLOGY}
 \label{sec:methodology}
@@ -434,24 +430,9 @@ Novel detections are accumulated online through spatially consistent multi-view 
 
 After each terminal verification, the system updates the task state, candidate poses, and semantic search prior, recomputes $\mathcal E_t$, and invokes JTVP from the current robot pose. When a task reaches a task-level outcome, CPTG additionally updates $\mathcal R_t$ and evaluates $\mathcal R_{\mathrm{cond}}$ to activate or skip downstream conditional tasks. This closes the loop among task logic, 3D observation, geometric motion, and online semantic evidence.
 
-\begin{table*}[t]
-\caption{Benchmark results grouped by task difficulty and floor scope. The clean schedule contains 270 single-floor and 38 cross-floor single-target episodes, and 364 single-floor and 182 cross-floor multi-target episodes. SR and SPL are percentages; CT is averaged over successful episodes. Dashes omit SPL and CT when no episode succeeds. OneMap uses its ordered-category projection. Bold denotes the best result in each task group.}
-\label{tab:main}\centering\small\renewcommand{\arraystretch}{1.15}
-\begin{tabular*}{0.94\textwidth}{@{\extracolsep{\fill}}llcccccc@{}}\toprule
-\raisebox{-8pt}[0pt][0pt]{Task type}&\raisebox{-8pt}[0pt][0pt]{Method}&\multicolumn{3}{c}{Single-floor}&\multicolumn{3}{c}{Cross-floor}\\
-\cmidrule(lr){3-5}\cmidrule(lr){6-8}
-&&SR$\uparrow$ (\%)&SPL$\uparrow$ (\%)&CT$\downarrow$ (s)&SR$\uparrow$ (\%)&SPL$\uparrow$ (\%)&CT$\downarrow$ (s)\\\midrule
-\raisebox{-22.9pt}[0pt][0pt]{Single-target}&SpatialNav&8.15&5.89&22.35&0.00&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}\\
-&SpatialGPT&10.37&2.69&115.39&0.00&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}\\
-&MapGPT&27.78&14.35&42.95&18.42&13.08&81.57\\
-&OneMap&52.59&35.45&77.32&21.05&20.30&49.88\\
-&LogicFly&\textbf{97.78}&\textbf{87.28}&\textbf{8.19}&\textbf{94.74}&\textbf{86.03}&\textbf{8.99}\\\midrule
-\raisebox{-11.45pt}[0pt][0pt]{Multi-target}&MapGPT&1.10&0.73&96.02&0.00&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}\\
-&OneMap&12.36&8.16&150.13&6.59&6.59&90.59\\
-&LogicFly&\textbf{96.70}&\textbf{82.49}&\textbf{10.33}&\textbf{96.70}&\textbf{81.45}&\textbf{14.70}\\\bottomrule
-\end{tabular*}
-\end{table*}
 
+
+\FloatBarrier
 \section{Experiments}
 We evaluate LogicFly through simulation, ablation studies, and real-world UAV experiments, covering benchmark performance, the contributions of CPTG, JTVP, and semantic recovery, and practical deployment.
 
@@ -500,6 +481,24 @@ Each evaluation process is subject to a fixed time limit of 240 s. A timeout or 
 \subsection{Comparison with Baseline Methods in Simulation}
 We compare LogicFly with HM3D adaptations of OneMap~\cite{busch2025onemap}, MapGPT~\cite{chen2024mapgpt}, SpatialGPT~\cite{jiang2025spatialgpt}, and SpatialNav~\cite{zhang2026spatialnav}. All methods run on the same 854-episode clean schedule. OneMap retains its native ordered-category projection, which omits relations, conditional branches, verified absence, recovery, and return constraints. All baselines and LogicFly are evaluated using the same frozen strict full-task evaluator. SpatialGPT and SpatialNav do not successfully complete any cross-floor episode, resulting in an SR of 0\%; therefore, their remaining cross-floor metrics are not reported.
 
+\begin{table*}[!t]
+\caption{Benchmark results grouped by task difficulty and floor scope. The clean schedule contains 270 single-floor and 38 cross-floor single-target episodes, and 364 single-floor and 182 cross-floor multi-target episodes. SR and SPL are percentages; CT is averaged over successful episodes. Dashes omit SPL and CT when no episode succeeds. OneMap uses its ordered-category projection. Bold denotes the best result in each task group.}
+\label{tab:main}\centering\small\renewcommand{\arraystretch}{1.15}
+\begin{tabular*}{0.94\textwidth}{@{\extracolsep{\fill}}llcccccc@{}}\toprule
+\raisebox{-8pt}[0pt][0pt]{Task type}&\raisebox{-8pt}[0pt][0pt]{Method}&\multicolumn{3}{c}{Single-floor}&\multicolumn{3}{c}{Cross-floor}\\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}
+&&SR$\uparrow$ (\%)&SPL$\uparrow$ (\%)&CT$\downarrow$ (s)&SR$\uparrow$ (\%)&SPL$\uparrow$ (\%)&CT$\downarrow$ (s)\\\midrule
+\raisebox{-22.9pt}[0pt][0pt]{Single-target}&SpatialNav&8.15&5.89&22.35&0.00&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}\\
+&SpatialGPT&10.37&2.69&115.39&0.00&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}\\
+&MapGPT&27.78&14.35&42.95&18.42&13.08&81.57\\
+&OneMap&52.59&35.45&77.32&21.05&20.30&49.88\\
+&LogicFly&\textbf{97.78}&\textbf{87.28}&\textbf{8.19}&\textbf{94.74}&\textbf{86.03}&\textbf{8.99}\\\midrule
+\raisebox{-11.45pt}[0pt][0pt]{Multi-target}&MapGPT&1.10&0.73&96.02&0.00&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}\\
+&OneMap&12.36&8.16&150.13&6.59&6.59&90.59\\
+&LogicFly&\textbf{96.70}&\textbf{82.49}&\textbf{10.33}&\textbf{96.70}&\textbf{81.45}&\textbf{14.70}\\\bottomrule
+\end{tabular*}
+\end{table*}
+
 As shown in Table~\ref{tab:main}, LogicFly outperforms the compared methods across target counts and floor scopes. On multi-target tasks, it maintains 96.70\% SR on both floor scopes, with SPL of 82.49\% and 81.45\% and CT of 10.33 s and 14.70 s for single-floor and cross-floor episodes, respectively. SpatialGPT and SpatialNav complete no multi-target episodes and are omitted from that block. Overall, LogicFly completes 828/854 episodes (96.96\% strict full-task SR, 0.8394 SPL).
 
 
@@ -515,8 +514,16 @@ All baselines retain their native planning, action, and stopping interfaces. One
 
 
 
-\begin{table}[!t]
-\begin{minipage}[t]{\columnwidth}
+
+
+\FloatBarrier
+\subsection{Ablation Studies}
+
+
+\textbf{CPTG and JTVP.}
+We evaluate CPTG and JTVP on the 546 multi-target episodes from the frozen six-scene HM3D schedule, covering all multi-target task types. The analysis contains 1638 full-mission evaluation records, reusing the corresponding native benchmark runs for the full method. All three variants use outer-run completion times for CT, including the reused records.
+
+\begin{table}[!hb]
 \caption{Ablation results on the multi-target subset of 546 episodes. SR and SPL are percentages. CT uses the same outer-run timing field for all variants and is averaged over successful episodes.}
 \label{tab:ablation}\centering\small\renewcommand{\arraystretch}{1.15}
 \begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lccc@{}}\toprule
@@ -525,24 +532,7 @@ w/o CPTG&64.84&58.45&35.63\\
 w/o JTVP&\textbf{96.70}&76.82&12.62\\
 LogicFly&\textbf{96.70}&\textbf{82.15}&\textbf{11.79}\\\bottomrule
 \end{tabular*}
-\end{minipage}
-\par\vspace{12pt}
-\begin{minipage}[t]{\columnwidth}
-\caption{Semantic-recovery ablation on 10 cross-region tasks, with 60 episodes per method. SR and SPL are percentages; CT is averaged over successful episodes. A dash denotes no successful episode.}
-\label{tab:recovery-ablation}\centering\small\renewcommand{\arraystretch}{1.15}
-\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lccc@{}}\toprule
-Variant&SR$\uparrow$ (\%)&SPL$\uparrow$ (\%)&CT$\downarrow$ (s)\\\midrule
-w/o recovery&0.00&0.00&--\\
-LogicFly&\textbf{80.00}&\textbf{53.46}&14.03\\\bottomrule
-\end{tabular*}
-\end{minipage}
 \end{table}
-
-\subsection{Ablation Studies}
-
-
-\textbf{CPTG and JTVP.}
-We evaluate CPTG and JTVP on the 546 multi-target episodes from the frozen six-scene HM3D schedule, covering all multi-target task types. The analysis contains 1638 full-mission evaluation records, reusing the corresponding native benchmark runs for the full method. All three variants use outer-run completion times for CT, including the reused records.
 
 All variants share the native Habitat runner, online open-vocabulary verification, strict evaluator, scene representations, start poses, motion constraints, and termination settings. \emph{w/o CPTG} removes task dependencies, conditional rules, and task-conditioned candidate generation, retaining target labels, coarse room/floor scopes, generic observation constraints, and fixed language order. \emph{w/o JTVP} retains CPTG but fixes task order and uses only each task's primary viewpoint. \emph{LogicFly} jointly optimizes task ordering and viewpoints. The evaluator enforces required outcomes and ordering, forbids visits to skipped branches, and checks spatial/reference constraints.
 
@@ -557,20 +547,31 @@ Table~\ref{tab:ablation} shows that removing CPTG reduces SR to 64.84\% and SPL 
 \textbf{Semantic recovery.}
 We further evaluate 10 cross-region target-search tasks across the same six scenes, covering both same-floor and cross-floor recovery. Each task starts with an incorrect target-location prior in a region without the target. True target-category entries are removed from the runtime semantic map, while the physical scene and other map entries are preserved. Before evaluation, all initial candidate views are checked for target absence, and reachable views in another region are verified to detect a real target. Three fixed starting states and two repetitions yield 60 episodes per method, or 120 newly executed episodes. The ablated variant retains CPTG, JTVP, local multi-view reinspection, and the same perception and motion settings, but disables semantic-region recovery and its frontier fallback. Both groups use the same perturbed maps and starting states, a 240~s budget, and native caching.
 
+\begin{table}[!hb]
+\caption{Semantic-recovery ablation on 10 cross-region tasks, with 60 episodes per method. SR and SPL are percentages; CT is averaged over successful episodes. A dash denotes no successful episode.}
+\label{tab:recovery-ablation}\centering\small\renewcommand{\arraystretch}{1.15}
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lccc@{}}\toprule
+Variant&SR$\uparrow$ (\%)&SPL$\uparrow$ (\%)&CT$\downarrow$ (s)\\\midrule
+w/o recovery&0.00&0.00&--\\
+LogicFly&\textbf{80.00}&\textbf{53.46}&14.03\\\bottomrule
+\end{tabular*}
+\end{table}
+
 Success requires exhausting the initial local search, leaving that region, and completing the task with RGB-D target evidence associated with a true same-category instance within 1~m. For SPL, the independently frozen A$^*$ reference route visits $\min(3,n_A)$ distinct initial viewpoints before a true-target candidate, where $n_A$ is the initial candidate count. CT uses successful episodes' outer-process wall-clock times, including initialization, planning, and perception.
 
 
 
 
 
-Table~\ref{tab:recovery-ablation} shows that LogicFly succeeds in 48 of 60 episodes, whereas removing semantic recovery reduces SR to zero. All 60 full-method episodes trigger recovery after local search exhaustion; eight tasks succeed in every starting state and repetition. The full method achieves an SPL of 53.46\% and a successful-task CT of 14.03~s. Of its 12 unsuccessful episodes, six end without resolving the search and six report completion without passing the true-target geometric check. All 120 episodes finish without infrastructure failures or timeouts. These results demonstrate that semantic recovery enables cross-region search after local failure and substantially improves task completion when the initial target-location prior is incorrect.
+Table~\ref{tab:recovery-ablation} shows that LogicFly succeeds in 48 of 60 episodes, whereas removing semantic recovery reduces SR to zero. All 60 full-method episodes trigger recovery after local search exhaustion; eight tasks succeed in every starting state and repetition. The full method achieves an SPL of 53.46\% and a successful-task CT of 14.03~s. Of its 12 unsuccessful episodes, six end without resolving the search and six report completion without passing the true-target geometric check. Semantic recovery relies on language-model reasoning about target--room associations. When actual target placement deviates from these associations, the search prioritizes semantically relevant but target-free regions, leaving the true target location unexplored within the bounded search budget. All 120 episodes finish without infrastructure failures or timeouts. These results demonstrate that semantic recovery enables cross-region search after local failure and substantially improves task completion when the initial target-location prior is incorrect.
 
+\FloatBarrier
 \subsection{Evaluation in Real-World Environments}
 
-\begin{figure*}[!b]
+\begin{figure*}[!tb]
 \centering
 \includegraphics[width=0.94\textwidth]{real_world_fig8_style.pdf}
-\caption{Representative real-world UAV executions. From top to bottom: a multi-target household inspection, a three-target laboratory inspection, a ball-search task at a pool table, and a cup-search task at a lounge table. Each row shows successive third-person views; yellow circles mark the UAV and green boxes highlight selected target objects.}
+\caption{Representative real-world UAV executions. From top to bottom: a multi-target household inspection, a three-target laboratory inspection, and a backpack-search task at a pool table. Yellow circles mark the UAV. Dashed white boxes and connectors associate target regions with detail views.}
 \label{fig:real-world-environments}
 \end{figure*}
 
@@ -592,6 +593,7 @@ Figure~\ref{fig:real-world-main} presents a four-task mission involving recovery
 \textbf{Results and failure analysis.}
 Figure~\ref{fig:real-world-environments} shows representative multi-target inspections and single-target searches. Across the 10 experiments, LogicFly successfully completes eight missions, yielding a mission success rate of $80\%$. Both unsuccessful missions result from target misdetections, indicating that perception errors can affect visual verification and task-outcome assessment. The successful executions support the feasibility of online language-guided aerial inspection across the tested indoor settings, including spatially constrained observations, multi-target execution, and search recovery. The failures identify visual perception and verification reliability as remaining limitations.
 
+\FloatBarrier
 \section{Conclusion}
 We presented \textbf{LogicFly}, a language-guided aerial navigation framework built around CPTG and JTVP. CPTG separates precedence and observation-triggered branches; JTVP selects task order and observation poses with 3D path and terminal costs within a bounded window. Verification and constrained recovery update subsequent decisions.
 

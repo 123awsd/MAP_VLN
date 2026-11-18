@@ -5,23 +5,75 @@
       "environment": "Confined Indoor Home Environment",
       "source_page": 1,
       "final": "figures/final/real_world_home_cropped.pdf",
-      "crop_box_pt": [37.948, 195.28, 457.664, 530.438]
+      "crop_box_pt": [
+        37.948,
+        195.28,
+        457.664,
+        530.438
+      ]
     },
     {
       "number": 10,
       "environment": "Office Area 1",
       "source_page": 2,
       "final": "figures/final/real_world_office1_cropped.pdf",
-      "crop_box_pt": [37.948, 193.36, 457.286, 530.834]
+      "crop_box_pt": [
+        37.948,
+        193.36,
+        457.286,
+        530.834
+      ]
     },
     {
       "number": 11,
       "environment": "Office Area 2",
       "source_page": 3,
       "final": "figures/final/real_world_office2_cropped.pdf",
-      "crop_box_pt": [37.948, 195.88, 457.04, 531.194]
+      "crop_box_pt": [
+        37.948,
+        195.88,
+        457.04,
+        531.194
+      ]
     }
   ],
   "source_pdf": "多个真机实验new.pdf",
-  "source_note": "User-provided three-page PDF; each page was cropped to its non-white content with a 5 pt margin while preserving PDF vectors."
+  "source_note": "User-provided three-page PDF; each page was cropped to its non-white content with a 5 pt margin while preserving PDF vectors.",
+  "current_installation": {
+    "figure_number": 9,
+    "installed_on": "2026-11-11",
+    "final": "figures/final/real_world_fig8_style.pdf",
+    "approved_source": "figures/source/fig09_11_real_world/四场景重绘/rgb_inset_draft/fig9_three_rows_rgb_insets_enhanced.pdf",
+    "sha256": "4a172473b320300923880b83c311bb1fd1e86f8d145cdb0fde9d88deca793703",
+    "previous_final": "figures/source/fig09_11_real_world/previous_final/real_world_fig8_style_before_20261111_4a72910411f8.pdf",
+    "rows": [
+      "household multi-target",
+      "laboratory three-target",
+      "backpack on pool table"
+    ],
+    "provenance": "First two rows: separately selected onboard RGB observations, with AI-assisted visual enhancement. Last row inset: separately captured user-supplied reference photograph. Local target tone adjustment and light-blue silhouette overlays; source provenance retained.",
+    "instruction_font_at_manuscript_placement": "8 TeX pt, matching figure caption",
+    "previous_before_font_adjustment": "figures/source/fig09_11_real_world/previous_final/real_world_fig8_style_before_instruction_font_20261111_46042b822249.pdf",
+    "inset_label_font_at_manuscript_placement": "6 TeX pt; full names on one line inside each inset",
+    "inset_label_style": "6 TeX pt, single line inside upper left of inset; bright yellow #FFF04D with black outline",
+    "target_outline_style": "Light blue #80F0FF, approximately 1 PDF pt after placement, with narrow dark #0C2330 outer edge",
+    "inset_sizes_source_pt": {
+      "electric_steamer": [
+        80,
+        60
+      ],
+      "bottled_water": [
+        66,
+        49.5
+      ],
+      "cups": [
+        57,
+        42.75
+      ],
+      "others": [
+        52,
+        39
+      ]
+    }
+  }
 }

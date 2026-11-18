@@ -44,7 +44,7 @@ make bundle    # 生成可独立编译的投稿源码包
 | 6 | 候选视角生成 | `视角选择.png` | `fig06_viewpoint_generation/` |
 | 7 | 联合规划与轨迹生成 | `联合规划_1.png` | `fig07_joint_planning/` |
 | 8 | Habitat 执行示例 | `habitat_long_instruction_en.png` | `fig09_habitat_execution/` |
-| 9 | 多场景真机实验：居家多目标、实验室三目标及桌面目标搜索 | `real_world_fig8_style.pdf` | `fig09_11_real_world/` |
+| 9 | 多场景真机实验：居家多目标、实验室三目标及台球桌书包搜索 | `real_world_fig8_style.pdf` | `fig09_11_real_world/四场景重绘/rgb_inset_draft/` |
 
 `final/` 是正文引用图件的唯一入口。源目录里的草稿、预览和新变体不会自动替换定稿。
 Fig. 4 最新的单行四幅工作稿位于 `fig04_room_partitioning/single_row/`；第二层倾斜分区及 SAM 3.1 目标框叠加图位于 `fig04_room_partitioning/oblique_l2/`。

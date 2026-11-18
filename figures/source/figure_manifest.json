@@ -66,9 +66,32 @@
   {
     "number": 9,
     "final": "figures/final/real_world_fig8_style.pdf",
-    "source": "figures/source/fig09_11_real_world",
-    "original_source": "User-provided file: figures/final/多个真机实验(2).pdf",
-    "final_sha256": "4a72910411f88750b8ad772f6c7a024e85e25d013ce17dc28d2dacae91267446",
-    "regeneration_dependencies": "Four-row real-world execution figure; editable generation script and frames are in source/fig09_11_real_world/四场景重绘/."
+    "source": "figures/source/fig09_11_real_world/四场景重绘/rgb_inset_draft",
+    "original_source": "Three-row Fig. 9 approved by user on 2026-11-11; see source_manifest_enhanced.json and IMAGEGEN_PROMPTS.md in the source directory.",
+    "final_sha256": "4a172473b320300923880b83c311bb1fd1e86f8d145cdb0fde9d88deca793703",
+    "regeneration_dependencies": "Source scripts build.py and prepare_local_brightness.py, cached photographs, segmentation masks, and visual-enhancement assets under assets/. Raw RGB recordings are external; the installed PDF builds portably without them.",
+    "installed_on": "2026-11-11",
+    "instruction_font_at_manuscript_placement": "8 TeX pt, matching figure caption",
+    "inset_label_font_at_manuscript_placement": "6 TeX pt; full names on one line inside each inset",
+    "inset_label_style": "6 TeX pt, single line inside upper left of inset; bright yellow #FFF04D with black outline",
+    "target_outline_style": "Light blue #80F0FF, approximately 1 PDF pt after placement, with narrow dark #0C2330 outer edge",
+    "inset_sizes_source_pt": {
+      "electric_steamer": [
+        80,
+        60
+      ],
+      "bottled_water": [
+        66,
+        49.5
+      ],
+      "cups": [
+        57,
+        42.75
+      ],
+      "others": [
+        52,
+        39
+      ]
+    }
   }
 ]

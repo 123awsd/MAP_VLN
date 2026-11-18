@@ -10,3 +10,14 @@ __pycache__/
 *.fls
 *.fdb_latexmk
 *.xdv
+
+# Local Blender scenes for Figure 7
+/figures/source/fig07_joint_planning/fig7_home_p3_canonical.blend
+/figures/source/fig07_joint_planning/fig7_home_p3_scene.blend
+/figures/source/fig07_joint_planning/home_p3_3d_work/conditional_minco_draft.blend
+/figures/source/fig07_joint_planning/home_p3_3d_work/conditional_oblique_view.blend
+/figures/source/fig07_joint_planning/home_p3_3d_work/start_d3_astar_raw.blend
+/figures/source/fig07_joint_planning/home_p3_3d_work/start_d3_astar_view.blend
+/figures/source/fig07_joint_planning/home_p3_3d_work/start_room_astar_raw.blend
+/figures/source/fig07_joint_planning/home_p3_3d_work/start_room_astar_view.blend
+/figures/source/fig07_joint_planning/home_p3_3d_work/target_selection_draft.blend
