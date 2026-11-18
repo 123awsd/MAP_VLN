@@ -14,7 +14,7 @@
 \title{LogicFly: Language-Guided Aerial Navigation with Conditional Task Graphs and Joint Task--Viewpoint Planning}
 \author{Anonymous Author(s)}
 \markboth{IEEE Transactions on Automation Science and Engineering}{Anonymous Author(s): LogicFly}
-\raggedbottom
+\flushbottom
 \begin{document}
 \bstctlcite{IEEEexample:BSTcontrol}
 \maketitle
@@ -93,7 +93,7 @@ Inner Monologue~\cite{huang2023innermonologue} addresses this execution gap by i
 \section{System Overview}
 \label{sec:system-overview}
 
-The proposed LogicFly framework is illustrated in Fig.~\ref{fig:overview}. The system comprises four modules: autonomous exploration and mapping, conditional task graph construction, joint task--viewpoint planning, and execution with observation-driven recovery. The exploration and mapping module constructs a reusable hierarchical semantic--geometric map containing navigable space, semantic regions, and object instances (Section~IV-A). Given a natural-language instruction and this map, the CPTG module performs language parsing and semantic grounding to identify subtasks, establish mandatory precedence relations and conditional branches, and determine the currently executable task set (Section~IV-B). The JTVP module receives these executable tasks and the current UAV state. It generates candidate three-dimensional observation poses, evaluates their observation quality and travel costs, and jointly selects task order and observation viewpoints within a bounded receding horizon (Sections~IV-C and~IV-D). The selected route is then refined into a smooth trajectory under safe-corridor constraints (Section~IV-E). The execution module follows the trajectory to the first planned observation pose and verifies the requested task outcome using onboard observations. Successful verification advances task execution, while unsuccessful observations are handled according to the task policy through local viewpoint reinspection, semantic-region search, or a resolved negative outcome (Section~IV-F). The resulting evidence updates the task and semantic search states, activates or skips conditional tasks, and returns the updated executable task set to JTVP for replanning until the instruction is completed or a stopping condition is reached.
+\looseness=4 The proposed LogicFly framework is illustrated in Fig.~\ref{fig:overview}. The system comprises four modules: autonomous exploration and mapping, conditional task graph construction, joint task--viewpoint planning, and execution with observation-driven recovery. The exploration and mapping module constructs a reusable hierarchical semantic--geometric map containing navigable space, semantic regions, and object instances (Section~IV-A). Given a natural-language instruction and this map, the CPTG module performs language parsing and semantic grounding to identify subtasks, establish mandatory precedence relations and conditional branches, and determine the currently executable task set (Section~IV-B). The JTVP module receives these executable tasks and the current UAV state. It generates candidate three-dimensional observation poses, evaluates their observation quality and travel costs, and jointly selects task order and observation viewpoints within a bounded receding horizon (Sections~IV-C and~IV-D). The selected route is then refined into a smooth trajectory under safe-corridor constraints (Section~IV-E). The execution module follows the trajectory to the first planned observation pose and verifies the requested task outcome using onboard observations. Successful verification advances task execution, while unsuccessful observations are handled according to the task policy through local viewpoint reinspection, semantic-region search, or a resolved negative outcome (Section~IV-F). The resulting evidence updates the task and semantic search states, activates or skips conditional tasks, and returns the updated executable task set to JTVP for replanning until the instruction is completed or a stopping condition is reached.
 
 \section{METHODOLOGY}
 \label{sec:methodology}
@@ -317,8 +317,7 @@ The joint planning problem in~\eqref{eq:jtvp} is solved using subset dynamic pro
 D(\{i\},i,k)&=c_t(\mathbf{q}_0,\mathbf{q}_i^k),
 \label{eq:dp-init}\\
 D(S\cup\{j\},j,\ell)&=
-\min_{\substack{i\in S,\,k\in\mathcal K_{i,t}}}\notag\\
-&\quad\left[D(S,i,k)+c_t(\mathbf{q}_i^k,\mathbf{q}_j^\ell)\right],
+\min_{\substack{i\in S\\ k\in\mathcal K_{i,t}}}\!\bigl[D(S,i,k)+c_t(\mathbf{q}_i^k,\mathbf{q}_j^\ell)\bigr],
 \label{eq:dp-recurrence}\\
 J_t^\star&=\min_{\substack{i\in\mathcal W_t,\,k\in\mathcal K_{i,t}}}
 D(\mathcal W_t,i,k).
@@ -600,7 +599,7 @@ Figure~\ref{fig:real-world-environments} shows representative multi-target inspe
 We presented \textbf{LogicFly}, a language-guided aerial navigation framework built around CPTG and JTVP. CPTG separates precedence and observation-triggered branches; JTVP selects task order and observation poses with 3D path and terminal costs within a bounded window. Verification and constrained recovery update subsequent decisions.
 
 Across 854 episodes, LogicFly achieves 96.96\% strict full-task SR and 0.8394 SPL, including 96.70\% multi-target SR. Ablations verify CPTG's role in complex task logic. Compared with fixed task order and primary viewpoints, JTVP raises SPL from 76.82\% to 82.15\% and reduces successful-task CT from 12.62 s to 11.79 s at unchanged SR. Semantic recovery achieves 80.0\% SR versus 0\% without it on cross-region tasks, demonstrating its effectiveness under incorrect target-location priors. Deployment on a custom quadrotor further demonstrates multi-target execution with logical dependencies in real indoor rooms. These results advance VLN toward efficient closed-loop execution of logically complex missions.
-\IEEEtriggeratref{30}
+\IEEEtriggeratref{26}
 \bibliographystyle{IEEEtran}
 \bibliography{references}
 \end{document}
