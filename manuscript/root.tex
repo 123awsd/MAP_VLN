@@ -456,13 +456,6 @@ For a required target-absence judgment, the frozen search-anchor center is used 
 \textbf{Baselines.}
 We compare four map-based and spatial-reasoning methods. OneMap~\cite{busch2025onemap} queries a real-time open-vocabulary feature map for multi-object navigation. MapGPT~\cite{chen2024mapgpt} uses map-guided LLM prompting and adaptive route planning. SpatialGPT~\cite{jiang2025spatialgpt} applies spatial chain-of-thought reasoning over structured memory. SpatialNav~\cite{zhang2026spatialnav} uses object-relation scene graphs for zero-shot navigation.
 
-\begin{figure*}[t]
-\centering
-\includegraphics[width=\textwidth]{habitat_long_instruction_en.png}
-\caption{Examples of long-instruction execution in Habitat. Each row pairs a natural-language instruction with the corresponding sequence of first-person observations, covering freely ordered subtasks and observation-dependent search or verification.}
-\label{fig:simulation-execution}
-\end{figure*}
-
 \textbf{Implementation details.}
 LogicFly first compiles each instruction into a conditional and precedence-constrained task graph, which is subsequently executed by the proposed task-graph runner. Reusable semantic maps are constructed from registered RGB-D observations. The mapping front end uses SAM~3.1 in image mode with a fixed vocabulary of 30 indoor object categories and a confidence threshold of $0.50$. Video tracking is disabled. Boxer lifts the accepted masks into 3-D and performs multi-view instance fusion using an IoU threshold of $0.20$, an instance-confidence threshold of $0.45$, and a minimum of four observations. During task execution, online object evidence is obtained from calibrated RGB-D observations using open-vocabulary recognition and is projected into the world frame using the estimated camera pose and aligned depth.
 
@@ -506,6 +499,13 @@ As shown in Table~\ref{tab:main}, LogicFly outperforms the compared methods acro
 
 \textbf{Execution with more subtasks.}
 In an additional cross-floor simulation in scene 00337, LogicFly completes all 15 subtasks of a single natural-language instruction in one mission. With the same fixed planning horizon $H=3$, language parsing and native navigation share a 240 s deadline; the complete run takes 148.96 s, including 59.24 s for parsing and 89.72 s for navigation. The 95th-percentile planning-call latency is 7.95 s. This run demonstrates completion beyond the planning-window size without a timeout; it is a single-run scalability demonstration rather than an estimate of the maximum supported task count.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{habitat_long_instruction_en.png}
+\caption{Examples of long-instruction execution in Habitat. Each row pairs a natural-language instruction with the corresponding sequence of first-person observations, covering freely ordered subtasks and observation-dependent search or verification.}
+\label{fig:simulation-execution}
+\end{figure*}
 
 Figure~\ref{fig:simulation-execution} presents a qualitative execution example in a three-floor Habitat environment. LogicFly completes the cross-floor route and all required subtasks, with terminal views providing visual evidence for each successful outcome.
 
