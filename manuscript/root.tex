@@ -14,7 +14,7 @@
 \title{LogicFly: Language-Guided Aerial Navigation with Conditional Task Graphs and Joint Task--Viewpoint Planning}
 \author{Anonymous Author(s)}
 \markboth{IEEE Transactions on Automation Science and Engineering}{Anonymous Author(s): LogicFly}
-\flushbottom
+\raggedbottom
 \begin{document}
 \bstctlcite{IEEEexample:BSTcontrol}
 \maketitle
@@ -502,7 +502,7 @@ In an additional cross-floor simulation in scene 00337, LogicFly completes all 1
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=\textwidth]{habitat_long_instruction_en.png}
+\includegraphics[width=0.89\textwidth]{habitat_long_instruction_en.png}
 \caption{Examples of long-instruction execution in Habitat. Each row pairs a natural-language instruction with the corresponding sequence of first-person observations, covering freely ordered subtasks and observation-dependent search or verification.}
 \label{fig:simulation-execution}
 \end{figure*}
@@ -517,7 +517,6 @@ All baselines retain their native planning, action, and stopping interfaces. One
 
 
 
-\FloatBarrier
 \subsection{Ablation Studies}
 
 
@@ -599,7 +598,7 @@ Figure~\ref{fig:real-world-environments} shows representative multi-target inspe
 We presented \textbf{LogicFly}, a language-guided aerial navigation framework built around CPTG and JTVP. CPTG separates precedence and observation-triggered branches; JTVP selects task order and observation poses with 3D path and terminal costs within a bounded window. Verification and constrained recovery update subsequent decisions.
 
 Across 854 episodes, LogicFly achieves 96.96\% strict full-task SR and 0.8394 SPL, including 96.70\% multi-target SR. Ablations verify CPTG's role in complex task logic. Compared with fixed task order and primary viewpoints, JTVP raises SPL from 76.82\% to 82.15\% and reduces successful-task CT from 12.62 s to 11.79 s at unchanged SR. Semantic recovery achieves 80.0\% SR versus 0\% without it on cross-region tasks, demonstrating its effectiveness under incorrect target-location priors. Deployment on a custom quadrotor further demonstrates multi-target execution with logical dependencies in real indoor rooms. These results advance VLN toward efficient closed-loop execution of logically complex missions.
-\IEEEtriggeratref{26}
+\IEEEtriggeratref{27}
 \bibliographystyle{IEEEtran}
 \bibliography{references}
 \end{document}
