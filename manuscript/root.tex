@@ -159,19 +159,20 @@ d(\mathbf{x})>\tau_c\right\},
 \end{equation}
 where $\tau_c$ is the interior-clearance threshold in~\eqref{eq:room-core} and is specified in Experimental Setup. Connected components smaller than $A_{\min}$ are discarded, with $A_{\min}$ fixed in Experimental Setup. Each retained core is a spatial marker rather than a semantic room label. Marker-controlled watershed propagation runs on $-d$ with grid-connected, multi-source priority-queue flooding and is restricted to $\Omega$; it therefore stops at wall barriers and unsupported boundaries, while low-clearance connections become bottlenecks between competing cores. A small enclosed region is merged into its sole labeled neighbor only when its boundary wall support is weak and it does not border unsupported open space. A supported connected component without a marker remains untyped rather than receiving an artificial seed.
 
-Room categories are assigned only after geometry: measured RGB frames whose camera positions lie in a region are paired with that region's fused 3D objects and passed to a multimodal language model acting as a classifier over a fixed set of room categories. The frame-count setting is given in Experimental Setup. Insufficient evidence yields ``unknown'', and the classifier cannot change the room boundary or occupancy map. Figure~\ref{fig:room-segmentation} summarizes the room-partitioning pipeline, from the input point cloud through wall and room-core extraction to the final partition. The resulting room regions group fused object instances under semantic categories while preserving the independently measured occupancy geometry.
-
-Together, object fusion and room partitioning form the reusable semantic hierarchy, while the geometric map provides free-space and connectivity information for task grounding, planning, and recovery.
-
-\subsection{Conditional Partial-Order Task Graph}
-\label{sec:cptg}
-
+% Queue this double-column float so it appears above the IV-B discussion.
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{conditional_task_graph.pdf}
 \caption{From a natural-language instruction to a CPTG. The task parser constructs task nodes with navigation anchors, semantic targets, and verification predicates; precedence and conditional edges encode mandatory ordering and observation-dependent activation.}
 \label{fig:cptg}
 \end{figure*}
+
+Room categories are assigned only after geometry: measured RGB frames whose camera positions lie in a region are paired with that region's fused 3D objects and passed to a multimodal language model acting as a classifier over a fixed set of room categories. The frame-count setting is given in Experimental Setup. Insufficient evidence yields ``unknown'', and the classifier cannot change the room boundary or occupancy map. Figure~\ref{fig:room-segmentation} summarizes the room-partitioning pipeline, from the input point cloud through wall and room-core extraction to the final partition. The resulting room regions group fused object instances under semantic categories while preserving the independently measured occupancy geometry.
+
+Together, object fusion and room partitioning form the reusable semantic hierarchy, while the geometric map provides free-space and connectivity information for task grounding, planning, and recovery.
+
+\subsection{Conditional Partial-Order Task Graph}
+\label{sec:cptg}
 
 CPTG represents the instruction as subtasks with mandatory dependencies and observation-dependent branches, providing the executable task set for planning.
 
