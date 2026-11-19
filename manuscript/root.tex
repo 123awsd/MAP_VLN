@@ -14,7 +14,6 @@
 \title{LogicFly: Language-Guided Aerial Navigation with Conditional Task Graphs and Joint Task--Viewpoint Planning}
 \author{Anonymous Author(s)}
 \markboth{IEEE Transactions on Automation Science and Engineering}{Anonymous Author(s): LogicFly}
-\raggedbottom
 \begin{document}
 \bstctlcite{IEEEexample:BSTcontrol}
 \maketitle
@@ -398,6 +397,7 @@ Open-vocabulary detections are lifted into the global frame using depth and came
 
 For tasks configured for semantic recovery, LogicFly distinguishes three levels of negative evidence. A \textbf{pose-level miss} removes the attempted candidate while keeping the task active. \textbf{Region-level exhaustion} invokes the language model with the target, mapped room/object inventory, and failed search anchors to propose alternative room--functional-region hypotheses grounded in the hierarchy; the hypotheses must reference existing room and object IDs and pass deterministic validation before becoming geometric observation regions and are ranked using semantic relevance, coverage, and travel cost. When a room-centered observation is insufficient, the recovery search adds reachable boundary viewpoints oriented toward the room walls. A \textbf{task-level negative outcome} is produced when the task-specific stopping condition is reached, after which CPTG updates downstream logic. Within semantic recovery, newly covered portions of an unproductive region reduce its belief, shifting search toward alternative hypotheses.
 
+{\interdisplaylinepenalty=0 \predisplaypenalty=0
 For a semantic recovery region $r$, let $\mathcal P_r$ be its fixed sample set and $\mathcal O_{r,n}$ the samples already covered before verification $n$, initialized as $\mathcal O_{r,0}=\varnothing$. With visible samples $\mathcal V_r(\mathbf q_n)$, define
 \begin{equation}
 \begin{aligned}[b]
@@ -407,6 +407,7 @@ For a semantic recovery region $r$, let $\mathcal P_r$ be its fixed sample set a
 \end{aligned}
 \label{eq:recovery-coverage}
 \end{equation}
+}
 The task-local confidence $b_{r,0}$ is initialized from semantic relevance: high, medium, low, and fallback hypotheses receive $1.0$, $0.6$, $0.3$, and $0.15$. Registration preserves an existing region's accumulated state. If $y_n\in\{0,1\}$ indicates successful target verification and $Q_r(\mathbf q_n)$ is geometric view quality, the update is
 \begin{equation}
 b_{r,n+1}=
@@ -566,7 +567,6 @@ Success requires exhausting the initial local search, leaving that region, and c
 
 Table~\ref{tab:recovery-ablation} shows that LogicFly succeeds in 48 of 60 episodes, whereas removing semantic recovery reduces SR to zero. All 60 full-method episodes trigger recovery after local search exhaustion; eight tasks succeed in every starting state and repetition. The full method achieves an SPL of 53.46\% and a successful-task CT of 14.03~s. Of its 12 unsuccessful episodes, six end without resolving the search and six report completion without passing the true-target geometric check. Semantic recovery relies on language-model reasoning about target--room associations. When actual target placement deviates from these associations, the search prioritizes semantically relevant but target-free regions, leaving the true target location unexplored within the bounded search budget. All 120 episodes finish without infrastructure failures or timeouts. These results demonstrate that semantic recovery enables cross-region search after local failure and substantially improves task completion when the initial target-location prior is incorrect.
 
-\FloatBarrier
 \subsection{Evaluation in Real-World Environments}
 
 \begin{figure*}[!tb]
