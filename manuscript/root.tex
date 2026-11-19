@@ -81,15 +81,15 @@ Inner Monologue~\cite{huang2023innermonologue} addresses this execution gap by i
 
 
 
+\section{System Overview}
+\label{sec:system-overview}
+
 \begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{systemoverview.pdf}
 \caption{Overview of LogicFly. A natural-language instruction and an autonomously explored hierarchical semantic--geometric representation are converted into a CPTG and an executable task set. JTVP jointly selects task order and 3D observation poses within a receding horizon. The first planned visit is then executed and verified online; the resulting observations update the task and search states, revise semantic map priors, and trigger recovery and replanning when necessary.}
 \label{fig:overview}
 \end{figure*}
-
-\section{System Overview}
-\label{sec:system-overview}
 
 \looseness=4 The proposed LogicFly framework is illustrated in Fig.~\ref{fig:overview}. The system comprises four modules: autonomous exploration and mapping, conditional task graph construction, joint task--viewpoint planning, and execution with observation-driven recovery. The exploration and mapping module constructs a reusable hierarchical semantic--geometric map containing navigable space, semantic regions, and object instances (Section~IV-A). Given a natural-language instruction and this map, the CPTG module performs language parsing and semantic grounding to identify subtasks, establish mandatory precedence relations and conditional branches, and determine the currently executable task set (Section~IV-B). The JTVP module receives these executable tasks and the current UAV state. It generates candidate three-dimensional observation poses, evaluates their observation quality and travel costs, and jointly selects task order and observation viewpoints within a bounded receding horizon (Sections~IV-C and~IV-D). The selected route is then refined into a smooth trajectory under safe-corridor constraints (Section~IV-E). The execution module follows the trajectory to the first planned observation pose and verifies the requested task outcome using onboard observations. Successful verification advances task execution, while unsuccessful observations are handled according to the task policy through local viewpoint reinspection, semantic-region search, or a resolved negative outcome (Section~IV-F). The resulting evidence updates the task and semantic search states, activates or skips conditional tasks, and returns the updated executable task set to JTVP for replanning until the instruction is completed or a stopping condition is reached.
 
@@ -159,19 +159,19 @@ d(\mathbf{x})>\tau_c\right\},
 \end{equation}
 where $\tau_c$ is the interior-clearance threshold in~\eqref{eq:room-core} and is specified in Experimental Setup. Connected components smaller than $A_{\min}$ are discarded, with $A_{\min}$ fixed in Experimental Setup. Each retained core is a spatial marker rather than a semantic room label. Marker-controlled watershed propagation runs on $-d$ with grid-connected, multi-source priority-queue flooding and is restricted to $\Omega$; it therefore stops at wall barriers and unsupported boundaries, while low-clearance connections become bottlenecks between competing cores. A small enclosed region is merged into its sole labeled neighbor only when its boundary wall support is weak and it does not border unsupported open space. A supported connected component without a marker remains untyped rather than receiving an artificial seed.
 
-\begin{figure*}[t]
-\centering
-\includegraphics[width=\textwidth]{conditional_task_graph.pdf}
-\caption{From a natural-language instruction to a CPTG. The task parser constructs task nodes with navigation anchors, semantic targets, and verification predicates; precedence and conditional edges encode mandatory ordering and observation-dependent activation.}
-\label{fig:cptg}
-\end{figure*}
-
 Room categories are assigned only after geometry: measured RGB frames whose camera positions lie in a region are paired with that region's fused 3D objects and passed to a multimodal language model acting as a classifier over a fixed set of room categories. The frame-count setting is given in Experimental Setup. Insufficient evidence yields ``unknown'', and the classifier cannot change the room boundary or occupancy map. Figure~\ref{fig:room-segmentation} summarizes the room-partitioning pipeline, from the input point cloud through wall and room-core extraction to the final partition. The resulting room regions group fused object instances under semantic categories while preserving the independently measured occupancy geometry.
 
 Together, object fusion and room partitioning form the reusable semantic hierarchy, while the geometric map provides free-space and connectivity information for task grounding, planning, and recovery.
 
 \subsection{Conditional Partial-Order Task Graph}
 \label{sec:cptg}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{conditional_task_graph.pdf}
+\caption{From a natural-language instruction to a CPTG. The task parser constructs task nodes with navigation anchors, semantic targets, and verification predicates; precedence and conditional edges encode mandatory ordering and observation-dependent activation.}
+\label{fig:cptg}
+\end{figure*}
 
 CPTG represents the instruction as subtasks with mandatory dependencies and observation-dependent branches, providing the executable task set for planning.
 
@@ -204,7 +204,7 @@ Observation and motion modeling converts executable tasks into feasible camera p
 
 For each executable task $i$, its navigation anchor and spatial constraints define a task-specific 3D observation region, such as an object, support surface, surrounding area, lower region, or relation-defined area.
 
-\begin{figure}[!t]
+\begin{figure}[!ht]
 \centering
 \includegraphics[width=\columnwidth]{视角选择.png}
 \caption{Viewpoint sampling and filtering for a dining-table target. Sampled poses are rejected when occluded or collision-prone; the remaining feasible views are retained for observation.}
@@ -266,7 +266,13 @@ For candidate poses $\mathbf{q}_a$ and $\mathbf{q}_b$, a 3D A$^*$ query returns 
 \end{subequations}
 Here, $v_{\mathrm{nom}}>0$ is a nominal speed along the three-dimensional polyline in~\eqref{eq:motion-time}, while $v_z>0$ and $\omega_\psi>0$ set nominal climb and yaw rates. The wrap operator returns an angle in $[-\pi,\pi)$. The maximum models concurrent translation and yaw as a ranking heuristic, not the duration of the optimized trajectory. Cross-floor detours and intermediate ascents or descents contribute to $L_t$; the second term accounts only for net altitude change. Acceleration, intermediate vertical-rate constraints, and observation dwell are handled during execution rather than predicted by this proxy. Unreachable transitions have $L_t=\widehat T_t=+\infty$.
 
-\begin{figure}[!t]
+The resulting candidate sets and observation scores describe where each task can be inspected, while path lengths and motion-time estimates quantify travel between candidates. These quantities provide the inputs to JTVP.
+
+
+
+\subsection{Receding-Horizon Joint Task--Viewpoint Planning}
+
+\begin{figure}[!ht]
 \centering
 \includegraphics[width=\columnwidth]{联合规划_1.png}
 \caption{Joint task--viewpoint planning and trajectory refinement. After an observation returns no target, the planner replans and produces a collision-free trajectory guided by A*.}
@@ -274,12 +280,6 @@ Here, $v_{\mathrm{nom}}>0$ is a nominal speed along the three-dimensional polyli
 \end{figure}
 
 Figure~\ref{fig:jtvp-illustration} shows A*-guided trajectory refinement after a negative observation, including route replanning and trajectory optimization.
-
-The resulting candidate sets and observation scores describe where each task can be inspected, while path lengths and motion-time estimates quantify travel between candidates. These quantities provide the inputs to JTVP.
-
-
-
-\subsection{Receding-Horizon Joint Task--Viewpoint Planning}
 
 
 
