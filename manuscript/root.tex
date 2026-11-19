@@ -453,6 +453,24 @@ where $S_e\in\{0,1\}$ is strict task success and $L_e$ is the sum of three-dimen
 
 For a required target-absence judgment, the frozen search-anchor center is used as the reference endpoint, with the planner's nearest-free-voxel adjustment. These episodes are therefore included when that anchor yields a valid reference route. No unique endpoint or no feasible reference route makes SPL undefined. For applicable episodes, failures and timeouts contribute zero; the denominator is the number of applicable episodes, not the number of successful episodes. The recorded LogicFly results have 854 applicable episodes in Table~\ref{tab:main}, including 54 target-absence episodes, and all 546 multi-target episodes are applicable in Table~\ref{tab:ablation}. Under the implemented numerical convention, $L_e^{\mathrm{ref}}=0$ yields zero even if $L_e=0$; otherwise~\eqref{eq:task-spl} lies in $[0,1]$. Group scores are arithmetic means over their applicable episodes.
 
+\begin{table*}[!t]
+\caption{Benchmark results grouped by task difficulty and floor scope. The clean schedule contains 270 single-floor and 38 cross-floor single-target episodes, and 364 single-floor and 182 cross-floor multi-target episodes. SR and SPL are percentages; CT is averaged over successful episodes. Dashes omit SPL and CT when no episode succeeds. OneMap uses its ordered-category projection. Bold denotes the best result in each task group.}
+\label{tab:main}\centering\small\renewcommand{\arraystretch}{1.15}
+\begin{tabular*}{0.94\textwidth}{@{\extracolsep{\fill}}llcccccc@{}}\toprule
+\raisebox{-8pt}[0pt][0pt]{Task type}&\raisebox{-8pt}[0pt][0pt]{Method}&\multicolumn{3}{c}{Single-floor}&\multicolumn{3}{c}{Cross-floor}\\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}
+&&SR$\uparrow$ (\%)&SPL$\uparrow$ (\%)&CT$\downarrow$ (s)&SR$\uparrow$ (\%)&SPL$\uparrow$ (\%)&CT$\downarrow$ (s)\\\midrule
+\raisebox{-22.9pt}[0pt][0pt]{Single-target}&SpatialNav&8.15&5.89&22.35&0.00&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}\\
+&SpatialGPT&10.37&2.69&115.39&0.00&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}\\
+&MapGPT&27.78&14.35&42.95&18.42&13.08&81.57\\
+&OneMap&52.59&35.45&77.32&21.05&20.30&49.88\\
+&LogicFly&\textbf{97.78}&\textbf{87.28}&\textbf{8.19}&\textbf{94.74}&\textbf{86.03}&\textbf{8.99}\\\midrule
+\raisebox{-11.45pt}[0pt][0pt]{Multi-target}&MapGPT&1.10&0.73&96.02&0.00&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}\\
+&OneMap&12.36&8.16&150.13&6.59&6.59&90.59\\
+&LogicFly&\textbf{96.70}&\textbf{82.49}&\textbf{10.33}&\textbf{96.70}&\textbf{81.45}&\textbf{14.70}\\\bottomrule
+\end{tabular*}
+\end{table*}
+
 \textbf{Baselines.}
 We compare four map-based and spatial-reasoning methods. OneMap~\cite{busch2025onemap} queries a real-time open-vocabulary feature map for multi-object navigation. MapGPT~\cite{chen2024mapgpt} uses map-guided LLM prompting and adaptive route planning. SpatialGPT~\cite{jiang2025spatialgpt} applies spatial chain-of-thought reasoning over structured memory. SpatialNav~\cite{zhang2026spatialnav} uses object-relation scene graphs for zero-shot navigation.
 
@@ -474,24 +492,6 @@ Each evaluation process is subject to a fixed time limit of 240 s. A timeout or 
 
 \subsection{Comparison with Baseline Methods in Simulation}
 We compare LogicFly with HM3D adaptations of OneMap~\cite{busch2025onemap}, MapGPT~\cite{chen2024mapgpt}, SpatialGPT~\cite{jiang2025spatialgpt}, and SpatialNav~\cite{zhang2026spatialnav}. All methods run on the same 854-episode clean schedule. OneMap retains its native ordered-category projection, which omits relations, conditional branches, verified absence, recovery, and return constraints. All baselines and LogicFly are evaluated using the same frozen strict full-task evaluator. SpatialGPT and SpatialNav do not successfully complete any cross-floor episode, resulting in an SR of 0\%; therefore, their remaining cross-floor metrics are not reported.
-
-\begin{table*}[!t]
-\caption{Benchmark results grouped by task difficulty and floor scope. The clean schedule contains 270 single-floor and 38 cross-floor single-target episodes, and 364 single-floor and 182 cross-floor multi-target episodes. SR and SPL are percentages; CT is averaged over successful episodes. Dashes omit SPL and CT when no episode succeeds. OneMap uses its ordered-category projection. Bold denotes the best result in each task group.}
-\label{tab:main}\centering\small\renewcommand{\arraystretch}{1.15}
-\begin{tabular*}{0.94\textwidth}{@{\extracolsep{\fill}}llcccccc@{}}\toprule
-\raisebox{-8pt}[0pt][0pt]{Task type}&\raisebox{-8pt}[0pt][0pt]{Method}&\multicolumn{3}{c}{Single-floor}&\multicolumn{3}{c}{Cross-floor}\\
-\cmidrule(lr){3-5}\cmidrule(lr){6-8}
-&&SR$\uparrow$ (\%)&SPL$\uparrow$ (\%)&CT$\downarrow$ (s)&SR$\uparrow$ (\%)&SPL$\uparrow$ (\%)&CT$\downarrow$ (s)\\\midrule
-\raisebox{-22.9pt}[0pt][0pt]{Single-target}&SpatialNav&8.15&5.89&22.35&0.00&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}\\
-&SpatialGPT&10.37&2.69&115.39&0.00&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}\\
-&MapGPT&27.78&14.35&42.95&18.42&13.08&81.57\\
-&OneMap&52.59&35.45&77.32&21.05&20.30&49.88\\
-&LogicFly&\textbf{97.78}&\textbf{87.28}&\textbf{8.19}&\textbf{94.74}&\textbf{86.03}&\textbf{8.99}\\\midrule
-\raisebox{-11.45pt}[0pt][0pt]{Multi-target}&MapGPT&1.10&0.73&96.02&0.00&\multicolumn{1}{c}{--}&\multicolumn{1}{c}{--}\\
-&OneMap&12.36&8.16&150.13&6.59&6.59&90.59\\
-&LogicFly&\textbf{96.70}&\textbf{82.49}&\textbf{10.33}&\textbf{96.70}&\textbf{81.45}&\textbf{14.70}\\\bottomrule
-\end{tabular*}
-\end{table*}
 
 As shown in Table~\ref{tab:main}, LogicFly outperforms the compared methods across target counts and floor scopes. On multi-target tasks, it maintains 96.70\% SR on both floor scopes, with SPL of 82.49\% and 81.45\% and CT of 10.33 s and 14.70 s for single-floor and cross-floor episodes, respectively. SpatialGPT and SpatialNav complete no multi-target episodes and are omitted from that block. Overall, LogicFly completes 828/854 episodes (96.96\% strict full-task SR, 0.8394 SPL).
 
