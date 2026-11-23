@@ -17,17 +17,28 @@
 \begin{document}
 \bstctlcite{IEEEexample:BSTcontrol}
 \maketitle
+% Keep the section gaps fixed; let lines share the small column-balancing adjustment.
+\begingroup
+\setlength{\parskip}{0pt}
 \begin{abstract}
+\advance\baselineskip by 0pt plus 1pt\relax
 Long-horizon aerial inspection requires efficient multi-target visits, respect for task dependencies, visual evidence acquisition, and handling missing targets. Existing vision-and-language navigation methods often exhibit low success rates, redundant actions, and limited adaptability in long-horizon, multi-subtask missions. We present LogicFly, a language-guided aerial navigation framework that combines a reusable hierarchical semantic--geometric map with conditional task reasoning and observation-aware planning. A large language model grounds instructions in the map to construct a Conditional Partial-Order Task Graph (CPTG) that separates mandatory precedence from observation-triggered branches and distinguishes navigation anchors from verification targets. Joint Task--Viewpoint Planning (JTVP) jointly optimizes task order and three-dimensional observation poses within a fixed-size receding horizon. By optimizing a bounded task window and executing only the first visit before replanning, LogicFly keeps joint planning computationally tractable while supporting multi-subtask missions. Online verification and language-model-guided semantic-region recovery update task states after observations, while safe-corridor-constrained trajectory optimization supports aerial execution. Across 854 simulation episodes in six indoor scenes, LogicFly achieves 96.96\% strict full-task success and 0.8394 success weighted by path length. A separate simulation completes all 15 subtasks of one instruction within the time budget. Physical UAV experiments demonstrate multi-target execution with conditional logic and recovery in indoor environments.
 \end{abstract}
 
+\vspace{0.375\baselineskip}
 \begin{practitioners}
+\advance\baselineskip by 0pt plus 1pt\relax
 LogicFly is applicable to search tasks in a wide range of indoor environments whose structural layouts remain relatively stable. An operator may issue a long natural-language request containing several checks, mandatory precedence relations, freely ordered subtasks, and observation-dependent alternatives. The framework converts such requests into a conditional partial-order task graph and jointly plans task order and three-dimensional observation viewpoints while respecting task dependencies and conditional branches. Negative visual evidence can trigger bounded semantic-region search and replanning rather than immediate failure. This coordinated planning reduces flight distance while enabling the UAV to acquire task-specific visual evidence. Deployment requires a previously constructed semantic--geometric map, calibrated RGB-D sensing, and localization in the map frame. The demonstrated platform uses an NVIDIA Jetson Orin NX (16 GB), a PX4 flight controller, a Livox Mid-360 LiDAR, and an Intel RealSense D435 depth camera, with FAST-LIO localization. Performance depends on map quality, perception reliability, and the coverage of candidate viewpoints; changes that invalidate the stored map may require renewed exploration or online recovery.
 \end{practitioners}
 
+\vspace{0.375\baselineskip}
 \begin{IEEEkeywords}
+\advance\baselineskip by 0pt plus 1pt\relax
 Aerial robotics, task and motion planning, vision-and-language navigation, semantic mapping.
+% Offset the keywords' trailing space at the foot of the column.
+\vspace{-0.46\baselineskip}
 \end{IEEEkeywords}
+\endgroup
 
 \begin{figure*}[t]
 \centering
