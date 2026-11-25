@@ -5,11 +5,11 @@
     "00166-RaYrxWt5pR1",
     "00070-w7QyjJ3H9Bp"
   ],
-  "paper_updated": false,
-  "typography": "Centered quoted instructions in black; only target nouns are bold. No a/b/c labels or frame captions.",
-  "presentation": "Complete 4:3 camera fields of view, natively replayed at 1600x1200 from recorded poses; no cropping, retouching, upscaling, artificial assets or model-generated pixels. Colored corner marks use the original recorded 640x480 OWLv2 detections, mapped to the same FoV.",
+  "paper_updated": true,
+  "typography": "Centered quoted instructions with bold target nouns, plus bold target names adjacent to the detection boxes.",
+  "presentation": "Complete 4:3 camera fields of view, natively replayed at 1600x1200 from recorded poses; no cropping, retouching, upscaling, artificial assets or model-generated pixels. Green boxes are padded around the recorded 640x480 OWLv2 detections where the panel permits. Yellow target labels are spaced apart from the boxes.",
   "ordering": "Left to right in actual execution order. Selected frames, not equally spaced timestamps.",
-  "replay_manifest_sha256": "8d7d9f2229cfa59668cb4e3f7015f1f003a0eb4ace06fd572ddb359876903abf",
+  "replay_manifest_sha256": "138f3620ca5fcb7832ebd0eed793c319fa4b4b1ba5ef9e8bf380a5a2b506dd0a",
   "episodes": [
     {
       "run": "outputs/stage2_3d/tasks/00337_all_found_showcase_v1_20260830",
@@ -72,6 +72,7 @@
             }
           ],
           "detector_box_selection": "highest recorded score",
+          "target_label_displayed": "Microwave",
           "task_id": "check_microwave_kitchen_l2",
           "outcome": "found",
           "verification_outcome": "found",
@@ -111,6 +112,7 @@
             }
           ],
           "detector_box_selection": "highest recorded score",
+          "target_label_displayed": "Toilet paper",
           "task_id": "check_toilet_paper_bath_l2",
           "outcome": "found",
           "verification_outcome": "found",
@@ -150,6 +152,7 @@
             }
           ],
           "detector_box_selection": "highest recorded score",
+          "target_label_displayed": "Coffee table",
           "task_id": "check_coffee_table_living_l2",
           "outcome": "found",
           "verification_outcome": "found",
@@ -212,6 +215,7 @@
             }
           ],
           "detector_box_selection": "highest recorded score",
+          "target_label_displayed": "TV",
           "task_id": "check_tv_living_l3",
           "outcome": "found",
           "verification_outcome": "found",
@@ -385,6 +389,7 @@
             }
           ],
           "detector_box_selection": "visually reviewed recorded detection 2; coordinates unchanged",
+          "target_label_displayed": "Cushion",
           "task_id": "find_cushion_bedroom_chair",
           "outcome": "found",
           "verification_outcome": "found",
@@ -555,6 +560,7 @@
             }
           ],
           "detector_box_selection": "highest recorded score",
+          "target_label_displayed": "Pillow",
           "task_id": "check_study_pillow",
           "outcome": "found",
           "verification_outcome": "found",
@@ -640,6 +646,7 @@
             }
           ],
           "detector_box_selection": "highest recorded score",
+          "target_label_displayed": "Pillow",
           "task_id": "check_bedroom_pillow",
           "outcome": "found",
           "verification_outcome": "found",
@@ -670,10 +677,10 @@
       }
     }
   ],
-  "generator_sha256": "184f508d8be689bcfdb74d69fe3fa781962d639c9c139eb2292a158269751dcc",
+  "generator_sha256": "a6ad3afc62fa4ddd5a47c6f7244dab2e832c21bc86b7fc1777fb9f953a180ec9",
   "outputs_sha256": {
-    ".svg": "778eeea4865a9366572d7b37ec76b05c9743f28f29be4c35bce6fe489998fee9",
-    ".pdf": "195181e1ad94e687468eb376012f88b6509982aa101c7b0dc95ff21362b5c6a5",
-    ".png": "a5f7d728f67538dc64b96f4b839ad6188cff3b124a59e351784f5a39612125af"
+    ".svg": "a25ac2d346513175723c95d9d0cd7c29fae459a0d78c7c08ba626cd056752446",
+    ".pdf": "b408457a4a037e2733e9e83b2938e4282081d25a640fcd1eb3dc31990912073c",
+    ".png": "ac8a2a32363a35200f5405e2e92d08e7320df274426dd858d4c42782f0e03132"
   }
 }

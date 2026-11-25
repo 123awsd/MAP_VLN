@@ -42,7 +42,7 @@ Aerial robotics, task and motion planning, vision-and-language navigation, seman
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=0.96\textwidth]{真机实验1.pdf}
+\includegraphics[trim=16bp 14bp 9bp 62bp,clip,width=0.96\textwidth]{真机实验1.pdf}
 \caption{Real-world execution of a multi-target instruction by LogicFly. The UAV first fails to detect the laptop at its instructed location, performs semantic recovery, and then verifies the laptop, toolbox, microwave state, and water bottle. The map panel shows the executed route, while numbered views document the recovery and task-verification sequence.}
 \label{fig:real-world-main}
 \end{figure*}
@@ -116,7 +116,7 @@ The proposed LogicFly framework is illustrated in Fig.~\ref{fig:overview}. The s
 \label{fig:semantic-map-construction}
 \end{figure*}
 
-The robot first explores an initially unknown environment and constructs a reusable hierarchical semantic--geometric representation from onboard observations. The geometric component $\mathcal M_g$ records occupied, observed-free, and unknown 3D space, while the semantic component $\mathcal M_s$ organizes floors, rooms, cross-floor transitions, and open-vocabulary object instances in a shared global frame. We use FALCON~\cite{zhang2024falcon} for autonomous aerial exploration; the resulting trajectories support the acquisition of RGB-D observations, camera poses, and occupancy evidence. The updated perception and room modules below convert these observations into auditable object instances and supported room regions without filling unknown space as free or silently assigning it to a room. This representation supplies semantic anchors for task grounding and geometric free space for navigation. Figure~\ref{fig:semantic-map-construction} summarizes its construction from exploration data.
+The robot first explores an initially unknown environment and constructs a reusable hierarchical semantic--geometric representation from onboard observations. The geometric component $\mathcal M_g$ records occupied, observed-free, and unknown 3D space, while the semantic component $\mathcal M_s$ organizes floors, rooms, cross-floor transitions, and open-vocabulary object instances in a shared global frame. We use FALCON~\cite{zhang2024falcon} for autonomous aerial exploration; the resulting trajectories support the acquisition of RGB-D observations, camera poses, and occupancy evidence. The updated perception and room modules below convert these observations into auditable object instances and supported room regions without filling unknown space as free or silently assigning it to a room. This representation supplies semantic anchors for task grounding and geometric free space for navigation. Fig.~\ref{fig:semantic-map-construction} summarizes its construction from exploration data.
 
 \subsubsection{Target Recognition and Multi-View 3D Fusion}
 
@@ -177,7 +177,7 @@ where $\tau_c$ is the interior-clearance threshold in~\eqref{eq:room-core} and i
 \label{fig:cptg}
 \end{figure*}
 
-Room categories are assigned only after geometry: measured RGB frames whose camera positions lie in a region are paired with that region's fused 3D objects and passed to a multimodal language model acting as a classifier over a fixed set of room categories. The frame-count setting is given in Experimental Setup. Insufficient evidence yields ``unknown'', and the classifier cannot change the room boundary or occupancy map. Figure~\ref{fig:room-segmentation} summarizes the room-partitioning pipeline, from the input point cloud through wall and room-core extraction to the final partition. The resulting room regions group fused object instances under semantic categories while preserving the independently measured occupancy geometry.
+Room categories are assigned only after geometry: measured RGB frames whose camera positions lie in a region are paired with that region's fused 3D objects and passed to a multimodal language model acting as a classifier over a fixed set of room categories. The frame-count setting is given in Experimental Setup. Insufficient evidence yields ``unknown'', and the classifier cannot change the room boundary or occupancy map. Fig.~\ref{fig:room-segmentation} summarizes the room-partitioning pipeline, from the input point cloud through wall and room-core extraction to the final partition. The resulting room regions group fused object instances under semantic categories while preserving the independently measured occupancy geometry.
 
 Together, object fusion and room partitioning form the reusable semantic hierarchy, while the geometric map provides free-space and connectivity information for task grounding, planning, and recovery.
 
@@ -191,7 +191,7 @@ Given a natural-language instruction $I$, the system constructs a \textbf{Condit
 \mathcal G_T=(\mathcal V,\mathcal E_{\mathrm{prec}},\mathcal R_{\mathrm{cond}}),
 \label{eq:cptg-definition}
 \end{equation}
-where $\mathcal V$ denotes language-grounded subtasks, $\mathcal E_{\mathrm{prec}}$ specifies mandatory precedence relations, and $\mathcal R_{\mathrm{cond}}$ contains observation-dependent activation and skip rules. Each task in~\eqref{eq:cptg-definition} stores its action, semantic target, navigation anchor, verification predicate, spatial constraints, room/floor scope, prerequisites, and search policy. The language model produces these fields as structured JSON from the instruction and map inventory. Before execution, the graph is rejected if entity references are invalid, dependencies are inconsistent, or the precedence relation contains a cycle. Figure~\ref{fig:cptg} illustrates the resulting task representation.
+where $\mathcal V$ denotes language-grounded subtasks, $\mathcal E_{\mathrm{prec}}$ specifies mandatory precedence relations, and $\mathcal R_{\mathrm{cond}}$ contains observation-dependent activation and skip rules. Each task in~\eqref{eq:cptg-definition} stores its action, semantic target, navigation anchor, verification predicate, spatial constraints, room/floor scope, prerequisites, and search policy. The language model produces these fields as structured JSON from the instruction and map inventory. Before execution, the graph is rejected if entity references are invalid, dependencies are inconsistent, or the precedence relation contains a cycle. Fig.~\ref{fig:cptg} illustrates the resulting task representation.
 
 
 
@@ -256,7 +256,7 @@ d_i^{\mathrm{between}}(\mathbf q)
 \end{equation}
 The first term is zero when $\mathcal B_i$ is empty; it compares alternative anchors and is constant across views of the same anchor. The second term is used only for a ``between'' relation with two distinct reference centers and is the distance to their closed line segment. Let $\mathbf h=\mathbf c_{b_2,xy}-\mathbf c_{b_1,xy}$ and $u=(\mathbf x(\mathbf q)-\mathbf c_{b_1,xy})^{\mathsf T}\mathbf h/\|\mathbf h\|_2^2$ be the normalized projection parameter; the hard filter requires $u\in[-0.05,1.05]$ and segment distance at most $\max(0.75\,\mathrm m,d_{i,\max}/2)$, where $d_{i,\max}$ is the maximum sampling standoff. Coincident reference centers are rejected. Other inapplicable terms are zero. The reference length $\ell_0$ makes~\eqref{eq:view-cost} dimensionless. Hard feasibility is enforced before scoring, so a low soft cost cannot compensate for an unsafe or unobservable pose. All weights are nonnegative and given in Section~V-A. The retained set $\mathcal Q_i=\{\mathbf q_i^1,\ldots,\mathbf q_i^{K_i}\}$ preserves diverse feasible viewpoints.
 
-Figure~\ref{fig:viewpoint-generation} illustrates the sampling and feasibility-filtering process.
+Fig.~\ref{fig:viewpoint-generation} illustrates the sampling and feasibility-filtering process.
 
 
 
@@ -275,7 +275,7 @@ For candidate poses $\mathbf{q}_a$ and $\mathbf{q}_b$, a 3D A$^*$ query returns 
 \label{eq:motion-time}
 \end{align}
 \end{subequations}
-Here, $v_{\mathrm{nom}}>0$ is a nominal speed along the three-dimensional polyline in~\eqref{eq:motion-time}, while $v_z>0$ and $\omega_\psi>0$ set nominal climb and yaw rates. The wrap operator returns an angle in $[-\pi,\pi)$. The maximum models concurrent translation and yaw as a ranking heuristic, not the duration of the optimized trajectory. Cross-floor detours and intermediate ascents or descents contribute to $L_t$; the second term accounts only for net altitude change. Acceleration, intermediate vertical-rate constraints, and observation dwell are handled during execution rather than predicted by this proxy. Unreachable transitions have $L_t=\widehat T_t=+\infty$.
+Here, $v_{\mathrm{nom}}>0$ is a nominal speed along the three-dimensional polyline in~\eqref{eq:path-length}, while $v_z>0$ and $\omega_\psi>0$ set nominal climb and yaw rates. The wrap operator returns an angle in $[-\pi,\pi)$. The maximum models concurrent translation and yaw as a ranking heuristic, not the duration of the optimized trajectory. Cross-floor detours and intermediate ascents or descents contribute to $L_t$; the second term accounts only for net altitude change. Acceleration, intermediate vertical-rate constraints, and observation dwell are handled during execution rather than predicted by this proxy. Unreachable transitions have $L_t=\widehat T_t=+\infty$.
 
 The resulting candidate sets and observation scores describe where each task can be inspected, while path lengths and motion-time estimates quantify travel between candidates. These quantities provide the inputs to JTVP.
 
@@ -290,7 +290,7 @@ The resulting candidate sets and observation scores describe where each task can
 \label{fig:jtvp-illustration}
 \end{figure}
 
-Figure~\ref{fig:jtvp-illustration} shows A*-guided trajectory refinement after a negative observation, including route replanning and trajectory optimization.
+Fig.~\ref{fig:jtvp-illustration} shows A*-guided trajectory refinement after a negative observation, including route replanning and trajectory optimization.
 
 
 
@@ -324,16 +324,19 @@ where $\tau_0$ is a reference time. Using~\eqref{eq:transition-score}, JTVP solv
 \end{equation}
 The joint planning problem in~\eqref{eq:jtvp} is solved using subset dynamic programming. Let $D(S,i,k)$ be the minimum cost of visiting exactly $S\subseteq\mathcal W_t$ and ending at $\mathbf q_i^k$, where $i\in S$ and $k\in\mathcal K_{i,t}$. Invalid or unreachable states have value $+\infty$, as do unreachable transition scores. For nonempty $S$ and $j\in\mathcal W_t\setminus S$, the initialization, recurrence, and terminal cost are
 \begin{subequations}\label{eq:subset-dp}
-\begin{align}
-&D(\{i\},i,k)=c_t(\mathbf{q}_0,\mathbf{q}_i^k),
+\begin{gather}
+D(\{i\},i,k)=c_t(\mathbf{q}_0,\mathbf{q}_i^k),
 \label{eq:dp-init}\\
-&D(S\cup\{j\},j,\ell)=
+% Keep the recurrence centered without amsmath's automatic shift for wide displays.
+\makebox[0pt][c]{\(\displaystyle
+D(S\cup\{j\},j,\ell)=
 \min_{\substack{i\in S\\ k\in\mathcal K_{i,t}}}\!\bigl[D(S,i,k)+c_t(\mathbf{q}_i^k,\mathbf{q}_j^\ell)\bigr],
+\)}
 \label{eq:dp-recurrence}\\
-&J_t^\star=\min_{\substack{i\in\mathcal W_t\\k\in\mathcal K_{i,t}}}
+J_t^\star=\min_{\substack{i\in\mathcal W_t\\k\in\mathcal K_{i,t}}}
 D(\mathcal W_t,i,k).
 \label{eq:dp-terminal}
-\end{align}
+\end{gather}
 \end{subequations}
 The recurrence is evaluated for $\ell\in\mathcal K_{j,t}$; a minimum over an empty set is $+\infty$. An empty window yields an empty plan with zero cost: execution finishes only if all required outcomes are resolved, otherwise it reports unresolved tasks. Empty candidate sets or an infinite terminal cost trigger expansion from representative views to the full available pool. If no feasible plan is found, planning terminates with failure rather than marking the task verified. For a finite terminal cost, backtracking through~\eqref{eq:subset-dp} returns the optimal order and poses for the selected window and candidate sets. Only the first visit is executed before replanning from the updated robot pose, task state, candidate set, and semantic evidence. This receding-horizon policy preserves the efficiency of multi-task lookahead without committing later visits to assumptions that subsequent observations may invalidate. With $K=\max_{i\in\mathcal W_t}|\mathcal K_{i,t}|$ and cached transition costs, the subset DP uses $O(2^m m^2K^2)$ time and $O(2^m mK)$ memory. Since $m\leq H$, the exponential dependence is limited to the local window. Task screening, candidate generation, and A$^*$ queries still depend on the available tasks and map size; retaining views per location does not impose a global constant $K$ when additional locations are admitted. The 15-subtask timing in Section~V-B measures the complete planner under this policy.
 
@@ -516,11 +519,11 @@ In an additional cross-floor simulation in scene 00337, LogicFly completes all 1
 \begin{figure*}[t]
 \centering
 \includegraphics[trim=29bp 0bp 29bp 0bp,clip,width=\textwidth]{habitat_long_instruction_en.png}
-\caption{Examples of long-instruction execution in Habitat. Each row pairs a natural-language instruction with the corresponding sequence of first-person observations, covering freely ordered subtasks and observation-dependent search or verification.}
+\caption{Examples of long-instruction execution in Habitat. Each row pairs a natural-language instruction with a sequence of first-person observations, covering freely ordered subtasks and observation-dependent search or verification. Green boxes mark detected targets, and yellow labels show their names.}
 \label{fig:simulation-execution}
 \end{figure*}
 
-Figure~\ref{fig:simulation-execution} presents a qualitative execution example in a three-floor Habitat environment. LogicFly completes the cross-floor route and all required subtasks, with terminal views providing visual evidence for each successful outcome.
+Fig.~\ref{fig:simulation-execution} presents a qualitative execution example in a three-floor Habitat environment. LogicFly completes the cross-floor route and all required subtasks, with terminal views providing visual evidence for each successful outcome.
 
 
 
@@ -600,10 +603,10 @@ The real-world home environment includes narrow doorways, with the narrowest mea
 The instructions specify targets on tables, beneath furniture, and on upper shelves, requiring observation positions and viewing directions that account for both targets and their reference objects. Multi-target missions also include mandatory precedence and observation-dependent branches. For example, the home-inspection instruction requires a kitchen inspection before subsequent checks and specifies an alternative search location if the cup is absent from its expected position. These tasks test the translation of spatial relations, task dependencies, and conditional rules into physical navigation and inspection actions.
 
 \textbf{Online recovery after an unsuccessful observation.}
-Figure~\ref{fig:real-world-main} presents a four-task mission involving recovery beyond the initial target location. The UAV first inspects the expected laptop location, where the target is not observed. Semantic recovery then directs the search to the reading room, where the laptop is found, after which the UAV continues with the remaining inspections, including the toolbox and microwave. The recorded trajectory and observation sequence document the initial unsuccessful inspection, the search in an alternative semantic region, and subsequent task execution. This example demonstrates online adaptation when the initial target-location prior is incorrect.
+Fig.~\ref{fig:real-world-main} presents a four-task mission involving recovery beyond the initial target location. The UAV first inspects the expected laptop location, where the target is not observed. Semantic recovery then directs the search to the reading room, where the laptop is found, after which the UAV continues with the remaining inspections, including the toolbox and microwave. The recorded trajectory and observation sequence document the initial unsuccessful inspection, the search in an alternative semantic region, and subsequent task execution. This example demonstrates online adaptation when the initial target-location prior is incorrect.
 
 \textbf{Results and failure analysis.}
-Figure~\ref{fig:real-world-environments} shows representative multi-target inspections and single-target searches. Across the 10 experiments, LogicFly successfully completes eight missions, yielding a mission success rate of $80\%$. Both unsuccessful missions result from target misdetections, indicating that perception errors can affect visual verification and task-outcome assessment. The successful executions support the feasibility of online language-guided aerial inspection across the tested indoor settings, including spatially constrained observations, multi-target execution, and search recovery. The failures identify visual perception and verification reliability as remaining limitations.
+Fig.~\ref{fig:real-world-environments} shows representative multi-target inspections and single-target searches. Across the 10 experiments, LogicFly successfully completes eight missions, yielding a mission success rate of $80\%$. Both unsuccessful missions result from target misdetections, indicating that perception errors can affect visual verification and task-outcome assessment. The successful executions support the feasibility of online language-guided aerial inspection across the tested indoor settings, including spatially constrained observations, multi-target execution, and search recovery. The failures identify visual perception and verification reliability as remaining limitations.
 
 \FloatBarrier
 \section{Conclusion}
